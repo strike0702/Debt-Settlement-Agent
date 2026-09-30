@@ -1,4 +1,10 @@
-"""Bridge between belief/scenario and the vendored feasibility engine."""
+"""Bridge between belief/scenario and the vendored feasibility engine.
+
+Settlement percentages are integer **basis points** (bp):
+  100 bp = 1%,  4500 bp = 45%,  10000 bp = 100%.
+Convert with ``bp_to_decimal(bp)`` -> ``Decimal(bp) / 10000`` for the engine.
+Never use float for money math; cents and bp stay ints end-to-end.
+"""
 
 from __future__ import annotations
 
@@ -18,12 +24,14 @@ from feasibility.util import round_half_up
 
 
 class FirmFees(Protocol):
+    """Anything with firm fee fields (e.g. CallScenario) works as `firm`."""
+
     program_fee_pct: float
     bank_fee_cents: int
 
 
 class NeedsInfo(Exception):
-    """Raised when belief is not ready to build CreditorRules."""
+    """Belief not ready: a required creditor-rule field is missing/weak/conflicted."""
 
     def __init__(self, fields: list[str]) -> None:
         self.fields = fields
@@ -32,10 +40,12 @@ class NeedsInfo(Exception):
 
 @dataclass(frozen=True)
 class EvalSummary:
+    """One engine run, plus FactSet already tagged PUBLIC vs PRIVATE for NLG."""
+
     feasible: bool
-    shape: str | None
+    shape: str | None  # "even" | "staircase" | "balloon" when feasible
     rows: list[ScheduleRow] | None
-    additional_funds: AdditionalFunds | None
+    additional_funds: AdditionalFunds | None  # rescue options when infeasible
     assumed_fields: list[str]
     facts: FactSet
     offer_total_cents: int
@@ -44,13 +54,16 @@ class EvalSummary:
 
 @dataclass(frozen=True)
 class Affordability:
-    max_bp: int | None
+    """Result of scanning settlement % from 1%..100% in 1% steps (100..10000 bp)."""
+
+    max_bp: int | None  # highest feasible bp, or None if nothing works
     feasible_bps: list[int]
-    curve: tuple[bool, ...]  # aligned with range(100, 10001, 100)
+    # Index i <-> bp = (i+1)*100. Feasibility is NOT assumed monotonic.
+    curve: tuple[bool, ...]
 
 
+# Belief payment_structure -> engine flags (even_pays, is_ballooning_allowed).
 _STRUCTURE_TO_FLAGS: dict[str, tuple[bool, bool]] = {
-    # payment_structure -> (even_pays, is_ballooning_allowed)
     "even": (True, False),
     "balloon": (False, True),
     "flexible": (False, False),
@@ -60,15 +73,15 @@ _STRUCTURE_TO_FLAGS: dict[str, tuple[bool, bool]] = {
 def build_rules(belief: BeliefState, firm: FirmFees) -> CreditorRules:
     """Map belief + firm fees into engine CreditorRules.
 
-    Raises NeedsInfo if any required field is not usable (KNOWN/ASSUMED).
+    Only KNOWN/ASSUMED fields are usable. Raises NeedsInfo if any *required*
+    field (max_payments, min_payment_cents, payment_structure) is not usable.
+    Firm fees are never asked of the rep — they come from firm.json.
     """
     missing = [
         name
         for name in REQUIRED_FIELDS
         if not belief.usable_for_engine(name)
     ]
-    # Also block if any registered field we need is TENTATIVE/CONTRADICTED
-    # while required; missing_required already covers UNKNOWN/TENTATIVE/CONTRADICTED.
     if missing:
         raise NeedsInfo(missing)
 
@@ -79,6 +92,7 @@ def build_rules(belief: BeliefState, firm: FirmFees) -> CreditorRules:
         raise ValueError(f"unknown payment_structure: {structure!r}")
     even_pays, balloon = _STRUCTURE_TO_FLAGS[structure]
 
+    # Optional fields: keep ASSUMED defaults when still usable.
     max_segments_term = belief.get("max_segments")
     max_segments = (
         int(max_segments_term.value)
@@ -86,6 +100,7 @@ def build_rules(belief: BeliefState, firm: FirmFees) -> CreditorRules:
         else 2
     )
 
+    # "No token limit" == max_token_pays equals max_payments.
     token_term = belief.get("max_token_pays")
     if belief.usable_for_engine("max_token_pays") and token_term.value is not None:
         max_token_pays = int(token_term.value)
@@ -98,6 +113,7 @@ def build_rules(belief: BeliefState, firm: FirmFees) -> CreditorRules:
     else:
         min_payment_tiers = []
 
+    # Engine treats max_terms and max_payments as redundant; we set both equal.
     return CreditorRules(
         max_terms=max_payments,
         max_payments=max_payments,
@@ -113,6 +129,7 @@ def build_rules(belief: BeliefState, firm: FirmFees) -> CreditorRules:
 
 
 def assumed_fields(belief: BeliefState) -> list[str]:
+    """Field names still on ASSUMED defaults (for audit / wrap-up disclosure)."""
     return [
         name
         for name in (spec.name for spec in FIELD_REGISTRY)
@@ -128,8 +145,12 @@ def evaluate(
     *,
     assumed: list[str] | None = None,
 ) -> EvalSummary:
-    """Run the engine at settlement `bp` and tag facts PUBLIC/PRIVATE."""
-    settlement = bp_to_decimal(bp)
+    """Run the engine at one settlement percentage (`bp` basis points).
+
+    Builds an Offer, calls ``evaluate_offer``, and wraps the result with a
+    FactSet whose visibility follows PLAN §4.3 (speakable vs client-private).
+    """
+    settlement = bp_to_decimal(bp)  # e.g. 4500 -> Decimal("0.45")
     offer = Offer(
         creditor=scenario.creditor,
         creditor_balance_cents=scenario.creditor_balance_cents,
@@ -138,6 +159,7 @@ def evaluate(
         first_payment_date=first_payment_date,
     )
     result = evaluate_offer(scenario.client, offer, rules)
+    # Recompute totals with Decimal half-up so Fact values match engine money rules.
     offer_total = round_half_up(settlement, scenario.creditor_balance_cents)
     program_fee = round_half_up(rules.program_fee_pct, scenario.original_balance_cents)
     facts = _facts_from_result(result, offer_total, first_payment_date)
@@ -158,6 +180,7 @@ def _facts_from_result(
     offer_total: int,
     first_payment_date: date,
 ) -> FactSet:
+    """Tag speakable schedule numbers PUBLIC; balances/fees/rescue PRIVATE."""
     facts = FactSet()
     facts.add(
         Fact(
@@ -200,6 +223,7 @@ def _facts_from_result(
                     source="engine",
                 )
             )
+            # Distinct levels in first-seen order (for "starting at X rising to Y").
             seen: list[int] = []
             for p in payments:
                 if p not in seen:
@@ -215,6 +239,7 @@ def _facts_from_result(
                     )
                 )
 
+        # Per-row balances and fees must never reach the NLG prompt.
         for i, row in enumerate(result.schedule):
             facts.add(
                 Fact(
@@ -254,6 +279,7 @@ def _facts_from_result(
             )
         )
 
+    # Rescue lump / increment are walk-away math — never spoken.
     if result.additional_funds is not None:
         facts.add(
             Fact(
@@ -278,6 +304,7 @@ def _facts_from_result(
 
 
 def _rules_tuple(rules: CreditorRules) -> tuple[Any, ...]:
+    """Hashable CreditorRules for lru_cache keys."""
     tiers = tuple((int(a), int(b)) for a, b in rules.min_payment_tiers)
     return (
         rules.max_terms,
@@ -294,6 +321,7 @@ def _rules_tuple(rules: CreditorRules) -> tuple[Any, ...]:
 
 
 def _scenario_key(scenario: CallScenario) -> tuple[Any, ...]:
+    """Hashable snapshot of scenario inputs (client ledger included)."""
     client = scenario.client
     ledger = tuple(
         (e.date.isoformat(), e.amount_cents, e.type) for e in client.ledger
@@ -320,8 +348,14 @@ def affordability(
     rules: CreditorRules,
     fpd: date,
 ) -> Affordability:
-    """Scan settlement bps with no monotonicity assumption. Cached."""
-    return _affordability_cached(_scenario_key(scenario), _rules_tuple(rules), fpd.isoformat())
+    """Scan every 100 bp from 100..10000; cache by (scenario, rules, fpd).
+
+    Callers on the async path should wrap with ``asyncio.to_thread``.
+    Do not assume the feasible set is a single contiguous band.
+    """
+    return _affordability_cached(
+        _scenario_key(scenario), _rules_tuple(rules), fpd.isoformat()
+    )
 
 
 @lru_cache(maxsize=256)
@@ -330,12 +364,13 @@ def _affordability_cached(
     rules_tuple: tuple[Any, ...],
     fpd_iso: str,
 ) -> Affordability:
+    # Rebuild objects from the hashable key, then evaluate each grid point.
     scenario = _scenario_from_key(scenario_key)
     rules = _rules_from_tuple(rules_tuple)
     fpd = date.fromisoformat(fpd_iso)
     curve: list[bool] = []
     feasible_bps: list[int] = []
-    for bp in range(100, 10001, 100):
+    for bp in range(100, 10001, 100):  # 1%, 2%, ..., 100%
         summary = evaluate(scenario, rules, bp, fpd)
         ok = summary.feasible
         curve.append(ok)
@@ -365,6 +400,7 @@ def _rules_from_tuple(t: tuple[Any, ...]) -> CreditorRules:
 
 
 def _scenario_from_key(key: tuple[Any, ...]) -> CallScenario:
+    """Inverse of ``_scenario_key`` for cache hits."""
     from feasibility.models import Client, LedgerEntry
 
     (
@@ -406,4 +442,5 @@ def _scenario_from_key(key: tuple[Any, ...]) -> CallScenario:
 
 
 def clear_affordability_cache() -> None:
+    """Drop cached scans (tests / rules change mid-process)."""
     _affordability_cached.cache_clear()

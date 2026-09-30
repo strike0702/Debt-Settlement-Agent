@@ -1,4 +1,9 @@
-"""Creditor-rule field registry for the belief state."""
+"""Registry of creditor-rule fields the agent may ask about or assume.
+
+Each ``FieldSpec`` carries ask/readback copy, kind, defaults, and optional
+prior ranges. ``FIELD_REGISTRY`` / ``REQUIRED_FIELDS`` drive belief seeding
+and ``NeedsInfo`` when the engine cannot yet build ``CreditorRules``.
+"""
 
 from __future__ import annotations
 

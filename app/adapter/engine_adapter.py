@@ -1,8 +1,10 @@
 """Bridge between belief/scenario and the vendored feasibility engine.
 
-Settlement percentages are integer **basis points** (bp):
-  100 bp = 1%,  4500 bp = 45%,  10000 bp = 100%.
-Convert with ``bp_to_decimal(bp)`` -> ``Decimal(bp) / 10000`` for the engine.
+Builds ``CreditorRules`` from usable belief fields (raises ``NeedsInfo`` when
+required terms are missing), runs ``evaluate`` / ``affordability``, and tags
+returned amounts as PUBLIC or PRIVATE ``Fact``s. Settlement percentages are
+integer **basis points** (bp): 100 bp = 1%, 4500 bp = 45%, 10000 bp = 100%.
+Convert with ``bp_to_decimal(bp)`` → ``Decimal(bp) / 10000`` for the engine.
 Never use float for money math; cents and bp stay ints end-to-end.
 """
 

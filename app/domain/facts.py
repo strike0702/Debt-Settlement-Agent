@@ -1,4 +1,10 @@
-"""Typed facts with PUBLIC/PRIVATE visibility for NLG and guards."""
+"""Typed negotiation figures with PUBLIC/PRIVATE visibility.
+
+``Fact`` is the only source of spoken numbers (via ``render`` → ``units``).
+PUBLIC facts may go to NLG and the creditor-facing transcript; PRIVATE facts
+(balances, fees, max affordable) stay off the NLG prompt and feed the
+rendered-guard blocklist.
+"""
 
 from __future__ import annotations
 

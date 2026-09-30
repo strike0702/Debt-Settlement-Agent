@@ -1,7 +1,10 @@
 """Spoken-unit render/parse helpers (money, pct, date, count).
 
 Money is integer cents. Settlement percentages are integer basis points
-(4500 = 45%). Spoken forms never come from the LLM — only from these renderers.
+(4500 = 45%). Spoken forms never come from the LLM — only from these
+renderers (and ``Fact.render``, which calls them). Parsers are the inverse
+for NLU verification and tests. Distinct from ``app.agent.numbers``, which
+*finds* figures inside free text for the guards.
 """
 
 from __future__ import annotations

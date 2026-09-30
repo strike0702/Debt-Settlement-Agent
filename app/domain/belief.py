@@ -1,4 +1,10 @@
-"""Creditor-term belief state with typed status transitions."""
+"""What we currently believe about each creditor term (and how sure we are).
+
+Tracks per-field status (UNKNOWN → TENTATIVE/KNOWN/…), evidence quotes, and
+history. Engine adapters only consume fields that are ``usable_for_engine``.
+NLU observations and read-back confirmations flow through ``observe`` /
+``confirm_readback``.
+"""
 
 from __future__ import annotations
 

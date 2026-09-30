@@ -1,4 +1,9 @@
-"""Independent schedule validator (no feasibility.simulate/shapes/scoring)."""
+"""Independent schedule validator — second opinion on engine output.
+
+Re-checks binding creditor rules (cadence, floors, fees, ledger, …) without
+importing ``feasibility.simulate``, ``shapes``, or ``scoring``. Used to prove
+agreements are legal even if the engine path is wrong or mocked.
+"""
 
 from __future__ import annotations
 

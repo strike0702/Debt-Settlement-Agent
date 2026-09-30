@@ -1,4 +1,19 @@
-"""Template and rendered utterance guards."""
+"""NLG safety layer: block bad templates and unsafe spoken sentences.
+
+Policy decides *what* to say; NLG fills placeholders from PUBLIC ``Fact``s.
+These guards are the deterministic backstop so the LLM cannot:
+
+- put raw digits / ``$`` / ``%`` / number-words into a template
+  (``template_guard`` — figures must stay as ``{fact_id}`` placeholders)
+- speak a figure that is not a PUBLIC fact or a number the creditor said
+  (``rendered_guard`` → ``unverified_number``)
+- leak a PRIVATE value in any rendering (``boundary``)
+- prematurely commit ("we agree", "it's a deal", …) (``commitment``)
+
+Pipeline (later phases): LLM/template → ``template_guard`` → ``Fact.render``
+→ ``rendered_guard`` → speak or ``SAFE_FALLBACK``. Token digging lives in
+``numbers.py``; this module only decides pass/block.
+"""
 
 from __future__ import annotations
 
@@ -18,6 +33,7 @@ from app.domain.facts import Fact, FactSet
 
 _PLACEHOLDER_RE = re.compile(r"\{([a-z_]+)\}")
 _DIGIT_RE = re.compile(r"\d")
+# Premature deal language — agent must not lock terms before policy says so.
 _COMMITMENT_RE = re.compile(
     r"\b(?:we|i|my client|the client)\s+"
     r"(?:agrees?|accepts?|commits?|guarantees?|promises?)\b"
@@ -30,6 +46,14 @@ _WORD_RE = re.compile(r"\b[A-Za-z]+(?:-[A-Za-z]+)*\b")
 
 
 class GuardResult(BaseModel):
+    """Outcome of a guard check.
+
+    ``reason`` is empty on pass. On block it is one of:
+    template — ``digit``, ``dollar``, ``percent``, ``number_word``,
+    ``unknown_placeholder``, ``missing_required``;
+    rendered — ``unverified_number``, ``boundary``, ``commitment``.
+    """
+
     ok: bool
     reason: str = ""
     offending: list[str] = Field(default_factory=list)
@@ -82,7 +106,12 @@ def template_guard(
     allowed_ids: set[str] | frozenset[str],
     required_ids: set[str] | frozenset[str],
 ) -> GuardResult:
-    """Block templates that embed digits, $, %, number words, or bad placeholders."""
+    """Validate an unfilled NLG template (placeholders only, no spoken figures).
+
+    Checks, in order: digits, ``$``, ``%``, forbidden number-words (with the
+    ``one`` allowlist phrases blanked out), then placeholder id set vs
+    ``allowed_ids`` / ``required_ids``.
+    """
     if _DIGIT_RE.search(text):
         m = _DIGIT_RE.search(text)
         assert m is not None
@@ -144,14 +173,20 @@ def rendered_guard(
     *,
     ref: date | None = None,
 ) -> GuardResult:
-    """Block unverified numbers, private leaks, and premature commitments."""
+    """Validate text after facts are filled in (ready to speak).
+
+    Every extracted figure must match a PUBLIC fact or a creditor-said number.
+    A hit on ``private_blocklist`` is ``boundary``, unless the same value is
+    also a chosen PUBLIC fact (collision allowed). Commitment phrasing is
+    checked last. ``ref`` anchors year-less dates during extraction.
+    """
     if ref is None:
         ref = date.today()
 
     allowed = _fact_pairs(public_facts) | set(creditor_numbers)
     tokens = extract_tokens(text, ref=ref)
 
-    # Promote "2500 dollars" style bare counts.
+    # "2500 dollars" arrives as bare count; promote to money cents.
     promoted: list[NumberToken] = []
     skip_until = -1
     for tok in tokens:
@@ -166,7 +201,7 @@ def rendered_guard(
 
     for tok in promoted:
         if _cross_match(tok.kind, tok.value, private_blocklist):
-            # Collision: private value equals a chosen PUBLIC fact — allow, do not block.
+            # Same cents as a PUBLIC fact for this action — not a leak.
             if _cross_match(tok.kind, tok.value, allowed):
                 continue
             return GuardResult(ok=False, reason="boundary", offending=[tok.raw])

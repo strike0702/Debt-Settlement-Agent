@@ -1,4 +1,9 @@
-"""Application settings loaded from environment / .env."""
+"""Application settings from environment / ``.env`` (pydantic-settings).
+
+API keys, LLM profile, NLG/NLU mode, DB path, negotiation knobs (max turns,
+anchor ratio, firm disclosure). Call ``get_settings()``; do not construct
+``Settings`` ad hoc in hot paths.
+"""
 
 from __future__ import annotations
 

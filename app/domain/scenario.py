@@ -1,4 +1,9 @@
-"""Call scenario loader: client, public offer fields, and firm fees."""
+"""Load a call scenario from a fixture folder (client + offer + firm).
+
+A scenario is the synthetic case under negotiation: engine ``Client``, public
+creditor offer amounts, and firm fee settings. Loaders read ``client.json``,
+``offer.json``, and ``firm.json`` from a directory such as ``fixtures/demo``.
+"""
 
 from __future__ import annotations
 

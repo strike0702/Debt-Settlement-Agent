@@ -1,4 +1,17 @@
-"""Token extraction and normalization for spoken/written number forms."""
+"""Pull money / pct / date / count figures out of agent or creditor text.
+
+Used by ``guards.rendered_guard`` (and later NLU checks). This is *not*
+spoken-unit formatting — that lives in ``app.domain.units``. Here we only:
+
+1. Find figure spans in a fixed priority order (money ``$…``, abbrev ``2.5k``,
+   percentages, dates, ordinals, bare digits, English number-words).
+2. Mask each matched span so a later pass cannot re-parse the same digits.
+3. Normalize each hit to ``(kind, value)`` with money in integer cents and
+   percentages in integer basis points.
+
+``NUMBER_WORDS`` / ``ONE_ALLOWLIST_PHRASES`` are also shared with
+``template_guard``, which forbids number-words in unfilled templates.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +22,7 @@ from typing import Literal
 
 TokenKind = Literal["money", "pct", "count", "date", "ordinal"]
 
+# Forbidden in templates; also the lexicon for word-phrase extraction.
 NUMBER_WORDS: frozenset[str] = frozenset(
     {
         "zero",
@@ -61,7 +75,7 @@ NUMBER_WORDS: frozenset[str] = frozenset(
     }
 )
 
-# "one" allowed only inside these phrases (template_guard).
+# template_guard: bare "one" blocks; these idioms are fine.
 ONE_ALLOWLIST_PHRASES: tuple[str, ...] = (
     "no one",
     "one moment",
@@ -170,6 +184,8 @@ _WORD_TOKEN_RE = re.compile(r"[A-Za-z]+(?:-[A-Za-z]+)?")
 
 @dataclass(frozen=True)
 class NumberToken:
+    """One extracted figure: typed value plus the raw span in the source text."""
+
     kind: TokenKind
     value: int | date
     raw: str
@@ -289,7 +305,10 @@ def _year_from(y: str | None, ref: date) -> int:
 
 
 def extract_tokens(text: str, *, ref: date | None = None) -> list[NumberToken]:
-    """Extract number tokens in section 6.4 order, masking spans once matched."""
+    """Extract figures in PLAN §6.4 order; each match masks its character span.
+
+    ``ref`` supplies the year when a date has none (e.g. ``April 15``).
+    """
     if ref is None:
         ref = date.today()
     masked = [False] * len(text)
@@ -305,7 +324,7 @@ def extract_tokens(text: str, *, ref: date | None = None) -> list[NumberToken]:
     for m in _MONEY_RE.finditer(text):
         add("money", _parse_money_raw(m.group(0)), m.group(0), m.start(), m.end())
 
-    # 1b. Abbreviated figures like 2.5k (hidden money) — before bare numbers.
+    # 1b. Hidden abbrev money (2.5k) — before bare digits can claim "2.5".
     for m in _ABBREV_RE.finditer(text):
         kind, value = _parse_abbrev(m.group(0))
         add(kind, value, m.group(0), m.start(), m.end())

@@ -25,6 +25,12 @@ Voice agent that negotiates debt settlements. Code-based policy decides every mo
 - Add a dependency only with a one-line justification in the commit message.
 - Stay inside your phase's scope. Do not start the next phase.
 
+## Module and comment style
+- Every new or touched `.py` module under `app/`, `sim/`, and `eval/` must open with a **module docstring** that a stranger can skim: what the file is for, what it does *not* do when that is easy to confuse (e.g. `numbers.py` vs `units.py`), and who calls it or where it sits in the pipeline.
+- Prefer a short multi-line opener (about 4–10 lines) over a one-liner title.
+- Public classes and functions get a one-line docstring stating the contract; expand only when the reason codes, units, or failure modes are non-obvious.
+- Do not narrate obvious code line-by-line. Comments explain *why*, invariants, and order-sensitive logic (guard reason codes, extract priority, money↔count cross-match).
+
 ## End of every phase
 1. Run the phase's acceptance check, plus `pytest -q` and `ruff check .`. All green.
 2. Update `docs/PROGRESS.md`: mark the phase done, list the files added, record the public interfaces (signatures) later phases need, and record any deviation from PLAN.md and open issues.

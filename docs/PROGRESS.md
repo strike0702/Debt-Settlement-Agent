@@ -11,7 +11,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 2 | Engine adapter and validator | done |
 | 3 | Numbers and guards | done |
 | 4 | Policy, NLG templates, audit | done |
-| 5 | LLM client and provider pool | pending |
+| 5 | LLM client and provider pool | done |
 | 6 | NLU and LLM NLG | pending |
 | 7 | Session, orchestrator, CLI | pending |
 | 8 | Simulator, scenarios, offline e2e | pending |
@@ -115,6 +115,19 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `class AuditLog` — `__init__(path)`; `append(call_id, actor, event_type, payload=None) -> int`; `for_call(call_id) -> list[dict]`; `close()`
 - WAL mode; BEFORE UPDATE/DELETE triggers raise `append-only`
 
+### `app.llm.client`
+- `LLMUnavailable` — all routed targets exhausted
+- `strip_json_fences(text) -> str`
+- `class FakeLLM` — `enqueue(role, response)`; `chat_json` / `chat_text` / `transcribe` (per-role queue)
+- `class LLMClient` — `__init__(settings=None, *, providers_path=None, http_clients=None, on_call=None, fake=None, skip_health_check=False)`
+  - `async chat_json(role, messages, schema: type[BaseModel]) -> T`
+  - `async chat_text(role, messages, max_tokens) -> str`
+  - `async transcribe(wav_bytes, prompt=None) -> str`
+  - `async aclose()`
+- `make_client(settings=None, **kwargs) -> LLMClient | FakeLLM` — offline profile returns `FakeLLM`
+- Roles: `nlu` | `nlg` | `sim` | `stt`. Routing from `config/providers.yaml` profiles (`demo`/`eval`/`local`/`offline`).
+- `on_call` meta: `{role, provider, model, latency_ms, prompt_tokens, completion_tokens, cache_hit, failover_from}`
+
 ## Deviations from PLAN.md
 
 - Ruff `extend-exclude = ["feasibility"]` so vendored engine stays untouched (UP035 on `shapes.py` otherwise).
@@ -129,10 +142,12 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `Intent` lives in `policy.py` (with `Action`); `nlg` imports it — avoids a policy↔nlg cycle.
 - `decide` takes `belief` + `NegotiationState` (not a full session object); rescue check is a boolean `rescue_within_guardrail` so policy stays pure (no engine call).
 - `settlement_ask_pct` interpreted as percent points (45.0 → 4500 bp).
+- OpenRouter smoke: `openai/gpt-oss-120b:free` returns 404 (“unavailable for free”); slug kept as in PLAN until a free replacement is chosen.
 
 ## Open issues
 
-(none yet)
+- Ollama: daemon up but planned models not pulled (`qwen3.5:9b`, `gemma4:e4b`); only `qwen2.5-coder:7b` present — `local` profile will skip Ollama until pull.
+- Cerebras smoke model `llama-3.3-70b` 404 (not in demo/eval routes; only used in smoke probe).
 
 ## Phase handoffs
 
@@ -161,3 +176,14 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - Files: `app/store/audit.py`, `app/agent/{nlu_types,policy,nlg}.py`, `tests/unit/{test_audit,test_policy,test_nlg}.py`.
 - Tests: 207 passed.
 - Notes: Intent enum + templates; `render_action` guard pipeline with SAFE_FALLBACK; policy rules 1–10 covered in unit tests.
+
+### Phase 5 (2026-10-01)
+- Files: `config/providers.yaml`, `app/llm/client.py`, `tests/unit/test_llm_client.py`, `scripts/smoke_llm.py`.
+- Tests: 216 passed (offline MockTransport: limiter, 429 short/long, Gemini 400→429, cache hit, missing key, LLMUnavailable, FakeLLM).
+- Smoke (`scripts/smoke_llm.py`, 2026-10-01):
+  - OK `groq/openai/gpt-oss-120b` 693 ms
+  - FAIL `mistral/mistral-small-latest` 429 rate_limited
+  - OK `gemini/gemini-3.1-flash-lite` 7616 ms
+  - FAIL `openrouter/openai/gpt-oss-120b:free` 404 free slug unavailable
+  - FAIL `cerebras/llama-3.3-70b` 404 model_not_found
+  - SKIP `ollama/qwen3.5:9b` (model not pulled)

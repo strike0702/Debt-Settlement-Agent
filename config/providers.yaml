@@ -1,0 +1,57 @@
+# Free-tier OpenAI-compatible provider pool. Limits change; check each console.
+# Routes are provider/model; model may contain slashes (e.g. openai/gpt-oss-120b).
+
+profiles:
+  demo: # latency first; everything on Groq
+    nlu: [groq/openai/gpt-oss-120b, mistral/mistral-small-latest]
+    nlg: [groq/openai/gpt-oss-20b, gemini/gemini-3.1-flash-lite]
+    stt: [groq/whisper-large-v3-turbo]
+  eval: # quota first; spread load, keep Groq for fallback
+    nlu:
+      - mistral/mistral-small-latest
+      - groq/openai/gpt-oss-120b
+      - openrouter/openai/gpt-oss-120b:free
+    nlg: [gemini/gemini-3.1-flash-lite, groq/openai/gpt-oss-20b]
+    sim: [gemini/gemini-3.1-flash-lite, mistral/mistral-small-latest, groq/openai/gpt-oss-20b]
+  local: # unlimited eval on the laptop; cloud only as fallback
+    nlu: [ollama/qwen3.5:9b, mistral/mistral-small-latest]
+    nlg: [ollama/gemma4:e4b, gemini/gemini-3.1-flash-lite]
+    sim: [ollama/gemma4:e4b, gemini/gemini-3.1-flash-lite]
+  offline: # CI; no network
+    all: [fake]
+
+providers:
+  groq:
+    base_url: "https://api.groq.com/openai/v1"
+    key_env: GROQ_API_KEY
+    rpm: 25
+    json_mode: true
+  mistral:
+    base_url: "https://api.mistral.ai/v1"
+    key_env: MISTRAL_API_KEY
+    rpm: 50
+    min_interval_s: 1.1
+    json_mode: true
+  gemini:
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    key_env: GEMINI_API_KEY
+    rpm: 12
+    json_mode: true
+    quota_as_400: true
+  openrouter:
+    base_url: "https://openrouter.ai/api/v1"
+    key_env: OPENROUTER_API_KEY
+    rpm: 18
+    json_mode: false
+  cerebras:
+    base_url: "https://api.cerebras.ai/v1"
+    key_env: CEREBRAS_API_KEY
+    rpm: 4
+    json_mode: true
+  ollama:
+    base_url: "http://localhost:11434/v1"
+    api_key: "ollama"
+    rpm: 0 # no limiter
+    json_mode: true
+    local: true
+    health: "/api/tags"

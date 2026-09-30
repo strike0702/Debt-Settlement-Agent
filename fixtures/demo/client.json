@@ -1,0 +1,18 @@
+{
+  "draft_amount_cents": 22000,
+  "draft_day": 15,
+  "first_draft_date": "2026-03-15",
+  "last_draft_date": "2026-10-15",
+  "as_of_date": "2026-03-01",
+  "current_balance_cents": 44000,
+  "ledger": [
+    {"date": "2026-03-15", "amount_cents": 22000, "type": "credit"},
+    {"date": "2026-04-15", "amount_cents": 22000, "type": "credit"},
+    {"date": "2026-05-15", "amount_cents": 22000, "type": "credit"},
+    {"date": "2026-06-15", "amount_cents": 22000, "type": "credit"},
+    {"date": "2026-07-15", "amount_cents": 22000, "type": "credit"},
+    {"date": "2026-08-15", "amount_cents": 22000, "type": "credit"},
+    {"date": "2026-09-15", "amount_cents": 22000, "type": "credit"},
+    {"date": "2026-10-15", "amount_cents": 22000, "type": "credit"}
+  ]
+}

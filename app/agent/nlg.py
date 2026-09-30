@@ -1,16 +1,22 @@
-"""Deterministic NLG templates and render pipeline (no LLM in this phase).
+"""Deterministic NLG templates plus optional LLM template generation.
 
-Each ``Intent`` has one template with ``{placeholders}``. ``render_action`` runs
-``template_guard``, fills ``text_slots`` then PUBLIC ``Fact.render``, then
-``rendered_guard``. Any guard failure yields ``SAFE_FALLBACK``.
+Deterministic ``TEMPLATES`` / sync ``render_action`` are the fallback and the
+``NLG_MODE=template`` path. ``speak_action`` (async) may ask the LLM for a
+template, run ``template_guard``, retry once, then fall back; fill facts; run
+``rendered_guard``. LLM never receives PRIVATE values or digits — only
+placeholder meanings from ``app.llm.prompts``.
 """
 
 from __future__ import annotations
 
 from datetime import date
+from typing import Any, Protocol
 
 from app.agent.guards import rendered_guard, template_guard
 from app.agent.policy import Action, Intent
+from app.config import Settings, get_settings
+from app.llm.prompts import nlg_messages
+from app.store.audit import AuditLog
 
 SAFE_FALLBACK = "Let me check that figure and come back to it."
 
@@ -56,6 +62,15 @@ TEMPLATES: dict[Intent, str] = {
 }
 
 
+class _TextLLM(Protocol):
+    async def chat_text(
+        self,
+        role: str,
+        messages: list[dict[str, Any]],
+        max_tokens: int,
+    ) -> str: ...
+
+
 def _allowed_ids(action: Action) -> set[str]:
     return set(action.facts.keys()) | set(action.text_slots.keys())
 
@@ -74,31 +89,43 @@ def _split_sentences(text: str) -> list[str]:
     return [p for p in parts if p]
 
 
-def render_action(
+def _render_filled(
+    template: str,
     action: Action,
     ref_date: date,
     *,
-    creditor_numbers: set[tuple[str, int | date]] | None = None,
-    private_blocklist: set[tuple[str, int | date]] | None = None,
+    creditor_numbers: set[tuple[str, int | date]] | None,
+    private_blocklist: set[tuple[str, int | date]] | None,
+    audit: AuditLog | None,
+    call_id: str | None,
 ) -> list[str]:
-    """Render an action to spoken sentences, or ``SAFE_FALLBACK`` on guard fail."""
-    template = TEMPLATES[action.intent]
     allowed = _allowed_ids(action)
-    # Placeholders present in the template that we expect to fill.
     tg = template_guard(template, allowed, action.required)
     if not tg.ok:
+        if audit is not None and call_id is not None:
+            audit.append(
+                call_id,
+                "nlg",
+                "blocked",
+                {"stage": "template", "reason": tg.reason, "offending": tg.offending},
+            )
         return [SAFE_FALLBACK]
 
     spoken = _fill_template(template, action, ref_date)
-    # Leftover unfilled placeholders → fail closed.
     if "{" in spoken and "}" in spoken:
+        if audit is not None and call_id is not None:
+            audit.append(
+                call_id,
+                "nlg",
+                "blocked",
+                {"stage": "unfilled", "reason": "unfilled_placeholder"},
+            )
         return [SAFE_FALLBACK]
 
     sentences = _split_sentences(spoken)
     creditor = creditor_numbers or set()
     private = private_blocklist or set()
     public = action.facts
-
     out: list[str] = []
     for sentence in sentences:
         rg = rendered_guard(
@@ -109,6 +136,127 @@ def render_action(
             ref=ref_date,
         )
         if not rg.ok:
+            if audit is not None and call_id is not None:
+                audit.append(
+                    call_id,
+                    "nlg",
+                    "blocked",
+                    {
+                        "stage": "rendered",
+                        "reason": rg.reason,
+                        "offending": rg.offending,
+                    },
+                )
             return [SAFE_FALLBACK]
         out.append(sentence)
     return out if out else [SAFE_FALLBACK]
+
+
+def render_action(
+    action: Action,
+    ref_date: date,
+    *,
+    creditor_numbers: set[tuple[str, int | date]] | None = None,
+    private_blocklist: set[tuple[str, int | date]] | None = None,
+    audit: AuditLog | None = None,
+    call_id: str | None = None,
+) -> list[str]:
+    """Render the deterministic template, or ``SAFE_FALLBACK`` on guard fail."""
+    return _render_filled(
+        TEMPLATES[action.intent],
+        action,
+        ref_date,
+        creditor_numbers=creditor_numbers,
+        private_blocklist=private_blocklist,
+        audit=audit,
+        call_id=call_id,
+    )
+
+
+async def speak_action(
+    action: Action,
+    ref_date: date,
+    *,
+    llm: _TextLLM | None = None,
+    settings: Settings | None = None,
+    last_rep_line: str = "",
+    creditor_numbers: set[tuple[str, int | date]] | None = None,
+    private_blocklist: set[tuple[str, int | date]] | None = None,
+    audit: AuditLog | None = None,
+    call_id: str | None = None,
+) -> list[str]:
+    """LLM template (optional) → template_guard → fill → rendered_guard.
+
+    On LLM/template failure after one retry, falls back to ``TEMPLATES``.
+    """
+    cfg = settings or get_settings()
+    allowed = _allowed_ids(action)
+    required = action.required
+    template = TEMPLATES[action.intent]
+
+    if cfg.nlg_mode == "llm" and llm is not None:
+        placeholder_ids = sorted(allowed)
+        messages = nlg_messages(action.intent, placeholder_ids, last_rep_line)
+        candidate: str | None = None
+        for attempt in range(2):
+            try:
+                msgs = list(messages)
+                if attempt == 1 and candidate is not None:
+                    msgs = [
+                        *messages,
+                        {
+                            "role": "user",
+                            "content": (
+                                "Previous template failed guards (digits, $, %, "
+                                "number words, or bad placeholders). "
+                                "Rewrite using only the listed placeholders."
+                            ),
+                        },
+                    ]
+                text = (await llm.chat_text("nlg", msgs, 400)).strip()
+
+                # Strip accidental fences
+                if text.startswith("```"):
+                    lines = text.split("\n")
+                    text = "\n".join(
+                        ln for ln in lines if not ln.strip().startswith("```")
+                    ).strip()
+                tg = template_guard(text, allowed, required)
+                if tg.ok:
+                    candidate = text
+                    break
+                candidate = text  # keep for retry hint
+                if audit is not None and call_id is not None:
+                    audit.append(
+                        call_id,
+                        "nlg",
+                        "nlg_template_rejected",
+                        {
+                            "attempt": attempt,
+                            "reason": tg.reason,
+                            "offending": tg.offending,
+                        },
+                    )
+            except Exception as e:
+                if audit is not None and call_id is not None:
+                    audit.append(
+                        call_id,
+                        "nlg",
+                        "nlg_llm_failed",
+                        {"attempt": attempt, "error": str(e)},
+                    )
+                candidate = None
+        if candidate is not None:
+            tg = template_guard(candidate, allowed, required)
+            if tg.ok:
+                template = candidate
+
+    return _render_filled(
+        template,
+        action,
+        ref_date,
+        creditor_numbers=creditor_numbers,
+        private_blocklist=private_blocklist,
+        audit=audit,
+        call_id=call_id,
+    )

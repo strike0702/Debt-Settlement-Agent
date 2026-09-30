@@ -12,7 +12,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 3 | Numbers and guards | done |
 | 4 | Policy, NLG templates, audit | done |
 | 5 | LLM client and provider pool | done |
-| 6 | NLU and LLM NLG | pending |
+| 6 | NLU and LLM NLG | done |
 | 7 | Session, orchestrator, CLI | pending |
 | 8 | Simulator, scenarios, offline e2e | pending |
 | 9 | Eval runner and metrics | pending |
@@ -109,7 +109,22 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 
 ### `app.agent.nlg`
 - `SAFE_FALLBACK: str`; `TEMPLATES: dict[Intent, str]`
-- `render_action(action, ref_date, *, creditor_numbers=None, private_blocklist=None) -> list[str]`
+- `render_action(action, ref_date, *, creditor_numbers=None, private_blocklist=None, audit=None, call_id=None) -> list[str]` — deterministic template path
+- `async speak_action(action, ref_date, *, llm=None, settings=None, last_rep_line="", creditor_numbers=None, private_blocklist=None, audit=None, call_id=None) -> list[str]` — LLM template → template_guard (1 retry) → fallback `TEMPLATES` → fill → rendered_guard
+
+### `app.agent.nlu`
+- `class VerifiedTerm` — `field`, `value`, `quote`, `hedged`, `verified`
+- `class VerifiedAnalysis` — terms + TurnAnalysis stance fields + `ask_verified`; `to_turn_analysis() -> TurnAnalysis`
+- `normalize_for_quote(text) -> str`; `quote_in_utterance(quote, utterance) -> bool`
+- `coerce_analysis_payload(data) -> dict` — field-keyed LLM shapes → `terms[]`
+- `post_verify(analysis, utterance, *, ref=None, audit=None, call_id=None) -> VerifiedAnalysis`
+- `async analyze(utterance, last_agent_line, pending_readback, *, llm=None, settings=None, oracle=None, audit=None, call_id=None, ref=None) -> VerifiedAnalysis`
+- `NLU_MODE=oracle` requires `oracle=TurnAnalysis` (skips LLM)
+
+### `app.llm.prompts`
+- `PLACEHOLDER_MEANINGS: dict[str, str]`
+- `nlu_messages(utterance, last_agent_line, pending_readback) -> list[dict]`
+- `nlg_messages(intent, placeholder_ids, last_rep_line) -> list[dict]`
 
 ### `app.store.audit`
 - `class AuditLog` — `__init__(path)`; `append(call_id, actor, event_type, payload=None) -> int`; `for_call(call_id) -> list[dict]`; `close()`
@@ -143,10 +158,12 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `decide` takes `belief` + `NegotiationState` (not a full session object); rescue check is a boolean `rescue_within_guardrail` so policy stays pure (no engine call).
 - `settlement_ask_pct` interpreted as percent points (45.0 → 4500 bp).
 - OpenRouter smoke: `openai/gpt-oss-120b:free` returns 404 (“unavailable for free”); slug kept as in PLAN until a free replacement is chosen.
+- NLU uses `chat_text` + local JSON parse/coerce (not `chat_json`) so field-keyed LLM shapes still validate; `coerce_analysis_payload` accepts `{max_payments: {value, quote, hedged}}`.
+- NLU `max_tokens=800` and NLG `max_tokens=400` (PLAN said 80 for NLG) because gpt-oss reasoning tokens consume the completion budget.
 
 ## Open issues
 
-- Ollama: daemon up but planned models not pulled (`qwen3.5:9b`, `gemma4:e4b`); only `qwen2.5-coder:7b` present — `local` profile will skip Ollama until pull.
+- Ollama: pull `qwen3.5:9b` / `gemma4:e4b` before `local` profile (see Environment facts).
 - Cerebras smoke model `llama-3.3-70b` 404 (not in demo/eval routes; only used in smoke probe).
 
 ## Phase handoffs
@@ -187,3 +204,8 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
   - FAIL `openrouter/openai/gpt-oss-120b:free` 404 free slug unavailable
   - FAIL `cerebras/llama-3.3-70b` 404 model_not_found
   - SKIP `ollama/qwen3.5:9b` (model not pulled)
+
+### Phase 6 (2026-10-01)
+- Files: `app/llm/prompts.py`, `app/agent/nlu.py`, `app/agent/nlg.py` (LLM `speak_action`), `tests/unit/test_nlu_nlg_llm.py`, `tests/live/test_nlu_live.py`.
+- Tests: 224 passed offline (+1 skipped live); FakeLLM covers hallucinated quote drop, hedged two-fifty `verified=False`, `$250`→25000 verified, invalid JSON retry, NLG digit/unknown-placeholder fallback.
+- Live NLU (`DSA_LIVE=1`, demo profile, Groq): **15/15 (100%)** on the synthetic rep corpus.

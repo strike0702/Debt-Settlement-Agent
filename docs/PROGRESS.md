@@ -31,7 +31,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `class Settings(BaseSettings)` — fields: `groq_api_key`, `mistral_api_key`, `gemini_api_key`, `openrouter_api_key`, `cerebras_api_key` (`str | None`); `llm_profile` (`str`, default `"demo"`); `llm_cache` (`bool`); `llm_cache_path` (`str`); `nlg_mode` / `nlu_mode` (`str`); `db_path` (`str`); `hostility_threshold` (`float`); `max_turns` / `max_counters` (`int`); `anchor_ratio` / `concession_factor` (`float`); `firm_name` / `opening_disclosure` (`str`).
 - `get_settings() -> Settings`
 
-### `app.domain.money`
+### `app.domain.units`
 - `render_money(cents: int) -> str`
 - `parse_money(text: str) -> int`
 - `render_pct(bp: int) -> str`
@@ -71,6 +71,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - Ruff `extend-exclude = ["feasibility"]` so vendored engine stays untouched (UP035 on `shapes.py` otherwise).
 - Synthetic fixtures under `fixtures/engine/{even_ok,rescue_gap,balloon_ok,tier_ok}` replace take-home `cases/`; engine tests re-pointed; rescue expected amounts match `rescue_gap` (lump 17500, incr 4375 × 5 drafts).
 - `max_token_pays` has no static `default_factory`; BeliefState keeps it ASSUMED and copies `max_payments` when that field is observed (PLAN: default is max_payments / no limit).
+- Domain unit helpers live in `app/domain/units.py` (PLAN/PHASES said `money.py`); covers money, pct, date, and count.
 
 ## Open issues
 
@@ -84,6 +85,6 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - Notes: no ASSIGNMENT.md or cases/ copied.
 
 ### Phase 1 (2026-10-01)
-- Files: `app/domain/{money,fields,facts,belief,scenario}.py`, `fixtures/demo/{client,offer,firm}.json`, `tests/unit/{test_money,test_fields_facts,test_belief}.py`.
+- Files: `app/domain/{units,fields,facts,belief,scenario}.py`, `fixtures/demo/{client,offer,firm}.json`, `tests/unit/{test_units,test_fields_facts,test_belief}.py`.
 - Tests: 73 passed (engine + unit).
 - Notes: demo fixture is synthetic (NorthPeak Collections); independent of `fixtures/engine`.

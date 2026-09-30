@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.domain.money import render_count, render_date, render_money, render_pct
+from app.domain.units import render_count, render_date, render_money, render_pct
 
 FactKind = Literal["money", "pct", "count", "date"]
 Visibility = Literal["PUBLIC", "PRIVATE"]

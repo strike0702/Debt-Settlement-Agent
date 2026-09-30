@@ -1,4 +1,4 @@
-"""Unit tests for money / pct / date / count render and parse."""
+"""Unit tests for spoken-unit render and parse (money / pct / date / count)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.money import (
+from app.domain.units import (
     bp_to_decimal,
     parse_count,
     parse_date,

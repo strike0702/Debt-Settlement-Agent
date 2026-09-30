@@ -21,7 +21,7 @@ Acceptance: `uv run pytest -q` green on tests/engine, `uv run ruff check .` clea
 
 ```
 Phase 1 of docs/PHASES.md. Read docs/PLAN.md section 4 only.
-Implement app/domain/money.py, fields.py, facts.py, belief.py, scenario.py exactly as specified. scenario.py loads a CallScenario (engine Client, public offer fields: creditor, creditor_balance_cents, original_balance_cents; firm: program_fee_pct, bank_fee_cents) from a folder with client.json, offer.json, firm.json. Create fixtures/demo/ with synthetic client.json, offer.json, firm.json.
+Implement app/domain/units.py, fields.py, facts.py, belief.py, scenario.py exactly as specified. scenario.py loads a CallScenario (engine Client, public offer fields: creditor, creditor_balance_cents, original_balance_cents; firm: program_fee_pct, bank_fee_cents) from a folder with client.json, offer.json, firm.json. Create fixtures/demo/ with synthetic client.json, offer.json, firm.json.
 Tests in tests/unit/: money render/parse round-trips (whole and fractional dollars, bp with decimals, dates with and without year), field registry defaults, Fact visibility, and a table-driven test covering every belief transition in section 4.4 including confirm_readback yes and no.
 Acceptance: pytest and ruff green. Record the public signatures in docs/PROGRESS.md Interfaces. Commit.
 ```

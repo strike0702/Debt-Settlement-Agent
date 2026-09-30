@@ -60,7 +60,7 @@ Debt-Settlement-Agent/
     config.py                   # Settings (pydantic-settings)
     llm/client.py               # the only place that calls the LLM or STT
     llm/prompts.py
-    domain/money.py             # cents/bp/date render + parse helpers
+    domain/units.py             # cents/bp/date/count render + parse helpers
     domain/fields.py            # FieldSpec registry
     domain/facts.py             # Fact, FactSet
     domain/belief.py            # TermStatus, TermBelief, BeliefState
@@ -99,7 +99,7 @@ Debt-Settlement-Agent/
 
 ## 4. Domain
 
-### 4.1 Units (`domain/money.py`)
+### 4.1 Units (`domain/units.py`)
 - Money is `int` cents. Settlement percentages are `int` basis points (4500 = 45%). Convert to the engine with `Decimal(bp) / Decimal(10000)`; this is already verified to work with `round_half_up`.
 - `render_money(cents)`: `"$2,500"` if whole dollars, else `"$2,500.50"`.
 - `render_pct(bp)`: `"45%"` or `"45.5%"`.

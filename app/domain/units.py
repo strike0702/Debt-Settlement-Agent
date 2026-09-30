@@ -1,4 +1,4 @@
-"""Money, percentage, date, and count render/parse helpers.
+"""Spoken-unit render/parse helpers (money, pct, date, count).
 
 Money is integer cents. Settlement percentages are integer basis points
 (4500 = 45%). Spoken forms never come from the LLM — only from these renderers.

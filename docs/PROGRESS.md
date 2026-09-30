@@ -174,14 +174,15 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `Intent` lives in `policy.py` (with `Action`); `nlg` imports it — avoids a policy↔nlg cycle.
 - `decide` takes `belief` + `NegotiationState` (not a full session object); rescue check is a boolean `rescue_within_guardrail` so policy stays pure (no engine call).
 - `settlement_ask_pct` interpreted as percent points (45.0 → 4500 bp).
-- OpenRouter smoke: `openai/gpt-oss-120b:free` returns 404 (“unavailable for free”); slug kept as in PLAN until a free replacement is chosen.
+- OpenRouter free slug: PLAN’s `openai/gpt-oss-120b:free` is gone; eval uses `cohere/north-mini-code:free`.
+- Mistral never first in any profile (last-resort fallback only); Experiment keys often 429 with `limit-req-minute=0` until workspace/phone setup.
 - NLU uses `chat_text` + local JSON parse/coerce (not `chat_json`) so field-keyed LLM shapes still validate; `coerce_analysis_payload` accepts `{max_payments: {value, quote, hedged}}`.
 - NLU `max_tokens=800` and NLG `max_tokens=400` (PLAN said 80 for NLG) because gpt-oss reasoning tokens consume the completion budget.
 
 ## Open issues
 
-- Ollama: pull `qwen3.5:9b` / `gemma4:e4b` before `local` profile (see Environment facts).
-- Cerebras smoke model `llama-3.3-70b` 404 (not in demo/eval routes; only used in smoke probe).
+- Mistral chat blocked until Experiment setup (`limit-req-minute=0`); routed last so demo/eval still work via Groq/Gemini.
+- Cerebras smoke still probes `llama-3.3-70b` (wrong id; live models are `gpt-oss-120b` / `qwen-3.8-27b`) — not in role routes.
 
 ## Phase handoffs
 

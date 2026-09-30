@@ -1,20 +1,27 @@
 # Free-tier OpenAI-compatible provider pool. Limits change; check each console.
 # Routes are provider/model; model may contain slashes (e.g. openai/gpt-oss-120b).
+#
+# Mistral stays in the pool as a *last* fallback only (Experiment plan often needs
+# phone/workspace setup; keys may 429 with limit-req-minute=0 until then).
 
 profiles:
-  demo: # latency first; everything on Groq
-    nlu: [groq/openai/gpt-oss-120b, mistral/mistral-small-latest]
+  demo: # latency first; Groq, then Gemini; Mistral last
+    nlu: [groq/openai/gpt-oss-120b, gemini/gemini-3.1-flash-lite, mistral/mistral-small-latest]
     nlg: [groq/openai/gpt-oss-20b, gemini/gemini-3.1-flash-lite]
     stt: [groq/whisper-large-v3-turbo]
-  eval: # quota first; spread load, keep Groq for fallback
+  eval: # quota first; never put Mistral first
     nlu:
-      - mistral/mistral-small-latest
+      - gemini/gemini-3.1-flash-lite
       - groq/openai/gpt-oss-120b
-      - openrouter/openai/gpt-oss-120b:free
+      - openrouter/cohere/north-mini-code:free
+      - mistral/mistral-small-latest
     nlg: [gemini/gemini-3.1-flash-lite, groq/openai/gpt-oss-20b]
-    sim: [gemini/gemini-3.1-flash-lite, mistral/mistral-small-latest, groq/openai/gpt-oss-20b]
+    sim:
+      - gemini/gemini-3.1-flash-lite
+      - groq/openai/gpt-oss-20b
+      - mistral/mistral-small-latest
   local: # unlimited eval on the laptop; cloud only as fallback
-    nlu: [ollama/qwen3.5:9b, mistral/mistral-small-latest]
+    nlu: [ollama/qwen3.5:9b, gemini/gemini-3.1-flash-lite, mistral/mistral-small-latest]
     nlg: [ollama/gemma4:e4b, gemini/gemini-3.1-flash-lite]
     sim: [ollama/gemma4:e4b, gemini/gemini-3.1-flash-lite]
   offline: # CI; no network

@@ -1,0 +1,7 @@
+{
+  "creditor": "SynthEven",
+  "creditor_balance_cents": 80000,
+  "original_balance_cents": 100000,
+  "settlement_pct": 0.55,
+  "first_payment_date": "2026-02-28"
+}

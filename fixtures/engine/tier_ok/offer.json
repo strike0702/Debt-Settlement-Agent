@@ -1,0 +1,7 @@
+{
+  "creditor": "SynthTier",
+  "creditor_balance_cents": 160000,
+  "original_balance_cents": 160000,
+  "settlement_pct": 0.35,
+  "first_payment_date": "2026-02-28"
+}

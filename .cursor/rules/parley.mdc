@@ -1,0 +1,31 @@
+---
+description: Parley project context and ground rules
+alwaysApply: true
+---
+
+# Parley
+
+Voice agent that negotiates debt settlements. Code-based policy decides every move; the LLM only extracts terms (NLU) and phrases moves with fact placeholders (NLG). The vendored `feasibility/` engine is the source of truth for every number.
+
+## Before doing anything in a new chat
+1. Read `docs/PROGRESS.md` (phase status, interfaces built so far, deviations, open issues).
+2. Read only the `docs/PLAN.md` sections your phase prompt names. Do not read the whole plan unless needed.
+3. Read existing code only when you need an interface not recorded in `docs/PROGRESS.md`.
+
+## Ground rules
+- Money is integer cents. Settlement percentages are integer basis points (4500 = 45%). Convert to the engine with `Decimal(bp) / Decimal(10000)`. Never use float for money. Dates are `datetime.date`.
+- `feasibility/` is read-only except for bug fixes, and every fix ships with a test.
+- The LLM never produces digits or number words for speech. Spoken numbers only come from `Fact.render()`.
+- The NLG prompt never receives PRIVATE facts or client financials.
+- All LLM and STT calls go through `app/llm/client.py`, by role (`nlu`, `nlg`, `sim`, `stt`), never by model name.
+- `sim/` must not import `app.agent`.
+- Every belief change, block, escalation, and LLM call is appended to the audit log.
+- Python 3.12, FastAPI, Pydantic v2, pytest, ruff. Type hints on all public functions.
+- Synthetic data only. Do not copy third-party assignment text or its `cases/`.
+- Add a dependency only with a one-line justification in the commit message.
+- Stay inside your phase's scope. Do not start the next phase.
+
+## End of every phase
+1. Run the phase's acceptance check, plus `pytest -q` and `ruff check .`. All green.
+2. Update `docs/PROGRESS.md`: mark the phase done, list the files added, record the public interfaces (signatures) later phases need, and record any deviation from PLAN.md and open issues.
+3. Commit with message `phase N: <summary>`.

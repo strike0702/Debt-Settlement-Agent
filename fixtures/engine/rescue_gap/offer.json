@@ -1,0 +1,7 @@
+{
+  "creditor": "SynthTight",
+  "creditor_balance_cents": 90000,
+  "original_balance_cents": 90000,
+  "settlement_pct": 0.45,
+  "first_payment_date": "2026-03-31"
+}

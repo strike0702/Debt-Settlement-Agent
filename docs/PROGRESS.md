@@ -10,7 +10,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 1 | Domain model | done |
 | 2 | Engine adapter and validator | done |
 | 3 | Numbers and guards | done |
-| 4 | Policy, NLG templates, audit | pending |
+| 4 | Policy, NLG templates, audit | done |
 | 5 | LLM client and provider pool | pending |
 | 6 | NLU and LLM NLG | pending |
 | 7 | Session, orchestrator, CLI | pending |
@@ -95,6 +95,26 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `template_guard(text, allowed_ids, required_ids) -> GuardResult` — reasons: `digit`, `dollar`, `percent`, `number_word`, `unknown_placeholder`, `missing_required`
 - `rendered_guard(text, public_facts, creditor_numbers, private_blocklist, *, ref=None) -> GuardResult` — reasons: `unverified_number`, `boundary`, `commitment`; money↔count dollar cross-match; public/private collision allowed
 
+### `app.agent.nlu_types`
+- `class ExtractedTerm` — `field` (registry names incl. `min_payment_tiers`), `value`, `quote`, `hedged`
+- `class TurnAnalysis` — `terms`, `settlement_ask_pct` (percent points, 45.0 → 4500 bp), `ask_quote`, `stance`, `readback_response`, `asks_client_private_info`, `demands_commitment`, `hostility`, `wants_to_end`
+
+### `app.agent.policy`
+- `Phase`, `Intent` (StrEnums); `Effect`, `Action`, `Agreement`, `NegotiationState`
+- `ask_pct_to_bp(pct: float) -> int`
+- `next_counter(*, ask_bp, max_bp, feasible_bps, c_prev, anchor_ratio, concession_factor) -> int`
+- `decide(belief, neg, analysis, afford, *, settings=None, rescue_within_guardrail=False, confirm_facts=None, counter_offer_total_cents=None) -> Action`
+- `draft_agreement(*, creditor, bp, offer_total, rows, assumed_fields, audit=None, call_id=None) -> Agreement`
+- `opening_action(*, settings=None, firm_name=None, opening_disclosure=None) -> Action`
+
+### `app.agent.nlg`
+- `SAFE_FALLBACK: str`; `TEMPLATES: dict[Intent, str]`
+- `render_action(action, ref_date, *, creditor_numbers=None, private_blocklist=None) -> list[str]`
+
+### `app.store.audit`
+- `class AuditLog` — `__init__(path)`; `append(call_id, actor, event_type, payload=None) -> int`; `for_call(call_id) -> list[dict]`; `close()`
+- WAL mode; BEFORE UPDATE/DELETE triggers raise `append-only`
+
 ## Deviations from PLAN.md
 
 - Ruff `extend-exclude = ["feasibility"]` so vendored engine stays untouched (UP035 on `shapes.py` otherwise).
@@ -105,6 +125,10 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - Money regex uses comma-required branch plus plain `\$\s?\d+` so `$2500` is not truncated to `$250` (PLAN's `(?:,\d{3})*` form).
 - `rendered_guard` accepts optional `ref=` for date parsing; commitment regex allows conjugated verbs (`commits`, `guarantees`, …).
 - Abbrev forms (`2.5k` / `10K`) extracted as money before bare numbers (not listed in PLAN order; needed for hidden-figure coverage).
+- `ExtractedTerm.field` uses `min_payment_tiers` (registry name) not PLAN's `min_payment_tier`.
+- `Intent` lives in `policy.py` (with `Action`); `nlg` imports it — avoids a policy↔nlg cycle.
+- `decide` takes `belief` + `NegotiationState` (not a full session object); rescue check is a boolean `rescue_within_guardrail` so policy stays pure (no engine call).
+- `settlement_ask_pct` interpreted as percent points (45.0 → 4500 bp).
 
 ## Open issues
 
@@ -132,3 +156,8 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - Files: `app/agent/{numbers,guards}.py`, `tests/unit/{guard_adversarial.jsonl,test_guard_regression,test_numbers}.py`.
 - Tests: 173 passed.
 - Notes: 48-line adversarial corpus; regression covers template + rendered stages.
+
+### Phase 4 (2026-10-01)
+- Files: `app/store/audit.py`, `app/agent/{nlu_types,policy,nlg}.py`, `tests/unit/{test_audit,test_policy,test_nlg}.py`.
+- Tests: 207 passed.
+- Notes: Intent enum + templates; `render_action` guard pipeline with SAFE_FALLBACK; policy rules 1–10 covered in unit tests.

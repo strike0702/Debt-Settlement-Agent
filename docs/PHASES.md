@@ -1,6 +1,6 @@
-# Parley phases
+# Debt Settlement Agent phases
 
-Run one phase per chat, in order, from the `~/projects/parley` workspace. Paste the prompt as is. The always-on rule `.cursor/rules/parley.mdc` makes each chat read `docs/PROGRESS.md` first and update it at the end. This file replaces the build order in PLAN.md section 12 with finer phases.
+Run one phase per chat, in order, from this workspace. Paste the prompt as is. The always-on rule `.cursor/rules/debt-settlement-agent.mdc` makes each chat read `docs/PROGRESS.md` first and update it at the end. This file replaces the build order in PLAN.md section 12 with finer phases.
 
 If a phase fails its acceptance check, fix it in the same chat before moving on. If a chat runs out of room mid-phase, start a new chat with: "Continue phase N. Read docs/PROGRESS.md and `git status` to see what is done."
 
@@ -73,7 +73,7 @@ Phase 6 of docs/PHASES.md. Read docs/PLAN.md sections 6.1 and 6.3, plus docs/PRO
 2. app/agent/nlu.py: analyze(utterance, last_agent_line, pending_readback) -> VerifiedAnalysis. Runs the LLM call with one retry on validation failure, then the deterministic post-verification from 6.1 (quote substring check, number check that sets verified, prior-range rejection). Add oracle mode.
 3. Extend app/agent/nlg.py with LLM mode: generate a template, run template_guard, retry once, then fall back to the deterministic template; then render and run rendered_guard.
 Tests with FakeLLM: a hallucinated quote is dropped; "about two-fifty" gives verified False (so TENTATIVE); $250 becomes 25000 cents; invalid JSON is retried; an NLG template containing a digit or an unknown placeholder falls back to the deterministic template.
-Also write tests/live/test_nlu_live.py (skipped unless PARLEY_LIVE=1) with 15 realistic rep utterances and expected extractions. Run it once with the demo profile and record accuracy in PROGRESS.md.
+Also write tests/live/test_nlu_live.py (skipped unless DSA_LIVE=1) with 15 realistic rep utterances and expected extractions. Run it once with the demo profile and record accuracy in PROGRESS.md.
 Acceptance: offline tests green. Commit.
 ```
 

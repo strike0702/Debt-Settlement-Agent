@@ -1,4 +1,4 @@
-# Parley progress log
+# Debt Settlement Agent progress log
 
 Each phase appends its handoff here. Keep entries short: facts later phases need, not narration.
 

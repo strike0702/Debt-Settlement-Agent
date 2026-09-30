@@ -1,5 +1,5 @@
 
-# Parley: implementation plan (MVP first)
+# Debt Settlement Agent: implementation plan (MVP first)
 
 ## 0. Review of the spec: what changes and why
 
@@ -41,7 +41,7 @@ In one turn, the rep's text goes to the NLU. The NLU output is verified and appl
 
 ## 2. Repo and setup
 
-- New repo: `~/projects/parley`. Use `uv venv --python 3.12` (the system Python is 3.14, which risks wheel gaps).
+- New repo: [Debt-Settlement-Agent](https://github.com/strike0702/Debt-Settlement-Agent). Use `uv venv --python 3.12` (the system Python is 3.14, which risks wheel gaps).
 - `pyproject.toml` dependencies:
   - `fastapi`, `uvicorn[standard]`: server and WebSocket.
   - `pydantic>=2`, `pydantic-settings`: models and env config.
@@ -49,12 +49,12 @@ In one turn, the rep's text goes to the NLU. The NLU output is verified and appl
   - `pyyaml`: thresholds file.
   - dev: `pytest`, `pytest-asyncio`, `httpx`, `ruff`.
 - Vendor `feasibility/` from [retape_ai_takehome/feasibility](/Users/shbagchi/projects/retape_ai_takehome/feasibility) as a **top-level package** (its imports are `feasibility.x`). Copy [tests/test_units.py](/Users/shbagchi/projects/retape_ai_takehome/tests/test_units.py) and [tests/test_rescue.py](/Users/shbagchi/projects/retape_ai_takehome/tests/test_rescue.py) into `tests/engine/`. Drop or re-point any test that loads `cases/` so it uses our own `fixtures/`. Do **not** copy `ASSIGNMENT.md` or `cases/`.
-- `.cursor/rules/parley.mdc`: spec section 2 ground rules, plus: "the LLM never produces digits; numbers only come from `Fact.render()`", and "`sim/` must not import `app.agent`".
+- `.cursor/rules/debt-settlement-agent.mdc`: spec section 2 ground rules, plus: "the LLM never produces digits; numbers only come from `Fact.render()`", and "`sim/` must not import `app.agent`".
 
 Layout:
 
 ```
-parley/
+Debt-Settlement-Agent/
   feasibility/                  # vendored, read-only
   app/
     config.py                   # Settings (pydantic-settings)
@@ -93,7 +93,7 @@ parley/
   - `LLM_PROFILE="demo"` (or `eval`, `local`, `offline`) selects the routing table.
   - `LLM_CACHE=true`, `LLM_CACHE_PATH="llm_cache.db"`
   - `NLG_MODE="llm"` (or `template`), `NLU_MODE="llm"` (or `oracle`, used only by tests)
-- Storage: `DB_PATH="parley.db"`
+- Storage: `DB_PATH="debt_settlement_agent.db"`
 - Policy knobs: `HOSTILITY_THRESHOLD=0.8`, `MAX_TURNS=24`, `ANCHOR_RATIO=0.7`, `CONCESSION_FACTOR=0.5`, `MAX_COUNTERS=4`
 - Opening: `FIRM_NAME="Synthetic Debt Relief"`, `OPENING_DISCLOSURE` text
 

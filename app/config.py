@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     nlg_mode: str = "llm"
     nlu_mode: str = "llm"
 
-    db_path: str = "parley.db"
+    db_path: str = "debt_settlement_agent.db"
 
     hostility_threshold: float = 0.8
     max_turns: int = 24

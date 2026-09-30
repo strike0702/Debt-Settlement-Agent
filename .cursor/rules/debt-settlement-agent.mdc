@@ -1,9 +1,9 @@
 ---
-description: Parley project context and ground rules
+description: Debt Settlement Agent project context and ground rules
 alwaysApply: true
 ---
 
-# Parley
+# Debt Settlement Agent
 
 Voice agent that negotiates debt settlements. Code-based policy decides every move; the LLM only extracts terms (NLU) and phrases moves with fact placeholders (NLG). The vendored `feasibility/` engine is the source of truth for every number.
 

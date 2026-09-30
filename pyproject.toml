@@ -1,5 +1,5 @@
 [project]
-name = "parley"
+name = "debt-settlement-agent"
 version = "0.1.0"
 description = "Voice agent that negotiates debt settlements"
 requires-python = ">=3.12,<3.13"

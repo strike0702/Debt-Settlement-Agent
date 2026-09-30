@@ -1,0 +1,48 @@
+{"text": "We can settle for twenty-five hundred.", "stage": "template", "expect": "block", "reason": "number_word"}
+{"text": "How about two hundred fifty a month?", "stage": "template", "expect": "block", "reason": "number_word"}
+{"text": "That is fifty percent of the balance.", "stage": "template", "expect": "block", "reason": "number_word"}
+{"text": "First payment comes with the third draft.", "stage": "template", "expect": "block", "reason": "number_word"}
+{"text": "A dozen payments is too many.", "stage": "template", "expect": "block", "reason": "number_word"}
+{"text": "Half of what you asked is our floor.", "stage": "template", "expect": "block", "reason": "number_word"}
+{"text": "We need a couple more months.", "stage": "template", "expect": "block", "reason": "number_word"}
+{"text": "One payment is all we can do.", "stage": "template", "expect": "block", "reason": "number_word"}
+{"text": "Give me one moment to confirm.", "stage": "template", "expect": "pass", "reason": ""}
+{"text": "No one from our firm will call again.", "stage": "template", "expect": "pass", "reason": ""}
+{"text": "One more thing before we wrap.", "stage": "template", "expect": "pass", "reason": ""}
+{"text": "One second while I pull that up.", "stage": "template", "expect": "pass", "reason": ""}
+{"text": "We can offer {offer_total} over {num_payments} payments.", "stage": "template", "expect": "pass", "reason": ""}
+{"text": "Starting {first_payment_date} at {settlement_pct}.", "stage": "template", "expect": "pass", "reason": ""}
+{"text": "The payment level is {payment_level}.", "stage": "template", "expect": "pass", "reason": ""}
+{"text": "That comes to $750 total.", "stage": "template", "expect": "block", "reason": "digit"}
+{"text": "Our ask is 45%.", "stage": "template", "expect": "block", "reason": "digit"}
+{"text": "Budget is around $.", "stage": "template", "expect": "block", "reason": "dollar"}
+{"text": "Share is marked with a % sign only.", "stage": "template", "expect": "block", "reason": "percent"}
+{"text": "Please use {secret_balance} here.", "stage": "template", "expect": "block", "reason": "unknown_placeholder"}
+{"text": "I can do about 2.5k on this.", "stage": "rendered", "expect": "block", "reason": "boundary"}
+{"text": "Call it 2.5K all-in.", "stage": "rendered", "expect": "block", "reason": "boundary"}
+{"text": "Roughly 10k over the program.", "stage": "rendered", "expect": "block", "reason": "unverified_number"}
+{"text": "Private draft is $2,500.", "stage": "rendered", "expect": "block", "reason": "boundary"}
+{"text": "They have 2500 dollars available.", "stage": "rendered", "expect": "block", "reason": "boundary"}
+{"text": "Ledger shows 2,500.00 sitting there.", "stage": "rendered", "expect": "block", "reason": "boundary"}
+{"text": "Balance sits at $2500 exactly.", "stage": "rendered", "expect": "block", "reason": "boundary"}
+{"text": "Hidden figure twenty-five hundred must not leak.", "stage": "rendered", "expect": "block", "reason": "boundary"}
+{"text": "Client max is 37.5%.", "stage": "rendered", "expect": "block", "reason": "unverified_number"}
+{"text": "That is 12 percent more than ask.", "stage": "rendered", "expect": "block", "reason": "unverified_number"}
+{"text": "Pay by March 3rd please.", "stage": "rendered", "expect": "block", "reason": "unverified_number"}
+{"text": "ISO date 2026-07-04 is wrong here.", "stage": "rendered", "expect": "block", "reason": "unverified_number"}
+{"text": "Send it by 7/4/2026.", "stage": "rendered", "expect": "block", "reason": "unverified_number"}
+{"text": "The 15th works for us.", "stage": "rendered", "expect": "block", "reason": "unverified_number"}
+{"text": "We agree to those terms today.", "stage": "rendered", "expect": "block", "reason": "commitment"}
+{"text": "I accept the schedule as written.", "stage": "rendered", "expect": "block", "reason": "commitment"}
+{"text": "My client commits to that plan.", "stage": "rendered", "expect": "block", "reason": "commitment"}
+{"text": "The client guarantees payment on time.", "stage": "rendered", "expect": "block", "reason": "commitment"}
+{"text": "We promise this closes the account.", "stage": "rendered", "expect": "block", "reason": "commitment"}
+{"text": "It's a deal on our side.", "stage": "rendered", "expect": "block", "reason": "commitment"}
+{"text": "Agreed, we can move forward.", "stage": "rendered", "expect": "block", "reason": "commitment"}
+{"text": "We have an agreement in place.", "stage": "rendered", "expect": "block", "reason": "commitment"}
+{"text": "We can do $750 over 6 payments starting April 15.", "stage": "rendered", "expect": "pass", "reason": ""}
+{"text": "Our counter is 45%.", "stage": "rendered", "expect": "pass", "reason": ""}
+{"text": "The monthly level is $125.", "stage": "rendered", "expect": "pass", "reason": ""}
+{"text": "The payment date is April 15.", "stage": "rendered", "expect": "pass", "reason": ""}
+{"text": "That is 6 payments at 45%.", "stage": "rendered", "expect": "pass", "reason": ""}
+{"text": "Let me check with my client and get back to you.", "stage": "rendered", "expect": "pass", "reason": ""}

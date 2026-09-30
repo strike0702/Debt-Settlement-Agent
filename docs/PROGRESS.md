@@ -9,7 +9,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 0 | Scaffold and vendored engine | done |
 | 1 | Domain model | done |
 | 2 | Engine adapter and validator | done |
-| 3 | Numbers and guards | pending |
+| 3 | Numbers and guards | done |
 | 4 | Policy, NLG templates, audit | pending |
 | 5 | LLM client and provider pool | pending |
 | 6 | NLU and LLM NLG | pending |
@@ -82,6 +82,19 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `BINDING_RULES` — 10 ids: `cadence`, `exact_sum`, `non_decreasing`, `floors`, `token_count`, `even_vector`, `segments`, `fees_and_horizon`, `ledger_nonnegative`, `balance_match`
 - `validate(schedule_rows, client, offer_total, program_fee, rules, first_payment_date) -> list[Violation]` — no imports of `feasibility.simulate` / `shapes` / `scoring`
 
+### `app.agent.numbers`
+- `NUMBER_WORDS: frozenset[str]` — zero..twenty, thirty..ninety, hundred/thousand/million, first..twelfth, half, quarter, dozen, couple
+- `ONE_ALLOWLIST_PHRASES` — `no one`, `one moment`, `one more`, `one second`
+- `class NumberToken` — `kind` (`money`|`pct`|`count`|`date`|`ordinal`), `value: int | date`, `raw`, `start`, `end`; `as_pair() -> tuple[str, int | date]`
+- `words_to_number(text: str) -> int | None` — common forms including `two hundred fifty`, `twenty-five hundred`
+- `extract_tokens(text: str, *, ref: date | None = None) -> list[NumberToken]` — order: money `$…`, abbrev `2.5k`, pct, dates (named/ISO/slash), ordinals, bare, number words (span-masked); `N dollars` → money
+- `normalize_token(token: NumberToken) -> tuple[str, int | date]`
+
+### `app.agent.guards`
+- `class GuardResult` — `ok: bool`, `reason: str`, `offending: list[str]`
+- `template_guard(text, allowed_ids, required_ids) -> GuardResult` — reasons: `digit`, `dollar`, `percent`, `number_word`, `unknown_placeholder`, `missing_required`
+- `rendered_guard(text, public_facts, creditor_numbers, private_blocklist, *, ref=None) -> GuardResult` — reasons: `unverified_number`, `boundary`, `commitment`; money↔count dollar cross-match; public/private collision allowed
+
 ## Deviations from PLAN.md
 
 - Ruff `extend-exclude = ["feasibility"]` so vendored engine stays untouched (UP035 on `shapes.py` otherwise).
@@ -89,6 +102,9 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `max_token_pays` has no static `default_factory`; BeliefState keeps it ASSUMED and copies `max_payments` when that field is observed (PLAN: default is max_payments / no limit).
 - Domain unit helpers live in `app/domain/units.py` (PLAN/PHASES said `money.py`); covers money, pct, date, and count.
 - `evaluate(..., *, assumed=)` optional kwarg so assumed field names can be recorded without re-passing belief.
+- Money regex uses comma-required branch plus plain `\$\s?\d+` so `$2500` is not truncated to `$250` (PLAN's `(?:,\d{3})*` form).
+- `rendered_guard` accepts optional `ref=` for date parsing; commitment regex allows conjugated verbs (`commits`, `guarantees`, …).
+- Abbrev forms (`2.5k` / `10K`) extracted as money before bare numbers (not listed in PLAN order; needed for hidden-figure coverage).
 
 ## Open issues
 
@@ -111,3 +127,8 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - Tests: 106 passed.
 - Timing: demo affordability median 8.3 ms (see Environment facts).
 - Notes: `gap_curve` has interior infeasible band at 18–20% between feasible regions.
+
+### Phase 3 (2026-10-01)
+- Files: `app/agent/{numbers,guards}.py`, `tests/unit/{guard_adversarial.jsonl,test_guard_regression,test_numbers}.py`.
+- Tests: 173 passed.
+- Notes: 48-line adversarial corpus; regression covers template + rendered stages.

@@ -13,7 +13,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 4 | Policy, NLG templates, audit | done |
 | 5 | LLM client and provider pool | done |
 | 6 | NLU and LLM NLG | done |
-| 7 | Session, orchestrator, CLI | pending |
+| 7 | Session, orchestrator, CLI | done |
 | 8 | Simulator, scenarios, offline e2e | pending |
 | 9 | Eval runner and metrics | pending |
 | 10 | Voice and UI | pending |
@@ -121,6 +121,23 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `async analyze(utterance, last_agent_line, pending_readback, *, llm=None, settings=None, oracle=None, audit=None, call_id=None, ref=None) -> VerifiedAnalysis`
 - `NLU_MODE=oracle` requires `oracle=TurnAnalysis` (skips LLM)
 
+### `app.agent.session`
+- `class Turn` — `role` (`agent`|`creditor`), `text`, `spoken`, `sentence_id`
+- `class PendingSpeech` — `action`, `sentence_ids`, `acked`
+- `class CallSession` — `call_id`, `scenario`, `belief`, `neg: NegotiationState`, `history`, `pending`, `last_eval`, `agreed_bp`, `agreement`, `creditor_numbers`, `private_blocklist`; props `phase`, `turn_idx`; `last_agent_line()`
+
+### `app.agent.orchestrator`
+- `class Utterance` — `sentences: list[tuple[id, text]]`, `action`, `timings`, `belief_changes`, `agreement`
+- `apply_effects(session, effects) -> None`
+- `class Orchestrator(session, *, llm=None, settings=None, audit=None, auto_ack=False)`
+  - `async start() -> Utterance`
+  - `async on_creditor_text(text, timings=None, *, oracle=None) -> Utterance` — cancel-and-merge during NLU; queue after NLU; affordability via `asyncio.to_thread`; timings `nlu_ms`/`policy_ms`/`nlg_ms`/`server_total_ms`
+  - `async on_sentence_done(ids) -> Agreement | None` — commits effects when all pending sentences acked; drafts agreement on `PROPOSE_WRAP` after validator pass
+  - `async on_barge_in(spoken_ids) -> None` — drops pending effects; keeps belief
+
+### `app.cli`
+- `python -m app.cli [fixtures/demo]` — type as rep; auto-acks; prints lines, belief, timings, verdict
+
 ### `app.llm.prompts`
 - `PLACEHOLDER_MEANINGS: dict[str, str]`
 - `nlu_messages(utterance, last_agent_line, pending_readback) -> list[dict]`
@@ -209,3 +226,22 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - Files: `app/llm/prompts.py`, `app/agent/nlu.py`, `app/agent/nlg.py` (LLM `speak_action`), `tests/unit/test_nlu_nlg_llm.py`, `tests/live/test_nlu_live.py`.
 - Tests: 224 passed offline (+1 skipped live); FakeLLM covers hallucinated quote drop, hedged two-fifty `verified=False`, `$250`→25000 verified, invalid JSON retry, NLG digit/unknown-placeholder fallback.
 - Live NLU (`DSA_LIVE=1`, demo profile, Groq): **15/15 (100%)** on the synthetic rep corpus.
+
+### Phase 7 (2026-10-01)
+- Files: `app/agent/session.py`, `app/agent/orchestrator.py`, `app/cli.py`, `tests/unit/test_orchestrator.py`.
+- Tests: 229 passed offline (+1 skipped live). Covers barge-in re-offer, contradiction→CLARIFY, private refuse→escalate, full call→PROPOSE_WRAP + validator-clean agreement, timings.
+- Manual CLI (`python -m app.cli fixtures/demo`, demo profile, live Groq). Short transcript to PROPOSE_WRAP:
+
+```
+agent: Good morning, this is Synthetic Debt Relief. … How may I assist you today?
+rep:   Max eight payments, minimum one hundred dollars, even payments please.
+agent: [ASK_SETTLEMENT] What percentage of the balance would you like to settle?
+       belief: max_payments/min_payment_cents/payment_structure → KNOWN
+rep:   We are looking for a forty five percent settlement.
+agent: [CONFIRM_SCHEDULE] We can schedule 2 payments totaling $562.50, starting on March 31.
+rep:   Yes I accept that payment schedule. Agreed.
+agent: [PROPOSE_WRAP] (NLG fell back to SAFE_FALLBACK once; agreement still drafted)
+engine: feasible=True shape=even offer=$562.50 settlement=45%
+agreement: NorthPeak Collections bp=4500 offer_total=56250 pending_client_approval rows=2
+phase: WRAP
+```

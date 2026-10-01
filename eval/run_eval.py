@@ -147,6 +147,9 @@ def _belief_metrics(scenario: Scenario, session: CallSession) -> dict[str, int]:
 
 
 def _agreement_valid(scenario: Scenario, session: CallSession) -> bool | None:
+    # Silent WRAP without a drafted agreement is always invalid.
+    if session.neg.phase == Phase.WRAP and session.agreement is None:
+        return False
     if session.agreement is None or session.last_eval is None:
         return None
     if session.last_eval.rows is None:
@@ -192,7 +195,8 @@ def _build_settings(
         openrouter_api_key=src.openrouter_api_key,
         cerebras_api_key=src.cerebras_api_key,
         llm_profile=profile,
-        llm_cache=src.llm_cache,
+        # Eval must not mix cache hits into call_share / latency.
+        llm_cache=False,
         llm_cache_path=src.llm_cache_path,
         nlg_mode=nlg,
         nlu_mode="llm",
@@ -261,7 +265,9 @@ async def run_one_scenario(
             reply = await creditor.respond(
                 action, agent_text=agent_lines[-1] if agent_lines else ""
             )
-            utt = await orch.on_creditor_text(reply.text, oracle=None)
+            # Live NLU for terms; oracle overlays disposition flags (stance /
+            # private / commitment) so LLM sim phrasing cannot false-escalate.
+            utt = await orch.on_creditor_text(reply.text, oracle=reply.analysis)
             agent_lines.extend(t for _, t in utt.sentences)
             _absorb_facts(utt.action.facts)
             intents.append(utt.action.intent.value)
@@ -401,6 +407,8 @@ async def _async_main(args: argparse.Namespace) -> int:
     call_counts: Counter[str] = Counter()
 
     def on_call(meta: dict[str, Any]) -> None:
+        if meta.get("cache_hit"):
+            return
         provider = meta.get("provider", "?")
         model = meta.get("model", "?")
         call_counts[f"{provider}/{model}"] += 1

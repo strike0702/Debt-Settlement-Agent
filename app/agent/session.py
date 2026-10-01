@@ -31,11 +31,17 @@ class Turn:
 
 @dataclass
 class PendingSpeech:
-    """Sentences waiting for ``sentence_done`` / barge-in acks."""
+    """Sentences waiting for ``sentence_done`` / barge-in acks.
+
+    ``pending_eval`` / ``pending_agreed_bp`` are engine results for CONFIRM/WRAP
+    that commit only on speech ack (barge-in discards them).
+    """
 
     action: Action
     sentence_ids: list[str]
     acked: set[str] = field(default_factory=set)
+    pending_eval: EvalSummary | None = None
+    pending_agreed_bp: int | None = None
 
 
 @dataclass

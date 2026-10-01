@@ -82,3 +82,13 @@ def test_span_masking_no_overlap() -> None:
     assert len(toks) == 1
     assert toks[0].kind == "money"
     assert toks[0].value == 75_000
+
+
+def test_invalid_named_date_skipped() -> None:
+    toks = extract_tokens("due February 30", ref=date(2026, 1, 1))
+    assert not any(t.kind == "date" for t in toks)
+
+
+def test_invalid_iso_date_skipped() -> None:
+    toks = extract_tokens("due 2026-13-01", ref=date(2026, 1, 1))
+    assert not any(t.kind == "date" for t in toks)

@@ -86,15 +86,22 @@ def next_counter(
     c_prev: int | None,
     anchor_ratio: float,
     concession_factor: float,
-) -> int:
-    """Ladder toward ``min(ask, max)``; snap down to feasible; never >= ask."""
+) -> int | None:
+    """Ladder toward ``min(ask, max)``; snap down to feasible; never >= ask.
+
+    Returns ``None`` when no legal counter exists (caller must NO_DEAL).
+    """
     if not feasible_bps:
         raise ValueError("next_counter requires at least one feasible bp")
 
+    legal = [bp for bp in feasible_bps if bp <= max_bp and bp < ask_bp]
+    if not legal:
+        return None
+
     target = min(ask_bp, max_bp)
     ratio_cap = int(Decimal(str(anchor_ratio)) * Decimal(target))
-    under_ratio = [bp for bp in feasible_bps if bp <= ratio_cap]
-    anchor = max(under_ratio) if under_ratio else min(feasible_bps)
+    under_ratio = [bp for bp in legal if bp <= ratio_cap]
+    anchor = max(under_ratio) if under_ratio else min(legal)
 
     if c_prev is None:
         c_next = anchor
@@ -102,26 +109,20 @@ def next_counter(
         delta = target - c_prev
         step = ceil(delta * concession_factor) if delta > 0 else 0
         raw = c_prev + step
-        under = [bp for bp in feasible_bps if bp <= raw]
+        under = [bp for bp in legal if bp <= raw]
         c_next = max(under) if under else c_prev
         if c_next < c_prev:
             c_next = c_prev
 
-    # Never at or above the rep's ask.
-    if c_next >= ask_bp:
-        under_ask = [bp for bp in feasible_bps if bp < ask_bp]
-        if not under_ask:
-            # No legal counter below ask — caller should NO_DEAL / escalate.
-            return c_prev if c_prev is not None else min(feasible_bps)
-        c_next = max(under_ask)
+    # Never at or above the rep's ask; never above max_bp.
+    if c_next >= ask_bp or c_next > max_bp:
+        c_next = max(legal)
         if c_prev is not None and c_next < c_prev:
-            c_next = c_prev
+            # Cannot advance legally — stall signal for caller.
+            return c_prev if c_prev in legal else None
 
-    # Also never above max_bp.
-    if c_next > max_bp:
-        under_max = [bp for bp in feasible_bps if bp <= max_bp and bp < ask_bp]
-        c_next = max(under_max) if under_max else c_next
-
+    if c_next > max_bp or c_next >= ask_bp:
+        return None
     return c_next
 
 
@@ -198,7 +199,9 @@ def _fact_for_value(fact_id: str, field: str, value: Any) -> Fact:
 def _confirm_key(belief: BeliefState, ask_bp: int) -> tuple[Any, ...]:
     """Fingerprint of ask + rule values that shape a CONFIRM schedule.
 
-    Values are JSON-safe (dates → ISO) so ``record_confirm`` can hit the audit log.
+    Includes every field that feeds ``CreditorRules`` so an ASSUMED-field
+    change after reject→ASK invalidates the prior key and forces a fresh
+    CONFIRM. Values are JSON-safe (dates → ISO) for the audit log.
     """
 
     def _norm(v: Any) -> Any:
@@ -216,6 +219,9 @@ def _confirm_key(belief: BeliefState, ask_bp: int) -> tuple[Any, ...]:
         _norm(belief.get("min_payment_cents").value),
         _norm(belief.get("payment_structure").value),
         _norm(belief.get("first_payment_date").value),
+        _norm(belief.get("max_segments").value),
+        _norm(belief.get("max_token_pays").value),
+        _norm(belief.get("min_payment_tiers").value),
     )
 
 
@@ -278,8 +284,8 @@ def _stall_after_confirm(
     max_counters: int,
 ) -> Action:
     """Rejected/identical CONFIRM: verify each ASSUMED field once, else no-deal."""
+    del max_counters  # reserved; once ASSUMED fields exhausted we always end
     effects = list(effects) + [Effect(kind="inc_confirm_reject")]
-    reject_n = neg.confirm_rejects + 1
     fname = _first_assumed_field(belief, already_asked=neg.assumed_asked)
     if fname is not None:
         spec = FIELDS_BY_NAME[fname]
@@ -291,13 +297,6 @@ def _stall_after_confirm(
             + [Effect(kind="note_assumed_asked", data={"field": fname})],
             next_phase=Phase.DISCOVERY,
             reason=fname,
-        )
-    if reject_n >= max_counters:
-        return Action(
-            intent=Intent.NO_DEAL_WRAP,
-            effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
-            next_phase=Phase.END,
-            reason="confirm_rejected",
         )
     return Action(
         intent=Intent.NO_DEAL_WRAP,
@@ -393,20 +392,16 @@ def decide(
             reason="commitment",
         )
 
-    # 10 (early): In CONFIRM, accept → wrap with draft intent.
-    if neg.phase == Phase.CONFIRM and (
-        analysis.stance == "accept" or analysis.readback_response == "confirm"
-    ):
-        facts = dict(confirm_facts or {})
+    # Rep wants to end (not mid-accept of a schedule).
+    if analysis.wants_to_end and analysis.stance != "accept":
         return Action(
-            intent=Intent.PROPOSE_WRAP,
-            facts=facts,
-            effects=effects + [Effect(kind="set_phase", data={"phase": Phase.WRAP.value})],
-            next_phase=Phase.WRAP,
-            reason="confirmed",
+            intent=Intent.NO_DEAL_WRAP,
+            effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
+            next_phase=Phase.END,
+            reason="wants_to_end",
         )
 
-    # 5. Contradictions before read-backs / asks
+    # 5. Contradictions before read-backs / wrap / asks
     contradicted = belief.contradicted_fields()
     if contradicted:
         fname = contradicted[0]
@@ -450,7 +445,7 @@ def decide(
             reason=fname,
         )
 
-    # 6. Tentative → read-back
+    # 6. Tentative → read-back (before schedule wrap)
     tentative = belief.tentative_fields()
     if tentative:
         fname = tentative[0]
@@ -472,6 +467,17 @@ def decide(
             + [Effect(kind="set_pending_readback", data={"field": fname})],
             next_phase=Phase.DISCOVERY,
             reason=fname,
+        )
+
+    # 10: In CONFIRM, accept stance only → wrap (not readback_response).
+    if neg.phase == Phase.CONFIRM and analysis.stance == "accept":
+        facts = dict(confirm_facts or {})
+        return Action(
+            intent=Intent.PROPOSE_WRAP,
+            facts=facts,
+            effects=effects + [Effect(kind="set_phase", data={"phase": Phase.WRAP.value})],
+            next_phase=Phase.WRAP,
+            reason="confirmed",
         )
 
     # 7. Missing required field
@@ -609,11 +615,19 @@ def decide(
         anchor_ratio=cfg.anchor_ratio,
         concession_factor=cfg.concession_factor,
     )
+    if c_next is None:
+        return Action(
+            intent=Intent.NO_DEAL_WRAP,
+            effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
+            next_phase=Phase.END,
+            reason="no_legal_counter",
+        )
+
     # If the ladder stalls below the ceiling, jump to the ceiling once.
     if c_prev is not None and c_next <= c_prev and ceiling is not None and ceiling > c_prev:
         c_next = ceiling
 
-    # Identical counter re-offer (incl. NLU miss on reject) counts toward cap.
+    # Identical / illegal stall: count toward cap then NO_DEAL or COUNTER.
     if c_prev is not None and c_next <= c_prev:
         if not any(e.kind == "inc_reject_at_max" for e in effects):
             effects.append(Effect(kind="inc_reject_at_max"))
@@ -626,20 +640,7 @@ def decide(
                 reason="max_counters",
             )
 
-    # If we cannot move at the ceiling, no-deal after enough rejects.
-    if c_prev is not None and c_next <= c_prev and at_ceiling:
-        reject_n = neg.rejects + (
-            1 if any(e.kind == "inc_reject_at_max" for e in effects) else 0
-        )
-        if reject_n >= cfg.max_counters:
-            return Action(
-                intent=Intent.NO_DEAL_WRAP,
-                effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
-                next_phase=Phase.END,
-                reason="max_counters",
-            )
-
-    if c_next >= ask_bp:
+    if c_next >= ask_bp or c_next > afford.max_bp:
         return Action(
             intent=Intent.NO_DEAL_WRAP,
             effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],

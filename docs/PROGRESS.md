@@ -114,6 +114,9 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
   - Identical CONFIRM: `reject` → ASK each ASSUMED once then NO_DEAL; other → soft retry then `confirm_unacked`
   - Unresolved CONTRADICTED after 2 CLARIFY → `ESCALATE(contradiction_unresolved)`
   - Identical COUNTER re-offer counts toward `max_counters` even if NLU misses `reject`
+  - CONFIRM wrap only on `stance == "accept"` (not `readback_response`); contradiction/tentative before wrap
+  - `wants_to_end` → NO_DEAL when not accepting
+  - `_confirm_key` fingerprints all CreditorRules fields; `next_counter` → `None` when no legal bp
 - `draft_agreement(*, creditor, bp, offer_total, rows, assumed_fields, audit=None, call_id=None) -> Agreement`
 - `opening_action(*, settings=None, firm_name=None, opening_disclosure=None) -> Action`
 
@@ -138,10 +141,10 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 
 ### `eval.metrics`
 - `load_scenario_results(run_dir) -> list[dict]`
-- `aggregate(results) -> dict` — PLAN §10 metrics + latency p50/p95
+- `aggregate(results) -> dict` — PLAN §10 metrics + latency p50/p95; empty denom → null (never vacuous 1.0); WRAP-sans-agreement counts invalid
 - `write_summaries(run_dir, summary, *, run_meta=None) -> (summary.json, summary.md)`
 - `load_thresholds(path=None) -> dict`
-- `check_thresholds(summary, thresholds=None) -> list[str]` (empty ⇒ pass)
+- `check_thresholds(summary, thresholds=None) -> list[str]` (empty ⇒ pass); gates include `no_deal_correct>=0.9`, `deal_rate_given_zopa>=0.75`
 
 ### `eval.run_eval`
 - CLI: `python -m eval.run_eval --scenarios N --seed S [--resume RUN_ID] [--profile] [--nlg llm|template] [--sim-phrasing llm|template]`
@@ -232,8 +235,49 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - Mistral chat blocked until Experiment setup (`limit-req-minute=0`); routed last so demo/eval still work via Groq/Gemini.
 - Cerebras smoke still probes `llama-3.3-70b` (wrong id; live models are `gpt-oss-120b` / `qwen-3.8-27b`) — not in role routes.
 - Local Ollama NLU (`qwen3.5:9b`): ~185 s p95; full 12-scenario local run finishes but quality fails thresholds (`escalation_correct=0`, all scenarios END).
-- Full-LLM sim phrasing can false-positive `demands_commitment` → wrong ESCALATE on some no_fix cells (`no_deal_correct` can be 0; not a threshold).
-- Rare WRAP without drafted `agreement` when validator fails under belief rules vs `last_eval` (metrics `got_deal` false while phase WRAP).
+
+## Code-review remediation (2026-10-01)
+
+Fixed must-fix findings from the post-phase-9 review (tests first):
+
+- NLU: word-boundary quotes; clear unverified ask; verify `readback_response`; tiers not auto-verified.
+- Numbers: invalid named/ISO dates no longer crash `extract_tokens`.
+- Policy: wrap only on `stance=accept` (after contradiction/tentative); `_confirm_key` includes all CreditorRules fields; `next_counter` returns `None` when no legal bp; honor `wants_to_end`.
+- Orchestrator: post-NLU queue does not overwrite live pending; `last_eval`/`agreed_bp` commit on speech ack only; WRAP without agreement → END.
+- LLM: cap short 429 retries (3) then failover.
+- Eval: no vacuous `agreement_valid=1.0`; WRAP-sans-agreement invalid; thresholds gate `no_deal_correct`/`deal_rate_given_zopa`; oracle disposition overlay under live NLU; eval forces `llm_cache=False`; sim strips injected commitment phrasing and re-raises `LLMUnavailable`.
+- Guards: block `we have a deal` / bare `deal` commitment variants.
+
+#### Cheap template re-check (`eval_20261001_081835_s7`)
+
+```
+# Eval summary
+
+- run_id: `eval_20261001_081835_s7`  seed=7  profile=`eval`  nlg=`template`  sim=`template`
+- git: `2c6add72a0d79a7ae895e15c0af94c5e2d7b0209`
+- model share: gemini/gemini-3.1-flash-lite=100.0%
+
+| metric | value |
+|---|---|
+| n_completed / n_scenarios | 12/12 |
+| skipped_quota | 0 |
+| agreement_valid | 1 |
+| deal_rate_given_zopa | 1 |
+| no_deal_correct | 1 |
+| escalation_correct | 1 |
+| unverified_figures_spoken | 0 |
+| sensitive_leaks | 0 |
+| guard_blocks | 0 |
+| rule_extraction_accuracy | 1 |
+| false_known_rate | 0.000 |
+| readback_count (mean) | 0.000 |
+| turns_to_proposal (mean) | 2.667 |
+| surplus_captured (mean) | 0.412 |
+
+thresholds: PASS
+```
+
+Closed by remediation: WRAP-without-agreement silent success; full-LLM sim false `demands_commitment` (oracle overlay + phrase strip); vacuous agreement_valid.
 
 ## Phase handoffs
 

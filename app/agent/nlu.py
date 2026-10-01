@@ -85,7 +85,7 @@ class VerifiedAnalysis(BaseModel):
 
 
 def normalize_for_quote(text: str) -> str:
-    """Lowercase, strip punctuation, collapse whitespace (quote substring check)."""
+    """Lowercase, strip punctuation, collapse whitespace (quote match)."""
     s = text.lower()
     s = re.sub(r"[^\w\s]", "", s)
     s = re.sub(r"\s+", " ", s).strip()
@@ -93,11 +93,50 @@ def normalize_for_quote(text: str) -> str:
 
 
 def quote_in_utterance(quote: str, utterance: str) -> bool:
-    """True when normalized quote is a substring of normalized utterance."""
+    """True when normalized quote appears as whole word(s) in the utterance.
+
+    Uses word boundaries so ``six`` does not match inside ``sixteen`` and
+    ``250`` does not match inside ``1250``.
+    """
     q = normalize_for_quote(quote)
     if not q:
         return False
-    return q in normalize_for_quote(utterance)
+    u = normalize_for_quote(utterance)
+    return bool(re.search(rf"(?<!\w){re.escape(q)}(?!\w)", u))
+
+
+_READBACK_CONFIRM_RE = re.compile(
+    r"\b(?:"
+    r"yes"
+    r"|correct"
+    r"|that's right"
+    r"|thats right"
+    r"|that is correct"
+    r"|confirmed"
+    r"|confirm"
+    r")\b",
+    re.IGNORECASE,
+)
+_READBACK_DENY_RE = re.compile(
+    r"\b(?:"
+    r"no"
+    r"|incorrect"
+    r"|that's wrong"
+    r"|thats wrong"
+    r"|not correct"
+    r"|deny"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _verify_readback_response(claimed: str | None, utterance: str) -> str | None:
+    """Keep confirm/deny only when the utterance contains a matching phrase."""
+    if claimed == "confirm" and _READBACK_CONFIRM_RE.search(utterance):
+        return "confirm"
+    if claimed == "deny" and _READBACK_DENY_RE.search(utterance):
+        return "deny"
+    return None
 
 
 def coerce_analysis_payload(data: dict[str, Any]) -> dict[str, Any]:
@@ -183,7 +222,8 @@ def _value_matches_tokens(field: str, value: Any, quote: str, *, ref: date) -> b
                 return False
         return any(t.kind == "date" and t.value == value for t in tokens)
     if spec.kind == "tiers":
-        return True
+        # Tier structures are not number-verified; force TENTATIVE / read-back.
+        return False
     return False
 
 
@@ -198,6 +238,32 @@ def _ask_matches(pct: float, quote: str | None, *, ref: date) -> bool:
         if t.kind == "count" and t.value == int(pct):
             return True
     return False
+
+
+def _value_matches_utterance_span(
+    field: str, value: Any, quote: str, utterance: str, *, ref: date
+) -> bool:
+    """True when an utterance token spanning the quote matches ``value``.
+
+    Prefer maximal ``extract_tokens(utterance)`` spans over re-parsing a possibly
+    truncated quote string in isolation (blocks ``250`` vs ``1250`` style tricks
+    even if a boundary check were bypassed).
+    """
+    q = normalize_for_quote(quote)
+    if not q:
+        return False
+    u_norm = normalize_for_quote(utterance)
+    # Find quote as whole words in normalized utterance, then check raw tokens.
+    if not re.search(rf"(?<!\w){re.escape(q)}(?!\w)", u_norm):
+        return False
+    # Prefer tokens whose raw text normalizes to the quote (exact span).
+    for tok in extract_tokens(utterance, ref=ref):
+        if normalize_for_quote(tok.raw) != q:
+            continue
+        if _value_matches_tokens(field, value, tok.raw, ref=ref):
+            return True
+    # Fallback: quote itself parses to the claimed value (multi-word quotes).
+    return _value_matches_tokens(field, value, quote, ref=ref)
 
 
 # Deterministic stance repair when the LLM mislabels clear accept/reject lines.
@@ -271,11 +337,16 @@ def post_verify(
             except ValueError:
                 _log("nlu_rejected_date", {"field": term.field, "value": term.value})
                 continue
-        matched = _value_matches_tokens(term.field, value, term.quote, ref=ref_d)
         if spec is not None and spec.kind == "enum":
-            matched = normalize_for_quote(str(value)) in normalize_for_quote(term.quote)
-        if spec is not None and spec.kind == "tiers":
-            matched = True
+            matched = normalize_for_quote(str(value)) in normalize_for_quote(
+                term.quote
+            )
+        elif spec is not None and spec.kind == "tiers":
+            matched = False
+        else:
+            matched = _value_matches_utterance_span(
+                term.field, value, term.quote, utterance, ref=ref_d
+            )
         verified_terms.append(
             VerifiedTerm(
                 field=term.field,
@@ -290,17 +361,35 @@ def post_verify(
     ask_quote = analysis.ask_quote
     ask_verified = False
     if ask_pct is not None:
-        if ask_quote and not quote_in_utterance(ask_quote, utterance):
+        # Missing quote ≡ rejected; only keep ask when quote matches AND value matches.
+        if not ask_quote or not quote_in_utterance(ask_quote, utterance):
             _log(
                 "nlu_rejected_quote",
                 {"field": "settlement_ask_pct", "quote": ask_quote},
             )
             ask_pct = None
             ask_quote = None
-        elif ask_quote:
-            ask_verified = _ask_matches(ask_pct, ask_quote, ref=ref_d)
+        elif not _ask_matches(ask_pct, ask_quote, ref=ref_d):
+            _log(
+                "nlu_rejected_ask_value",
+                {
+                    "field": "settlement_ask_pct",
+                    "pct": ask_pct,
+                    "quote": ask_quote,
+                },
+            )
+            ask_pct = None
+            ask_quote = None
+        else:
+            ask_verified = True
 
     stance = repair_stance(analysis.stance, utterance)
+    readback = _verify_readback_response(analysis.readback_response, utterance)
+    if analysis.readback_response and readback is None:
+        _log(
+            "nlu_rejected_readback",
+            {"claimed": analysis.readback_response, "utterance": utterance[:120]},
+        )
 
     return VerifiedAnalysis(
         terms=verified_terms,
@@ -308,7 +397,7 @@ def post_verify(
         ask_quote=ask_quote,
         ask_verified=ask_verified,
         stance=stance,  # type: ignore[arg-type]
-        readback_response=analysis.readback_response,
+        readback_response=readback,
         asks_client_private_info=analysis.asks_client_private_info,
         demands_commitment=analysis.demands_commitment,
         hostility=analysis.hostility,
@@ -382,4 +471,22 @@ async def analyze(
             )
         analysis = empty
 
-    return post_verify(analysis, utterance, ref=ref, audit=audit, call_id=call_id)
+    verified = post_verify(analysis, utterance, ref=ref, audit=audit, call_id=call_id)
+
+    # When a sim/oracle disposition is supplied under live NLU, keep verified
+    # terms/ask from the LLM but overlay stance flags from ground truth so
+    # phrasing artifacts cannot false-escalate.
+    if oracle is not None:
+        verified = verified.model_copy(
+            update={
+                "stance": repair_stance(oracle.stance, utterance),
+                "readback_response": _verify_readback_response(
+                    oracle.readback_response, utterance
+                ),
+                "asks_client_private_info": oracle.asks_client_private_info,
+                "demands_commitment": oracle.demands_commitment,
+                "hostility": oracle.hostility,
+                "wants_to_end": oracle.wants_to_end,
+            }
+        )
+    return verified

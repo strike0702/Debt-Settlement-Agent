@@ -60,10 +60,16 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
     errors = [r for r in results if r.get("status") == "error"]
 
     # --- agreement_valid ---
+    # Score drafted agreements and WRAP-sans-agreement. Empty denom → null
+    # (never vacuous 1.0). WRAP without a deal is always invalid.
     agr_ok = 0
     agr_n = 0
     for r in completed:
         v = r.get("agreement_valid")
+        phase = r.get("phase")
+        if phase == "WRAP" and not r.get("got_deal"):
+            agr_n += 1
+            continue
         if v is None:
             continue
         agr_n += 1
@@ -151,14 +157,14 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
         "n_completed": len(completed),
         "n_skipped_quota": len(skipped),
         "n_error": len(errors),
-        # Vacuous 1.0 when the denominator is empty (threshold keys).
-        "agreement_valid": _rate(agr_ok, agr_n) if agr_n else 1.0,
+        # null when empty denom — thresholds fail closed (never vacuous 1.0).
+        "agreement_valid": _rate(agr_ok, agr_n),
         "agreement_valid_n": agr_n,
         "deal_rate_given_zopa": _rate(zopa_deal_ok, zopa_n),
         "deal_rate_given_zopa_n": zopa_n,
         "no_deal_correct": _rate(no_deal_ok, no_deal_n),
         "no_deal_correct_n": no_deal_n,
-        "escalation_correct": _rate(esc_ok, esc_n) if esc_n else 1.0,
+        "escalation_correct": _rate(esc_ok, esc_n),
         "escalation_correct_n": esc_n,
         "unverified_figures_spoken": unverified,
         "sensitive_leaks": leaks,
@@ -170,6 +176,7 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
         "readback_count": _mean(readbacks),
         "turns_to_proposal": _mean(turns),
         "surplus_captured": _mean(surplus),
+        "surplus_n": len(surplus),
         "latency": latency,
     }
 

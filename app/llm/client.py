@@ -43,6 +43,7 @@ _DEFAULT_PROVIDERS = _REPO_ROOT / "config" / "providers.yaml"
 _WHISPER_PROMPT = "settlement, minimum payment, balloon, monthly payments, percent"
 _FENCE_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```\s*$", re.DOTALL | re.IGNORECASE)
 _SHORT_RETRY_S = 20.0
+_MAX_SHORT_RETRIES = 3
 
 _KEY_ATTR = {
     "GROQ_API_KEY": "groq_api_key",
@@ -650,6 +651,7 @@ class LLMClient:
         limiter = self._limiters[provider]
         backoff_s = [1.0, 2.0, 4.0]
         attempt_5xx = 0
+        short_retries = 0
 
         while True:
             await limiter.acquire()
@@ -667,7 +669,12 @@ class LLMClient:
                 resp = await client.chat.completions.create(**kwargs)
             except RateLimitError as e:
                 ra = self._retry_after_seconds(e)
-                if ra is not None and ra <= _SHORT_RETRY_S:
+                if (
+                    ra is not None
+                    and ra <= _SHORT_RETRY_S
+                    and short_retries < _MAX_SHORT_RETRIES
+                ):
+                    short_retries += 1
                     await asyncio.sleep(ra)
                     continue
                 self._mark_exhausted(provider, model, ra)
@@ -675,7 +682,12 @@ class LLMClient:
             except APIStatusError as e:
                 if self._is_gemini_quota_400(provider, e):
                     ra = self._retry_after_seconds(e)
-                    if ra is not None and ra <= _SHORT_RETRY_S:
+                    if (
+                        ra is not None
+                        and ra <= _SHORT_RETRY_S
+                        and short_retries < _MAX_SHORT_RETRIES
+                    ):
+                        short_retries += 1
                         await asyncio.sleep(ra)
                         continue
                     self._mark_exhausted(provider, model, ra)
@@ -684,7 +696,12 @@ class LLMClient:
                     ) from e
                 if e.status_code == 429:
                     ra = self._retry_after_seconds(e)
-                    if ra is not None and ra <= _SHORT_RETRY_S:
+                    if (
+                        ra is not None
+                        and ra <= _SHORT_RETRY_S
+                        and short_retries < _MAX_SHORT_RETRIES
+                    ):
+                        short_retries += 1
                         await asyncio.sleep(ra)
                         continue
                     self._mark_exhausted(provider, model, ra)

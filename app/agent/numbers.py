@@ -333,21 +333,27 @@ def extract_tokens(text: str, *, ref: date | None = None) -> list[NumberToken]:
     for m in _PCT_RE.finditer(text):
         add("pct", _parse_pct_raw(m.group(0)), m.group(0), m.start(), m.end())
 
-    # 3. Dates (named, ISO, slash)
+    # 3. Dates (named, ISO, slash) — skip invalid calendars (no crash).
     for m in _DATE_NAMED_RE.finditer(text):
         month = _MONTHS[m.group("month").lower()]
         day = int(m.group("day"))
         year = _year_from(m.group("year"), ref)
-        add("date", date(year, month, day), m.group(0), m.start(), m.end())
+        try:
+            add("date", date(year, month, day), m.group(0), m.start(), m.end())
+        except ValueError:
+            continue
 
     for m in _DATE_ISO_RE.finditer(text):
-        add(
-            "date",
-            date(int(m.group("year")), int(m.group("month")), int(m.group("day"))),
-            m.group(0),
-            m.start(),
-            m.end(),
-        )
+        try:
+            add(
+                "date",
+                date(int(m.group("year")), int(m.group("month")), int(m.group("day"))),
+                m.group(0),
+                m.start(),
+                m.end(),
+            )
+        except ValueError:
+            continue
 
     for m in _DATE_SLASH_RE.finditer(text):
         month = int(m.group("month"))

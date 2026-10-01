@@ -213,6 +213,104 @@ def test_post_verify_repairs_reject_stance() -> None:
     assert out.stance == "reject"
 
 
+def test_six_not_verified_inside_sixteen() -> None:
+    analysis = TurnAnalysis(
+        terms=[
+            ExtractedTerm(
+                field="max_payments",
+                value=6,
+                quote="six",
+                hedged=False,
+            )
+        ],
+        stance="info",
+    )
+    out = post_verify(analysis, "sixteen payments max", ref=_REF)
+    assert out.terms == []
+
+
+def test_250_not_verified_inside_1250() -> None:
+    analysis = TurnAnalysis(
+        terms=[
+            ExtractedTerm(
+                field="min_payment_cents",
+                value=25000,
+                quote="250",
+                hedged=False,
+            )
+        ],
+        stance="info",
+    )
+    out = post_verify(analysis, "minimum is 1250 dollars", ref=_REF)
+    assert out.terms == []
+
+
+def test_ask_without_quote_cleared() -> None:
+    analysis = TurnAnalysis(
+        settlement_ask_pct=95.0,
+        ask_quote=None,
+        stance="info",
+    )
+    out = post_verify(analysis, "we want a good deal", ref=_REF)
+    assert out.settlement_ask_pct is None
+    assert out.ask_verified is False
+
+
+def test_ask_mismatched_value_cleared() -> None:
+    analysis = TurnAnalysis(
+        settlement_ask_pct=40.0,
+        ask_quote="ninety-five percent",
+        stance="info",
+    )
+    out = post_verify(
+        analysis, "we need ninety-five percent settlement", ref=_REF
+    )
+    assert out.settlement_ask_pct is None
+    assert out.ask_verified is False
+
+
+def test_ask_verified_when_quote_matches() -> None:
+    analysis = TurnAnalysis(
+        settlement_ask_pct=45.0,
+        ask_quote="forty five percent",
+        stance="counter",
+    )
+    out = post_verify(
+        analysis, "We are looking for a forty five percent settlement.", ref=_REF
+    )
+    assert out.settlement_ask_pct == 45.0
+    assert out.ask_verified is True
+
+
+def test_spoofed_readback_response_nullified() -> None:
+    analysis = TurnAnalysis(stance="info", readback_response="confirm")
+    out = post_verify(analysis, "please hold", ref=_REF)
+    assert out.readback_response is None
+
+
+def test_readback_confirm_phrase_kept() -> None:
+    analysis = TurnAnalysis(stance="info", readback_response="confirm")
+    out = post_verify(analysis, "Yes, that is correct.", ref=_REF)
+    assert out.readback_response == "confirm"
+
+
+def test_tiers_never_auto_verified() -> None:
+    analysis = TurnAnalysis(
+        terms=[
+            ExtractedTerm(
+                field="min_payment_tiers",
+                value=[{"up_to_payments": 99, "min_cents": 1}],
+                quote="tiers",
+                hedged=False,
+            )
+        ],
+        stance="info",
+    )
+    out = post_verify(analysis, "we have special tiers", ref=_REF)
+    assert len(out.terms) == 1
+    assert out.terms[0].verified is False
+
+
 @pytest.mark.asyncio
 async def test_nlg_bad_template_falls_back_to_deterministic() -> None:
     fake = FakeLLM()

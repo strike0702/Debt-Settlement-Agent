@@ -209,6 +209,49 @@ async def test_429_short_retry_same_target(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_429_short_retry_capped_then_failover(tmp_path: Path) -> None:
+    """Persistent short Retry-After must not loop forever — fail over after cap."""
+    path = _write_yaml(tmp_path, _PROVIDERS_YAML)
+    n = {"i": 0}
+
+    def primary(request: httpx.Request) -> httpx.Response:
+        n["i"] += 1
+        return httpx.Response(
+            429,
+            headers={"retry-after": "0.01"},
+            json={"error": {"message": "rate"}},
+        )
+
+    def backup(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_ok_body('{"ok": true}'))
+
+    events: list[dict[str, Any]] = []
+
+    async def on_call(meta: dict[str, Any]) -> None:
+        events.append(meta)
+
+    settings = _settings()
+    http_clients = {
+        "primary": httpx.AsyncClient(transport=httpx.MockTransport(primary)),
+        "backup": httpx.AsyncClient(transport=httpx.MockTransport(backup)),
+    }
+    client = LLMClient(
+        settings,
+        providers_path=path,
+        http_clients=http_clients,
+        on_call=on_call,
+        skip_health_check=True,
+    )
+    out = await client.chat_json("nlu", [{"role": "user", "content": "x"}], _Tiny)
+    await client.aclose()
+    assert out.ok is True
+    # 1 initial + 3 short retries = 4 attempts on primary, then backup.
+    assert n["i"] == 4
+    assert events[-1]["provider"] == "backup"
+    assert events[-1]["failover_from"] == "primary/test-model"
+
+
+@pytest.mark.asyncio
 async def test_429_long_failover(tmp_path: Path) -> None:
     path = _write_yaml(tmp_path, _PROVIDERS_YAML)
 

@@ -18,6 +18,7 @@ from typing import Any
 
 from app.adapter.engine_adapter import (
     Affordability,
+    EvalSummary,
     NeedsInfo,
     affordability,
     assumed_fields,
@@ -131,6 +132,9 @@ class Orchestrator:
         self._post_nlu_queue: str | None = None
         self._result_fut: asyncio.Future[Utterance] | None = None
         self._ref: date = session.scenario.client.as_of_date
+        # Engine eval for the in-flight turn; committed to session only on speech ack.
+        self._turn_eval: EvalSummary | None = None
+        self._turn_agreed_bp: int | None = None
 
     def _audit(self, actor: str, event_type: str, payload: dict[str, Any] | None = None) -> None:
         if self.audit is not None:
@@ -305,6 +309,8 @@ class Orchestrator:
             belief_changes = self._apply_belief(verified, turn)
             session.last_belief_changes = belief_changes
 
+            self._turn_eval = None
+            self._turn_agreed_bp = None
             afford, confirm_facts, counter_total, rescue_ok = await self._engine_context(
                 verified
             )
@@ -349,15 +355,48 @@ class Orchestrator:
 
             utterance = await self._emit(action, sentences, timings, belief_changes)
 
-            async with self._meta:
-                queued = self._post_nlu_queue
-                self._post_nlu_queue = None
-            if queued:
-                # PLAN: text after NLU is queued — process as the next turn.
-                follow = await self._run_turn(queued, {}, oracle=None)
-                return follow
+            # Only chain queued text when the prior utterance is already acked
+            # (auto_ack). Otherwise leave the queue for the next idle turn so
+            # pending effects are not overwritten.
+            if self.auto_ack:
+                async with self._meta:
+                    queued = self._post_nlu_queue
+                    self._post_nlu_queue = None
+                if queued:
+                    follow = await self._run_turn(queued, {}, oracle=None)
+                    return follow
 
             return utterance
+
+    def _commit_pending(self, pending: PendingSpeech) -> Agreement | None:
+        """Apply effects + deferred eval; draft agreement or fail WRAP to END."""
+        apply_effects(self.session, pending.action.effects)
+        if pending.pending_eval is not None:
+            self.session.last_eval = pending.pending_eval
+        if pending.pending_agreed_bp is not None:
+            self.session.agreed_bp = pending.pending_agreed_bp
+
+        agreement = self._maybe_draft_agreement(pending.action)
+        if pending.action.intent == Intent.PROPOSE_WRAP and agreement is None:
+            self.session.neg.phase = Phase.END
+            self._audit(
+                "orchestrator",
+                "wrap_failed_no_deal",
+                {"reason": "draft_failed"},
+            )
+        else:
+            self.session.neg.phase = pending.action.next_phase
+
+        self._audit(
+            "orchestrator",
+            "effects_committed",
+            {
+                "intent": pending.action.intent.value,
+                "phase": self.session.neg.phase.value,
+                "effects": [e.model_dump() for e in pending.action.effects],
+            },
+        )
+        return agreement
 
     async def on_sentence_done(self, ids: list[str] | set[str]) -> Agreement | None:
         """Ack spoken sentence ids; commit effects when all pending are done."""
@@ -378,19 +417,7 @@ class Orchestrator:
             if not set(pending.sentence_ids).issubset(pending.acked):
                 return None
 
-            apply_effects(self.session, pending.action.effects)
-            self.session.neg.phase = pending.action.next_phase
-
-            agreement = self._maybe_draft_agreement(pending.action)
-            self._audit(
-                "orchestrator",
-                "effects_committed",
-                {
-                    "intent": pending.action.intent.value,
-                    "phase": self.session.neg.phase.value,
-                    "effects": [e.model_dump() for e in pending.action.effects],
-                },
-            )
+            agreement = self._commit_pending(pending)
             self.session.pending = None
             return agreement
 
@@ -437,7 +464,14 @@ class Orchestrator:
         self.session.pending = PendingSpeech(
             action=action,
             sentence_ids=[sid for sid, _ in pairs],
+            pending_eval=self._turn_eval,
+            pending_agreed_bp=self._turn_agreed_bp,
         )
+        # Eager READ_BACK pending so barge-in doesn't lose the field before ack.
+        if action.intent == Intent.READ_BACK:
+            field = action.text_slots.get("field") or action.reason
+            if field:
+                self.session.neg.pending_readback = field
         result = Utterance(
             sentences=pairs,
             action=action,
@@ -454,18 +488,7 @@ class Orchestrator:
                 for turn in self.session.history:
                     if turn.sentence_id == sid:
                         turn.spoken = True
-            apply_effects(self.session, pending.action.effects)
-            self.session.neg.phase = pending.action.next_phase
-            agreement = self._maybe_draft_agreement(pending.action)
-            self._audit(
-                "orchestrator",
-                "effects_committed",
-                {
-                    "intent": pending.action.intent.value,
-                    "phase": self.session.neg.phase.value,
-                    "effects": [e.model_dump() for e in pending.action.effects],
-                },
-            )
+            agreement = self._commit_pending(pending)
             self.session.pending = None
             result.agreement = agreement
         return result
@@ -574,7 +597,7 @@ class Orchestrator:
             session.private_blocklist.add(("pct", afford.max_bp))
 
         ask_bp = session.neg.ask_bp
-        if verified.settlement_ask_pct is not None:
+        if verified.settlement_ask_pct is not None and verified.ask_verified:
             ask_bp = ask_pct_to_bp(verified.settlement_ask_pct)
 
         confirm_facts: dict[str, Fact] | None = None
@@ -612,8 +635,8 @@ class Orchestrator:
                     fpd,
                     assumed=assumed_fields(session.belief),
                 )
-                session.last_eval = summary
-                session.agreed_bp = ask_bp
+                self._turn_eval = summary
+                self._turn_agreed_bp = ask_bp
                 session.absorb_private_facts(summary)
                 confirm_facts = dict(summary.facts.public())
                 confirm_facts["settlement_pct"] = Fact(
@@ -633,8 +656,8 @@ class Orchestrator:
                     fpd,
                     assumed=assumed_fields(session.belief),
                 )
-                session.last_eval = summary
-                session.agreed_bp = bp
+                self._turn_eval = summary
+                self._turn_agreed_bp = bp
                 session.absorb_private_facts(summary)
                 confirm_facts = dict(summary.facts.public())
                 confirm_facts["settlement_pct"] = Fact(
@@ -683,17 +706,19 @@ class Orchestrator:
         return afford, confirm_facts, counter_total, rescue_ok
 
     async def _enrich_action(self, action: Action) -> Action:
-        if action.intent == Intent.CONFIRM_SCHEDULE and self.session.last_eval is not None:
+        turn_eval = self._turn_eval
+        turn_bp = self._turn_agreed_bp
+        if action.intent == Intent.CONFIRM_SCHEDULE and turn_eval is not None:
             facts = dict(action.facts)
-            for fid, fact in self.session.last_eval.facts.public().items():
+            for fid, fact in turn_eval.facts.public().items():
                 facts.setdefault(fid, fact)
-            if self.session.agreed_bp is not None:
+            if turn_bp is not None:
                 facts.setdefault(
                     "settlement_pct",
                     Fact(
                         id="settlement_pct",
                         kind="pct",
-                        value=self.session.agreed_bp,
+                        value=turn_bp,
                         visibility="PUBLIC",
                         source="engine",
                     ),

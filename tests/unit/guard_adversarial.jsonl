@@ -40,6 +40,9 @@
 {"text": "It's a deal on our side.", "stage": "rendered", "expect": "block", "reason": "commitment"}
 {"text": "Agreed, we can move forward.", "stage": "rendered", "expect": "block", "reason": "commitment"}
 {"text": "We have an agreement in place.", "stage": "rendered", "expect": "block", "reason": "commitment"}
+{"text": "We have a deal.", "stage": "rendered", "expect": "block", "reason": "commitment"}
+{"text": "Sounds like a deal to me.", "stage": "rendered", "expect": "block", "reason": "commitment"}
+{"text": "Deal.", "stage": "rendered", "expect": "block", "reason": "commitment"}
 {"text": "We can do $750 over 6 payments starting April 15.", "stage": "rendered", "expect": "pass", "reason": ""}
 {"text": "Our counter is 45%.", "stage": "rendered", "expect": "pass", "reason": ""}
 {"text": "The monthly level is $125.", "stage": "rendered", "expect": "pass", "reason": ""}

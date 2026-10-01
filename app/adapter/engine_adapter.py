@@ -306,8 +306,13 @@ def _facts_from_result(
 
 
 def _rules_tuple(rules: CreditorRules) -> tuple[Any, ...]:
-    """Hashable CreditorRules for lru_cache keys."""
+    """Hashable CreditorRules for lru_cache keys.
+
+    ``program_fee_pct`` is stored as integer basis points (not float) so
+    tiny float drift cannot miss or falsely hit the affordability cache.
+    """
     tiers = tuple((int(a), int(b)) for a, b in rules.min_payment_tiers)
+    fee_bp = int(round(float(rules.program_fee_pct) * 10_000))
     return (
         rules.max_terms,
         rules.max_payments,
@@ -318,7 +323,7 @@ def _rules_tuple(rules: CreditorRules) -> tuple[Any, ...]:
         rules.is_ballooning_allowed,
         rules.max_segments,
         rules.bank_fee_cents,
-        float(rules.program_fee_pct),
+        fee_bp,
     )
 
 
@@ -397,7 +402,7 @@ def _rules_from_tuple(t: tuple[Any, ...]) -> CreditorRules:
         is_ballooning_allowed=bool(t[6]),
         max_segments=int(t[7]),
         bank_fee_cents=int(t[8]),
-        program_fee_pct=float(t[9]),
+        program_fee_pct=float(t[9]) / 10_000.0,
     )
 
 

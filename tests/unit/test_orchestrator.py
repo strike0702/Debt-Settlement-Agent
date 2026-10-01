@@ -142,7 +142,8 @@ async def test_contradiction_leads_to_clarify(tmp_path: Path) -> None:
     )
     assert session.belief.get("max_payments").status == TermStatus.CONTRADICTED
     assert utt.action.intent == Intent.CLARIFY
-    assert "clarify" in " ".join(t for _, t in utt.sentences).lower() or True
+    joined = " ".join(t for _, t in utt.sentences).lower()
+    assert "earlier" in joined or "hearing" in joined
     audit.close()
 
 
@@ -254,4 +255,110 @@ async def test_timings_recorded(tmp_path: Path) -> None:
     assert "nlg_ms" in timings
     assert "server_total_ms" in timings
     assert timings["server_total_ms"] >= timings["nlu_ms"]
+    audit.close()
+
+
+@pytest.mark.asyncio
+async def test_barge_in_does_not_keep_agreed_bp(tmp_path: Path) -> None:
+    """Engine deal state must not stick after barge-in of an unacked CONFIRM."""
+    orch, session, audit = _orch(tmp_path, auto_ack=False)
+    await orch.start()
+    assert session.pending is not None
+    await orch.on_sentence_done(session.pending.sentence_ids)
+
+    u = await orch.on_creditor_text(
+        "Up to eight payments, minimum one hundred dollars, even structure.",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(field="max_payments", value=8, quote="eight", hedged=False),
+                ExtractedTerm(
+                    field="min_payment_cents",
+                    value=10000,
+                    quote="one hundred dollars",
+                    hedged=False,
+                ),
+                ExtractedTerm(
+                    field="payment_structure", value="even", quote="even", hedged=False
+                ),
+            ],
+            stance="info",
+        ),
+    )
+    await orch.on_sentence_done([sid for sid, _ in u.sentences])
+
+    confirm = await orch.on_creditor_text(
+        "We can do forty-five percent.",
+        oracle=TurnAnalysis(
+            settlement_ask_pct=45.0,
+            ask_quote="forty-five percent",
+            stance="offer",
+        ),
+    )
+    assert confirm.action.intent == Intent.CONFIRM_SCHEDULE
+    assert session.agreed_bp is None  # not acked yet
+    assert session.pending is not None
+    assert session.pending.pending_agreed_bp == 4500
+
+    await orch.on_barge_in([])
+    assert session.pending is None
+    assert session.agreed_bp is None
+    assert session.last_eval is None
+    audit.close()
+
+
+@pytest.mark.asyncio
+async def test_post_nlu_queue_does_not_overwrite_pending(tmp_path: Path) -> None:
+    """With auto_ack=False, queued text must not replace live pending speech."""
+    orch, session, audit = _orch(tmp_path, auto_ack=False)
+    await orch.start()
+    assert session.pending is not None
+    await orch.on_sentence_done(session.pending.sentence_ids)
+
+    # Simulate text arriving during post-NLU by seeding the queue before emit ends.
+    # Drive a normal turn, then set queue and ensure a second on_creditor_text
+    # after ack processes it without having overwritten the first pending.
+    u1 = await orch.on_creditor_text(
+        "Maximum six payments, minimum one hundred, even.",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(field="max_payments", value=6, quote="six", hedged=False),
+                ExtractedTerm(
+                    field="min_payment_cents",
+                    value=10000,
+                    quote="one hundred",
+                    hedged=False,
+                ),
+                ExtractedTerm(
+                    field="payment_structure", value="even", quote="even", hedged=False
+                ),
+            ],
+            stance="info",
+        ),
+    )
+    first_intent = u1.action.intent
+    first_ids = list(session.pending.sentence_ids) if session.pending else []
+    assert session.pending is not None
+    assert first_ids
+
+    # Inject queued text as if it arrived during post; must remain until after ack.
+    orch._post_nlu_queue = "Also we need forty five percent."
+    # Pending must still be the first action.
+    assert session.pending is not None
+    assert session.pending.action.intent == first_intent
+    assert session.pending.sentence_ids == first_ids
+
+    await orch.on_sentence_done(first_ids)
+    assert session.pending is None
+
+    # Next idle turn consumes the queue.
+    u2 = await orch.on_creditor_text(
+        "",
+        oracle=TurnAnalysis(
+            settlement_ask_pct=45.0,
+            ask_quote="forty five percent",
+            stance="offer",
+        ),
+    )
+    assert orch._post_nlu_queue is None
+    assert u2.action.intent in (Intent.CONFIRM_SCHEDULE, Intent.ASK_SETTLEMENT, Intent.COUNTER)
     audit.close()

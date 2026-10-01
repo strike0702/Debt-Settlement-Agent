@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from app.adapter.engine_adapter import Affordability
+from app.agent import policy as policy_mod
 from app.agent.nlu_types import TurnAnalysis
 from app.agent.policy import (
     Intent,
@@ -20,6 +21,10 @@ from app.domain.belief import BeliefState, TermStatus
 from app.domain.facts import Fact
 from app.domain.scenario import load_scenario
 from app.store.audit import AuditLog
+
+
+def _key(belief: BeliefState, ask_bp: int) -> tuple:
+    return policy_mod._confirm_key(belief, ask_bp)
 
 
 def _belief(**known: object) -> BeliefState:
@@ -383,9 +388,7 @@ def test_confirm_reject_asks_assumed_field_not_same_schedule() -> None:
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
     # first_payment_date stays ASSUMED from BeliefState seed
     assert b.get("first_payment_date").status == TermStatus.ASSUMED
-    fpd = b.get("first_payment_date").value
-    assert isinstance(fpd, date)
-    key = (4500, 6, 10000, "even", fpd.isoformat())
+    key = _key(b, 4500)
     action = decide(
         b,
         _neg(
@@ -411,9 +414,7 @@ def test_confirm_reject_asks_assumed_field_not_same_schedule() -> None:
 
 def test_confirm_assumed_asked_skips_to_next_or_no_deal() -> None:
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
-    fpd = b.get("first_payment_date").value
-    assert isinstance(fpd, date)
-    key = (4500, 6, 10000, "even", fpd.isoformat())
+    key = _key(b, 4500)
     # All assumed fields already probed once → no-deal, not infinite ASK.
     asked = {"first_payment_date", "max_segments", "max_token_pays", "min_payment_tiers"}
     action = decide(
@@ -437,9 +438,7 @@ def test_confirm_assumed_asked_skips_to_next_or_no_deal() -> None:
 def test_confirm_identical_key_without_reject_stance_soft_retries() -> None:
     """NLU miss on accept: soft re-offer CONFIRM, do not burn ASSUMED fields."""
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
-    fpd = b.get("first_payment_date").value
-    assert isinstance(fpd, date)
-    key = (4500, 6, 10000, "even", fpd.isoformat())
+    key = _key(b, 4500)
     action = decide(
         b,
         _neg(
@@ -459,9 +458,7 @@ def test_confirm_identical_key_without_reject_stance_soft_retries() -> None:
 
 def test_confirm_unacked_after_max_soft_retries() -> None:
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
-    fpd = b.get("first_payment_date").value
-    assert isinstance(fpd, date)
-    key = (4500, 6, 10000, "even", fpd.isoformat())
+    key = _key(b, 4500)
     action = decide(
         b,
         _neg(
@@ -492,7 +489,7 @@ def test_confirm_reject_no_assumed_no_deal_after_max() -> None:
     # Force all non-required out of ASSUMED
     for name in ("first_payment_date", "max_segments", "max_token_pays", "min_payment_tiers"):
         b.terms[name].status = TermStatus.KNOWN
-    key = (4500, 6, 10000, "even", "2026-04-15")
+    key = _key(b, 4500)
     action = decide(
         b,
         _neg(
@@ -508,6 +505,80 @@ def test_confirm_reject_no_assumed_no_deal_after_max() -> None:
     )
     assert action.intent == Intent.NO_DEAL_WRAP
     assert action.reason == "confirm_rejected"
+
+
+def test_max_segments_change_invalidates_confirm_key() -> None:
+    """ASSUMED field change must force a fresh CONFIRM, not soft-retry."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    old_key = _key(b, 4500)
+    b.observe("max_segments", 3, "three segments", 2, verified=True, hedged=False)
+    new_key = _key(b, 4500)
+    assert old_key != new_key
+    action = decide(
+        b,
+        _neg(
+            turn_idx=6,
+            ask_bp=4500,
+            phase=Phase.CONFIRM,
+            last_confirm_key=old_key,
+            confirm_rejects=1,
+        ),
+        TurnAnalysis(stance="other"),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+        confirm_facts={
+            "offer_total": Fact(
+                id="offer_total",
+                kind="money",
+                value=50_000,
+                visibility="PUBLIC",
+                source="engine",
+            ),
+        },
+    )
+    assert action.intent == Intent.CONFIRM_SCHEDULE
+    # Fresh confirm must not burn soft-retry counter.
+    assert not any(e.kind == "inc_confirm_reject" for e in action.effects)
+
+
+def test_next_counter_none_when_no_legal_bp() -> None:
+    # Feasible only above max_bp or at/above ask → no legal counter.
+    assert (
+        next_counter(
+            ask_bp=2000,
+            max_bp=1000,
+            feasible_bps=[1500, 2500, 3000],
+            c_prev=None,
+            anchor_ratio=0.7,
+            concession_factor=0.5,
+        )
+        is None
+    )
+
+
+def test_readback_response_does_not_wrap_in_confirm() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(turn_idx=5, ask_bp=4500, phase=Phase.CONFIRM),
+        TurnAnalysis(stance="other", readback_response="confirm"),
+        _afford(6000),
+        settings=_SETTINGS,
+    )
+    assert action.intent != Intent.PROPOSE_WRAP
+
+
+def test_wants_to_end_no_deal() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(turn_idx=3, ask_bp=4500, phase=Phase.NEGOTIATE),
+        TurnAnalysis(stance="other", wants_to_end=True),
+        _afford(6000),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.NO_DEAL_WRAP
+    assert action.reason == "wants_to_end"
 
 
 def test_confirm_records_key_on_first_offer() -> None:

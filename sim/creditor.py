@@ -10,6 +10,7 @@ Must not import ``app.agent``.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Literal, Protocol
@@ -20,11 +21,24 @@ from app.domain.actions import Action, Intent
 from app.domain.facts import Fact
 from app.domain.nlu_types import ExtractedTerm, TurnAnalysis
 from app.domain.units import render_count, render_money, render_pct
+from app.llm.client import LLMUnavailable
 from feasibility.models import CreditorRules
 from sim.personas import Persona, get_persona
 from sim.scenarios import Scenario, to_creditor_rules
 
 PhrasingMode = Literal["template", "llm"]
+
+# Phrases the sim LLM must not inject (would false-trigger agent escalate).
+_COMMIT_PHRASE_RE = re.compile(
+    r"\b(?:"
+    r"commit(?:ment|s|ted|ting)?"
+    r"|lock(?:ed|ing)?\s+in"
+    r"|guarantee(?:s|d)?"
+    r"|it's a deal"
+    r"|we have a deal"
+    r")\b",
+    re.IGNORECASE,
+)
 
 
 class _SimLLM(Protocol):
@@ -434,13 +448,24 @@ class CreditorPolicy:
 
         if intent == Intent.READ_BACK:
             field = action.text_slots.get("field") or action.reason or ""
-            # Confirm if the spoken readback matches our last spoken value.
-            text = "Yes, that is correct."
+            true_v = self._true_value(field) if field else None
+            spoken = None
+            if "readback_value" in action.facts:
+                spoken = action.facts["readback_value"].value
+            elif "readback_value" in action.text_slots:
+                spoken = action.text_slots["readback_value"]
+            matches = spoken is not None and true_v is not None and spoken == true_v
+            if matches:
+                text = "Yes, that is correct."
+                rb = "confirm"
+            else:
+                text = "No, that is not correct."
+                rb = "deny"
             return CreditorReply(
                 text=text,
                 analysis=TurnAnalysis(
                     stance="info",
-                    readback_response="confirm",
+                    readback_response=rb,  # type: ignore[arg-type]
                 ),
             )
 
@@ -497,7 +522,8 @@ class CreditorPolicy:
                 "content": (
                     f"You are a creditor collections rep. Persona: {style}. "
                     "Rewrite the draft reply in that style. Keep every number "
-                    "and percentage exactly as written. One or two short sentences."
+                    "and percentage exactly as written. One or two short sentences. "
+                    "Do not invent commitment, lock-in, guarantee, or deal language."
                 ),
             },
             {
@@ -511,7 +537,14 @@ class CreditorPolicy:
         try:
             line = await self.llm.chat_text("sim", messages, max_tokens=120)
             line = (line or "").strip() or draft.text
+            # Strip commitment phrasing the LLM may have injected.
+            if _COMMIT_PHRASE_RE.search(line) and not _COMMIT_PHRASE_RE.search(
+                draft.text
+            ):
+                line = draft.text
             return CreditorReply(text=line, analysis=draft.analysis)
+        except LLMUnavailable:
+            raise
         except Exception:
             return draft
 

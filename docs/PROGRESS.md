@@ -231,7 +231,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 
 - Mistral chat blocked until Experiment setup (`limit-req-minute=0`); routed last so demo/eval still work via Groq/Gemini.
 - Cerebras smoke still probes `llama-3.3-70b` (wrong id; live models are `gpt-oss-120b` / `qwen-3.8-27b`) — not in role routes.
-- Local Ollama NLU (`qwen3.5:9b`) is 100–200 s/call cold (likely thinking); full 12-scenario local eval not practical on Air without disabling thinking.
+- Local Ollama NLU (`qwen3.5:9b`): ~185 s p95; full 12-scenario local run finishes but quality fails thresholds (`escalation_correct=0`, all scenarios END).
 - Full-LLM sim phrasing can false-positive `demands_commitment` → wrong ESCALATE on some no_fix cells (`no_deal_correct` can be 0; not a threshold).
 - Rare WRAP without drafted `agreement` when validator fails under belief rules vs `last_eval` (metrics `got_deal` false while phase WRAP).
 
@@ -346,9 +346,45 @@ phase: WRAP
 
 thresholds: PASS
 
-#### Run 2 — local
+#### Run 2 — local (`eval_20261001_012534_s7`)
 
-Skipped after start: Ollama NLU too slow for 12×~26 turns (see Open issues).
+Finished after ~1.8 h. Ollama NLU (`qwen3.5:9b`) quality too weak for deals/escalation; thresholds fail. p95 NLU ~185 s.
+
+```
+# Eval summary
+
+- run_id: `eval_20261001_012534_s7`  seed=7  profile=`local`  nlg=`template`  sim=`template`
+- git: `9a98e1290aa0b5160512e4fc796fba7d20a37042`
+- model share: ollama/qwen3.5:9b=100.0%
+
+| metric | value |
+|---|---|
+| n_completed / n_scenarios | 12/12 |
+| skipped_quota | 0 |
+| agreement_valid | 1 |
+| deal_rate_given_zopa | 0.000 |
+| no_deal_correct | 1 |
+| escalation_correct | 0.000 |
+| unverified_figures_spoken | 0 |
+| sensitive_leaks | 0 |
+| guard_blocks | 0 |
+| rule_extraction_accuracy | 0.000 |
+| false_known_rate | n/a |
+| readback_count (mean) | 0.000 |
+| turns_to_proposal (mean) | n/a |
+| surplus_captured (mean) | n/a |
+
+## Latency (ms)
+
+| stage | p50 | p95 | n |
+|---|---|---|---|
+| nlu_ms | 0.124 | 185257.287 | 312 |
+| policy_ms | 0.010 | 0.992 | 312 |
+| nlg_ms | 0.037 | 1.092 | 312 |
+| server_total_ms | 0.456 | 185261.219 | 312 |
+```
+
+thresholds: FAIL (`escalation_correct=0`)
 
 #### Run 3 — full LLM (`eval_20261001_011347_s7`, thresholds after clarify-cap fix + resume of s0007_007)
 

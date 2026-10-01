@@ -7,7 +7,7 @@ Callers: ``app.agent.nlu`` and ``app.agent.nlg``. Does not call the LLM.
 
 from __future__ import annotations
 
-from app.agent.policy import Intent
+from app.domain.actions import Intent
 
 # Meanings only — never interpolate spoken values or digits here.
 PLACEHOLDER_MEANINGS: dict[str, str] = {

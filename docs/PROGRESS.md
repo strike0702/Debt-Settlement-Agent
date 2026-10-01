@@ -14,7 +14,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 5 | LLM client and provider pool | done |
 | 6 | NLU and LLM NLG | done |
 | 7 | Session, orchestrator, CLI | done |
-| 8 | Simulator, scenarios, offline e2e | pending |
+| 8 | Simulator, scenarios, offline e2e | done |
 | 9 | Eval runner and metrics | pending |
 | 10 | Voice and UI | pending |
 | 11 | README and final eval | pending |
@@ -95,17 +95,43 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `template_guard(text, allowed_ids, required_ids) -> GuardResult` — reasons: `digit`, `dollar`, `percent`, `number_word`, `unknown_placeholder`, `missing_required`
 - `rendered_guard(text, public_facts, creditor_numbers, private_blocklist, *, ref=None) -> GuardResult` — reasons: `unverified_number`, `boundary`, `commitment`; money↔count dollar cross-match; public/private collision allowed
 
+### `app.domain.actions`
+- `Phase`, `Intent` (StrEnums); `Effect`, `Action` — shared with sim (sim must not import `app.agent`)
+- Re-exported from `app.agent.policy` for existing callers
+
+### `app.domain.nlu_types`
+- `ExtractedTerm`, `TurnAnalysis` — shared with sim/oracle; re-exported from `app.agent.nlu_types`
+
 ### `app.agent.nlu_types`
-- `class ExtractedTerm` — `field` (registry names incl. `min_payment_tiers`), `value`, `quote`, `hedged`
-- `class TurnAnalysis` — `terms`, `settlement_ask_pct` (percent points, 45.0 → 4500 bp), `ask_quote`, `stance`, `readback_response`, `asks_client_private_info`, `demands_commitment`, `hostility`, `wants_to_end`
+- Re-exports `ExtractedTerm`, `TurnAnalysis` from `app.domain.nlu_types`
 
 ### `app.agent.policy`
-- `Phase`, `Intent` (StrEnums); `Effect`, `Action`, `Agreement`, `NegotiationState`
+- `Phase`, `Intent`, `Effect`, `Action` re-exported from `app.domain.actions`
+- `Agreement`, `NegotiationState`
 - `ask_pct_to_bp(pct: float) -> int`
 - `next_counter(*, ask_bp, max_bp, feasible_bps, c_prev, anchor_ratio, concession_factor) -> int`
 - `decide(belief, neg, analysis, afford, *, settings=None, rescue_within_guardrail=False, confirm_facts=None, counter_offer_total_cents=None) -> Action`
 - `draft_agreement(*, creditor, bp, offer_total, rows, assumed_fields, audit=None, call_id=None) -> Agreement`
 - `opening_action(*, settings=None, firm_name=None, opening_disclosure=None) -> Action`
+
+### `sim.personas`
+- `PersonaName = Literal["flexible", "contradictory", "pressuring"]`
+- `PERSONAS`, `PERSONA_BY_NAME`, `get_persona(name) -> Persona`
+- `Persona(name, contradict_once, pressure_private_turns, pressure_commit_turns)`
+
+### `sim.scenarios`
+- `Stratum = Literal["deal", "rescue", "no_fix"]`; `STRATA`
+- `TrueRules` — hidden max_payments / min_payment_cents / payment_structure / fpd / segments / token / tiers
+- `Scenario` — `id`, `call: CallScenario`, `true_rules`, `opening_ask_bp`, `floor_bp`, `persona`, `true_max_bp`, `feasible_bps`, `zopa`, `rescue_within_guardrail`, `should_escalate`, `stratum`
+- `to_creditor_rules(rules, *, program_fee_pct, bank_fee_cents) -> CreditorRules`
+- `generate(n, seed) -> list[Scenario]` — deterministic, strata balanced
+- `generate_one(persona, stratum, seed) -> Scenario`
+- `stratum_counts(scenarios)`, `balanced_quota(n)`
+
+### `sim.creditor`
+- `CreditorReply(text, analysis: TurnAnalysis)`
+- `CreditorPolicy(scenario, phrasing="template"|"llm", llm=None)`
+  - `async respond(action, agent_text="") -> CreditorReply` — sees intent + PUBLIC facts only; validates `CONFIRM_SCHEDULE` under true rules; concedes 500 bp per rejected counter down to floor; emits oracle `TurnAnalysis`
 
 ### `app.agent.nlg`
 - `SAFE_FALLBACK: str`; `TEMPLATES: dict[Intent, str]`
@@ -178,6 +204,9 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - Mistral never first in any profile (last-resort fallback only); Experiment keys often 429 with `limit-req-minute=0` until workspace/phone setup.
 - NLU uses `chat_text` + local JSON parse/coerce (not `chat_json`) so field-keyed LLM shapes still validate; `coerce_analysis_payload` accepts `{max_payments: {value, quote, hedged}}`.
 - NLU `max_tokens=800` and NLG `max_tokens=400` (PLAN said 80 for NLG) because gpt-oss reasoning tokens consume the completion budget.
+- `Action`/`Intent`/`Phase`/`Effect` and `TurnAnalysis`/`ExtractedTerm` live in `app.domain` so `sim/` never imports `app.agent` (agent modules re-export).
+- Pressuring private-info turns are (2, 3) not PLAN's (3, 5) so short rescue/no_fix calls still escalate offline.
+- Counter ladder treats "at max" as the highest feasible counter strictly below the ask (ceiling), not raw `max_bp`, so unreachable asks NO_DEAL instead of looping.
 
 ## Open issues
 
@@ -246,3 +275,7 @@ engine: feasible=True shape=even offer=$562.50 settlement=45%
 agreement: NorthPeak Collections bp=4500 offer_total=56250 pending_client_approval rows=2
 phase: WRAP
 ```
+
+### Phase 8 (2026-10-01)
+- Files: `app/domain/{actions,nlu_types}.py`, `sim/{personas,scenarios,creditor}.py`, `tests/unit/test_scenarios.py`, `tests/e2e/test_text_call.py`; policy ceiling-stuck fix; agent re-exports for moved types.
+- Tests: 242 passed offline (+1 skipped live). Generator deterministic + all strata; e2e 3 personas × 3 strata (oracle NLU, template NLG, template sim): deal→valid agreement, rescue→escalate, no_fix→END, pressuring→escalate, zero leaks.

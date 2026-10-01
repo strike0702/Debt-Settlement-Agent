@@ -13,8 +13,8 @@ from datetime import date
 from typing import Any, Protocol
 
 from app.agent.guards import rendered_guard, template_guard
-from app.agent.policy import Action, Intent
 from app.config import Settings, get_settings
+from app.domain.actions import Action, Intent
 from app.llm.prompts import nlg_messages
 from app.store.audit import AuditLog
 

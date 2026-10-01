@@ -11,61 +11,35 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from enum import StrEnum
 from math import ceil
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.adapter.engine_adapter import Affordability
-from app.agent.nlu_types import TurnAnalysis
 from app.config import Settings, get_settings
+from app.domain.actions import Action, Effect, Intent, Phase
 from app.domain.belief import BeliefState
 from app.domain.facts import Fact
 from app.domain.fields import FIELDS_BY_NAME
+from app.domain.nlu_types import TurnAnalysis
 from app.store.audit import AuditLog
 from feasibility.engine import ScheduleRow
 
-
-class Phase(StrEnum):
-    OPENING = "OPENING"
-    DISCOVERY = "DISCOVERY"
-    NEGOTIATE = "NEGOTIATE"
-    CONFIRM = "CONFIRM"
-    WRAP = "WRAP"
-    ESCALATE = "ESCALATE"
-    END = "END"
-
-
-class Intent(StrEnum):
-    OPENING = "OPENING"
-    ASK = "ASK"
-    ASK_SETTLEMENT = "ASK_SETTLEMENT"
-    READ_BACK = "READ_BACK"
-    CLARIFY = "CLARIFY"
-    REFUSE_PRIVATE = "REFUSE_PRIVATE"
-    REFUSE_COMMIT = "REFUSE_COMMIT"
-    COUNTER = "COUNTER"
-    CONFIRM_SCHEDULE = "CONFIRM_SCHEDULE"
-    PROPOSE_WRAP = "PROPOSE_WRAP"
-    NO_DEAL_WRAP = "NO_DEAL_WRAP"
-    ESCALATE = "ESCALATE"
-
-
-class Effect(BaseModel):
-    """Side effect committed only when spoken sentences are acked."""
-
-    kind: Literal[
-        "offer_counter",
-        "set_pending_readback",
-        "clear_pending_readback",
-        "inc_private_ask",
-        "inc_commit_demand",
-        "record_ask",
-        "inc_reject_at_max",
-        "set_phase",
-    ]
-    data: dict[str, Any] = Field(default_factory=dict)
+# Re-export for callers that import Action/Intent/Phase from policy.
+__all__ = [
+    "Action",
+    "Agreement",
+    "Effect",
+    "Intent",
+    "NegotiationState",
+    "Phase",
+    "ask_pct_to_bp",
+    "decide",
+    "draft_agreement",
+    "next_counter",
+    "opening_action",
+]
 
 
 @dataclass
@@ -81,18 +55,6 @@ class NegotiationState:
     pending_readback: str | None = None
     phase: Phase = Phase.OPENING
     turn_idx: int = 0
-
-
-class Action(BaseModel):
-    intent: Intent
-    facts: dict[str, Fact] = Field(default_factory=dict)
-    # Non-numeric fills (ask copy, escalate reason, firm name). Never digits.
-    text_slots: dict[str, str] = Field(default_factory=dict)
-    required: set[str] = Field(default_factory=set)
-    effects: list[Effect] = Field(default_factory=list)
-    next_phase: Phase
-    # Optional free-form reason for ESCALATE / tests.
-    reason: str | None = None
 
 
 class Agreement(BaseModel):
@@ -479,9 +441,20 @@ def decide(
             reason=f"bp={ask_bp}",
         )
 
-    # Counter ladder. Stop after MAX_COUNTERS rejections at max_bp.
-    at_max = bool(neg.counters_offered) and neg.counters_offered[-1] >= afford.max_bp
-    if at_max and neg.rejects >= cfg.max_counters:
+    # Counter ladder. Stop after MAX_COUNTERS rejections at the highest
+    # legal counter (feasible, <= max_bp, and strictly below the ask).
+    legal_counters = [
+        bp
+        for bp in afford.feasible_bps
+        if bp <= afford.max_bp and bp < ask_bp
+    ]
+    ceiling = max(legal_counters) if legal_counters else None
+    at_ceiling = (
+        bool(neg.counters_offered)
+        and ceiling is not None
+        and neg.counters_offered[-1] >= ceiling
+    )
+    if at_ceiling and neg.rejects >= cfg.max_counters:
         return Action(
             intent=Intent.NO_DEAL_WRAP,
             effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
@@ -490,8 +463,8 @@ def decide(
         )
 
     c_prev = neg.counters_offered[-1] if neg.counters_offered else None
-    # If rep rejected and we were at max, count toward max_counters (on ack).
-    if analysis.stance == "reject" and at_max:
+    # If rep rejected and we were at the ceiling, count toward max_counters (on ack).
+    if analysis.stance == "reject" and at_ceiling:
         effects.append(Effect(kind="inc_reject_at_max"))
 
     c_next = next_counter(
@@ -502,10 +475,16 @@ def decide(
         anchor_ratio=cfg.anchor_ratio,
         concession_factor=cfg.concession_factor,
     )
+    # If the ladder stalls below the ceiling, jump to the ceiling once.
+    if c_prev is not None and c_next <= c_prev and ceiling is not None and ceiling > c_prev:
+        c_next = ceiling
 
-    # If we cannot move (stuck at/above ask or no progress), no-deal.
-    if c_prev is not None and c_next <= c_prev and c_next >= afford.max_bp:
-        if neg.rejects + (1 if analysis.stance == "reject" and at_max else 0) >= cfg.max_counters:
+    # If we cannot move at the ceiling, no-deal after enough rejects.
+    if c_prev is not None and c_next <= c_prev and at_ceiling:
+        reject_n = neg.rejects + (
+            1 if analysis.stance == "reject" and at_ceiling else 0
+        )
+        if reject_n >= cfg.max_counters:
             return Action(
                 intent=Intent.NO_DEAL_WRAP,
                 effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],

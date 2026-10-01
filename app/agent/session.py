@@ -13,7 +13,8 @@ from datetime import date
 from typing import Any, Literal
 
 from app.adapter.engine_adapter import EvalSummary
-from app.agent.policy import Action, Agreement, NegotiationState, Phase
+from app.agent.policy import Agreement, NegotiationState
+from app.domain.actions import Action, Phase
 from app.domain.belief import BeliefChange, BeliefState
 from app.domain.scenario import CallScenario
 

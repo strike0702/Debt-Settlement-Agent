@@ -1,9 +1,10 @@
 """WebSocket ``/ws/call/{call_id}`` protocol for the voice UI.
 
-Client events: ``start``, binary WAV, ``text``, ``sentence_done``, ``barge_in``,
-``timing``. Server events: ``transcript``, ``say``, ``belief``, ``eval``,
-``blocked``, ``escalate``, ``latency``, ``audit``, ``phase``. Speaks through
-``Orchestrator``; STT via ``app.voice.stt``. Does not own policy or NLG.
+Client events: ``start``, ``end``, binary WAV, ``text``, ``sentence_done``,
+``barge_in``, ``timing``. Server events: ``transcript``, ``say``, ``belief``,
+``eval``, ``blocked``, ``escalate``, ``latency``, ``audit``, ``phase``,
+``stt_error``, ``turn_done``. Speaks through ``Orchestrator``; STT via
+``app.voice.stt``. Does not own policy or NLG.
 """
 
 from __future__ import annotations

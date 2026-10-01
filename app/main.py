@@ -1,7 +1,8 @@
 """FastAPI entrypoint: static UI, call WebSocket, metrics, call/scenario APIs.
 
 Serves ``app/static`` at ``/``, mounts ``/ws/call/{call_id}``, and exposes
-``GET /metrics/summary``, ``/scenarios``, and ``/calls*``. LLM + audit are
+``GET /metrics/summary``, ``/scenarios`` (+ ``/{id}`` operator brief and
+``/{id}/rep_card``), and ``/calls*``. LLM + audit are
 created once in lifespan and shared across sockets.
 """
 
@@ -9,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import Settings, get_settings
-from app.domain.scenario import list_scenario_metas, load_rep_card
+from app.domain.scenario import list_scenario_metas, load_rep_card, scenario_details
 from app.llm.client import make_client
 from app.store.audit import AuditLog
 from app.voice import ws as voice_ws
@@ -82,6 +84,14 @@ def create_app(
         except (ValueError, FileNotFoundError) as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
         return {"id": scenario_id, "markdown": body}
+
+    @application.get("/scenarios/{scenario_id}")
+    async def get_scenario(scenario_id: str) -> dict[str, Any]:
+        """Operator brief: meta, creditor, PRIVATE client finances, firm fees."""
+        try:
+            return scenario_details(scenario_id, rebase_to=date.today())
+        except (ValueError, FileNotFoundError) as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
 
     @application.get("/calls")
     async def get_calls(request: Request, limit: int = 50) -> list[dict[str, Any]]:

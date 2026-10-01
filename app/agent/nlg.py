@@ -20,6 +20,13 @@ from app.store.audit import AuditLog
 
 SAFE_FALLBACK = "Let me check that figure and come back to it."
 
+# These intents' slots are already full sentences (``ask_text``, ``no_deal_reason``,
+# ``escalate_reason``). LLM rewrites wrap them in another sentence, producing
+# mid-sentence capitals and leaked field names, so they always use ``TEMPLATES``.
+TEMPLATE_ONLY_INTENTS: frozenset[Intent] = frozenset(
+    {Intent.ASK, Intent.ASK_SETTLEMENT, Intent.NO_DEAL_WRAP, Intent.ESCALATE}
+)
+
 # One spoken template per intent. No digits, $, %, or number-words.
 TEMPLATES: dict[Intent, str] = {
     Intent.OPENING: (
@@ -208,13 +215,15 @@ async def speak_action(
     """LLM template (optional) → template_guard → fill → rendered_guard.
 
     On LLM/template failure after one retry, falls back to ``TEMPLATES``.
+    ``TEMPLATE_ONLY_INTENTS`` always use ``TEMPLATES`` (no LLM call).
     """
     cfg = settings or get_settings()
     allowed = _allowed_ids(action)
     required = action.required
     template = TEMPLATES[action.intent]
 
-    if cfg.nlg_mode == "llm" and llm is not None:
+    use_llm = action.intent not in TEMPLATE_ONLY_INTENTS
+    if use_llm and cfg.nlg_mode == "llm" and llm is not None:
         placeholder_ids = sorted(allowed)
         messages = nlg_messages(action.intent, placeholder_ids, last_rep_line)
         candidate: str | None = None

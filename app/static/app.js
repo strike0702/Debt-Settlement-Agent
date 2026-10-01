@@ -61,6 +61,7 @@ const store = createStore({
   callId: null,
   connected: false,
   started: false,
+  ending: false,
   mock: false,
   micOn: false,
   speaking: false,
@@ -88,16 +89,16 @@ const el = {
   viewCaption: document.getElementById("view-caption"),
   viewRep: document.getElementById("view-rep"),
   viewOp: document.getElementById("view-op"),
-  btnStart: document.getElementById("btn-start"),
-  btnEnd: document.getElementById("btn-end"),
+  btnCall: document.getElementById("btn-call"),
+  btnCallOp: document.getElementById("btn-call-op"),
   btnMic: document.getElementById("btn-mic"),
   btnSend: document.getElementById("btn-send"),
   btnDownload: document.getElementById("btn-download"),
-  togBarge: document.getElementById("tog-barge"),
   togMock: document.getElementById("tog-mock"),
   sttMode: document.getElementById("stt-mode"),
   scenarioSelect: document.getElementById("scenario-select"),
   expectedBadge: document.getElementById("expected-badge"),
+  opControls: document.getElementById("op-controls"),
   textInput: document.getElementById("text-input"),
   notice: document.getElementById("notice"),
   chatLog: document.getElementById("chat-log"),
@@ -121,6 +122,8 @@ const el = {
   opHeroMain: document.getElementById("op-hero-main"),
   opHeroSub: document.getElementById("op-hero-sub"),
   opHeroMetrics: document.getElementById("op-hero-metrics"),
+  scenarioBrief: document.getElementById("scenario-brief"),
+  briefTitle: document.getElementById("brief-title"),
   repWorkspace: document.getElementById("rep-workspace"),
   opWorkspace: document.getElementById("op-workspace"),
   splitter: document.getElementById("splitter"),
@@ -133,6 +136,11 @@ let pendingSayQueue = [];
 const speakingIds = new Set();
 let mockTimer = null;
 let mockIdx = 0;
+let endTimer = null;
+const END_TIMEOUT_MS = 3000;
+let micGen = 0;
+let micStream = null;
+let chatGroupCount = 0;
 let browserRec = null;
 let browserActive = false;
 
@@ -208,10 +216,143 @@ function applyView() {
     : "Operator (firm) view";
   el.repWorkspace.hidden = !isRep;
   el.opWorkspace.hidden = isRep;
+  if (el.opControls) el.opControls.hidden = isRep;
   renderHero();
   renderSchedule();
   renderTerms();
   renderTranscript();
+}
+
+function inlineMarkdown(text) {
+  return escapeHtml(text)
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, '<code class="mono">$1</code>');
+}
+
+/** Light markdown → HTML for rep cards (headers, lists, tables, paragraphs). */
+function renderMarkdown(md) {
+  if (!md) return `<div class="hint">Select a scenario to load the playbook.</div>`;
+  const lines = String(md).replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  let i = 0;
+  let para = [];
+
+  const flushPara = () => {
+    if (!para.length) return;
+    out.push(`<p>${inlineMarkdown(para.join(" "))}</p>`);
+    para = [];
+  };
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      flushPara();
+      i += 1;
+      continue;
+    }
+
+    const heading = /^(#{1,3})\s+(.+)$/.exec(trimmed);
+    if (heading) {
+      flushPara();
+      const level = heading[1].length;
+      out.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
+      i += 1;
+      continue;
+    }
+
+    if (
+      trimmed.includes("|") &&
+      i + 1 < lines.length &&
+      /^\|?\s*:?-{3,}/.test(lines[i + 1].trim())
+    ) {
+      flushPara();
+      const rows = [];
+      while (i < lines.length && lines[i].trim().includes("|")) {
+        const cells = lines[i]
+          .trim()
+          .replace(/^\|/, "")
+          .replace(/\|$/, "")
+          .split("|")
+          .map((c) => c.trim());
+        if (!/^:?-{3,}/.test(cells[0] || "")) rows.push(cells);
+        i += 1;
+      }
+      if (rows.length) {
+        const head = rows[0];
+        const body = rows.slice(1);
+        out.push("<table>");
+        out.push(
+          `<thead><tr>${head.map((c) => `<th>${inlineMarkdown(c)}</th>`).join("")}</tr></thead>`,
+        );
+        out.push("<tbody>");
+        for (const row of body) {
+          out.push(
+            `<tr>${row.map((c) => `<td>${inlineMarkdown(c)}</td>`).join("")}</tr>`,
+          );
+        }
+        out.push("</tbody></table>");
+      }
+      continue;
+    }
+
+    const ol = /^(\d+)\.\s+(.+)$/.exec(trimmed);
+    if (ol) {
+      flushPara();
+      out.push("<ol>");
+      while (i < lines.length) {
+        const m = /^(\d+)\.\s+(.+)$/.exec(lines[i].trim());
+        if (!m) break;
+        out.push(`<li>${inlineMarkdown(m[2])}</li>`);
+        i += 1;
+      }
+      out.push("</ol>");
+      continue;
+    }
+
+    const ul = /^[-*]\s+(.+)$/.exec(trimmed);
+    if (ul) {
+      flushPara();
+      out.push("<ul>");
+      while (i < lines.length) {
+        const m = /^[-*]\s+(.+)$/.exec(lines[i].trim());
+        if (!m) break;
+        out.push(`<li>${inlineMarkdown(m[1])}</li>`);
+        i += 1;
+      }
+      out.push("</ul>");
+      continue;
+    }
+
+    para.push(trimmed);
+    i += 1;
+  }
+  flushPara();
+  return out.join("") || `<div class="hint">Empty playbook.</div>`;
+}
+
+function setRepCard(md) {
+  store.set({ repCard: md || "" });
+  if (el.repCard) el.repCard.innerHTML = renderMarkdown(md || "");
+}
+
+function updateCallButton() {
+  const s = store.get();
+  const active = s.started && !s.ending;
+  for (const btn of [el.btnCall, el.btnCallOp]) {
+    if (!btn) continue;
+    btn.textContent = active ? "End chat" : "Start chat";
+    btn.classList.toggle("danger", active);
+    btn.disabled = Boolean(s.ending);
+  }
+}
+
+function updateMicButton() {
+  const on = store.get().micOn;
+  el.btnMic.classList.toggle("active", on);
+  el.btnMic.setAttribute("aria-label", on ? "Microphone on" : "Microphone off");
+  el.btnMic.title = on ? "Mic on — click to stop" : "Mic off — click to talk";
 }
 
 function verdictState(s) {
@@ -271,35 +412,35 @@ function renderHero() {
   flash(el.opHeroMain);
 }
 
+function chatSide(role) {
+  return role === "agent" ? "agent" : "rep";
+}
+
+function bubbleHtml(side, texts, extraClass = "", enter = false) {
+  const who = side === "agent" ? "Agent" : "You";
+  const body = texts.map((t) => `<p>${escapeHtml(t)}</p>`).join("");
+  return (
+    `<div class="msg ${side}${enter ? " enter" : ""}">` +
+    `<div class="who">${who}</div>` +
+    `<div class="bubble ${side}${extraClass}">${body}</div>` +
+    `</div>`
+  );
+}
+
 function renderChat() {
   const s = store.get();
-  const lines = s.transcript;
-  const parts = lines.map((line) => {
-    const who = line.role === "agent" ? "Agent" : "Rep";
-    const meta = [];
-    if (line.intent) meta.push(`<span class="chip intent">${escapeHtml(line.intent)}</span>`);
-    if (line.ms) meta.push(`<span>${escapeHtml(line.ms)}</span>`);
-    return `
-      <div class="bubble ${line.role}${line.blocked ? " blocked" : ""}">
-        <div class="who">${who}</div>
-        <div>${escapeHtml(line.text)}</div>
-        ${meta.length ? `<div class="meta">${meta.join("")}</div>` : ""}
-      </div>`;
-  });
-  if (s.interim) {
-    parts.push(`
-      <div class="bubble rep interim">
-        <div class="who">Rep (listening)</div>
-        <div>${escapeHtml(s.interim)}</div>
-      </div>`);
+  // The server streams one transcript line per sentence; group consecutive lines by speaker.
+  const groups = [];
+  for (const line of s.transcript) {
+    const side = chatSide(line.role);
+    const last = groups.at(-1);
+    if (last && last.side === side) last.texts.push(line.text);
+    else groups.push({ side, texts: [line.text] });
   }
-  if (s.waiting) {
-    parts.push(`
-      <div class="bubble agent typing">
-        <div class="who">Agent</div>
-        <div>Thinking…</div>
-      </div>`);
-  }
+  const parts = groups.map((g, i) => bubbleHtml(g.side, g.texts, "", i >= chatGroupCount));
+  chatGroupCount = groups.length;
+  if (s.interim) parts.push(bubbleHtml("rep", [s.interim], " interim"));
+  if (s.waiting) parts.push(bubbleHtml("agent", ["Thinking…"], " typing"));
   el.chatLog.innerHTML = parts.join("");
   el.chatLog.scrollTop = el.chatLog.scrollHeight;
 }
@@ -520,13 +661,14 @@ function renderAll() {
   renderGuards();
   renderLatency();
   renderAudit();
-  if (el.repCard) {
-    el.repCard.textContent = store.get().repCard || "Select a scenario to load the playbook.";
-  }
+  setRepCard(store.get().repCard);
   showNotice(store.get().sttFallbackNotice);
+  updateCallButton();
+  updateMicButton();
 }
 
 function resetCallState() {
+  chatGroupCount = 0;
   pendingSayQueue = [];
   speakingIds.clear();
   window.speechSynthesis?.cancel();
@@ -534,6 +676,7 @@ function resetCallState() {
     callId: null,
     connected: false,
     started: false,
+    ending: false,
     speaking: false,
     waiting: false,
     interim: "",
@@ -560,34 +703,60 @@ function setControlsEnabled(on) {
   el.textInput.disabled = !on;
   el.btnSend.disabled = !on;
   el.btnMic.disabled = !on;
-  el.btnEnd.disabled = !on;
   el.btnDownload.disabled = !on || !store.get().callId;
+  updateCallButton();
+  updateMicButton();
+}
+
+function closeSocket() {
+  clearTimeout(endTimer);
+  endTimer = null;
+  if (!ws) return;
+  const old = ws;
+  ws = null;
+  old.onopen = old.onmessage = old.onclose = null;
+  try {
+    old.close();
+  } catch {
+    /* ignore */
+  }
 }
 
 function connectAndStart() {
+  closeSocket();
   resetCallState();
   const callId = crypto.randomUUID();
   const scenarioId = el.scenarioSelect.value || store.get().scenarioId || "easy_deal";
   store.set({ callId, connected: false, started: false, scenarioId });
-  ws = new WebSocket(wsUrl(callId));
-  ws.binaryType = "arraybuffer";
-  ws.onopen = () => {
+  updateCallButton();
+  const sock = new WebSocket(wsUrl(callId));
+  ws = sock;
+  sock.binaryType = "arraybuffer";
+  // Handlers check identity so a late event from a replaced socket cannot clobber the new call.
+  sock.onopen = () => {
+    if (ws !== sock) return;
     store.set({ connected: true });
-    ws.send(JSON.stringify({ type: "start", scenario_id: scenarioId }));
+    sock.send(JSON.stringify({ type: "start", scenario_id: scenarioId }));
     store.set({ started: true });
     setControlsEnabled(true);
   };
-  ws.onmessage = (ev) => {
+  sock.onmessage = (ev) => {
+    if (ws !== sock) return;
     try {
       applyEvent(JSON.parse(ev.data));
     } catch (err) {
       console.warn(err);
     }
   };
-  ws.onclose = () => {
-    store.set({ connected: false, waiting: false });
+  sock.onclose = () => {
+    if (ws !== sock) return;
+    ws = null;
+    clearTimeout(endTimer);
+    endTimer = null;
+    stopMic();
+    store.set({ connected: false, waiting: false, started: false, ending: false });
     setControlsEnabled(false);
-    stopBrowserRec();
+    updateCallButton();
   };
 }
 
@@ -610,11 +779,41 @@ function sendJson(obj) {
 }
 
 function endChat() {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  if (store.get().mock) {
+    stopMock();
+    setControlsEnabled(false);
+    updateCallButton();
+    return;
+  }
+  if (store.get().ending) return;
   stopMic();
-  stopBrowserRec();
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    store.set({ ending: true });
+    finishEnd();
+    return;
+  }
+  store.set({ ending: true, waiting: true });
+  updateCallButton();
   sendJson({ type: "end" });
-  store.set({ waiting: true });
+  renderChat();
+  // Never leave the toggle stuck if the server never answers the end.
+  clearTimeout(endTimer);
+  endTimer = setTimeout(finishEnd, END_TIMEOUT_MS);
+}
+
+function finishEnd() {
+  if (!store.get().ending) return;
+  closeSocket();
+  store.set({
+    started: false,
+    ending: false,
+    waiting: false,
+    connected: false,
+    phase: "END",
+  });
+  setControlsEnabled(false);
+  updateCallButton();
+  renderHero();
   renderChat();
 }
 
@@ -758,7 +957,7 @@ function applyEvent(msg) {
       el.sttMode.value = "browser";
       showNotice(store.get().sttFallbackNotice);
       if (store.get().micOn) {
-        stopMic().then(() => startBrowserRec());
+        stopMic().then(() => startMic());
       }
     } else {
       showNotice(`STT error: ${msg.message || "unavailable"}`);
@@ -766,14 +965,26 @@ function applyEvent(msg) {
     return;
   }
   if (type === "error") {
-    showNotice(msg.message || "Error");
     store.set({ waiting: false });
+    if (store.get().ending) {
+      finishEnd();
+      return;
+    }
+    showNotice(msg.message || "Error");
     renderChat();
     return;
   }
   if (type === "turn_done") {
     store.set({ waiting: false });
     renderChat();
+    if (store.get().ending) {
+      finishEnd();
+    } else if (store.get().phase === "END") {
+      stopMic();
+      store.set({ started: false });
+      setControlsEnabled(false);
+      updateCallButton();
+    }
   }
 }
 
@@ -818,49 +1029,85 @@ function effectiveSttMode() {
 
 async function startMic() {
   if (store.get().mock) return;
+  // micOn flips immediately so a second click during VAD load routes to stopMic.
+  const gen = ++micGen;
+  store.set({ micOn: true });
+  updateMicButton();
   const mode = effectiveSttMode();
   if (mode === "browser") {
     startBrowserRec();
-    store.set({ micOn: true });
-    el.btnMic.textContent = "Mic on";
     return;
   }
-  const { MicVAD } = await import(
-    "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/+esm"
-  );
-  vad = await MicVAD.new({
-    onnxWASMBasePath: onnxBase,
-    baseAssetPath: vadAssetBase,
-    getStream: async () =>
-      navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-      }),
-    onSpeechStart: () => {
-      if (store.get().speaking || pendingSayQueue.length) bargeIn();
-    },
-    onSpeechEnd: (audio) => {
-      vadEndAt = performance.now();
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
-      const wav = encodeWav(audio, 16000);
-      ws.send(wav);
-      store.set({ waiting: true });
-      renderChat();
-    },
-  });
+  let instance = null;
+  let stream = null;
+  try {
+    const { MicVAD } = await import(
+      "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/+esm"
+    );
+    if (gen !== micGen) return;
+    instance = await MicVAD.new({
+      onnxWASMBasePath: onnxBase,
+      baseAssetPath: vadAssetBase,
+      getStream: async () => {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true },
+        });
+        micStream = stream;
+        return stream;
+      },
+      onSpeechStart: () => {
+        if (gen !== micGen) return;
+        if (store.get().speaking || pendingSayQueue.length) bargeIn();
+      },
+      onSpeechEnd: (audio) => {
+        if (gen !== micGen) return;
+        vadEndAt = performance.now();
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        ws.send(encodeWav(audio, 16000));
+        store.set({ waiting: true });
+        renderChat();
+      },
+    });
+  } catch (err) {
+    if (gen === micGen) {
+      showNotice(`Microphone unavailable: ${err?.message || err}`);
+      await stopMic();
+    }
+    return;
+  }
+  if (gen !== micGen) {
+    // Stopped while loading: tear down what was just created.
+    destroyVad(instance);
+    stopTracks(stream);
+    return;
+  }
+  vad = instance;
   vad.start();
-  store.set({ micOn: true });
-  el.btnMic.textContent = "Mic on";
+}
+
+function destroyVad(instance) {
+  if (!instance) return;
+  try {
+    instance.pause();
+    instance.destroy();
+  } catch {
+    /* ignore */
+  }
+}
+
+function stopTracks(stream) {
+  stream?.getTracks().forEach((t) => t.stop());
 }
 
 async function stopMic() {
-  if (vad) {
-    vad.pause();
-    vad.destroy();
-    vad = null;
-  }
-  stopBrowserRec();
+  micGen += 1;
   store.set({ micOn: false, interim: "" });
-  el.btnMic.textContent = "Mic off";
+  updateMicButton();
+  destroyVad(vad);
+  vad = null;
+  stopTracks(micStream);
+  micStream = null;
+  stopBrowserRec();
   renderChat();
 }
 
@@ -868,19 +1115,23 @@ function startBrowserRec() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
     showNotice("Browser speech recognition is not available in this browser.");
+    store.set({ micOn: false });
+    updateMicButton();
     return;
   }
   stopBrowserRec();
-  browserRec = new SR();
-  browserRec.continuous = true;
-  browserRec.interimResults = true;
-  browserRec.onstart = () => {
+  const rec = new SR();
+  browserRec = rec;
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.onstart = () => {
     browserActive = true;
   };
-  browserRec.onspeechstart = () => {
+  rec.onspeechstart = () => {
     if (store.get().speaking || pendingSayQueue.length) bargeIn();
   };
-  browserRec.onresult = (event) => {
+  rec.onresult = (event) => {
+    if (browserRec !== rec) return;
     let interim = "";
     let finalText = "";
     for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -897,34 +1148,36 @@ function startBrowserRec() {
       sendText(finalText.trim(), "browser_stt");
     }
   };
-  browserRec.onerror = (ev) => {
+  rec.onerror = (ev) => {
     if (ev.error !== "no-speech" && ev.error !== "aborted") {
       showNotice(`Browser STT: ${ev.error}`);
     }
   };
-  browserRec.onend = () => {
+  rec.onend = () => {
     browserActive = false;
-    if (store.get().micOn && effectiveSttMode() === "browser") {
+    // Chrome ends continuous recognition on silence; restart only while still the live recognizer.
+    if (browserRec === rec && store.get().micOn && effectiveSttMode() === "browser") {
       try {
-        browserRec.start();
+        rec.start();
       } catch {
         /* ignore restart races */
       }
     }
   };
-  browserRec.start();
+  rec.start();
   browserActive = true;
 }
 
 function stopBrowserRec() {
   if (browserRec) {
+    const rec = browserRec;
+    browserRec = null;
+    rec.onend = rec.onresult = rec.onspeechstart = rec.onerror = null;
     try {
-      browserRec.onend = null;
-      browserRec.stop();
+      rec.abort();
     } catch {
       /* ignore */
     }
-    browserRec = null;
   }
   browserActive = false;
 }
@@ -934,6 +1187,7 @@ function startMock() {
   store.set({ mock: true, started: true, connected: true });
   setControlsEnabled(false);
   el.btnMic.disabled = true;
+  updateCallButton();
   mockIdx = 0;
   runMockStep();
 }
@@ -942,7 +1196,8 @@ function stopMock() {
   if (mockTimer) clearTimeout(mockTimer);
   mockTimer = null;
   mockIdx = 0;
-  store.set({ mock: false, started: false, connected: false });
+  store.set({ mock: false, started: false, connected: false, ending: false });
+  updateCallButton();
 }
 
 function runMockStep() {
@@ -969,9 +1224,68 @@ async function loadScenarios() {
     const current = store.get().scenarioId;
     if (list.some((s) => s.id === current)) el.scenarioSelect.value = current;
     updateExpectedBadge();
-    await loadRepCard(el.scenarioSelect.value);
   } catch (err) {
     console.warn(err);
+  }
+  await loadScenarioInfo(el.scenarioSelect.value || store.get().scenarioId);
+}
+
+async function loadScenarioInfo(id) {
+  await Promise.all([loadRepCard(id), loadScenarioBrief(id)]);
+}
+
+function kvRow(label, value, isPrivate = false) {
+  const badge = isPrivate ? ` <span class="badge private">PRIVATE</span>` : "";
+  return `<div class="kv"><span class="k">${escapeHtml(label)}${badge}</span><span class="mono">${escapeHtml(value)}</span></div>`;
+}
+
+function renderScenarioBrief(d) {
+  if (!d) {
+    el.briefTitle.textContent = "";
+    el.scenarioBrief.innerHTML = `<div class="hint">Select a scenario to see its details.</div>`;
+    return;
+  }
+  el.briefTitle.textContent = `${d.title} · expected ${d.expected}`;
+  const c = d.client;
+  const cr = d.creditor;
+  const f = d.firm;
+  el.scenarioBrief.innerHTML = `
+    ${d.description ? `<p class="brief-desc">${escapeHtml(d.description)}</p>` : ""}
+    <div class="brief-grid">
+      <div class="brief-card">
+        <h3>Creditor</h3>
+        ${kvRow("Name", cr.name)}
+        ${kvRow("Creditor balance", money(cr.creditor_balance_cents))}
+        ${kvRow("Original balance", money(cr.original_balance_cents))}
+      </div>
+      <div class="brief-card">
+        <h3>Client <span class="badge private">PRIVATE</span></h3>
+        ${kvRow("As of", formatDate(c.as_of_date))}
+        ${kvRow("SDA balance", money(c.sda_balance_cents))}
+        ${kvRow("Monthly draft", `${money(c.draft_amount_cents)} on day ${c.draft_day}`)}
+        ${kvRow("Draft window", `${formatDate(c.first_draft_date)} – ${formatDate(c.last_draft_date)}`)}
+        ${kvRow("Upcoming drafts", `${c.upcoming_drafts} · ${money(c.upcoming_deposits_cents)}`)}
+        ${c.upcoming_withdrawals_cents ? kvRow("Upcoming withdrawals", money(c.upcoming_withdrawals_cents)) : ""}
+      </div>
+      <div class="brief-card">
+        <h3>Firm fees</h3>
+        ${kvRow("Program fee rate", pct(f.program_fee_bp))}
+        ${kvRow("Program fee", money(f.program_fee_cents))}
+        ${kvRow("Bank fee / payment", money(f.bank_fee_cents))}
+      </div>
+    </div>`;
+}
+
+async function loadScenarioBrief(id) {
+  if (!id) {
+    renderScenarioBrief(null);
+    return;
+  }
+  try {
+    const res = await fetch(`/scenarios/${encodeURIComponent(id)}`);
+    renderScenarioBrief(res.ok ? await res.json() : null);
+  } catch {
+    renderScenarioBrief(null);
   }
 }
 
@@ -988,13 +1302,20 @@ function updateExpectedBadge() {
 }
 
 async function loadRepCard(id) {
+  if (!id) {
+    setRepCard("");
+    return;
+  }
   try {
     const res = await fetch(`/scenarios/${encodeURIComponent(id)}/rep_card`);
+    if (!res.ok) {
+      setRepCard("");
+      return;
+    }
     const data = await res.json();
-    store.set({ repCard: data.markdown || "" });
-    el.repCard.textContent = data.markdown || "";
+    setRepCard(data.markdown || "");
   } catch {
-    el.repCard.textContent = "";
+    setRepCard("");
   }
 }
 
@@ -1046,20 +1367,31 @@ el.viewOp.addEventListener("click", () => {
   store.set({ view: "operator" });
   applyView();
 });
-el.btnStart.addEventListener("click", async () => {
+async function toggleCall() {
+  const s = store.get();
+  if (s.ending) return;
+  if (s.started) {
+    endChat();
+    return;
+  }
   await stopMic();
   stopMock();
   showNotice("");
   if (el.togMock.checked) startMock();
   else connectAndStart();
+}
+
+el.btnCall.addEventListener("click", () => {
+  toggleCall();
 });
-el.btnEnd.addEventListener("click", endChat);
+if (el.btnCallOp) {
+  el.btnCallOp.addEventListener("click", () => {
+    toggleCall();
+  });
+}
 el.btnSend.addEventListener("click", () => sendText());
 el.textInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") sendText();
-});
-el.togBarge.addEventListener("change", () => {
-  store.set({ bargeInEnabled: el.togBarge.checked });
 });
 el.sttMode.addEventListener("change", async () => {
   store.set({ sttMode: el.sttMode.value, sttFallbackNotice: "" });
@@ -1076,7 +1408,7 @@ el.btnMic.addEventListener("click", async () => {
 el.scenarioSelect.addEventListener("change", async () => {
   store.set({ scenarioId: el.scenarioSelect.value });
   updateExpectedBadge();
-  await loadRepCard(el.scenarioSelect.value);
+  await loadScenarioInfo(el.scenarioSelect.value);
 });
 el.btnDownload.addEventListener("click", downloadLog);
 el.auditFilters.addEventListener("click", (e) => {
@@ -1098,6 +1430,7 @@ if (params.get("scenario")) {
 initSplitter();
 applyView();
 renderAll();
+renderScenarioBrief(null);
 loadScenarios();
 
 if (el.togMock.checked) startMock();

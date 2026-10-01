@@ -4,7 +4,8 @@ A scenario is the synthetic case under negotiation: engine ``Client``, public
 creditor offer amounts, and firm fee settings. Loaders read ``client.json``,
 ``offer.json``, and ``firm.json`` from a directory such as ``fixtures/demo``.
 Optional ``rebase_to`` shifts every client date by whole months so demos do
-not go stale relative to ``date.today()``.
+not go stale relative to ``date.today()``. ``scenario_details`` builds the
+operator-only brief (includes PRIVATE client finances; never sent to NLG).
 """
 
 from __future__ import annotations
@@ -12,7 +13,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
+from typing import Any
 
 from feasibility.models import Client, LedgerEntry, add_months, load_client
 
@@ -143,3 +146,59 @@ def load_rep_card(scenario_id: str, *, root: Path | None = None) -> str:
     if not path.is_file():
         return ""
     return path.read_text()
+
+
+def scenario_details(
+    scenario_id: str,
+    *,
+    rebase_to: date | None = None,
+    root: Path | None = None,
+) -> dict[str, Any]:
+    """Operator brief for one catalog scenario, including PRIVATE client finances.
+
+    Dates are rebased like the live call (``rebase_to``) so the brief matches
+    what the engine will see. Money is integer cents; fee rate is basis points.
+    """
+    folder = resolve_scenario_dir(scenario_id, root=root)
+    meta = next(
+        (m for m in list_scenario_metas(root=root) if m.id == folder.name),
+        ScenarioMeta(id=folder.name, title=folder.name, description="", expected="deal"),
+    )
+    sc = load_scenario(folder, rebase_to=rebase_to)
+    c = sc.client
+    upcoming = [e for e in c.ledger if e.date > c.as_of_date]
+    deposits = sum(e.amount_cents for e in upcoming if e.type == "credit")
+    withdrawals = sum(e.amount_cents for e in upcoming if e.type == "debit")
+    fee_bp = int((Decimal(str(sc.program_fee_pct)) * 10000).to_integral_value(ROUND_HALF_UP))
+    program_fee_cents = int(
+        (Decimal(fee_bp) / Decimal(10000) * sc.original_balance_cents).to_integral_value(
+            ROUND_HALF_UP
+        )
+    )
+    return {
+        "id": meta.id,
+        "title": meta.title,
+        "description": meta.description,
+        "expected": meta.expected,
+        "creditor": {
+            "name": sc.creditor,
+            "creditor_balance_cents": sc.creditor_balance_cents,
+            "original_balance_cents": sc.original_balance_cents,
+        },
+        "client": {
+            "as_of_date": c.as_of_date.isoformat(),
+            "sda_balance_cents": c.current_balance_cents,
+            "draft_amount_cents": c.draft_amount_cents,
+            "draft_day": c.draft_day,
+            "first_draft_date": c.first_draft_date.isoformat(),
+            "last_draft_date": c.last_draft_date.isoformat(),
+            "upcoming_drafts": sum(1 for e in upcoming if e.type == "credit"),
+            "upcoming_deposits_cents": deposits,
+            "upcoming_withdrawals_cents": withdrawals,
+        },
+        "firm": {
+            "program_fee_bp": fee_bp,
+            "program_fee_cents": program_fee_cents,
+            "bank_fee_cents": sc.bank_fee_cents,
+        },
+    }

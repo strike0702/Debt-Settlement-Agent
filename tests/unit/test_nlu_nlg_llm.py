@@ -395,6 +395,36 @@ async def test_nlg_good_llm_template_used() -> None:
     assert SAFE_FALLBACK not in lines
 
 
+@pytest.mark.asyncio
+async def test_nlg_ask_skips_llm_and_speaks_ask_text() -> None:
+    fake = FakeLLM()
+    fake.enqueue("nlg", "Could you please provide the max_payments for {ask_text}?")
+    ask = "What is the maximum number of payments you can accept?"
+    action = Action(
+        intent=Intent.ASK,
+        text_slots={"ask_text": ask, "field_label": "maximum number of payments"},
+        required={"ask_text"},
+        next_phase=Phase.DISCOVERY,
+    )
+    lines = await speak_action(action, _REF, llm=fake, settings=_settings(nlg_mode="llm"))
+    assert fake.calls == []
+    assert lines == [ask]
+
+
+@pytest.mark.asyncio
+async def test_nlg_no_deal_wrap_skips_llm() -> None:
+    fake = FakeLLM()
+    fake.enqueue("nlg", "I'm sorry, but we cannot proceed due to {no_deal_reason}.")
+    action = Action(
+        intent=Intent.NO_DEAL_WRAP,
+        text_slots={"no_deal_reason": "Understood, we will end the call here."},
+        next_phase=Phase.END,
+    )
+    lines = await speak_action(action, _REF, llm=fake, settings=_settings(nlg_mode="llm"))
+    assert fake.calls == []
+    assert lines == ["Understood, we will end the call here.", "Thank you for your time."]
+
+
 def test_post_verify_rejects_bare_year_date() -> None:
     analysis = TurnAnalysis(
         terms=[

@@ -161,6 +161,63 @@ def test_ws_start_text_say_sentence_done_barge_in(tmp_path: Path) -> None:
             _ack_all_says(ws, turn3)
 
 
+def test_ws_end_closes_without_unknown_event(tmp_path: Path) -> None:
+    with _client(tmp_path) as client:
+        with client.websocket_connect("/ws/call/test-call-end") as ws:
+            ws.send_json({"type": "start", "scenario": "fixtures/demo"})
+            opening = _recv_until(ws, lambda m: m.get("type") == "turn_done")
+            _ack_all_says(ws, opening)
+
+            ws.send_json({"type": "end"})
+            ended = _recv_until(ws, lambda m: m.get("type") == "turn_done")
+            assert not any(
+                m.get("type") == "error" and "unknown event" in str(m.get("message", ""))
+                for m in ended
+            )
+            assert any(m.get("type") == "say" for m in ended)
+            assert any(
+                m.get("type") == "phase" and m.get("intent") == "NO_DEAL_WRAP"
+                for m in ended
+            )
+            # Effects (set_phase END) apply on sentence_done; collect that batch.
+            ack_batch: list[dict] = []
+            for ev in ended:
+                if ev.get("type") != "say":
+                    continue
+                ws.send_json({"type": "sentence_done", "id": ev["id"]})
+                ack_batch.extend(
+                    _recv_until(ws, lambda m: m.get("type") == "turn_done")
+                )
+            assert any(
+                m.get("type") == "phase" and m.get("phase") == "END" for m in ack_batch
+            )
+
+
+def test_scenario_brief_endpoint(tmp_path: Path) -> None:
+    with _client(tmp_path) as client:
+        res = client.get("/scenarios/easy_deal")
+        assert res.status_code == 200
+        body = res.json()
+        assert body["title"] == "Easy deal"
+        assert body["expected"] == "deal"
+        assert body["creditor"]["creditor_balance_cents"] == 125_000
+        assert body["client"]["draft_amount_cents"] == 22_000
+        assert body["client"]["upcoming_drafts"] == 8
+        assert body["client"]["upcoming_deposits_cents"] == 176_000
+        assert body["firm"] == {
+            "program_fee_bp": 1800,
+            "program_fee_cents": 28_800,
+            "bank_fee_cents": 950,
+        }
+        assert "rep_card" not in body
+        assert client.get("/scenarios/nope").status_code == 404
+
+    from app.domain.scenario import scenario_details
+
+    with pytest.raises(ValueError):
+        scenario_details("..")
+
+
 def test_metrics_summary_shape(tmp_path: Path) -> None:
     with _client(tmp_path) as client:
         res = client.get("/metrics/summary")

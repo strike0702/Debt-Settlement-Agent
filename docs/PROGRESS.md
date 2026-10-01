@@ -521,3 +521,25 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
   - HTTP: `GET /scenarios`, `/scenarios/{id}/rep_card`, `/calls`, `/calls/{id}/events`, `/calls/{id}/export`
 - Tests: 287 passed offline (+1 skipped live).
 - Open: Groq remains the only server STT route in `providers.yaml` demo profile; browser STT is the offline fallback.
+
+### UI polish (2026-10-01) — rep chrome
+- Files: `app/static/{index.html,app.js}`, `app/voice/ws.py` (docstring), `tests/unit/test_ws.py`.
+- Rep view: scenario / mock / STT / download hidden (operator-only); barge-in always on (no checkbox); Start/End unified toggle in conversation header (+ operator mirror); mic icon in compose field.
+- Playbook: `loadRepCard` always runs on boot (not gated on `/scenarios` catalog success); light markdown→HTML for headers/tables/lists.
+- WS: regression test for client `end` → `on_rep_end` (no `unknown event: end`).
+- Chat bubbles + negotiation metric boxes restyled (lighter asymmetric bubbles; content-sized metric stack).
+- Tests: 288 passed offline (+1 skipped live).
+
+### UI fixes (2026-10-01) — end/restart, mic, chat, NLG phrasing
+- `unknown event: end` was a **stale uvicorn** (started before the `end` handler landed, no `--reload`). Run the demo server with `--reload`, outside the sandbox (sandboxed runs also caused the STT `Connection error`).
+- Client: `ending` flag now cleared on server `error`, on socket close, and by a 3 s timeout; `connectAndStart` closes the previous socket and ignores events from replaced sockets, so Start works after End.
+- Mic: `micGen` generation counter + `micOn` flips first; stop during VAD load tears down the late instance and its `MediaStream`; browser STT uses `abort()` with handlers detached.
+- Rep chat: no intent/latency meta (operator transcript keeps them); consecutive sentences grouped per speaker; removed `pre-wrap` whitespace bug; server `role: "creditor"` now styled as the rep side.
+- NLG: `TEMPLATE_ONLY_INTENTS = {ASK, ASK_SETTLEMENT, NO_DEAL_WRAP, ESCALATE}` in `app/agent/nlg.py` skip the LLM (their slots are full sentences; LLM wrapping produced "…provide the max_payments for What's the most…"). `ask_text` copy reworded to address the rep directly.
+- Tests: 290 passed offline (+1 skipped live).
+
+### Operator scenario brief (2026-10-01)
+- `scenario_details(scenario_id, *, rebase_to=None, root=None) -> dict` in `app/domain/scenario.py`: meta, creditor balances, PRIVATE client finances (SDA balance, draft amount/day/window, upcoming drafts + deposits), firm fee (`program_fee_bp`, `program_fee_cents`, `bank_fee_cents`). Dates rebased like the live call. Rep card stays rep-view only.
+- HTTP `GET /scenarios/{id}` (rebased to `date.today()`); 404 on unknown/invalid id.
+- Operator view: "Scenario brief" panel (Creditor / Client PRIVATE / Firm fees cards) refreshes on scenario change and on load.
+- Tests: 291 passed offline (+1 skipped live).

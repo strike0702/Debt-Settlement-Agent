@@ -29,7 +29,10 @@ PLACEHOLDER_MEANINGS: dict[str, str] = {
 
 _INTENT_INSTRUCTION: dict[Intent, str] = {
     Intent.OPENING: "Greet and invite the rep to state their request.",
-    Intent.ASK: "Ask for the missing creditor term using {ask_text}.",
+    Intent.ASK: (
+        "Output exactly {ask_text} and nothing else. "
+        "Never mention internal field names."
+    ),
     Intent.ASK_SETTLEMENT: "Ask what settlement percentage of the balance they want.",
     Intent.READ_BACK: (
         "Confirm the tentative {field_label} using {readback_value}."

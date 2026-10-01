@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -44,14 +45,17 @@ class AuditLog:
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
-        self._conn = sqlite3.connect(self.path)
+        # FastAPI / TestClient may touch the connection from worker threads.
+        self._conn = sqlite3.connect(self.path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.executescript(_SCHEMA + _TRIGGERS)
         self._conn.commit()
+        self._lock = threading.Lock()
 
     def close(self) -> None:
-        self._conn.close()
+        with self._lock:
+            self._conn.close()
 
     def append(
         self,
@@ -62,26 +66,28 @@ class AuditLog:
     ) -> int:
         """Insert one event; returns the new row id."""
         ts = datetime.now(UTC).isoformat()
-        cur = self._conn.execute(
-            "INSERT INTO events (ts, call_id, actor, type, payload) VALUES (?, ?, ?, ?, ?)",
-            (
-                ts,
-                call_id,
-                actor,
-                event_type,
-                json.dumps(payload) if payload is not None else None,
-            ),
-        )
-        self._conn.commit()
-        return int(cur.lastrowid)
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT INTO events (ts, call_id, actor, type, payload) VALUES (?, ?, ?, ?, ?)",
+                (
+                    ts,
+                    call_id,
+                    actor,
+                    event_type,
+                    json.dumps(payload) if payload is not None else None,
+                ),
+            )
+            self._conn.commit()
+            return int(cur.lastrowid)
 
     def for_call(self, call_id: str) -> list[dict[str, Any]]:
         """Return all events for ``call_id`` in insertion order."""
-        rows = self._conn.execute(
-            "SELECT id, ts, call_id, actor, type, payload FROM events "
-            "WHERE call_id = ? ORDER BY id ASC",
-            (call_id,),
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, ts, call_id, actor, type, payload FROM events "
+                "WHERE call_id = ? ORDER BY id ASC",
+                (call_id,),
+            ).fetchall()
         out: list[dict[str, Any]] = []
         for row in rows:
             payload = row["payload"]

@@ -58,10 +58,12 @@ class CallSession:
     last_eval: EvalSummary | None = None
     agreed_bp: int | None = None
     agreement: Agreement | None = None
+    # Highest feasible settlement bp from the last affordability scan (PRIVATE).
+    last_max_bp: int | None = None
     # Guard inputs accumulated across the call.
     creditor_numbers: set[tuple[str, int | date]] = field(default_factory=set)
     private_blocklist: set[tuple[str, int | date]] = field(default_factory=set)
-    # Recent changes for CLI / tests (also audited).
+    # Recent changes for CLI / tests / voice UI (also audited).
     last_belief_changes: list[BeliefChange] = field(default_factory=list)
     last_blocked: list[dict[str, Any]] = field(default_factory=list)
 

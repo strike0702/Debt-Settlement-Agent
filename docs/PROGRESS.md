@@ -16,7 +16,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 7 | Session, orchestrator, CLI | done |
 | 8 | Simulator, scenarios, offline e2e | done |
 | 9 | Eval runner and metrics | done |
-| 10 | Voice and UI | pending |
+| 10 | Voice and UI | done |
 | 11 | README and final eval | pending |
 
 ## Environment facts
@@ -169,7 +169,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 ### `app.agent.session`
 - `class Turn` — `role` (`agent`|`creditor`), `text`, `spoken`, `sentence_id`
 - `class PendingSpeech` — `action`, `sentence_ids`, `acked`
-- `class CallSession` — `call_id`, `scenario`, `belief`, `neg: NegotiationState`, `history`, `pending`, `last_eval`, `agreed_bp`, `agreement`, `creditor_numbers`, `private_blocklist`; props `phase`, `turn_idx`; `last_agent_line()`
+- `class CallSession` — `call_id`, `scenario`, `belief`, `neg: NegotiationState`, `history`, `pending`, `last_eval`, `agreed_bp`, `agreement`, `last_max_bp`, `creditor_numbers`, `private_blocklist`, `last_belief_changes`, `last_blocked`; props `phase`, `turn_idx`; `last_agent_line()`
 
 ### `app.agent.orchestrator`
 - `class Utterance` — `sentences: list[tuple[id, text]]`, `action`, `timings`, `belief_changes`, `agreement`
@@ -182,6 +182,19 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 
 ### `app.cli`
 - `python -m app.cli [fixtures/demo]` — type as rep; auto-acks; prints lines, belief, timings, verdict
+
+### `app.voice.stt`
+- `async def transcribe(llm, wav_bytes, *, prompt=None) -> tuple[str, float]` — `(text, stt_ms)` via client `transcribe`
+
+### `app.voice.ws`
+- `configure(audit, llm, settings=None) -> None`
+- WS `/ws/call/{call_id}` — client: `start{scenario}`, binary wav, `text`, `sentence_done{id}`, `barge_in{spoken_ids}`, `timing{turn,vad_end_to_first_audio_ms}`; optional `oracle` on `text` when `nlu_mode=oracle`
+- server: `transcript`, `say`, `belief`, `eval` (incl. `max_bp`), `blocked`, `escalate`, `latency`, `audit`, `phase`, `agreement`, `turn_done`
+
+### `app.main`
+- `create_app(*, settings=None, llm=None, audit=None) -> FastAPI`
+- `GET /`, `GET /static/*`, `GET /metrics/summary` → `{stage: {p50,p95,n}}`
+- `app = create_app()` for `uvicorn app.main:app`
 
 ### `app.llm.prompts`
 - `PLACEHOLDER_MEANINGS: dict[str, str]`
@@ -229,6 +242,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `ExtractedTerm.value` allows `date` (needed for `first_payment_date` oracle/sim reveals); PLAN listed only int|str|dict.
 - Deterministic `repair_stance` after NLU: Gemini often labels "Agreed" / schedule-accept lines as `info`.
 - FPD field ask/readback copy avoids the number-word `first` so `template_guard` does not block ASK.
+- WS framing adds server `turn_done` after each turn / ack / barge / timing batch so clients can drain without blocking (not named in PLAN §8 event list).
 
 ## Open issues
 
@@ -467,3 +481,27 @@ thresholds: FAIL (`escalation_correct=0`)
 ```
 
 thresholds: PASS
+
+### Phase 10 (2026-10-01)
+- Files: `app/voice/{stt,ws,metrics_buf}.py`, `app/main.py`, `app/static/{index.html,app.js,mock_script.js}`, `fixtures/demo/rep_card.md`, `tests/unit/test_ws.py`; session `last_max_bp` + NLG `blocked_out` → `last_blocked`; audit SQLite `check_same_thread=False` + lock.
+- UI: Creditor rep | Operator (firm) switch; mock replay; VAD CDN + 16 kHz WAV; speechSynthesis + sentence_done; barge-in toggle; PRIVATE max affordable on operator only.
+- Tests: 281 passed offline (+1 skipped live). WS text protocol (start/text/say/sentence_done/barge_in/turn_done) + `/metrics/summary` shape + STT wrapper.
+- Live demo-profile text WS call (same event path as voice UI; STT not in this smoke) reached `PROPOSE_WRAP`:
+
+```
+t1 ASK_SETTLEMENT  server_total≈11401 ms (nlu≈6094, nlg≈5283)
+t2 CONFIRM_SCHEDULE feasible=True max_bp=10000  server_total≈24488 ms (nlu≈15925, nlg≈8561)
+t3 PROPOSE_WRAP  server_total≈10370 ms (nlu≈4810, nlg≈5559)
+```
+
+`/metrics/summary` after that call (n=4 turns incl. opening):
+
+| stage | p50 | p95 | n |
+|---|---|---|---|
+| nlu_ms | 5452 | 14450 | 4 |
+| policy_ms | 0.08 | 0.13 | 4 |
+| nlg_ms | 6256 | 8320 | 4 |
+| server_total_ms | 10886 | 22525 | 4 |
+| stt_ms / vad_end_to_first_audio_ms | null | null | 0 |
+
+Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n=4).

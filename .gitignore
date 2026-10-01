@@ -7,9 +7,12 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 *.db
+*.db-shm
+*.db-wal
 llm_cache.db
 eval/results/
 .env
 .DS_Store
 dist/
 build/
+tmp/

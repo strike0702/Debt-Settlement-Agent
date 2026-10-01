@@ -495,6 +495,8 @@ class Orchestrator:
 
     async def _speak(self, action: Action, *, last_rep_line: str) -> list[str]:
         session = self.session
+        session.last_blocked = []
+        blocked_out = session.last_blocked
         try:
             if self.settings.nlg_mode == "template" or self.llm is None:
                 return render_action(
@@ -504,6 +506,7 @@ class Orchestrator:
                     private_blocklist=session.private_blocklist,
                     audit=self.audit,
                     call_id=session.call_id,
+                    blocked_out=blocked_out,
                 )
             return await speak_action(
                 action,
@@ -515,6 +518,7 @@ class Orchestrator:
                 private_blocklist=session.private_blocklist,
                 audit=self.audit,
                 call_id=session.call_id,
+                blocked_out=blocked_out,
             )
         except LLMUnavailable:
             self._audit("nlg", "llm_unavailable", {"fallback": SAFE_FALLBACK})
@@ -525,6 +529,7 @@ class Orchestrator:
                 private_blocklist=session.private_blocklist,
                 audit=self.audit,
                 call_id=session.call_id,
+                blocked_out=blocked_out,
             )
 
     def _apply_belief(self, verified: VerifiedAnalysis, turn: int) -> list[BeliefChange]:
@@ -588,6 +593,7 @@ class Orchestrator:
         assert isinstance(fpd, date)
 
         afford = await asyncio.to_thread(affordability, session.scenario, rules, fpd)
+        session.last_max_bp = afford.max_bp
         self._audit(
             "engine",
             "affordability",

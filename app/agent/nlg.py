@@ -89,6 +89,20 @@ def _split_sentences(text: str) -> list[str]:
     return [p for p in parts if p]
 
 
+def _note_blocked(
+    entry: dict[str, Any],
+    *,
+    audit: AuditLog | None,
+    call_id: str | None,
+    blocked_out: list[dict[str, Any]] | None,
+) -> None:
+    """Append a guard-block record to audit and/or the caller's sink."""
+    if blocked_out is not None:
+        blocked_out.append(entry)
+    if audit is not None and call_id is not None:
+        audit.append(call_id, "nlg", "blocked", entry)
+
+
 def _render_filled(
     template: str,
     action: Action,
@@ -98,28 +112,27 @@ def _render_filled(
     private_blocklist: set[tuple[str, int | date]] | None,
     audit: AuditLog | None,
     call_id: str | None,
+    blocked_out: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     allowed = _allowed_ids(action)
     tg = template_guard(template, allowed, action.required)
     if not tg.ok:
-        if audit is not None and call_id is not None:
-            audit.append(
-                call_id,
-                "nlg",
-                "blocked",
-                {"stage": "template", "reason": tg.reason, "offending": tg.offending},
-            )
+        _note_blocked(
+            {"stage": "template", "reason": tg.reason, "offending": tg.offending},
+            audit=audit,
+            call_id=call_id,
+            blocked_out=blocked_out,
+        )
         return [SAFE_FALLBACK]
 
     spoken = _fill_template(template, action, ref_date)
     if "{" in spoken and "}" in spoken:
-        if audit is not None and call_id is not None:
-            audit.append(
-                call_id,
-                "nlg",
-                "blocked",
-                {"stage": "unfilled", "reason": "unfilled_placeholder"},
-            )
+        _note_blocked(
+            {"stage": "unfilled", "reason": "unfilled_placeholder"},
+            audit=audit,
+            call_id=call_id,
+            blocked_out=blocked_out,
+        )
         return [SAFE_FALLBACK]
 
     sentences = _split_sentences(spoken)
@@ -136,17 +149,16 @@ def _render_filled(
             ref=ref_date,
         )
         if not rg.ok:
-            if audit is not None and call_id is not None:
-                audit.append(
-                    call_id,
-                    "nlg",
-                    "blocked",
-                    {
-                        "stage": "rendered",
-                        "reason": rg.reason,
-                        "offending": rg.offending,
-                    },
-                )
+            _note_blocked(
+                {
+                    "stage": "rendered",
+                    "reason": rg.reason,
+                    "offending": rg.offending,
+                },
+                audit=audit,
+                call_id=call_id,
+                blocked_out=blocked_out,
+            )
             return [SAFE_FALLBACK]
         out.append(sentence)
     return out if out else [SAFE_FALLBACK]
@@ -160,6 +172,7 @@ def render_action(
     private_blocklist: set[tuple[str, int | date]] | None = None,
     audit: AuditLog | None = None,
     call_id: str | None = None,
+    blocked_out: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     """Render the deterministic template, or ``SAFE_FALLBACK`` on guard fail."""
     return _render_filled(
@@ -170,6 +183,7 @@ def render_action(
         private_blocklist=private_blocklist,
         audit=audit,
         call_id=call_id,
+        blocked_out=blocked_out,
     )
 
 
@@ -184,6 +198,7 @@ async def speak_action(
     private_blocklist: set[tuple[str, int | date]] | None = None,
     audit: AuditLog | None = None,
     call_id: str | None = None,
+    blocked_out: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     """LLM template (optional) → template_guard → fill → rendered_guard.
 
@@ -259,4 +274,5 @@ async def speak_action(
         private_blocklist=private_blocklist,
         audit=audit,
         call_id=call_id,
+        blocked_out=blocked_out,
     )

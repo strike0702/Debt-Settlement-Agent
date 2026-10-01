@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Debt Settlement Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-0: #0b1016;
+      --bg-1: #111820;
+      --bg-2: #172029;
+      --bg-3: #1e2a36;
+      --line: #2a3848;
+      --text: #e6eef6;
+      --muted: #8b9aab;
+      --accent: #2ec4b6;
+      --accent-dim: rgba(46, 196, 182, 0.14);
+      --ok: #3dcf8e;
+      --warn: #e0a84a;
+      --bad: #e35d6a;
+      --private: #7aa2ff;
+      --space: 8px;
+      --radius: 6px;
+      --font: "IBM Plex Sans", system-ui, sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --flash: rgba(46, 196, 182, 0.28);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(46, 196, 182, 0.08), transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, rgba(122, 162, 255, 0.06), transparent 50%),
+        var(--bg-0);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    button, input, select {
+      font: inherit;
+      color: inherit;
+    }
+
+    .banner {
+      background: #1a2a22;
+      border-bottom: 1px solid #2f4a3c;
+      color: #9fd5b5;
+      text-align: center;
+      padding: calc(var(--space) * 1) calc(var(--space) * 2);
+      letter-spacing: 0.08em;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      height: calc(100% - 36px);
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: calc(var(--space) * 2);
+      gap: calc(var(--space) * 2);
+    }
+
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: calc(var(--space) * 2);
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 180px;
+    }
+    .brand strong { font-size: 16px; font-weight: 600; }
+    .brand span { color: var(--muted); font-size: 12px; }
+
+    .view-switch {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--bg-1);
+    }
+    .view-switch button {
+      border: 0;
+      background: transparent;
+      padding: calc(var(--space) * 1.25) calc(var(--space) * 2);
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .view-switch button[aria-pressed="true"] {
+      background: var(--accent-dim);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space);
+      align-items: center;
+    }
+    .controls button, .controls label.toggle {
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: calc(var(--space) * 1) calc(var(--space) * 1.5);
+      cursor: pointer;
+    }
+    .controls button.primary {
+      background: var(--accent-dim);
+      border-color: rgba(46, 196, 182, 0.45);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .controls button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .controls label.toggle {
+      display: inline-flex;
+      gap: var(--space);
+      align-items: center;
+      user-select: none;
+    }
+    .controls input[type="text"] {
+      min-width: 280px;
+      background: var(--bg-1);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: calc(var(--space) * 1) calc(var(--space) * 1.5);
+    }
+    .hint { color: var(--muted); font-size: 12px; }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: calc(var(--space) * 2);
+      background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+      border: 1px solid var(--line);
+      border-radius: calc(var(--radius) + 2px);
+      padding: calc(var(--space) * 2.5);
+      min-height: 120px;
+    }
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; }
+    }
+
+    .verdict-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: var(--space);
+    }
+    .verdict-main {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .verdict-main[data-state="feasible"] { color: var(--ok); }
+    .verdict-main[data-state="infeasible"] { color: var(--bad); }
+    .verdict-main[data-state="needs_info"] { color: var(--warn); }
+    .verdict-main[data-state="pending"] { color: var(--muted); }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: calc(var(--space) * 1.5);
+    }
+    .metric {
+      background: var(--bg-0);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: calc(var(--space) * 1.25);
+    }
+    .metric .k {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .metric .v {
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 18px;
+      margin-top: 4px;
+    }
+    .badge {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      vertical-align: middle;
+      border: 1px solid currentColor;
+    }
+    .badge.private { color: var(--private); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr;
+      gap: calc(var(--space) * 2);
+      min-height: 0;
+    }
+    @media (max-width: 1100px) {
+      .grid { grid-template-columns: 1fr; overflow: auto; }
+    }
+
+    .panel {
+      background: var(--bg-1);
+      border: 1px solid var(--line);
+      border-radius: calc(var(--radius) + 2px);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .panel h2 {
+      margin: 0;
+      padding: calc(var(--space) * 1.5) calc(var(--space) * 2);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
+      background: var(--bg-2);
+    }
+    .panel .body {
+      padding: calc(var(--space) * 1.5);
+      overflow: auto;
+      flex: 1;
+      min-height: 120px;
+    }
+
+    .panel.schedule-panel .body {
+      min-height: 200px;
+    }
+
+    .col-stack {
+      display: flex;
+      flex-direction: column;
+      gap: calc(var(--space) * 2);
+      min-height: 0;
+    }
+
+    .transcript-line {
+      display: grid;
+      grid-template-columns: 64px 1fr;
+      gap: var(--space);
+      padding: calc(var(--space) * 1) 0;
+      border-bottom: 1px solid rgba(42, 56, 72, 0.55);
+    }
+    .transcript-line .role {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding-top: 2px;
+    }
+    .transcript-line.agent .role { color: var(--accent); }
+    .transcript-line.blocked .text {
+      text-decoration: line-through;
+      color: var(--muted);
+    }
+
+    table.terms, table.sched {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    table.terms th, table.sched th,
+    table.terms td, table.sched td {
+      text-align: left;
+      padding: calc(var(--space) * 1) calc(var(--space) * 1);
+      border-bottom: 1px solid rgba(42, 56, 72, 0.55);
+      vertical-align: top;
+    }
+    table.terms th, table.sched th {
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1px solid transparent;
+    }
+    .chip.KNOWN { background: rgba(61, 207, 142, 0.12); color: var(--ok); border-color: rgba(61, 207, 142, 0.35); }
+    .chip.TENTATIVE { background: rgba(224, 168, 74, 0.12); color: var(--warn); border-color: rgba(224, 168, 74, 0.35); }
+    .chip.ASSUMED { background: rgba(139, 154, 171, 0.12); color: var(--muted); border-color: rgba(139, 154, 171, 0.35); }
+    .chip.UNKNOWN { background: rgba(139, 154, 171, 0.08); color: var(--muted); border-color: var(--line); }
+    .chip.CONTRADICTED { background: rgba(227, 93, 106, 0.12); color: var(--bad); border-color: rgba(227, 93, 106, 0.35); }
+
+    .rep-card {
+      white-space: pre-wrap;
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.45;
+    }
+    .rep-card .title {
+      color: var(--accent);
+      font-weight: 600;
+      margin-bottom: var(--space);
+    }
+
+    .latency-row, .guard-row, .audit-row {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space);
+      padding: calc(var(--space) * 0.75) 0;
+      border-bottom: 1px solid rgba(42, 56, 72, 0.45);
+      font-size: 12px;
+    }
+    .audit-row { flex-direction: column; align-items: flex-start; }
+    .audit-row .meta { color: var(--muted); }
+
+    .changed {
+      animation: flash 0.7s ease;
+    }
+    @keyframes flash {
+      from { background-color: var(--flash); }
+      to { background-color: transparent; }
+    }
+
+    .op-only[hidden], .rep-only[hidden] { display: none !important; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .changed { animation: none; }
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="banner" role="status">Synthetic data — demonstration only</div>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <strong>Debt Settlement Agent</strong>
+        <span id="view-caption">Creditor rep view</span>
+      </div>
+      <div class="view-switch" role="group" aria-label="Dashboard view">
+        <button type="button" id="view-rep" aria-pressed="true" aria-label="Creditor rep view">Creditor rep</button>
+        <button type="button" id="view-op" aria-pressed="false" aria-label="Operator firm view">Operator (firm)</button>
+      </div>
+      <div class="controls">
+        <button type="button" class="primary" id="btn-start">Start call</button>
+        <button type="button" id="btn-mic" disabled>Mic off</button>
+        <label class="toggle"><input type="checkbox" id="tog-barge" checked /> Barge-in</label>
+        <label class="toggle"><input type="checkbox" id="tog-mock" /> Mock</label>
+        <input type="text" id="text-input" placeholder="Type as the creditor rep" disabled />
+        <button type="button" id="btn-send" disabled>Send</button>
+        <span class="hint">Use headphones for spoken calls</span>
+      </div>
+    </header>
+
+    <section class="hero" aria-label="Negotiation status">
+      <div>
+        <div class="verdict-label" id="hero-label">Call status</div>
+        <div class="verdict-main" id="hero-main" data-state="pending" aria-live="polite">Pending</div>
+        <div class="hint" id="hero-sub" style="margin-top:8px">Awaiting start</div>
+      </div>
+      <div class="metrics" id="hero-metrics"></div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>Live transcript</h2>
+        <div class="body" id="transcript"></div>
+      </div>
+
+      <div class="col-stack">
+        <div class="panel" style="flex:1.2">
+          <h2>Extracted terms</h2>
+          <div class="body" id="terms"></div>
+        </div>
+        <div class="panel rep-only" style="flex:0.9">
+          <h2>Rep card</h2>
+          <div class="body rep-card" id="rep-card"></div>
+        </div>
+      </div>
+
+      <div class="col-stack">
+        <div class="panel schedule-panel" style="flex:1.4">
+          <h2 id="sched-title">Payment schedule</h2>
+          <div class="body" id="schedule"></div>
+        </div>
+        <div class="panel op-only" hidden>
+          <h2>Guardrails</h2>
+          <div class="body" id="guards"></div>
+        </div>
+        <div class="panel op-only" hidden>
+          <h2>Per-turn latency</h2>
+          <div class="body" id="latency"></div>
+        </div>
+        <div class="panel op-only" hidden>
+          <h2>Audit tail</h2>
+          <div class="body" id="audit"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/static/mock_script.js"></script>
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

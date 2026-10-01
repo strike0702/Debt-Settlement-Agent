@@ -34,6 +34,7 @@ class Intent(StrEnum):
     REFUSE_PRIVATE = "REFUSE_PRIVATE"
     REFUSE_COMMIT = "REFUSE_COMMIT"
     COUNTER = "COUNTER"
+    COUNTER_TERMS = "COUNTER_TERMS"
     CONFIRM_SCHEDULE = "CONFIRM_SCHEDULE"
     PROPOSE_WRAP = "PROPOSE_WRAP"
     NO_DEAL_WRAP = "NO_DEAL_WRAP"
@@ -55,6 +56,8 @@ class Effect(BaseModel):
         "inc_confirm_reject",
         "note_assumed_asked",
         "note_clarify",
+        "note_terms_countered",
+        "clear_pending_terms_alt",
         "set_phase",
     ]
     data: dict[str, Any] = Field(default_factory=dict)

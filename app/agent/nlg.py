@@ -30,7 +30,9 @@ TEMPLATES: dict[Intent, str] = {
     Intent.ASK_SETTLEMENT: (
         "What settlement percentage of the balance are you looking for?"
     ),
-    Intent.READ_BACK: "So I have {readback_value} for that term. Is that right?",
+    Intent.READ_BACK: (
+        "So I have {readback_value} for the {field_label}. Is that right?"
+    ),
     Intent.CLARIFY: (
         "Earlier you mentioned {clarify_old}, and now I am hearing {clarify_new}. "
         "Which of those should I use?"
@@ -45,6 +47,10 @@ TEMPLATES: dict[Intent, str] = {
         "We can propose {counter_pct} of the balance, which is {offer_total}. "
         "Would that work?"
     ),
+    Intent.COUNTER_TERMS: (
+        "That start date does not fit the client's program. "
+        "Could payment start on {alt_first_payment_date} instead?"
+    ),
     Intent.CONFIRM_SCHEDULE: (
         "We can do {num_payments} payments totaling {offer_total}, "
         "starting {first_payment_date}."
@@ -53,8 +59,7 @@ TEMPLATES: dict[Intent, str] = {
         "I can take this proposal to the client for approval."
     ),
     Intent.NO_DEAL_WRAP: (
-        "I do not think we can make a settlement work under these terms. "
-        "Thank you for your time."
+        "{no_deal_reason} Thank you for your time."
     ),
     Intent.ESCALATE: (
         "I need to involve someone from our side. {escalate_reason}"

@@ -129,6 +129,29 @@ _READBACK_DENY_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Bare year like "2026" with no month/day — not a payment date.
+_BARE_YEAR_QUOTE_RE = re.compile(r"^\s*(?:year\s+)?((?:19|20)\d{2})\s*$", re.I)
+_MONTH_OR_DAY_RE = re.compile(
+    r"(?:"
+    r"\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
+    r"jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|"
+    r"dec(?:ember)?)\b"
+    r"|\b(?:\d{1,2})(?:st|nd|rd|th)?\b"
+    r"|[/.-]"
+    r")",
+    re.I,
+)
+
+_PLAIN_YES_RE = re.compile(
+    r"^\s*(?:yes|yep|yeah|correct|that's right|thats right|that is correct|"
+    r"confirmed|confirm|right)\s*[.!]?\s*$",
+    re.I,
+)
+_PLAIN_NO_RE = re.compile(
+    r"^\s*(?:no|nope|incorrect|that's wrong|thats wrong|not correct|deny)\s*[.!]?\s*$",
+    re.I,
+)
+
 
 def _verify_readback_response(claimed: str | None, utterance: str) -> str | None:
     """Keep confirm/deny only when the utterance contains a matching phrase."""
@@ -136,6 +159,37 @@ def _verify_readback_response(claimed: str | None, utterance: str) -> str | None
         return "confirm"
     if claimed == "deny" and _READBACK_DENY_RE.search(utterance):
         return "deny"
+    return None
+
+
+def _quote_is_bare_year(quote: str) -> bool:
+    """True when the quote is only a year with no month/day cue."""
+    q = quote.strip()
+    if not q:
+        return False
+    if _BARE_YEAR_QUOTE_RE.match(q) and not _MONTH_OR_DAY_RE.search(q):
+        return True
+    # ISO year-only or year with no month/day digits beyond the year.
+    if re.fullmatch(r"(?:19|20)\d{2}", q):
+        return True
+    return False
+
+
+def try_fast_readback(utterance: str, pending_readback: str | None) -> VerifiedAnalysis | None:
+    """Skip the LLM when pending read-back and the utterance is plain yes/no."""
+    if not pending_readback:
+        return None
+    text = utterance.strip()
+    if _PLAIN_YES_RE.match(text):
+        return VerifiedAnalysis(
+            stance="info",
+            readback_response="confirm",
+        )
+    if _PLAIN_NO_RE.match(text):
+        return VerifiedAnalysis(
+            stance="info",
+            readback_response="deny",
+        )
     return None
 
 
@@ -337,6 +391,16 @@ def post_verify(
             except ValueError:
                 _log("nlu_rejected_date", {"field": term.field, "value": term.value})
                 continue
+        if (
+            spec is not None
+            and spec.kind == "date"
+            and _quote_is_bare_year(term.quote)
+        ):
+            _log(
+                "nlu_rejected_bare_year",
+                {"field": term.field, "value": str(value), "quote": term.quote},
+            )
+            continue
         if spec is not None and spec.kind == "enum":
             matched = normalize_for_quote(str(value)) in normalize_for_quote(
                 term.quote
@@ -425,6 +489,18 @@ async def analyze(
         if oracle is None:
             raise ValueError("nlu_mode=oracle requires oracle=TurnAnalysis")
         return post_verify(oracle, utterance, ref=ref, audit=audit, call_id=call_id)
+
+    # Deterministic yes/no while a read-back is pending — skip the LLM.
+    fast = try_fast_readback(utterance, pending_readback)
+    if fast is not None:
+        if audit is not None and call_id is not None:
+            audit.append(
+                call_id,
+                "nlu",
+                "fast_readback",
+                {"response": fast.readback_response, "utterance": utterance[:80]},
+            )
+        return fast
 
     if llm is None:
         raise ValueError("llm is required when nlu_mode is not oracle")

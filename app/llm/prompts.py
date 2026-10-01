@@ -15,31 +15,39 @@ PLACEHOLDER_MEANINGS: dict[str, str] = {
     "opening_disclosure": "synthetic-data disclosure sentence",
     "ask_text": "question asking for a missing creditor term",
     "readback_value": "the tentative term value being confirmed",
+    "field_label": "human label for the creditor term under discussion",
     "clarify_old": "earlier value the rep gave",
     "clarify_new": "newer conflicting value the rep gave",
     "counter_pct": "settlement percentage we are proposing",
     "offer_total": "dollar total of the proposed settlement",
     "num_payments": "number of payments in the schedule",
     "first_payment_date": "date of the first payment",
+    "alt_first_payment_date": "alternate earlier first payment date we propose",
+    "no_deal_reason": "brief reason we cannot settle",
     "escalate_reason": "brief reason we need a specialist",
-    "field": "name of the creditor term under discussion",
 }
 
 _INTENT_INSTRUCTION: dict[Intent, str] = {
     Intent.OPENING: "Greet and invite the rep to state their request.",
     Intent.ASK: "Ask for the missing creditor term using {ask_text}.",
     Intent.ASK_SETTLEMENT: "Ask what settlement percentage of the balance they want.",
-    Intent.READ_BACK: "Confirm the tentative value using {readback_value}.",
+    Intent.READ_BACK: (
+        "Confirm the tentative {field_label} using {readback_value}."
+    ),
     Intent.CLARIFY: "Ask which of {clarify_old} or {clarify_new} is correct.",
     Intent.REFUSE_PRIVATE: "Refuse to share client private financials.",
     Intent.REFUSE_COMMIT: "Refuse to commit; say we can only propose to the client.",
     Intent.COUNTER: "Propose {counter_pct} of the balance equaling {offer_total}.",
+    Intent.COUNTER_TERMS: (
+        "Explain the requested start date does not fit, and propose "
+        "{alt_first_payment_date} instead."
+    ),
     Intent.CONFIRM_SCHEDULE: (
         "Confirm a schedule with {num_payments} payments totaling {offer_total}, "
         "starting {first_payment_date}."
     ),
     Intent.PROPOSE_WRAP: "Say you will take the proposal to the client for approval.",
-    Intent.NO_DEAL_WRAP: "Politely end; settlement cannot work under these terms.",
+    Intent.NO_DEAL_WRAP: "Politely end using {no_deal_reason}.",
     Intent.ESCALATE: "Say a specialist must join. Include {escalate_reason}.",
 }
 

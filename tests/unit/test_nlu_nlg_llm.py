@@ -393,3 +393,38 @@ async def test_nlg_good_llm_template_used() -> None:
     assert "40%" in joined
     assert "$500" in joined
     assert SAFE_FALLBACK not in lines
+
+
+def test_post_verify_rejects_bare_year_date() -> None:
+    analysis = TurnAnalysis(
+        terms=[
+            ExtractedTerm(
+                field="first_payment_date",
+                value="2026-01-01",
+                quote="2026",
+                hedged=False,
+            )
+        ],
+        stance="info",
+    )
+    out = post_verify(analysis, "i mean 2026", ref=_REF)
+    assert out.terms == []
+
+
+@pytest.mark.asyncio
+async def test_fast_readback_skips_llm() -> None:
+    from app.agent.nlu import analyze
+    from app.config import Settings
+    from app.llm.client import FakeLLM
+
+    llm = FakeLLM()
+    # If LLM were called, chat_text would raise (empty queue).
+    settings = Settings(nlu_mode="llm", llm_profile="offline", nlg_mode="template")
+    out = await analyze(
+        "yes",
+        "So I have October 31 for the initial payment date. Is that right?",
+        "first_payment_date",
+        llm=llm,
+        settings=settings,
+    )
+    assert out.readback_response == "confirm"

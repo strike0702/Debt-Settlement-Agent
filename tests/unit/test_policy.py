@@ -235,6 +235,57 @@ def test_rule9_infeasible_no_rescue_no_deal() -> None:
         rescue_within_guardrail=False,
     )
     assert action.intent == Intent.NO_DEAL_WRAP
+    assert "no_deal_reason" in action.text_slots
+
+
+def test_rule9_infeasible_with_alt_date_counters_terms() -> None:
+    b = _belief(max_payments=8, min_payment_cents=10000, payment_structure="even")
+    alt = date(2026, 9, 30)
+    action = decide(
+        b,
+        _neg(turn_idx=3, ask_bp=4500),
+        TurnAnalysis(stance="info"),
+        _afford(None),
+        settings=_SETTINGS,
+        rescue_within_guardrail=False,
+        alt_first_payment_date=alt,
+    )
+    assert action.intent == Intent.COUNTER_TERMS
+    assert action.facts["alt_first_payment_date"].value == alt
+    # Already offered → no deal.
+    action2 = decide(
+        b,
+        _neg(turn_idx=4, ask_bp=4500, terms_countered=[alt.isoformat()]),
+        TurnAnalysis(stance="reject"),
+        _afford(None),
+        settings=_SETTINGS,
+        rescue_within_guardrail=False,
+        alt_first_payment_date=alt,
+    )
+    assert action2.intent == Intent.NO_DEAL_WRAP
+
+
+def test_readback_uses_field_label_not_raw_name() -> None:
+    b = _belief(max_payments=8, min_payment_cents=10000, payment_structure="even")
+    b.observe(
+        "first_payment_date",
+        date(2026, 10, 31),
+        "31st Oct",
+        2,
+        verified=False,
+        hedged=False,
+    )
+    action = decide(
+        b,
+        _neg(turn_idx=2, ask_bp=4500),
+        TurnAnalysis(stance="info"),
+        _afford(10000),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.READ_BACK
+    assert action.text_slots.get("field_label") == "initial payment date"
+    assert "first_payment_date" not in action.text_slots.get("field_label", "")
+    assert "field" not in action.text_slots
 
 
 def test_rule9_confirm_when_ask_feasible() -> None:

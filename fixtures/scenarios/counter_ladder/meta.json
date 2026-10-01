@@ -1,0 +1,5 @@
+{
+  "title": "Counter ladder",
+  "description": "Rep opens at 95%; agent should counter down toward a feasible %.",
+  "expected": "counter"
+}

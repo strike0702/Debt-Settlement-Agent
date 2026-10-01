@@ -22,17 +22,18 @@
       --warn: #e0a84a;
       --bad: #e35d6a;
       --private: #7aa2ff;
+      --agent-bubble: #15343a;
+      --rep-bubble: #1a2430;
       --space: 8px;
-      --radius: 6px;
+      --radius: 8px;
       --font: "IBM Plex Sans", system-ui, sans-serif;
       --mono: "IBM Plex Mono", ui-monospace, monospace;
       --flash: rgba(46, 196, 182, 0.28);
+      --chat-width: 52%;
     }
-
     * { box-sizing: border-box; }
     html, body {
-      margin: 0;
-      height: 100%;
+      margin: 0; height: 100%;
       background:
         radial-gradient(1200px 600px at 10% -10%, rgba(46, 196, 182, 0.08), transparent 55%),
         radial-gradient(900px 500px at 100% 0%, rgba(122, 162, 255, 0.06), transparent 50%),
@@ -40,272 +41,121 @@
       color: var(--text);
       font-family: var(--font);
       font-size: 14px;
-      line-height: 1.4;
+      line-height: 1.45;
     }
-
-    button, input, select {
-      font: inherit;
-      color: inherit;
-    }
-
+    button, input, select { font: inherit; color: inherit; }
     .banner {
-      background: #1a2a22;
-      border-bottom: 1px solid #2f4a3c;
-      color: #9fd5b5;
-      text-align: center;
-      padding: calc(var(--space) * 1) calc(var(--space) * 2);
-      letter-spacing: 0.08em;
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
+      background: #1a2a22; border-bottom: 1px solid #2f4a3c; color: #9fd5b5;
+      text-align: center; padding: 8px 16px; letter-spacing: 0.08em;
+      font-size: 12px; font-weight: 600; text-transform: uppercase;
     }
-
     .app {
-      display: grid;
-      grid-template-rows: auto auto 1fr;
-      height: calc(100% - 36px);
-      max-width: 1440px;
-      margin: 0 auto;
-      padding: calc(var(--space) * 2);
-      gap: calc(var(--space) * 2);
+      display: grid; grid-template-rows: auto auto 1fr;
+      height: calc(100% - 36px); max-width: 1500px; margin: 0 auto;
+      padding: 12px; gap: 12px;
     }
-
     .topbar {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: calc(var(--space) * 2);
+      display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
       justify-content: space-between;
     }
-
-    .brand {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 180px;
-    }
+    .brand { display: flex; flex-direction: column; gap: 2px; min-width: 160px; }
     .brand strong { font-size: 16px; font-weight: 600; }
     .brand span { color: var(--muted); font-size: 12px; }
-
     .view-switch {
-      display: inline-flex;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      overflow: hidden;
-      background: var(--bg-1);
+      display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius);
+      overflow: hidden; background: var(--bg-1);
     }
     .view-switch button {
-      border: 0;
-      background: transparent;
-      padding: calc(var(--space) * 1.25) calc(var(--space) * 2);
-      cursor: pointer;
-      color: var(--muted);
+      border: 0; background: transparent; padding: 8px 14px; cursor: pointer; color: var(--muted);
     }
     .view-switch button[aria-pressed="true"] {
-      background: var(--accent-dim);
-      color: var(--accent);
-      font-weight: 600;
+      background: var(--accent-dim); color: var(--accent); font-weight: 600;
     }
-
-    .controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--space);
-      align-items: center;
-    }
-    .controls button, .controls label.toggle {
-      background: var(--bg-2);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: calc(var(--space) * 1) calc(var(--space) * 1.5);
-      cursor: pointer;
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .controls button, .controls label.toggle, .controls select {
+      background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 7px 12px; cursor: pointer;
     }
     .controls button.primary {
-      background: var(--accent-dim);
-      border-color: rgba(46, 196, 182, 0.45);
-      color: var(--accent);
-      font-weight: 600;
+      background: var(--accent-dim); border-color: rgba(46, 196, 182, 0.45);
+      color: var(--accent); font-weight: 600;
+    }
+    .controls button.danger {
+      border-color: rgba(227, 93, 106, 0.45); color: var(--bad);
     }
     .controls button:disabled { opacity: 0.45; cursor: not-allowed; }
     .controls label.toggle {
-      display: inline-flex;
-      gap: var(--space);
-      align-items: center;
-      user-select: none;
+      display: inline-flex; gap: 6px; align-items: center; user-select: none;
     }
     .controls input[type="text"] {
-      min-width: 280px;
-      background: var(--bg-1);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: calc(var(--space) * 1) calc(var(--space) * 1.5);
+      min-width: 220px; background: var(--bg-1); border: 1px solid var(--line);
+      border-radius: var(--radius); padding: 7px 12px;
     }
     .hint { color: var(--muted); font-size: 12px; }
+    .notice {
+      display: none; background: rgba(224, 168, 74, 0.12); border: 1px solid rgba(224, 168, 74, 0.35);
+      color: var(--warn); padding: 8px 12px; border-radius: var(--radius); font-size: 13px;
+    }
+    .notice.show { display: block; }
 
-    .hero {
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: calc(var(--space) * 2);
-      background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
-      border: 1px solid var(--line);
-      border-radius: calc(var(--radius) + 2px);
-      padding: calc(var(--space) * 2.5);
-      min-height: 120px;
+    .workspace {
+      display: grid; grid-template-columns: var(--chat-width) 6px 1fr;
+      gap: 0; min-height: 0; height: 100%;
     }
-    @media (max-width: 900px) {
-      .hero { grid-template-columns: 1fr; }
+    .splitter {
+      cursor: col-resize; background: transparent; position: relative;
     }
-
-    .verdict-label {
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--muted);
-      margin-bottom: var(--space);
+    .splitter::after {
+      content: ""; position: absolute; inset: 8% 2px; border-radius: 4px;
+      background: var(--line);
     }
-    .verdict-main {
-      font-size: 28px;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-    }
-    .verdict-main[data-state="feasible"] { color: var(--ok); }
-    .verdict-main[data-state="infeasible"] { color: var(--bad); }
-    .verdict-main[data-state="needs_info"] { color: var(--warn); }
-    .verdict-main[data-state="pending"] { color: var(--muted); }
-
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: calc(var(--space) * 1.5);
-    }
-    .metric {
-      background: var(--bg-0);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: calc(var(--space) * 1.25);
-    }
-    .metric .k {
-      color: var(--muted);
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .metric .v {
-      font-family: var(--mono);
-      font-variant-numeric: tabular-nums;
-      font-size: 18px;
-      margin-top: 4px;
-    }
-    .badge {
-      display: inline-block;
-      margin-left: 6px;
-      padding: 1px 6px;
-      border-radius: 999px;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      vertical-align: middle;
-      border: 1px solid currentColor;
-    }
-    .badge.private { color: var(--private); }
-
-    .grid {
-      display: grid;
-      grid-template-columns: 1.2fr 1fr 1fr;
-      gap: calc(var(--space) * 2);
-      min-height: 0;
-    }
-    @media (max-width: 1100px) {
-      .grid { grid-template-columns: 1fr; overflow: auto; }
-    }
+    .splitter:hover::after { background: var(--accent); }
 
     .panel {
-      background: var(--bg-1);
-      border: 1px solid var(--line);
+      background: var(--bg-1); border: 1px solid var(--line);
       border-radius: calc(var(--radius) + 2px);
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-      overflow: hidden;
+      display: flex; flex-direction: column; min-height: 0; overflow: hidden;
     }
     .panel h2 {
-      margin: 0;
-      padding: calc(var(--space) * 1.5) calc(var(--space) * 2);
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--muted);
-      border-bottom: 1px solid var(--line);
-      background: var(--bg-2);
+      margin: 0; padding: 10px 14px; font-size: 12px; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted);
+      border-bottom: 1px solid var(--line); background: var(--bg-2);
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
     }
-    .panel .body {
-      padding: calc(var(--space) * 1.5);
-      overflow: auto;
-      flex: 1;
-      min-height: 120px;
-    }
+    .panel .body { padding: 12px; overflow: auto; flex: 1; min-height: 0; }
 
-    .panel.schedule-panel .body {
-      min-height: 200px;
+    .chat-panel { min-height: 0; }
+    .chat-log {
+      display: flex; flex-direction: column; gap: 10px; padding: 14px;
+      overflow: auto; flex: 1; min-height: 0;
     }
-
-    .col-stack {
-      display: flex;
-      flex-direction: column;
-      gap: calc(var(--space) * 2);
-      min-height: 0;
+    .bubble {
+      max-width: 88%; padding: 10px 12px; border-radius: 12px;
+      border: 1px solid var(--line); white-space: pre-wrap; word-break: break-word;
     }
-
-    .transcript-line {
-      display: grid;
-      grid-template-columns: 64px 1fr;
-      gap: var(--space);
-      padding: calc(var(--space) * 1) 0;
-      border-bottom: 1px solid rgba(42, 56, 72, 0.55);
+    .bubble.agent {
+      align-self: flex-start; background: var(--agent-bubble);
+      border-color: rgba(46, 196, 182, 0.35);
     }
-    .transcript-line .role {
-      color: var(--muted);
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      padding-top: 2px;
+    .bubble.rep {
+      align-self: flex-end; background: var(--rep-bubble);
     }
-    .transcript-line.agent .role { color: var(--accent); }
-    .transcript-line.blocked .text {
-      text-decoration: line-through;
-      color: var(--muted);
+    .bubble.interim {
+      opacity: 0.7; border-style: dashed; font-style: italic; color: var(--muted);
     }
-
-    table.terms, table.sched {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
+    .bubble.typing { color: var(--muted); font-style: italic; }
+    .bubble .who {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--muted); margin-bottom: 4px;
     }
-    table.terms th, table.sched th,
-    table.terms td, table.sched td {
-      text-align: left;
-      padding: calc(var(--space) * 1) calc(var(--space) * 1);
-      border-bottom: 1px solid rgba(42, 56, 72, 0.55);
-      vertical-align: top;
+    .bubble.agent .who { color: var(--accent); }
+    .bubble .meta {
+      margin-top: 6px; font-size: 11px; color: var(--muted);
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
     }
-    table.terms th, table.sched th {
-      color: var(--muted);
-      font-weight: 500;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-    .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-
     .chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 600;
+      display: inline-flex; align-items: center; padding: 2px 8px;
+      border-radius: 999px; font-size: 11px; font-weight: 600;
       border: 1px solid transparent;
     }
     .chip.KNOWN { background: rgba(61, 207, 142, 0.12); color: var(--ok); border-color: rgba(61, 207, 142, 0.35); }
@@ -313,40 +163,135 @@
     .chip.ASSUMED { background: rgba(139, 154, 171, 0.12); color: var(--muted); border-color: rgba(139, 154, 171, 0.35); }
     .chip.UNKNOWN { background: rgba(139, 154, 171, 0.08); color: var(--muted); border-color: var(--line); }
     .chip.CONTRADICTED { background: rgba(227, 93, 106, 0.12); color: var(--bad); border-color: rgba(227, 93, 106, 0.35); }
+    .chip.intent { background: var(--accent-dim); color: var(--accent); border-color: rgba(46, 196, 182, 0.35); }
+
+    .chat-compose {
+      display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line);
+      background: var(--bg-2); flex-wrap: wrap; align-items: center;
+    }
+    .chat-compose input[type="text"] {
+      flex: 1; min-width: 160px; background: var(--bg-1); border: 1px solid var(--line);
+      border-radius: var(--radius); padding: 8px 12px;
+    }
+
+    .dash {
+      display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto;
+      padding-left: 12px;
+    }
+    .status-card {
+      background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+      border: 1px solid var(--line); border-radius: calc(var(--radius) + 2px);
+      padding: 14px;
+    }
+    .status-label {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+    }
+    .status-main {
+      font-size: 24px; font-weight: 600; margin-top: 4px; letter-spacing: -0.02em;
+    }
+    .status-main[data-state="feasible"] { color: var(--ok); }
+    .status-main[data-state="infeasible"] { color: var(--bad); }
+    .status-main[data-state="needs_info"] { color: var(--warn); }
+    .status-main[data-state="pending"] { color: var(--muted); }
+    .metrics {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 8px; margin-top: 12px;
+    }
+    .metric {
+      background: var(--bg-0); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px;
+    }
+    .metric .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .metric .v { font-family: var(--mono); font-size: 16px; margin-top: 4px; }
+    .badge {
+      display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+      font-size: 10px; font-weight: 600; border: 1px solid currentColor; vertical-align: middle;
+    }
+    .badge.private { color: var(--private); }
+    .badge.expected {
+      text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--accent); border-color: rgba(46, 196, 182, 0.45);
+    }
+
+    table.terms, table.sched {
+      width: 100%; border-collapse: collapse; font-size: 13px;
+    }
+    table.terms th, table.sched th, table.terms td, table.sched td {
+      text-align: left; padding: 8px 6px; border-bottom: 1px solid rgba(42, 56, 72, 0.55);
+      vertical-align: top;
+    }
+    table.terms th, table.sched th {
+      color: var(--muted); font-weight: 500; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
     .rep-card {
-      white-space: pre-wrap;
-      font-size: 12px;
-      color: var(--text);
-      line-height: 1.45;
+      white-space: pre-wrap; font-size: 12px; line-height: 1.45; color: var(--text);
     }
-    .rep-card .title {
-      color: var(--accent);
-      font-weight: 600;
-      margin-bottom: var(--space);
+    details.card-fold > summary {
+      cursor: pointer; color: var(--accent); font-weight: 600; margin-bottom: 8px;
     }
 
-    .latency-row, .guard-row, .audit-row {
-      display: flex;
-      justify-content: space-between;
-      gap: var(--space);
-      padding: calc(var(--space) * 0.75) 0;
-      border-bottom: 1px solid rgba(42, 56, 72, 0.45);
-      font-size: 12px;
+    .op-grid {
+      display: grid; grid-template-columns: 1fr; gap: 12px; min-height: 0;
     }
-    .audit-row { flex-direction: column; align-items: flex-start; }
-    .audit-row .meta { color: var(--muted); }
+    .op-split {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-height: 0;
+    }
+    @media (max-width: 1100px) {
+      .workspace { grid-template-columns: 1fr; }
+      .splitter { display: none; }
+      .dash { padding-left: 0; }
+      .op-split { grid-template-columns: 1fr; }
+    }
 
-    .changed {
-      animation: flash 0.7s ease;
+    .transcript-block {
+      padding: 10px 0; border-bottom: 1px solid rgba(42, 56, 72, 0.55);
     }
+    .transcript-block .head {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px;
+    }
+    .transcript-block .role { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+    .transcript-block.agent .role { color: var(--accent); }
+    .transcript-block .text { white-space: pre-wrap; word-break: break-word; }
+    .transcript-block.blocked .text { text-decoration: line-through; color: var(--muted); }
+    #transcript { resize: vertical; min-height: 180px; max-height: 70vh; }
+    #audit { resize: vertical; min-height: 180px; max-height: 70vh; }
+
+    .audit-group {
+      border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 8px;
+      overflow: hidden; background: var(--bg-0);
+    }
+    .audit-group > summary {
+      cursor: pointer; padding: 8px 10px; background: var(--bg-2);
+      list-style: none; display: flex; justify-content: space-between; gap: 8px;
+    }
+    .audit-group > summary::-webkit-details-marker { display: none; }
+    .audit-row {
+      padding: 8px 10px; border-top: 1px solid rgba(42, 56, 72, 0.45); font-size: 12px;
+    }
+    .audit-row .meta { color: var(--muted); margin-bottom: 4px; }
+    .audit-row pre {
+      margin: 6px 0 0; white-space: pre-wrap; word-break: break-word;
+      font-family: var(--mono); font-size: 11px; color: var(--muted);
+    }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+    .filters button {
+      background: var(--bg-1); border: 1px solid var(--line); border-radius: 999px;
+      padding: 3px 10px; font-size: 11px; cursor: pointer; color: var(--muted);
+    }
+    .filters button.active { color: var(--accent); border-color: rgba(46, 196, 182, 0.45); background: var(--accent-dim); }
+
+    .latency-row, .guard-row {
+      display: flex; justify-content: space-between; gap: 8px;
+      padding: 6px 0; border-bottom: 1px solid rgba(42, 56, 72, 0.45); font-size: 12px;
+    }
+    .op-only[hidden], .rep-only[hidden] { display: none !important; }
+    .changed { animation: flash 0.7s ease; }
     @keyframes flash {
       from { background-color: var(--flash); }
       to { background-color: transparent; }
     }
-
-    .op-only[hidden], .rep-only[hidden] { display: none !important; }
-
     @media (prefers-reduced-motion: reduce) {
       .changed { animation: none; }
       * { transition: none !important; }
@@ -362,62 +307,119 @@
         <span id="view-caption">Creditor rep view</span>
       </div>
       <div class="view-switch" role="group" aria-label="Dashboard view">
-        <button type="button" id="view-rep" aria-pressed="true" aria-label="Creditor rep view">Creditor rep</button>
-        <button type="button" id="view-op" aria-pressed="false" aria-label="Operator firm view">Operator (firm)</button>
+        <button type="button" id="view-rep" aria-pressed="true">Creditor rep</button>
+        <button type="button" id="view-op" aria-pressed="false">Operator (firm)</button>
       </div>
       <div class="controls">
+        <select id="scenario-select" aria-label="Demo scenario" title="Demo scenario">
+          <option value="easy_deal">Easy deal</option>
+        </select>
+        <span id="expected-badge" class="badge expected" hidden></span>
         <button type="button" class="primary" id="btn-start">Start call</button>
+        <button type="button" class="danger" id="btn-end" disabled>End chat</button>
         <button type="button" id="btn-mic" disabled>Mic off</button>
         <label class="toggle"><input type="checkbox" id="tog-barge" checked /> Barge-in</label>
         <label class="toggle"><input type="checkbox" id="tog-mock" /> Mock</label>
-        <input type="text" id="text-input" placeholder="Type as the creditor rep" disabled />
-        <button type="button" id="btn-send" disabled>Send</button>
-        <span class="hint">Use headphones for spoken calls</span>
+        <select id="stt-mode" aria-label="Speech recognition mode">
+          <option value="auto">STT: Auto</option>
+          <option value="server">STT: Server</option>
+          <option value="browser">STT: Browser</option>
+        </select>
+        <button type="button" id="btn-download" disabled>Download log</button>
       </div>
     </header>
 
-    <section class="hero" aria-label="Negotiation status">
-      <div>
-        <div class="verdict-label" id="hero-label">Call status</div>
-        <div class="verdict-main" id="hero-main" data-state="pending" aria-live="polite">Pending</div>
-        <div class="hint" id="hero-sub" style="margin-top:8px">Awaiting start</div>
-      </div>
-      <div class="metrics" id="hero-metrics"></div>
-    </section>
+    <div id="notice" class="notice" role="status"></div>
 
-    <section class="grid">
-      <div class="panel">
-        <h2>Live transcript</h2>
-        <div class="body" id="transcript"></div>
+    <!-- REP VIEW -->
+    <section class="workspace rep-only" id="rep-workspace">
+      <div class="panel chat-panel">
+        <h2>Conversation</h2>
+        <div class="chat-log" id="chat-log" aria-live="polite"></div>
+        <div class="chat-compose">
+          <input type="text" id="text-input" placeholder="Type as the creditor rep" disabled />
+          <button type="button" id="btn-send" disabled>Send</button>
+          <span class="hint">Headphones help for spoken calls</span>
+        </div>
       </div>
-
-      <div class="col-stack">
-        <div class="panel" style="flex:1.2">
+      <div class="splitter" id="splitter" title="Drag to resize"></div>
+      <div class="dash">
+        <div class="status-card">
+          <div class="status-label" id="hero-label">Negotiation status</div>
+          <div class="status-main" id="hero-main" data-state="pending">Pending</div>
+          <div class="hint" id="hero-sub" style="margin-top:6px">Awaiting start</div>
+          <div class="metrics" id="hero-metrics"></div>
+        </div>
+        <div class="panel">
           <h2>Extracted terms</h2>
           <div class="body" id="terms"></div>
         </div>
-        <div class="panel rep-only" style="flex:0.9">
-          <h2>Rep card</h2>
-          <div class="body rep-card" id="rep-card"></div>
-        </div>
-      </div>
-
-      <div class="col-stack">
-        <div class="panel schedule-panel" style="flex:1.4">
-          <h2 id="sched-title">Payment schedule</h2>
+        <div class="panel">
+          <h2 id="sched-title">Proposed schedule</h2>
           <div class="body" id="schedule"></div>
         </div>
-        <div class="panel op-only" hidden>
-          <h2>Guardrails</h2>
-          <div class="body" id="guards"></div>
+        <div class="panel">
+          <h2>Your role (creditor script)</h2>
+          <div class="body">
+            <details class="card-fold" open>
+              <summary>Show / hide playbook</summary>
+              <div class="rep-card" id="rep-card"></div>
+            </details>
+          </div>
         </div>
-        <div class="panel op-only" hidden>
-          <h2>Per-turn latency</h2>
-          <div class="body" id="latency"></div>
+      </div>
+    </section>
+
+    <!-- OPERATOR VIEW -->
+    <section class="workspace op-only" id="op-workspace" hidden>
+      <div class="panel" style="grid-column: 1 / -1">
+        <div class="status-card" style="border:0;border-radius:0;border-bottom:1px solid var(--line)">
+          <div class="status-label" id="op-hero-label">Engine verdict</div>
+          <div class="status-main" id="op-hero-main" data-state="pending">Pending</div>
+          <div class="hint" id="op-hero-sub" style="margin-top:6px">Awaiting start</div>
+          <div class="metrics" id="op-hero-metrics"></div>
         </div>
-        <div class="panel op-only" hidden>
-          <h2>Audit tail</h2>
-          <div class="body" id="audit"></div>
+      </div>
+      <div class="op-grid" style="grid-column: 1 / -1; display:grid; grid-template-rows: 1fr auto; min-height:0; height:100%">
+        <div class="op-split">
+          <div class="panel">
+            <h2>Live transcript</h2>
+            <div class="body" id="transcript"></div>
+          </div>
+          <div class="col-stack" style="display:flex;flex-direction:column;gap:12px;min-height:0">
+            <div class="panel" style="flex:1.1">
+              <h2>Extracted terms</h2>
+              <div class="body" id="op-terms"></div>
+            </div>
+            <div class="panel" style="flex:1">
+              <h2>Engine schedule</h2>
+              <div class="body" id="op-schedule"></div>
+            </div>
+          </div>
+        </div>
+        <div class="op-split">
+          <div class="panel">
+            <h2>Guardrails &amp; latency</h2>
+            <div class="body">
+              <div id="guards"></div>
+              <div id="latency" style="margin-top:12px"></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h2>
+              Audit trail
+              <span class="hint" id="audit-count"></span>
+            </h2>
+            <div class="filters" id="audit-filters">
+              <button type="button" data-actor="all" class="active">All</button>
+              <button type="button" data-actor="orchestrator">Orchestrator</button>
+              <button type="button" data-actor="policy">Policy</button>
+              <button type="button" data-actor="nlu">NLU</button>
+              <button type="button" data-actor="engine">Engine</button>
+              <button type="button" data-actor="belief">Belief</button>
+            </div>
+            <div class="body" id="audit"></div>
+          </div>
         </div>
       </div>
     </section>

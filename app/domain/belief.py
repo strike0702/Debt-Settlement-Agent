@@ -191,6 +191,39 @@ class BeliefState:
 
         raise RuntimeError(f"unhandled status {old_status} for field {field}")
 
+    def accept_alternative(
+        self,
+        field: str,
+        value: Any,
+        quote: str,
+        turn: int,
+    ) -> BeliefChange:
+        """Agent-mediated term change (e.g. earlier start date) → KNOWN.
+
+        Unlike ``observe``, this does not mark a prior KNOWN value as
+        CONTRADICTED — the rep accepted our proposed alternative.
+        """
+        if field not in self.terms or field not in FIELDS_BY_NAME:
+            raise KeyError(field)
+        term = self.terms[field]
+        old_value = term.value
+        old_status = term.status
+        if old_value is not None and not _values_equal(old_value, value):
+            term.history.append(old_value)
+        term.value = value
+        term.status = TermStatus.KNOWN
+        term.evidence.append(Evidence(turn=turn, quote=quote))
+        self._maybe_sync_max_token_pays(field, value)
+        return BeliefChange(
+            field=field,
+            old_value=old_value,
+            new_value=term.value,
+            old_status=old_status,
+            new_status=term.status,
+            turn=turn,
+            quote=quote,
+        )
+
     def confirm_readback(self, field: str, yes: bool) -> BeliefChange:
         if field not in self.terms:
             raise KeyError(field)

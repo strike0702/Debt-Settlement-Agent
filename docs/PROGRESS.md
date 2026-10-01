@@ -17,6 +17,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 8 | Simulator, scenarios, offline e2e | done |
 | 9 | Eval runner and metrics | done |
 | 10 | Voice and UI | done |
+| 10.1 | Demo UX + non-price recovery | done |
 | 11 | README and final eval | pending |
 
 ## Environment facts
@@ -505,3 +506,18 @@ t3 PROPOSE_WRAP  server_total≈10370 ms (nlu≈4810, nlg≈5559)
 | stt_ms / vad_end_to_first_audio_ms | null | null | 0 |
 
 Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n=4).
+
+### Phase 10.1 (2026-10-01) — demo UX + non-price recovery
+- **Why no-deal on Oct 31:** demo client's `last_draft_date` is 2026-10-15; FPD after that → `afford.max_bp is None` → was hard `NO_DEAL_WRAP`. Policy is intentionally deterministic; brittleness was missing non-price moves.
+- Files: policy `COUNTER_TERMS` + `alt_first_payment_date`; `BeliefState.accept_alternative`; NLU bare-year reject + yes/no fast readback; `FieldSpec.label`; scenario catalog `fixtures/scenarios/*` + `rebase_to`; audit `list_calls`/`export_call`; HTTP `/scenarios`, `/calls*`; WS `scenario_id`, `stt_error`, `end`; rep chat UI + operator resize/audit formatting + browser STT fallback.
+- Interfaces:
+  - `Intent.COUNTER_TERMS`; `decide(..., alt_first_payment_date=)`; `NegotiationState.terms_countered` / `pending_terms_alt`
+  - `find_alt_first_payment_date(scenario, rules, *, ask_bp, requested, already) -> date | None`
+  - `BeliefState.accept_alternative(field, value, quote, turn)`
+  - `load_scenario(path, *, rebase_to=None)`; `list_scenario_metas()`; `resolve_scenario_dir(id)`; `load_rep_card(id)`
+  - `AuditLog.list_calls(limit)`; `AuditLog.export_call(call_id)`
+  - `Orchestrator.on_rep_end() -> Utterance`
+  - WS client: `start{scenario_id}`, `end`, binary STT failures → server `stt_error` (socket stays up)
+  - HTTP: `GET /scenarios`, `/scenarios/{id}/rep_card`, `/calls`, `/calls/{id}/events`, `/calls/{id}/export`
+- Tests: 287 passed offline (+1 skipped live).
+- Open: Groq remains the only server STT route in `providers.yaml` demo profile; browser STT is the offline fallback.

@@ -104,3 +104,86 @@ class AuditLog:
                 }
             )
         return out
+
+    def list_calls(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Summarize recent calls (newest first) for the operator UI."""
+        with self._lock:
+            ids = self._conn.execute(
+                "SELECT call_id, MIN(ts) AS started_at, MAX(id) AS last_id "
+                "FROM events GROUP BY call_id ORDER BY last_id DESC LIMIT ?",
+                (int(limit),),
+            ).fetchall()
+        out: list[dict[str, Any]] = []
+        for row in ids:
+            call_id = str(row["call_id"])
+            events = self.for_call(call_id)
+            scenario_id = None
+            phase = None
+            turns = 0
+            for ev in events:
+                payload = ev.get("payload") or {}
+                if ev["type"] == "call_started":
+                    scenario_id = payload.get("scenario_id")
+                if ev["type"] == "effects_committed":
+                    phase = payload.get("phase") or phase
+                if ev["type"] == "turn_complete":
+                    turns += 1
+                if ev["actor"] == "creditor" and ev["type"] == "utterance":
+                    turns = max(turns, int(payload.get("turn") or 0))
+            out.append(
+                {
+                    "call_id": call_id,
+                    "started_at": row["started_at"],
+                    "scenario_id": scenario_id,
+                    "phase": phase,
+                    "turn_count": turns,
+                }
+            )
+        return out
+
+    def export_call(self, call_id: str) -> dict[str, Any]:
+        """Bundle transcript + events for download."""
+        events = self.for_call(call_id)
+        transcript: list[dict[str, Any]] = []
+        for ev in events:
+            payload = ev.get("payload") or {}
+            if ev["actor"] == "creditor" and ev["type"] == "utterance":
+                transcript.append(
+                    {
+                        "role": "creditor",
+                        "text": payload.get("text"),
+                        "turn": payload.get("turn"),
+                        "ts": ev["ts"],
+                    }
+                )
+            if ev["type"] == "turn_complete":
+                for sentence in payload.get("sentences") or []:
+                    transcript.append(
+                        {
+                            "role": "agent",
+                            "text": sentence,
+                            "intent": payload.get("intent"),
+                            "ts": ev["ts"],
+                        }
+                    )
+            if ev["type"] == "start":
+                for sentence in payload.get("sentences") or []:
+                    transcript.append(
+                        {
+                            "role": "agent",
+                            "text": sentence,
+                            "intent": payload.get("intent"),
+                            "ts": ev["ts"],
+                        }
+                    )
+        scenario_id = None
+        for ev in events:
+            if ev["type"] == "call_started":
+                scenario_id = (ev.get("payload") or {}).get("scenario_id")
+                break
+        return {
+            "call_id": call_id,
+            "scenario_id": scenario_id,
+            "transcript": transcript,
+            "events": events,
+        }

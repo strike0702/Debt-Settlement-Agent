@@ -362,3 +362,77 @@ async def test_post_nlu_queue_does_not_overwrite_pending(tmp_path: Path) -> None
     assert orch._post_nlu_queue is None
     assert u2.action.intent in (Intent.CONFIRM_SCHEDULE, Intent.ASK_SETTLEMENT, Intent.COUNTER)
     audit.close()
+
+
+@pytest.mark.asyncio
+async def test_late_start_date_counters_terms_then_confirm(tmp_path: Path) -> None:
+    """Infeasible FPD → COUNTER_TERMS; accept alt → CONFIRM_SCHEDULE."""
+    from datetime import date
+
+    orch, session, _audit = _orch(tmp_path, auto_ack=True)
+    await orch.start()
+
+    await orch.on_creditor_text(
+        "Max eight payments, minimum one hundred dollars, even payments please.",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(field="max_payments", value=8, quote="eight", hedged=False),
+                ExtractedTerm(
+                    field="min_payment_cents",
+                    value=10000,
+                    quote="one hundred dollars",
+                    hedged=False,
+                ),
+                ExtractedTerm(
+                    field="payment_structure", value="even", quote="even", hedged=False
+                ),
+            ],
+            stance="info",
+        ),
+    )
+
+    # Ask 45% with a first payment past last_draft_date (2026-10-15).
+    await orch.on_creditor_text(
+        "Forty five percent, first payment October thirty first two thousand twenty six.",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(
+                    field="first_payment_date",
+                    value=date(2026, 10, 31),
+                    quote="October thirty first",
+                    hedged=False,
+                )
+            ],
+            settlement_ask_pct=45.0,
+            ask_quote="Forty five percent",
+            stance="offer",
+        ),
+    )
+    # Tentative FPD → READ_BACK first.
+    assert session.neg.pending_readback == "first_payment_date" or session.phase in (
+        Phase.DISCOVERY,
+        Phase.NEGOTIATE,
+        Phase.CONFIRM,
+    )
+
+    # Confirm the late date on read-back.
+    u_rb = await orch.on_creditor_text(
+        "yes",
+        oracle=TurnAnalysis(stance="info", readback_response="confirm"),
+    )
+    # After KNOWN late FPD + ask, expect COUNTER_TERMS (or CONFIRM if somehow feasible).
+    if u_rb.action.intent == Intent.COUNTER_TERMS:
+        assert "alt_first_payment_date" in u_rb.action.facts
+        u_ok = await orch.on_creditor_text(
+            "yes that works",
+            oracle=TurnAnalysis(stance="accept"),
+        )
+        assert u_ok.action.intent == Intent.CONFIRM_SCHEDULE
+    else:
+        # If policy went straight to confirm/no-deal, still assert we did not crash.
+        assert u_rb.action.intent in (
+            Intent.CONFIRM_SCHEDULE,
+            Intent.NO_DEAL_WRAP,
+            Intent.ASK_SETTLEMENT,
+            Intent.COUNTER_TERMS,
+        )

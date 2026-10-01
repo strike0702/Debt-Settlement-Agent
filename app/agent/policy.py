@@ -60,6 +60,10 @@ class NegotiationState:
     confirm_rejects: int = 0
     assumed_asked: set[str] = field(default_factory=set)
     clarify_counts: dict[str, int] = field(default_factory=dict)
+    # Non-price alternatives already offered (ISO dates for first_payment_date).
+    terms_countered: list[str] = field(default_factory=list)
+    # Last COUNTER_TERMS date awaiting accept/reject (ISO).
+    pending_terms_alt: str | None = None
 
 
 class Agreement(BaseModel):
@@ -291,7 +295,7 @@ def _stall_after_confirm(
         spec = FIELDS_BY_NAME[fname]
         return Action(
             intent=Intent.ASK,
-            text_slots={"ask_text": spec.ask_text, "field": fname},
+            text_slots={"ask_text": spec.ask_text, "field_label": spec.label},
             required=set(),
             effects=effects
             + [Effect(kind="note_assumed_asked", data={"field": fname})],
@@ -300,9 +304,30 @@ def _stall_after_confirm(
         )
     return Action(
         intent=Intent.NO_DEAL_WRAP,
+        text_slots={
+            "no_deal_reason": (
+                "We could not confirm a schedule both sides can accept."
+            )
+        },
         effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
         next_phase=Phase.END,
         reason="confirm_rejected",
+    )
+
+
+def _no_deal(
+    effects: list[Effect],
+    *,
+    reason: str,
+    spoken_reason: str,
+) -> Action:
+    """End the call with a speakable reason (no digits)."""
+    return Action(
+        intent=Intent.NO_DEAL_WRAP,
+        text_slots={"no_deal_reason": spoken_reason},
+        effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
+        next_phase=Phase.END,
+        reason=reason,
     )
 
 
@@ -316,6 +341,7 @@ def decide(
     rescue_within_guardrail: bool = False,
     confirm_facts: dict[str, Fact] | None = None,
     counter_offer_total_cents: int | None = None,
+    alt_first_payment_date: date | None = None,
 ) -> Action:
     """Apply §6.2 rules in order; return the next agent ``Action``."""
     cfg = settings or get_settings()
@@ -329,11 +355,10 @@ def decide(
 
     # 1. Turn cap
     if neg.turn_idx > cfg.max_turns:
-        return Action(
-            intent=Intent.NO_DEAL_WRAP,
-            effects=effects,
-            next_phase=Phase.END,
+        return _no_deal(
+            effects,
             reason="max_turns",
+            spoken_reason="We have reached the limit for this call.",
         )
 
     # 2. Hostility
@@ -394,11 +419,26 @@ def decide(
 
     # Rep wants to end (not mid-accept of a schedule).
     if analysis.wants_to_end and analysis.stance != "accept":
-        return Action(
-            intent=Intent.NO_DEAL_WRAP,
-            effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
-            next_phase=Phase.END,
+        return _no_deal(
+            effects,
             reason="wants_to_end",
+            spoken_reason="Understood — we will end the call here.",
+        )
+
+    # Rejected a pending non-price alternative → no deal.
+    if (
+        neg.pending_terms_alt is not None
+        and analysis.stance == "reject"
+        and analysis.settlement_ask_pct is None
+    ):
+        return _no_deal(
+            list(effects)
+            + [Effect(kind="clear_pending_terms_alt", data={})],
+            reason="terms_alt_rejected",
+            spoken_reason=(
+                "Without an earlier start date we cannot fit a schedule "
+                "within the client's program."
+            ),
         )
 
     # 5. Contradictions before read-backs / wrap / asks
@@ -422,7 +462,7 @@ def decide(
         old_val = term.history[-1] if term.history else None
         new_val = term.value
         facts: dict[str, Fact] = {}
-        text_slots: dict[str, str] = {"field": fname}
+        text_slots: dict[str, str] = {"field_label": FIELDS_BY_NAME[fname].label}
         required: set[str] = set()
         if old_val is not None and FIELDS_BY_NAME[fname].kind in ("cents", "int", "date"):
             facts["clarify_old"] = _fact_for_value("clarify_old", fname, old_val)
@@ -451,7 +491,7 @@ def decide(
         fname = tentative[0]
         term = belief.get(fname)
         facts = {}
-        text_slots = {"field": fname}
+        text_slots = {"field_label": FIELDS_BY_NAME[fname].label}
         required = set()
         if term.value is not None and FIELDS_BY_NAME[fname].kind in ("cents", "int", "date"):
             facts["readback_value"] = _fact_for_value("readback_value", fname, term.value)
@@ -487,7 +527,10 @@ def decide(
         spec = FIELDS_BY_NAME[fname]
         return Action(
             intent=Intent.ASK,
-            text_slots={"ask_text": spec.ask_text, "field": fname},
+            text_slots={
+                "ask_text": spec.ask_text,
+                "field_label": spec.label,
+            },
             required=set(),
             effects=effects,
             next_phase=Phase.DISCOVERY,
@@ -512,7 +555,7 @@ def decide(
         )
 
     if afford.max_bp is None:
-        # Nothing feasible: rescue check (amounts never spoken).
+        # Nothing feasible at the current first_payment_date.
         if rescue_within_guardrail:
             return Action(
                 intent=Intent.ESCALATE,
@@ -526,11 +569,39 @@ def decide(
                 next_phase=Phase.ESCALATE,
                 reason="out_of_guardrail",
             )
-        return Action(
-            intent=Intent.NO_DEAL_WRAP,
-            effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
-            next_phase=Phase.END,
+        # Non-price recovery: propose an earlier start date once.
+        if alt_first_payment_date is not None:
+            alt_iso = alt_first_payment_date.isoformat()
+            if alt_iso not in neg.terms_countered:
+                return Action(
+                    intent=Intent.COUNTER_TERMS,
+                    facts={
+                        "alt_first_payment_date": Fact(
+                            id="alt_first_payment_date",
+                            kind="date",
+                            value=alt_first_payment_date,
+                            visibility="PUBLIC",
+                            source="engine",
+                        )
+                    },
+                    required={"alt_first_payment_date"},
+                    effects=effects
+                    + [
+                        Effect(
+                            kind="note_terms_countered",
+                            data={"field": "first_payment_date", "value": alt_iso},
+                        )
+                    ],
+                    next_phase=Phase.NEGOTIATE,
+                    reason="alt_first_payment_date",
+                )
+        return _no_deal(
+            effects,
             reason="infeasible",
+            spoken_reason=(
+                "No payment schedule fits within the client's program "
+                "under these terms."
+            ),
         )
 
     # Rep accepted our last counter → confirm that bp.
@@ -559,12 +630,10 @@ def decide(
             # Same schedule already offered; NLU may have missed accept — soft retry.
             soft = list(effects) + [Effect(kind="inc_confirm_reject")]
             if neg.confirm_rejects + 1 >= cfg.max_counters:
-                return Action(
-                    intent=Intent.NO_DEAL_WRAP,
-                    effects=soft
-                    + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
-                    next_phase=Phase.END,
+                return _no_deal(
+                    soft,
                     reason="confirm_unacked",
+                    spoken_reason="We still have not confirmed a schedule.",
                 )
             return _confirm_action(
                 ask_bp=ask_bp,
@@ -595,11 +664,10 @@ def decide(
         and neg.counters_offered[-1] >= ceiling
     )
     if at_ceiling and neg.rejects >= cfg.max_counters:
-        return Action(
-            intent=Intent.NO_DEAL_WRAP,
-            effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
-            next_phase=Phase.END,
+        return _no_deal(
+            effects,
             reason="max_counters",
+            spoken_reason="We have exhausted the settlement options we can propose.",
         )
 
     c_prev = neg.counters_offered[-1] if neg.counters_offered else None
@@ -616,11 +684,10 @@ def decide(
         concession_factor=cfg.concession_factor,
     )
     if c_next is None:
-        return Action(
-            intent=Intent.NO_DEAL_WRAP,
-            effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
-            next_phase=Phase.END,
+        return _no_deal(
+            effects,
             reason="no_legal_counter",
+            spoken_reason="We cannot propose a settlement under these terms.",
         )
 
     # If the ladder stalls below the ceiling, jump to the ceiling once.
@@ -633,19 +700,17 @@ def decide(
             effects.append(Effect(kind="inc_reject_at_max"))
         reject_n = neg.rejects + 1
         if reject_n >= cfg.max_counters:
-            return Action(
-                intent=Intent.NO_DEAL_WRAP,
-                effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
-                next_phase=Phase.END,
+            return _no_deal(
+                effects,
                 reason="max_counters",
+                spoken_reason="We have exhausted the settlement options we can propose.",
             )
 
     if c_next >= ask_bp or c_next > afford.max_bp:
-        return Action(
-            intent=Intent.NO_DEAL_WRAP,
-            effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
-            next_phase=Phase.END,
+        return _no_deal(
+            effects,
             reason="no_counter_below_ask",
+            spoken_reason="We cannot propose a settlement under these terms.",
         )
 
     facts = {

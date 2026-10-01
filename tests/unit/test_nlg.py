@@ -44,7 +44,7 @@ def _sample_action(intent: Intent) -> Action:
             intent=intent,
             text_slots={
                 "ask_text": "What's the most payments they'll take?",
-                "field": "max_payments",
+                "field_label": "maximum number of payments",
             },
             next_phase=common_next,
         )
@@ -54,6 +54,7 @@ def _sample_action(intent: Intent) -> Action:
         return Action(
             intent=intent,
             facts={"readback_value": _count("readback_value", 6)},
+            text_slots={"field_label": "maximum number of payments"},
             required={"readback_value"},
             next_phase=common_next,
         )
@@ -64,6 +65,7 @@ def _sample_action(intent: Intent) -> Action:
                 "clarify_old": _count("clarify_old", 6),
                 "clarify_new": _count("clarify_new", 8),
             },
+            text_slots={"field_label": "maximum number of payments"},
             required={"clarify_old", "clarify_new"},
             next_phase=common_next,
         )
@@ -81,6 +83,17 @@ def _sample_action(intent: Intent) -> Action:
             required={"counter_pct", "offer_total"},
             next_phase=Phase.NEGOTIATE,
         )
+    if intent == Intent.COUNTER_TERMS:
+        return Action(
+            intent=intent,
+            facts={
+                "alt_first_payment_date": _date(
+                    "alt_first_payment_date", date(2026, 6, 30)
+                ),
+            },
+            required={"alt_first_payment_date"},
+            next_phase=Phase.NEGOTIATE,
+        )
     if intent == Intent.CONFIRM_SCHEDULE:
         return Action(
             intent=intent,
@@ -95,7 +108,16 @@ def _sample_action(intent: Intent) -> Action:
     if intent == Intent.PROPOSE_WRAP:
         return Action(intent=intent, next_phase=Phase.WRAP)
     if intent == Intent.NO_DEAL_WRAP:
-        return Action(intent=intent, next_phase=Phase.END)
+        return Action(
+            intent=intent,
+            text_slots={
+                "no_deal_reason": (
+                    "No payment schedule fits within the client's program "
+                    "under these terms."
+                )
+            },
+            next_phase=Phase.END,
+        )
     if intent == Intent.ESCALATE:
         return Action(
             intent=intent,

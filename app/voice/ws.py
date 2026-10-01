@@ -22,7 +22,8 @@ from app.agent.orchestrator import Orchestrator, Utterance
 from app.agent.policy import Intent
 from app.agent.session import CallSession
 from app.config import Settings, get_settings
-from app.domain.scenario import load_scenario
+from app.domain.scenario import load_scenario, resolve_scenario_dir
+from app.llm.client import LLMUnavailable
 from app.store.audit import AuditLog
 from app.voice.metrics_buf import LATENCY_BUFFER
 from app.voice.stt import transcribe
@@ -301,7 +302,23 @@ async def call_socket(websocket: WebSocket, call_id: str) -> None:
                     )
                     continue
                 wav = message["bytes"]
-                text, stt_ms = await transcribe(_llm, wav)
+                try:
+                    text, stt_ms = await transcribe(_llm, wav)
+                except LLMUnavailable as e:
+                    _audit.append(
+                        call_id,
+                        "stt",
+                        "stt_error",
+                        {"message": str(e)},
+                    )
+                    await _send(
+                        websocket,
+                        {"type": "stt_error", "message": str(e)},
+                    )
+                    audit_after = await _send_audit_tail(
+                        websocket, _audit, call_id, after_id=audit_after
+                    )
+                    continue
                 if not text.strip():
                     continue
                 utt = await orch.on_creditor_text(text)
@@ -326,15 +343,45 @@ async def call_socket(websocket: WebSocket, call_id: str) -> None:
 
             event = data.get("type")
             if event == "start":
-                scenario_path = data.get("scenario") or "fixtures/demo"
-                path = Path(scenario_path)
-                if not path.is_dir():
+                scenario_id = data.get("scenario_id")
+                rebased_as_of = None
+                try:
+                    if scenario_id:
+                        path = resolve_scenario_dir(str(scenario_id))
+                        from datetime import date as _date
+
+                        scenario = load_scenario(path, rebase_to=_date.today())
+                        rebased_as_of = scenario.client.as_of_date.isoformat()
+                    else:
+                        # Legacy path for unit tests (fixtures/demo, no rebase).
+                        scenario_path = data.get("scenario") or "fixtures/demo"
+                        path = Path(scenario_path)
+                        if not path.is_dir():
+                            await _send(
+                                websocket,
+                                {
+                                    "type": "error",
+                                    "message": f"scenario not found: {path}",
+                                },
+                            )
+                            continue
+                        # Only allow under fixtures/
+                        resolved = path.resolve()
+                        fixtures_root = Path("fixtures").resolve()
+                        if fixtures_root not in resolved.parents and resolved != fixtures_root:
+                            await _send(
+                                websocket,
+                                {"type": "error", "message": "scenario path denied"},
+                            )
+                            continue
+                        scenario = load_scenario(path)
+                        scenario_id = scenario.id
+                except (ValueError, FileNotFoundError) as e:
                     await _send(
                         websocket,
-                        {"type": "error", "message": f"scenario not found: {path}"},
+                        {"type": "error", "message": str(e)},
                     )
                     continue
-                scenario = load_scenario(path)
                 session = CallSession(scenario=scenario, call_id=call_id)
                 orch = Orchestrator(
                     session,
@@ -342,6 +389,15 @@ async def call_socket(websocket: WebSocket, call_id: str) -> None:
                     settings=settings,
                     audit=_audit,
                     auto_ack=False,
+                )
+                _audit.append(
+                    call_id,
+                    "orchestrator",
+                    "call_started",
+                    {
+                        "scenario_id": scenario_id,
+                        "rebased_as_of": rebased_as_of,
+                    },
                 )
                 utt = await orch.start()
                 started = True
@@ -362,10 +418,30 @@ async def call_socket(websocket: WebSocket, call_id: str) -> None:
                 )
                 continue
 
+            if event == "end":
+                utt = await orch.on_rep_end()
+                audit_after = await _emit_utterance(
+                    websocket,
+                    orch,
+                    utt,
+                    creditor_text=None,
+                    stt_ms=None,
+                    audit_after=audit_after,
+                )
+                continue
+
             if event == "text":
                 text = str(data.get("text") or "").strip()
                 if not text:
                     continue
+                source = data.get("source")
+                if source:
+                    _audit.append(
+                        orch.session.call_id,
+                        "creditor",
+                        "utterance_source",
+                        {"source": source, "text": text[:200]},
+                    )
                 oracle = None
                 if settings.nlu_mode == "oracle" and "oracle" in data:
                     oracle = _parse_oracle(data.get("oracle"))
@@ -436,4 +512,20 @@ async def call_socket(websocket: WebSocket, call_id: str) -> None:
                     {"type": "error", "message": f"unknown event: {event}"},
                 )
     except WebSocketDisconnect:
+        if orch is not None:
+            _audit.append(
+                call_id,
+                "orchestrator",
+                "call_ended",
+                {"by": "disconnect"},
+            )
         return
+    except Exception:
+        if orch is not None:
+            _audit.append(
+                call_id,
+                "orchestrator",
+                "call_ended",
+                {"by": "error"},
+            )
+        raise

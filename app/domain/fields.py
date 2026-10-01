@@ -3,6 +3,7 @@
 Each ``FieldSpec`` carries ask/readback copy, kind, defaults, and optional
 prior ranges. ``FIELD_REGISTRY`` / ``REQUIRED_FIELDS`` drive belief seeding
 and ``NeedsInfo`` when the engine cannot yet build ``CreditorRules``.
+``label`` is human-speakable (NLG / UI); ``name`` stays the machine id.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ PAYMENT_STRUCTURES: tuple[PaymentStructure, ...] = ("even", "balloon", "flexible
 class FieldSpec:
     name: str
     kind: FieldKind
+    label: str
     ask_text: str
     readback_text: str
     required: bool
@@ -32,6 +34,7 @@ FIELD_REGISTRY: list[FieldSpec] = [
     FieldSpec(
         name="max_payments",
         kind="int",
+        label="maximum number of payments",
         ask_text="What's the most payments they'll take?",
         readback_text="So the maximum number of payments is {value}?",
         required=True,
@@ -41,6 +44,7 @@ FIELD_REGISTRY: list[FieldSpec] = [
     FieldSpec(
         name="min_payment_cents",
         kind="cents",
+        label="minimum payment",
         ask_text="What's the minimum payment amount?",
         readback_text="So the minimum payment is {value}?",
         required=True,
@@ -50,6 +54,7 @@ FIELD_REGISTRY: list[FieldSpec] = [
     FieldSpec(
         name="payment_structure",
         kind="enum",
+        label="payment structure",
         ask_text="Do they need even payments, allow a balloon, or is flexible okay?",
         readback_text="So the payment structure is {value}?",
         required=True,
@@ -59,6 +64,7 @@ FIELD_REGISTRY: list[FieldSpec] = [
     FieldSpec(
         name="first_payment_date",
         kind="date",
+        label="initial payment date",
         ask_text="What's the initial payment due date?",
         readback_text="So the initial payment date is {value}?",
         required=False,
@@ -68,6 +74,7 @@ FIELD_REGISTRY: list[FieldSpec] = [
     FieldSpec(
         name="max_segments",
         kind="int",
+        label="payment levels",
         ask_text="How many distinct payment levels can the schedule have?",
         readback_text="So at most {value} payment levels?",
         required=False,
@@ -77,6 +84,7 @@ FIELD_REGISTRY: list[FieldSpec] = [
     FieldSpec(
         name="max_token_pays",
         kind="int",
+        label="token payments",
         ask_text="How many token payments are allowed?",
         readback_text="So at most {value} token payments?",
         required=False,
@@ -87,6 +95,7 @@ FIELD_REGISTRY: list[FieldSpec] = [
     FieldSpec(
         name="min_payment_tiers",
         kind="tiers",
+        label="payment tiers",
         ask_text="Are there any tiered minimum payment floors?",
         readback_text="So the payment tiers are {value}?",
         required=False,

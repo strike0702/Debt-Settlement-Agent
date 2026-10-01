@@ -1,0 +1,5 @@
+{
+  "title": "Late start date",
+  "description": "Rep confirms a first payment after the savings horizon; agent proposes an earlier date.",
+  "expected": "deal"
+}

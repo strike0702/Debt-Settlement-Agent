@@ -46,8 +46,10 @@ from app.agent.session import CallSession, PendingSpeech, Turn
 from app.config import Settings, get_settings
 from app.domain.belief import BeliefChange
 from app.domain.facts import Fact
+from app.domain.scenario import CallScenario
 from app.llm.client import LLMUnavailable
 from app.store.audit import AuditLog
+from feasibility.models import CreditorRules, add_months, end_of_month
 
 
 @dataclass
@@ -63,6 +65,60 @@ class Utterance:
 
 def _ms_since(t0: float) -> float:
     return (time.perf_counter() - t0) * 1000.0
+
+
+def find_alt_first_payment_date(
+    scenario: CallScenario,
+    rules: CreditorRules,
+    *,
+    ask_bp: int | None,
+    requested: date,
+    already: set[str],
+) -> date | None:
+    """Scan EOM candidates within the savings horizon; pick closest feasible.
+
+    Prefers dates where ``ask_bp`` is feasible; otherwise any non-empty
+    affordability curve. Never re-offers an ISO date in ``already``.
+    """
+    client = scenario.client
+    start = end_of_month(max(client.as_of_date, client.first_draft_date))
+    end = client.last_draft_date
+    if start > end:
+        return None
+
+    candidates: list[date] = []
+    cur = start
+    # Cap scans (~24 months) so a bad fixture cannot hang the turn.
+    for _ in range(24):
+        if cur > end:
+            break
+        candidates.append(cur)
+        nxt = end_of_month(add_months(cur, 1))
+        if nxt <= cur:
+            break
+        cur = nxt
+
+    best: date | None = None
+    best_dist: int | None = None
+    for cand in candidates:
+        iso = cand.isoformat()
+        if iso in already:
+            continue
+        aff = affordability(scenario, rules, cand)
+        if aff.max_bp is None:
+            continue
+        if ask_bp is not None and ask_bp not in aff.feasible_bps:
+            # Still usable if *something* is feasible; prefer ask-feasible first.
+            ask_ok = False
+        else:
+            ask_ok = True
+        dist = abs((cand - requested).days)
+        # Prefer ask-feasible; among equals, closest to requested.
+        rank_dist = dist if ask_ok else dist + 100_000
+        if best is None or best_dist is None or rank_dist < best_dist:
+            best = cand
+            best_dist = rank_dist
+    return best
 
 
 def apply_effects(session: CallSession, effects: list[Effect]) -> None:
@@ -101,6 +157,13 @@ def apply_effects(session: CallSession, effects: list[Effect]) -> None:
         elif kind == "note_clarify":
             fname = str(data["field"])
             session.neg.clarify_counts[fname] = session.neg.clarify_counts.get(fname, 0) + 1
+        elif kind == "note_terms_countered":
+            iso = str(data["value"])
+            if iso not in session.neg.terms_countered:
+                session.neg.terms_countered.append(iso)
+            session.neg.pending_terms_alt = iso
+        elif kind == "clear_pending_terms_alt":
+            session.neg.pending_terms_alt = None
         elif kind == "set_phase":
             session.neg.phase = Phase(str(data["phase"]))
 
@@ -309,10 +372,26 @@ class Orchestrator:
             belief_changes = self._apply_belief(verified, turn)
             session.last_belief_changes = belief_changes
 
+            # Accept a pending non-price alternative before affordability.
+            if (
+                session.neg.pending_terms_alt is not None
+                and verified.stance == "accept"
+            ):
+                alt = date.fromisoformat(session.neg.pending_terms_alt)
+                ch = session.belief.accept_alternative(
+                    "first_payment_date",
+                    alt,
+                    "accepted alternate start",
+                    turn,
+                )
+                belief_changes.append(ch)
+                self._audit("belief", "accept_terms_alt", ch.model_dump(mode="json"))
+                session.neg.pending_terms_alt = None
+
             self._turn_eval = None
             self._turn_agreed_bp = None
-            afford, confirm_facts, counter_total, rescue_ok = await self._engine_context(
-                verified
+            afford, confirm_facts, counter_total, rescue_ok, alt_fpd = (
+                await self._engine_context(verified)
             )
 
             t_pol = time.perf_counter()
@@ -325,6 +404,7 @@ class Orchestrator:
                 rescue_within_guardrail=rescue_ok,
                 confirm_facts=confirm_facts,
                 counter_offer_total_cents=counter_total,
+                alt_first_payment_date=alt_fpd,
             )
             action = await self._enrich_action(action)
             timings["policy_ms"] = _ms_since(t_pol)
@@ -446,6 +526,33 @@ class Orchestrator:
                 },
             )
 
+    async def on_rep_end(self) -> Utterance:
+        """Rep ended the chat; speak a short close and move to END."""
+        async with self._lock:
+            t0 = time.perf_counter()
+            action = Action(
+                intent=Intent.NO_DEAL_WRAP,
+                text_slots={
+                    "no_deal_reason": "Understood — we will end the call here."
+                },
+                effects=[Effect(kind="set_phase", data={"phase": Phase.END.value})],
+                next_phase=Phase.END,
+                reason="rep_ended",
+            )
+            sentences = await self._speak(action, last_rep_line="")
+            timings = {
+                "nlu_ms": 0.0,
+                "policy_ms": 0.0,
+                "nlg_ms": _ms_since(t0),
+                "server_total_ms": _ms_since(t0),
+            }
+            self._audit(
+                "orchestrator",
+                "call_ended",
+                {"by": "rep", "intent": action.intent.value},
+            )
+            return await self._emit(action, sentences, timings, belief_changes=[])
+
     async def _emit(
         self,
         action: Action,
@@ -469,9 +576,17 @@ class Orchestrator:
         )
         # Eager READ_BACK pending so barge-in doesn't lose the field before ack.
         if action.intent == Intent.READ_BACK:
-            field = action.text_slots.get("field") or action.reason
+            field = action.reason
             if field:
                 self.session.neg.pending_readback = field
+        # Eager COUNTER_TERMS pending so accept can apply before ack.
+        if action.intent == Intent.COUNTER_TERMS:
+            fact = action.facts.get("alt_first_payment_date")
+            if fact is not None and isinstance(fact.value, date):
+                iso = fact.value.isoformat()
+                self.session.neg.pending_terms_alt = iso
+                if iso not in self.session.neg.terms_countered:
+                    self.session.neg.terms_countered.append(iso)
         result = Utterance(
             sentences=pairs,
             action=action,
@@ -577,6 +692,7 @@ class Orchestrator:
         dict[str, Fact] | None,
         int | None,
         bool,
+        date | None,
     ]:
         session = self.session
         try:
@@ -587,7 +703,7 @@ class Orchestrator:
                 "needs_info",
                 {"fields": session.belief.missing_required()},
             )
-            return None, None, None, False
+            return None, None, None, False, None
 
         fpd = session.belief.get("first_payment_date").value
         assert isinstance(fpd, date)
@@ -609,6 +725,7 @@ class Orchestrator:
         confirm_facts: dict[str, Fact] | None = None
         counter_total: int | None = None
         rescue_ok = False
+        alt_fpd: date | None = None
 
         if ask_bp is not None and afford.max_bp is None:
             summary = await asyncio.to_thread(
@@ -630,6 +747,23 @@ class Orchestrator:
                 "rescue_check",
                 {"ask_bp": ask_bp, "within_guardrail": rescue_ok},
             )
+            if not rescue_ok:
+                alt_fpd = await asyncio.to_thread(
+                    find_alt_first_payment_date,
+                    session.scenario,
+                    rules,
+                    ask_bp=ask_bp,
+                    requested=fpd,
+                    already=set(session.neg.terms_countered),
+                )
+                self._audit(
+                    "engine",
+                    "alt_first_payment_date",
+                    {
+                        "requested": fpd.isoformat(),
+                        "alt": alt_fpd.isoformat() if alt_fpd else None,
+                    },
+                )
 
         if ask_bp is not None and afford.max_bp is not None:
             if ask_bp <= afford.max_bp and ask_bp in afford.feasible_bps:
@@ -709,7 +843,7 @@ class Orchestrator:
                 session.absorb_private_facts(summary)
                 counter_total = summary.offer_total_cents
 
-        return afford, confirm_facts, counter_total, rescue_ok
+        return afford, confirm_facts, counter_total, rescue_ok, alt_fpd
 
     async def _enrich_action(self, action: Action) -> Action:
         turn_eval = self._turn_eval

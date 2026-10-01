@@ -6,6 +6,7 @@ import ``app.agent``. Agent NLU re-exports these from ``app.agent.nlu_types``.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -21,7 +22,7 @@ class ExtractedTerm(BaseModel):
         "max_token_pays",
         "min_payment_tiers",
     ]
-    value: int | str | dict | list
+    value: int | str | date | dict | list
     quote: str  # verbatim span from the utterance
     hedged: bool = False
 

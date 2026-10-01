@@ -193,6 +193,26 @@ def test_post_verify_rejects_out_of_range() -> None:
     assert out.terms == []
 
 
+def test_post_verify_repairs_accept_stance() -> None:
+    analysis = TurnAnalysis(stance="info")
+    out = post_verify(
+        analysis,
+        "Yes, that payment schedule works for us. Agreed.",
+        ref=_REF,
+    )
+    assert out.stance == "accept"
+
+
+def test_post_verify_repairs_reject_stance() -> None:
+    analysis = TurnAnalysis(stance="info")
+    out = post_verify(
+        analysis,
+        "Those payment amounts are off — our minimum is actually $300.",
+        ref=_REF,
+    )
+    assert out.stance == "reject"
+
+
 @pytest.mark.asyncio
 async def test_nlg_bad_template_falls_back_to_deterministic() -> None:
     fake = FakeLLM()

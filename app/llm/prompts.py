@@ -70,6 +70,9 @@ Units:
 Each term quote must be a verbatim substring of the utterance.
 hedged=true for hedges like about/around/roughly.
 If pending_readback is set, fill readback_response with "confirm" or "deny".
+stance must be one of: offer, counter, accept, reject, stall, info, question, other.
+Use accept when the rep agrees to a schedule or counter ("agreed", "that works").
+Use reject when they refuse terms or say a schedule does not work.
 Omit unknown fields; use [] / null when nothing extracted.
 """
 

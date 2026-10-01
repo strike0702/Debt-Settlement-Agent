@@ -51,6 +51,10 @@ class Effect(BaseModel):
         "inc_commit_demand",
         "record_ask",
         "inc_reject_at_max",
+        "record_confirm",
+        "inc_confirm_reject",
+        "note_assumed_asked",
+        "note_clarify",
         "set_phase",
     ]
     data: dict[str, Any] = Field(default_factory=dict)

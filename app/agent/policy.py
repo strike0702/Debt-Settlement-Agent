@@ -19,9 +19,9 @@ from pydantic import BaseModel
 from app.adapter.engine_adapter import Affordability
 from app.config import Settings, get_settings
 from app.domain.actions import Action, Effect, Intent, Phase
-from app.domain.belief import BeliefState
+from app.domain.belief import BeliefState, TermStatus
 from app.domain.facts import Fact
-from app.domain.fields import FIELDS_BY_NAME
+from app.domain.fields import FIELD_REGISTRY, FIELDS_BY_NAME
 from app.domain.nlu_types import TurnAnalysis
 from app.store.audit import AuditLog
 from feasibility.engine import ScheduleRow
@@ -55,6 +55,11 @@ class NegotiationState:
     pending_readback: str | None = None
     phase: Phase = Phase.OPENING
     turn_idx: int = 0
+    # Last CONFIRM fingerprint (ask + rules that shape the schedule).
+    last_confirm_key: tuple[Any, ...] | None = None
+    confirm_rejects: int = 0
+    assumed_asked: set[str] = field(default_factory=set)
+    clarify_counts: dict[str, int] = field(default_factory=dict)
 
 
 class Agreement(BaseModel):
@@ -190,6 +195,118 @@ def _fact_for_value(fact_id: str, field: str, value: Any) -> Fact:
     )
 
 
+def _confirm_key(belief: BeliefState, ask_bp: int) -> tuple[Any, ...]:
+    """Fingerprint of ask + rule values that shape a CONFIRM schedule.
+
+    Values are JSON-safe (dates → ISO) so ``record_confirm`` can hit the audit log.
+    """
+
+    def _norm(v: Any) -> Any:
+        if isinstance(v, date):
+            return v.isoformat()
+        if isinstance(v, list):
+            return [(_norm(x) if not isinstance(x, tuple) else list(x)) for x in v]
+        if isinstance(v, tuple):
+            return [_norm(x) for x in v]
+        return v
+
+    return (
+        ask_bp,
+        _norm(belief.get("max_payments").value),
+        _norm(belief.get("min_payment_cents").value),
+        _norm(belief.get("payment_structure").value),
+        _norm(belief.get("first_payment_date").value),
+    )
+
+
+def _first_assumed_field(belief: BeliefState, *, already_asked: set[str]) -> str | None:
+    """Next ASSUMED field to verify after a rejected schedule (registry order)."""
+    for spec in FIELD_REGISTRY:
+        if spec.name in already_asked:
+            continue
+        if belief.get(spec.name).status == TermStatus.ASSUMED:
+            return spec.name
+    return None
+
+
+def _confirm_action(
+    *,
+    ask_bp: int,
+    belief: BeliefState,
+    confirm_facts: dict[str, Fact] | None,
+    effects: list[Effect],
+    required: set[str],
+) -> Action:
+    """Emit CONFIRM_SCHEDULE and record its fingerprint on ack."""
+    facts = dict(confirm_facts or {})
+    facts.setdefault(
+        "settlement_pct",
+        Fact(
+            id="settlement_pct",
+            kind="pct",
+            value=ask_bp,
+            visibility="PUBLIC",
+            source="engine",
+        ),
+    )
+    key = _confirm_key(belief, ask_bp)
+    return Action(
+        intent=Intent.CONFIRM_SCHEDULE,
+        facts=facts,
+        required=required,
+        effects=effects
+        + [
+            Effect(
+                kind="record_confirm",
+                data={
+                    "ask_bp": ask_bp,
+                    "key": list(key),
+                },
+            ),
+            Effect(kind="set_phase", data={"phase": Phase.CONFIRM.value}),
+        ],
+        next_phase=Phase.CONFIRM,
+        reason=f"bp={ask_bp}",
+    )
+
+
+def _stall_after_confirm(
+    *,
+    belief: BeliefState,
+    neg: NegotiationState,
+    effects: list[Effect],
+    max_counters: int,
+) -> Action:
+    """Rejected/identical CONFIRM: verify each ASSUMED field once, else no-deal."""
+    effects = list(effects) + [Effect(kind="inc_confirm_reject")]
+    reject_n = neg.confirm_rejects + 1
+    fname = _first_assumed_field(belief, already_asked=neg.assumed_asked)
+    if fname is not None:
+        spec = FIELDS_BY_NAME[fname]
+        return Action(
+            intent=Intent.ASK,
+            text_slots={"ask_text": spec.ask_text, "field": fname},
+            required=set(),
+            effects=effects
+            + [Effect(kind="note_assumed_asked", data={"field": fname})],
+            next_phase=Phase.DISCOVERY,
+            reason=fname,
+        )
+    if reject_n >= max_counters:
+        return Action(
+            intent=Intent.NO_DEAL_WRAP,
+            effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
+            next_phase=Phase.END,
+            reason="confirm_rejected",
+        )
+    return Action(
+        intent=Intent.NO_DEAL_WRAP,
+        effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
+        next_phase=Phase.END,
+        reason="confirm_rejected",
+    )
+
+
 def decide(
     belief: BeliefState,
     neg: NegotiationState,
@@ -293,6 +410,19 @@ def decide(
     contradicted = belief.contradicted_fields()
     if contradicted:
         fname = contradicted[0]
+        if neg.clarify_counts.get(fname, 0) >= 2:
+            return Action(
+                intent=Intent.ESCALATE,
+                text_slots={
+                    "escalate_reason": (
+                        "I need a specialist to resolve conflicting terms."
+                    )
+                },
+                effects=effects
+                + [Effect(kind="set_phase", data={"phase": Phase.ESCALATE.value})],
+                next_phase=Phase.ESCALATE,
+                reason="contradiction_unresolved",
+            )
         term = belief.get(fname)
         old_val = term.history[-1] if term.history else None
         new_val = term.value
@@ -314,7 +444,8 @@ def decide(
             facts=facts,
             text_slots=text_slots,
             required=required,
-            effects=effects,
+            effects=effects
+            + [Effect(kind="note_clarify", data={"field": fname})],
             next_phase=Phase.DISCOVERY,
             reason=fname,
         )
@@ -399,46 +530,49 @@ def decide(
     # Rep accepted our last counter → confirm that bp.
     if analysis.stance == "accept" and neg.counters_offered:
         bp = neg.counters_offered[-1]
-        facts = dict(confirm_facts or {})
-        facts.setdefault(
-            "settlement_pct",
-            Fact(
-                id="settlement_pct",
-                kind="pct",
-                value=bp,
-                visibility="PUBLIC",
-                source="engine",
-            ),
-        )
-        return Action(
-            intent=Intent.CONFIRM_SCHEDULE,
-            facts=facts,
-            required=set(facts.keys()) & {"offer_total", "num_payments", "first_payment_date"},
-            effects=effects + [Effect(kind="set_phase", data={"phase": Phase.CONFIRM.value})],
-            next_phase=Phase.CONFIRM,
-            reason=f"bp={bp}",
+        return _confirm_action(
+            ask_bp=bp,
+            belief=belief,
+            confirm_facts=confirm_facts,
+            effects=effects,
+            required=set((confirm_facts or {}).keys())
+            & {"offer_total", "num_payments", "first_payment_date"},
         )
 
     # Ask is affordable and on the feasible grid → confirm schedule at ask.
     if ask_bp <= afford.max_bp and ask_bp in afford.feasible_bps:
-        facts = dict(confirm_facts or {})
-        facts.setdefault(
-            "settlement_pct",
-            Fact(
-                id="settlement_pct",
-                kind="pct",
-                value=ask_bp,
-                visibility="PUBLIC",
-                source="engine",
-            ),
-        )
-        return Action(
-            intent=Intent.CONFIRM_SCHEDULE,
-            facts=facts,
+        key = _confirm_key(belief, ask_bp)
+        if neg.last_confirm_key == key:
+            if analysis.stance == "reject":
+                return _stall_after_confirm(
+                    belief=belief,
+                    neg=neg,
+                    effects=effects,
+                    max_counters=cfg.max_counters,
+                )
+            # Same schedule already offered; NLU may have missed accept — soft retry.
+            soft = list(effects) + [Effect(kind="inc_confirm_reject")]
+            if neg.confirm_rejects + 1 >= cfg.max_counters:
+                return Action(
+                    intent=Intent.NO_DEAL_WRAP,
+                    effects=soft
+                    + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
+                    next_phase=Phase.END,
+                    reason="confirm_unacked",
+                )
+            return _confirm_action(
+                ask_bp=ask_bp,
+                belief=belief,
+                confirm_facts=confirm_facts,
+                effects=soft,
+                required=set(),
+            )
+        return _confirm_action(
+            ask_bp=ask_bp,
+            belief=belief,
+            confirm_facts=confirm_facts,
+            effects=effects,
             required=set(),
-            effects=effects + [Effect(kind="set_phase", data={"phase": Phase.CONFIRM.value})],
-            next_phase=Phase.CONFIRM,
-            reason=f"bp={ask_bp}",
         )
 
     # Counter ladder. Stop after MAX_COUNTERS rejections at the highest
@@ -479,10 +613,23 @@ def decide(
     if c_prev is not None and c_next <= c_prev and ceiling is not None and ceiling > c_prev:
         c_next = ceiling
 
+    # Identical counter re-offer (incl. NLU miss on reject) counts toward cap.
+    if c_prev is not None and c_next <= c_prev:
+        if not any(e.kind == "inc_reject_at_max" for e in effects):
+            effects.append(Effect(kind="inc_reject_at_max"))
+        reject_n = neg.rejects + 1
+        if reject_n >= cfg.max_counters:
+            return Action(
+                intent=Intent.NO_DEAL_WRAP,
+                effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
+                next_phase=Phase.END,
+                reason="max_counters",
+            )
+
     # If we cannot move at the ceiling, no-deal after enough rejects.
     if c_prev is not None and c_next <= c_prev and at_ceiling:
         reject_n = neg.rejects + (
-            1 if analysis.stance == "reject" and at_ceiling else 0
+            1 if any(e.kind == "inc_reject_at_max" for e in effects) else 0
         )
         if reject_n >= cfg.max_counters:
             return Action(

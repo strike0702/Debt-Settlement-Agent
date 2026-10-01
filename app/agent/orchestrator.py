@@ -85,6 +85,21 @@ def apply_effects(session: CallSession, effects: list[Effect]) -> None:
             session.neg.ask_history.append(bp)
         elif kind == "inc_reject_at_max":
             session.neg.rejects += 1
+        elif kind == "record_confirm":
+            raw_key = data.get("key")
+            if isinstance(raw_key, list):
+                session.neg.last_confirm_key = tuple(raw_key)
+            elif isinstance(raw_key, tuple):
+                session.neg.last_confirm_key = raw_key
+            else:
+                session.neg.last_confirm_key = (int(data["ask_bp"]),)
+        elif kind == "inc_confirm_reject":
+            session.neg.confirm_rejects += 1
+        elif kind == "note_assumed_asked":
+            session.neg.assumed_asked.add(str(data["field"]))
+        elif kind == "note_clarify":
+            fname = str(data["field"])
+            session.neg.clarify_counts[fname] = session.neg.clarify_counts.get(fname, 0) + 1
         elif kind == "set_phase":
             session.neg.phase = Phase(str(data["phase"]))
 

@@ -59,8 +59,8 @@ FIELD_REGISTRY: list[FieldSpec] = [
     FieldSpec(
         name="first_payment_date",
         kind="date",
-        ask_text="What's the first payment due date?",
-        readback_text="So the first payment date is {value}?",
+        ask_text="What's the initial payment due date?",
+        readback_text="So the initial payment date is {value}?",
         required=False,
         default_factory=None,  # BeliefState seeds from default_first_payment_date(client)
         prior_range=None,

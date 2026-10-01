@@ -1,0 +1,506 @@
+"""Sequential eval runner: scenarios → per-scenario JSON → metrics + thresholds.
+
+CLI: ``python -m eval.run_eval --scenarios 12 --seed 7 [--resume RUN_ID]
+[--profile eval] [--nlg llm|template] [--sim-phrasing llm|template]``.
+
+Writes ``eval/results/<run_id>/<scenario_id>.json`` as each finishes; resume
+skips completed ``status=ok`` files and retries ``skipped_quota``. ``run.json``
+records models, call share, seed, git sha, settings. Exits non-zero when
+``eval/thresholds.yaml`` fails. Does not import voice/UI code.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import subprocess
+import sys
+from collections import Counter
+from datetime import UTC, date, datetime
+from pathlib import Path
+from typing import Any, Literal
+
+from app.adapter.validator import validate
+from app.agent.guards import rendered_guard
+from app.agent.numbers import extract_tokens
+from app.agent.orchestrator import Orchestrator
+from app.agent.session import CallSession
+from app.config import Settings, get_settings
+from app.domain.actions import Intent, Phase
+from app.domain.belief import TermStatus
+from app.domain.facts import Fact
+from app.domain.fields import REQUIRED_FIELDS
+from app.llm.client import LLMUnavailable, make_client
+from app.store.audit import AuditLog
+from eval.metrics import (
+    aggregate,
+    check_thresholds,
+    load_scenario_results,
+    load_thresholds,
+    write_summaries,
+)
+from sim.creditor import CreditorPolicy, PhrasingMode
+from sim.scenarios import Scenario, generate, to_creditor_rules
+
+RESULTS_ROOT = Path(__file__).resolve().parent / "results"
+NlgMode = Literal["llm", "template"]
+
+
+def _git_sha() -> str:
+    try:
+        out = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).resolve().parents[1],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        return out.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return "unknown"
+
+
+def _new_run_id(seed: int) -> str:
+    stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    return f"eval_{stamp}_s{seed}"
+
+
+def _private_values(scenario: Scenario) -> set[tuple[str, int | date]]:
+    client = scenario.call.client
+    out: set[tuple[str, int | date]] = {
+        ("money", client.draft_amount_cents),
+        ("money", client.current_balance_cents),
+        ("money", scenario.call.bank_fee_cents),
+        ("money", scenario.call.creditor_balance_cents),
+        ("money", scenario.call.original_balance_cents),
+    }
+    for entry in client.ledger:
+        out.add(("money", entry.amount_cents))
+    return out
+
+
+def _count_leaks(texts: list[str], blocklist: set[tuple[str, int | date]]) -> int:
+    leaks = 0
+    for text in texts:
+        for tok in extract_tokens(text):
+            if tok.as_pair() in blocklist:
+                leaks += 1
+    return leaks
+
+
+def _count_unverified(
+    texts: list[str],
+    public_facts: dict[str, Fact],
+    creditor_numbers: set[tuple[str, int | date]],
+    private_blocklist: set[tuple[str, int | date]],
+    *,
+    ref: date,
+) -> int:
+    """Independent re-scan: spoken lines that still fail rendered_guard as unverified."""
+    n = 0
+    for text in texts:
+        rg = rendered_guard(
+            text,
+            public_facts,
+            creditor_numbers,
+            private_blocklist,
+            ref=ref,
+        )
+        if not rg.ok and rg.reason == "unverified_number":
+            n += 1
+    return n
+
+
+def _belief_metrics(scenario: Scenario, session: CallSession) -> dict[str, int]:
+    tr = scenario.true_rules
+    truth: dict[str, Any] = {
+        "max_payments": tr.max_payments,
+        "min_payment_cents": tr.min_payment_cents,
+        "payment_structure": tr.payment_structure,
+        "first_payment_date": tr.first_payment_date,
+        "max_segments": tr.max_segments,
+        "max_token_pays": tr.max_token_pays,
+        "min_payment_tiers": list(tr.min_payment_tiers),
+    }
+    correct = 0
+    total = 0
+    false_known = 0
+    known_count = 0
+    for field in REQUIRED_FIELDS:
+        term = session.belief.get(field)
+        total += 1
+        if term.status in (TermStatus.KNOWN, TermStatus.ASSUMED) and term.value == truth[field]:
+            correct += 1
+    for field, true_v in truth.items():
+        term = session.belief.get(field)
+        if term.status != TermStatus.KNOWN:
+            continue
+        known_count += 1
+        if term.value != true_v:
+            false_known += 1
+    return {
+        "rule_fields_correct": correct,
+        "rule_fields_total": total,
+        "false_known_count": false_known,
+        "known_count": known_count,
+    }
+
+
+def _agreement_valid(scenario: Scenario, session: CallSession) -> bool | None:
+    if session.agreement is None or session.last_eval is None:
+        return None
+    if session.last_eval.rows is None:
+        return False
+    rules = to_creditor_rules(
+        scenario.true_rules,
+        program_fee_pct=scenario.call.program_fee_pct,
+        bank_fee_cents=scenario.call.bank_fee_cents,
+    )
+    violations = validate(
+        session.last_eval.rows,
+        scenario.call.client,
+        session.last_eval.offer_total_cents,
+        session.last_eval.program_fee_cents,
+        rules,
+        scenario.true_rules.first_payment_date,
+    )
+    return violations == []
+
+
+def _surplus(scenario: Scenario, agreed_bp: int | None) -> float | None:
+    if agreed_bp is None or not scenario.zopa:
+        return None
+    if scenario.true_max_bp is None:
+        return None
+    denom = scenario.true_max_bp - scenario.floor_bp
+    if denom <= 0:
+        return None
+    return (scenario.true_max_bp - agreed_bp) / denom
+
+
+def _build_settings(
+    *,
+    profile: str,
+    nlg: NlgMode,
+    base: Settings | None = None,
+) -> Settings:
+    src = base or get_settings()
+    return Settings(
+        groq_api_key=src.groq_api_key,
+        mistral_api_key=src.mistral_api_key,
+        gemini_api_key=src.gemini_api_key,
+        openrouter_api_key=src.openrouter_api_key,
+        cerebras_api_key=src.cerebras_api_key,
+        llm_profile=profile,
+        llm_cache=src.llm_cache,
+        llm_cache_path=src.llm_cache_path,
+        nlg_mode=nlg,
+        nlu_mode="llm",
+        db_path=src.db_path,
+        hostility_threshold=src.hostility_threshold,
+        max_turns=src.max_turns,
+        max_counters=src.max_counters,
+        anchor_ratio=src.anchor_ratio,
+        concession_factor=src.concession_factor,
+        firm_name=src.firm_name,
+        opening_disclosure=src.opening_disclosure,
+    )
+
+
+async def run_one_scenario(
+    scenario: Scenario,
+    *,
+    settings: Settings,
+    llm: Any,
+    sim_phrasing: PhrasingMode,
+    audit_dir: Path,
+    max_turns: int = 30,
+) -> dict[str, Any]:
+    """Run one full text call; return a serializable result dict."""
+    audit_path = audit_dir / f"audit_{scenario.id}.db"
+    audit = AuditLog(audit_path)
+    session = CallSession(scenario=scenario.call)
+    orch = Orchestrator(
+        session,
+        llm=llm,
+        settings=settings,
+        audit=audit,
+        auto_ack=True,
+    )
+    creditor = CreditorPolicy(scenario, phrasing=sim_phrasing, llm=llm)
+    agent_lines: list[str] = []
+    public_pairs: set[tuple[str, int | date]] = set()
+    timings: list[dict[str, float]] = []
+    readback_count = 0
+    turns_to_proposal: int | None = None
+    intents: list[str] = []
+
+    def _absorb_facts(facts: dict[str, Fact]) -> None:
+        for fact in facts.values():
+            if fact.visibility == "PUBLIC" and isinstance(fact.value, (int, date)):
+                public_pairs.add((fact.kind, fact.value))
+
+    try:
+        utt = await orch.start()
+        agent_lines.extend(t for _, t in utt.sentences)
+        _absorb_facts(utt.action.facts)
+        intents.append(utt.action.intent.value)
+        if utt.timings:
+            timings.append(dict(utt.timings))
+        action = utt.action
+
+        for _ in range(max_turns):
+            if action.intent in (
+                Intent.PROPOSE_WRAP,
+                Intent.NO_DEAL_WRAP,
+                Intent.ESCALATE,
+            ):
+                break
+            if session.neg.phase in (Phase.WRAP, Phase.ESCALATE, Phase.END):
+                break
+            reply = await creditor.respond(
+                action, agent_text=agent_lines[-1] if agent_lines else ""
+            )
+            utt = await orch.on_creditor_text(reply.text, oracle=None)
+            agent_lines.extend(t for _, t in utt.sentences)
+            _absorb_facts(utt.action.facts)
+            intents.append(utt.action.intent.value)
+            if utt.action.intent == Intent.READ_BACK:
+                readback_count += 1
+            if turns_to_proposal is None and utt.action.intent in (
+                Intent.CONFIRM_SCHEDULE,
+                Intent.PROPOSE_WRAP,
+            ):
+                turns_to_proposal = session.neg.turn_idx
+            if utt.timings:
+                timings.append(dict(utt.timings))
+            action = utt.action
+            if creditor.done:
+                break
+    except LLMUnavailable as e:
+        audit.close()
+        return {
+            "scenario_id": scenario.id,
+            "status": "skipped_quota",
+            "error": str(e),
+            "stratum": scenario.stratum,
+            "persona": scenario.persona,
+            "zopa": scenario.zopa,
+            "should_escalate": scenario.should_escalate,
+        }
+    except Exception as e:
+        audit.close()
+        return {
+            "scenario_id": scenario.id,
+            "status": "error",
+            "error": f"{type(e).__name__}: {e}",
+            "stratum": scenario.stratum,
+            "persona": scenario.persona,
+            "zopa": scenario.zopa,
+            "should_escalate": scenario.should_escalate,
+        }
+
+    events = audit.for_call(session.call_id)
+    guard_blocks = sum(1 for ev in events if ev.get("type") == "blocked")
+    audit.close()
+
+    # Leak scan matches e2e: client/firm private amounts only (not engine
+    # PRIVATE facts that can collide with spoken PUBLIC offer totals).
+    private = _private_values(scenario)
+    ref = scenario.call.client.as_of_date
+    public_facts = {
+        f"hist_{i}": Fact(
+            id=f"hist_{i}",
+            kind=kind,  # type: ignore[arg-type]
+            value=value,
+            visibility="PUBLIC",
+            source="engine",
+        )
+        for i, (kind, value) in enumerate(sorted(public_pairs, key=lambda p: (p[0], str(p[1]))))
+    }
+    unverified = _count_unverified(
+        agent_lines,
+        public_facts,
+        session.creditor_numbers,
+        private,
+        ref=ref,
+    )
+    leaks = _count_leaks(agent_lines, private)
+    belief = _belief_metrics(scenario, session)
+    agr_valid = _agreement_valid(scenario, session)
+    escalated = session.neg.phase == Phase.ESCALATE
+    got_deal = session.agreement is not None
+
+    return {
+        "scenario_id": scenario.id,
+        "status": "ok",
+        "stratum": scenario.stratum,
+        "persona": scenario.persona,
+        "zopa": scenario.zopa,
+        "should_escalate": scenario.should_escalate,
+        "rescue_within_guardrail": scenario.rescue_within_guardrail,
+        "phase": session.neg.phase.value,
+        "final_intent": intents[-1] if intents else None,
+        "intents": intents,
+        "agreed_bp": session.agreed_bp,
+        "true_max_bp": scenario.true_max_bp,
+        "floor_bp": scenario.floor_bp,
+        "opening_ask_bp": scenario.opening_ask_bp,
+        "agreement_valid": agr_valid,
+        "got_deal": got_deal,
+        "escalated": escalated,
+        "agent_lines": agent_lines,
+        "timings": timings,
+        "guard_blocks": guard_blocks,
+        "readback_count": readback_count,
+        "turns_to_proposal": turns_to_proposal,
+        "unverified_figures_spoken": unverified,
+        "sensitive_leaks": leaks,
+        "surplus_captured": _surplus(scenario, session.agreed_bp),
+        **belief,
+    }
+
+
+def _route_models(settings: Settings) -> dict[str, list[str]]:
+    import yaml
+
+    path = Path(__file__).resolve().parents[1] / "config" / "providers.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    profile = data["profiles"].get(settings.llm_profile, {})
+    out: dict[str, list[str]] = {}
+    for role in ("nlu", "nlg", "sim", "stt"):
+        specs = profile.get(role) or profile.get("all") or []
+        out[role] = list(specs)
+    return out
+
+
+def _should_skip_existing(path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+    return data.get("status") == "ok"
+
+
+async def _async_main(args: argparse.Namespace) -> int:
+    seed = args.seed
+    n = args.scenarios
+    profile = args.profile
+    nlg: NlgMode = args.nlg
+    sim_phrasing: PhrasingMode = args.sim_phrasing
+
+    run_id = args.resume or _new_run_id(seed)
+    run_dir = RESULTS_ROOT / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    audit_dir = run_dir / "audit"
+    audit_dir.mkdir(exist_ok=True)
+
+    settings = _build_settings(profile=profile, nlg=nlg)
+    call_counts: Counter[str] = Counter()
+
+    def on_call(meta: dict[str, Any]) -> None:
+        provider = meta.get("provider", "?")
+        model = meta.get("model", "?")
+        call_counts[f"{provider}/{model}"] += 1
+
+    llm = make_client(settings, on_call=on_call)
+    scenarios = generate(n, seed)
+
+    print(
+        f"run_id={run_id} scenarios={len(scenarios)} "
+        f"profile={profile} nlg={nlg} sim={sim_phrasing}"
+    )
+
+    for i, sc in enumerate(scenarios, 1):
+        out_path = run_dir / f"{sc.id}.json"
+        if _should_skip_existing(out_path):
+            print(f"[{i}/{len(scenarios)}] skip {sc.id} (resume)")
+            continue
+        print(f"[{i}/{len(scenarios)}] run  {sc.id} ({sc.stratum}/{sc.persona}) ...", flush=True)
+        result = await run_one_scenario(
+            sc,
+            settings=settings,
+            llm=llm,
+            sim_phrasing=sim_phrasing,
+            audit_dir=audit_dir,
+        )
+        out_path.write_text(json.dumps(result, indent=2, default=str) + "\n", encoding="utf-8")
+        print(f"         → {result.get('status')} phase={result.get('phase')}", flush=True)
+
+    await llm.aclose()
+
+    results = load_scenario_results(run_dir)
+    summary = aggregate(results)
+    total_calls = sum(call_counts.values())
+    call_share = {
+        k: (v / total_calls if total_calls else 0.0) for k, v in sorted(call_counts.items())
+    }
+    run_meta: dict[str, Any] = {
+        "run_id": run_id,
+        "seed": seed,
+        "n_scenarios": n,
+        "git_sha": _git_sha(),
+        "profile": profile,
+        "nlg": nlg,
+        "sim_phrasing": sim_phrasing,
+        "settings": {
+            "llm_profile": settings.llm_profile,
+            "nlg_mode": settings.nlg_mode,
+            "nlu_mode": settings.nlu_mode,
+            "max_turns": settings.max_turns,
+            "max_counters": settings.max_counters,
+            "anchor_ratio": settings.anchor_ratio,
+            "concession_factor": settings.concession_factor,
+            "hostility_threshold": settings.hostility_threshold,
+            "llm_cache": settings.llm_cache,
+        },
+        "models": _route_models(settings),
+        "call_counts": dict(call_counts),
+        "call_share": call_share,
+    }
+    (run_dir / "run.json").write_text(
+        json.dumps(run_meta, indent=2, default=str) + "\n", encoding="utf-8"
+    )
+    write_summaries(run_dir, summary, run_meta=run_meta)
+
+    thresholds = load_thresholds()
+    failures = check_thresholds(summary, thresholds)
+    run_meta["thresholds"] = thresholds
+    run_meta["thresholds_passed"] = not failures
+    run_meta["threshold_failures"] = failures
+    (run_dir / "run.json").write_text(
+        json.dumps(run_meta, indent=2, default=str) + "\n", encoding="utf-8"
+    )
+
+    md = (run_dir / "summary.md").read_text(encoding="utf-8")
+    print("\n" + md)
+    if failures:
+        print("THRESHOLD FAILURES:")
+        for f in failures:
+            print(f"  - {f}")
+        return 1
+    print("thresholds: PASS")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(description="Debt Settlement Agent eval runner")
+    p.add_argument("--scenarios", type=int, default=12)
+    p.add_argument("--seed", type=int, default=7)
+    p.add_argument("--resume", type=str, default=None, metavar="RUN_ID")
+    p.add_argument("--profile", type=str, default="eval")
+    p.add_argument("--nlg", choices=("llm", "template"), default="llm")
+    p.add_argument(
+        "--sim-phrasing",
+        choices=("llm", "template"),
+        default="llm",
+        dest="sim_phrasing",
+    )
+    args = p.parse_args(argv)
+    return asyncio.run(_async_main(args))
+
+
+if __name__ == "__main__":
+    sys.exit(main())

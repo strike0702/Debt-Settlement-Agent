@@ -311,6 +311,10 @@ class FakeLLM:
         )
         return str(raw)
 
+    async def aclose(self) -> None:
+        """No-op; matches ``LLMClient.aclose`` for shared teardown."""
+        return None
+
 
 class LLMClient:
     """Role-routed chat / transcribe client over the provider pool."""

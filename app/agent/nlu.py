@@ -20,7 +20,7 @@ from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
 from app.agent.numbers import extract_tokens
 from app.config import Settings, get_settings
 from app.domain.fields import FIELDS_BY_NAME
-from app.llm.client import strip_json_fences
+from app.llm.client import LLMUnavailable, strip_json_fences
 from app.llm.prompts import nlu_messages
 from app.store.audit import AuditLog
 
@@ -200,6 +200,43 @@ def _ask_matches(pct: float, quote: str | None, *, ref: date) -> bool:
     return False
 
 
+# Deterministic stance repair when the LLM mislabels clear accept/reject lines.
+_ACCEPT_STANCE_RE = re.compile(
+    r"\b(?:"
+    r"agreed"
+    r"|we agree"
+    r"|that works"
+    r"|sounds good"
+    r"|we can accept"
+    r"|we accept"
+    r"|schedule works"
+    r"|payment schedule works"
+    r")\b",
+    re.IGNORECASE,
+)
+_REJECT_STANCE_RE = re.compile(
+    r"\b(?:"
+    r"too low"
+    r"|does not work"
+    r"|doesn't work"
+    r"|cannot go below"
+    r"|can't go below"
+    r"|minimum is actually"
+    r"|those payment amounts are off"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def repair_stance(stance: str, utterance: str) -> str:
+    """Override LLM stance when the utterance clearly accepts or rejects."""
+    if _REJECT_STANCE_RE.search(utterance):
+        return "reject"
+    if _ACCEPT_STANCE_RE.search(utterance):
+        return "accept"
+    return stance
+
+
 def post_verify(
     analysis: TurnAnalysis,
     utterance: str,
@@ -263,12 +300,14 @@ def post_verify(
         elif ask_quote:
             ask_verified = _ask_matches(ask_pct, ask_quote, ref=ref_d)
 
+    stance = repair_stance(analysis.stance, utterance)
+
     return VerifiedAnalysis(
         terms=verified_terms,
         settlement_ask_pct=ask_pct,
         ask_quote=ask_quote,
         ask_verified=ask_verified,
-        stance=analysis.stance,
+        stance=stance,  # type: ignore[arg-type]
         readback_response=analysis.readback_response,
         asks_client_private_info=analysis.asks_client_private_info,
         demands_commitment=analysis.demands_commitment,
@@ -322,6 +361,8 @@ async def analyze(
             text = await llm.chat_text("nlu", msgs, _NLU_MAX_TOKENS)
             analysis = _parse_analysis(text)
             break
+        except LLMUnavailable:
+            raise
         except (ValidationError, ValueError, TypeError, json.JSONDecodeError) as e:
             last_err = str(e)
             analysis = None

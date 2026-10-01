@@ -15,7 +15,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 6 | NLU and LLM NLG | done |
 | 7 | Session, orchestrator, CLI | done |
 | 8 | Simulator, scenarios, offline e2e | done |
-| 9 | Eval runner and metrics | pending |
+| 9 | Eval runner and metrics | done |
 | 10 | Voice and UI | pending |
 | 11 | README and final eval | pending |
 
@@ -107,10 +107,13 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 
 ### `app.agent.policy`
 - `Phase`, `Intent`, `Effect`, `Action` re-exported from `app.domain.actions`
-- `Agreement`, `NegotiationState`
+- `Agreement`, `NegotiationState` (also `last_confirm_key`, `confirm_rejects`, `assumed_asked`, `clarify_counts`)
 - `ask_pct_to_bp(pct: float) -> int`
 - `next_counter(*, ask_bp, max_bp, feasible_bps, c_prev, anchor_ratio, concession_factor) -> int`
 - `decide(belief, neg, analysis, afford, *, settings=None, rescue_within_guardrail=False, confirm_facts=None, counter_offer_total_cents=None) -> Action`
+  - Identical CONFIRM: `reject` → ASK each ASSUMED once then NO_DEAL; other → soft retry then `confirm_unacked`
+  - Unresolved CONTRADICTED after 2 CLARIFY → `ESCALATE(contradiction_unresolved)`
+  - Identical COUNTER re-offer counts toward `max_counters` even if NLU misses `reject`
 - `draft_agreement(*, creditor, bp, offer_total, rows, assumed_fields, audit=None, call_id=None) -> Agreement`
 - `opening_action(*, settings=None, firm_name=None, opening_disclosure=None) -> Action`
 
@@ -133,19 +136,32 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `CreditorPolicy(scenario, phrasing="template"|"llm", llm=None)`
   - `async respond(action, agent_text="") -> CreditorReply` — sees intent + PUBLIC facts only; validates `CONFIRM_SCHEDULE` under true rules; concedes 500 bp per rejected counter down to floor; emits oracle `TurnAnalysis`
 
+### `eval.metrics`
+- `load_scenario_results(run_dir) -> list[dict]`
+- `aggregate(results) -> dict` — PLAN §10 metrics + latency p50/p95
+- `write_summaries(run_dir, summary, *, run_meta=None) -> (summary.json, summary.md)`
+- `load_thresholds(path=None) -> dict`
+- `check_thresholds(summary, thresholds=None) -> list[str]` (empty ⇒ pass)
+
+### `eval.run_eval`
+- CLI: `python -m eval.run_eval --scenarios N --seed S [--resume RUN_ID] [--profile] [--nlg llm|template] [--sim-phrasing llm|template]`
+- Writes `eval/results/<run_id>/<scenario_id>.json` per finish; resume skips `status=ok`, retries `skipped_quota`
+- `run.json`: models, call_share, seed, git sha, settings; exit 1 on threshold fail
+
 ### `app.agent.nlg`
 - `SAFE_FALLBACK: str`; `TEMPLATES: dict[Intent, str]`
 - `render_action(action, ref_date, *, creditor_numbers=None, private_blocklist=None, audit=None, call_id=None) -> list[str]` — deterministic template path
 - `async speak_action(action, ref_date, *, llm=None, settings=None, last_rep_line="", creditor_numbers=None, private_blocklist=None, audit=None, call_id=None) -> list[str]` — LLM template → template_guard (1 retry) → fallback `TEMPLATES` → fill → rendered_guard
 
 ### `app.agent.nlu`
+- `repair_stance(stance, utterance) -> str` — deterministic accept/reject override
 - `class VerifiedTerm` — `field`, `value`, `quote`, `hedged`, `verified`
 - `class VerifiedAnalysis` — terms + TurnAnalysis stance fields + `ask_verified`; `to_turn_analysis() -> TurnAnalysis`
 - `normalize_for_quote(text) -> str`; `quote_in_utterance(quote, utterance) -> bool`
 - `coerce_analysis_payload(data) -> dict` — field-keyed LLM shapes → `terms[]`
 - `post_verify(analysis, utterance, *, ref=None, audit=None, call_id=None) -> VerifiedAnalysis`
 - `async analyze(utterance, last_agent_line, pending_readback, *, llm=None, settings=None, oracle=None, audit=None, call_id=None, ref=None) -> VerifiedAnalysis`
-- `NLU_MODE=oracle` requires `oracle=TurnAnalysis` (skips LLM)
+- `NLU_MODE=oracle` requires `oracle=TurnAnalysis` (skips LLM); re-raises `LLMUnavailable` for eval `skipped_quota`
 
 ### `app.agent.session`
 - `class Turn` — `role` (`agent`|`creditor`), `text`, `spoken`, `sentence_id`
@@ -207,11 +223,17 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `Action`/`Intent`/`Phase`/`Effect` and `TurnAnalysis`/`ExtractedTerm` live in `app.domain` so `sim/` never imports `app.agent` (agent modules re-export).
 - Pressuring private-info turns are (2, 3) not PLAN's (3, 5) so short rescue/no_fix calls still escalate offline.
 - Counter ladder treats "at max" as the highest feasible counter strictly below the ask (ceiling), not raw `max_bp`, so unreachable asks NO_DEAL instead of looping.
+- `ExtractedTerm.value` allows `date` (needed for `first_payment_date` oracle/sim reveals); PLAN listed only int|str|dict.
+- Deterministic `repair_stance` after NLU: Gemini often labels "Agreed" / schedule-accept lines as `info`.
+- FPD field ask/readback copy avoids the number-word `first` so `template_guard` does not block ASK.
 
 ## Open issues
 
 - Mistral chat blocked until Experiment setup (`limit-req-minute=0`); routed last so demo/eval still work via Groq/Gemini.
 - Cerebras smoke still probes `llama-3.3-70b` (wrong id; live models are `gpt-oss-120b` / `qwen-3.8-27b`) — not in role routes.
+- Local Ollama NLU (`qwen3.5:9b`) is 100–200 s/call cold (likely thinking); full 12-scenario local eval not practical on Air without disabling thinking.
+- Full-LLM sim phrasing can false-positive `demands_commitment` → wrong ESCALATE on some no_fix cells (`no_deal_correct` can be 0; not a threshold).
+- Rare WRAP without drafted `agreement` when validator fails under belief rules vs `last_eval` (metrics `got_deal` false while phase WRAP).
 
 ## Phase handoffs
 
@@ -279,3 +301,89 @@ phase: WRAP
 ### Phase 8 (2026-10-01)
 - Files: `app/domain/{actions,nlu_types}.py`, `sim/{personas,scenarios,creditor}.py`, `tests/unit/test_scenarios.py`, `tests/e2e/test_text_call.py`; policy ceiling-stuck fix; agent re-exports for moved types.
 - Tests: 242 passed offline (+1 skipped live). Generator deterministic + all strata; e2e 3 personas × 3 strata (oracle NLU, template NLG, template sim): deal→valid agreement, rescue→escalate, no_fix→END, pressuring→escalate, zero leaks.
+
+### Phase 9 (2026-10-01)
+- Files: `eval/{run_eval,metrics,thresholds}.py|yaml`, `tests/unit/test_metrics.py`; policy CONFIRM/COUNTER/CLARIFY stall fixes; NLU `repair_stance` + `LLMUnavailable` re-raise; `ExtractedTerm` date; FPD ask copy without number-word `first`.
+- Tests: 255 passed offline (+1 skipped live).
+- Root-cause fixes (tests first, not thresholds): identical CONFIRM spam; accept stance mislabel; clarify infinite loop; identical COUNTER without reject stance.
+- Local profile: models pulled (`qwen3.5:9b`, `gemma4:e4b`) but full 12-scenario run aborted — NLU ~100–200 s/call; no local summary.
+
+#### Run 1 — cheap template (`eval_20261001_011123_s7`)
+
+```
+# Eval summary
+
+- run_id: `eval_20261001_011123_s7`  seed=7  profile=`eval`  nlg=`template`  sim=`template`
+- git: `acc121f90f340687f4acc435cdd336f826be4742`
+- model share: gemini/gemini-3.1-flash-lite=100.0%
+
+| metric | value |
+|---|---|
+| n_completed / n_scenarios | 12/12 |
+| skipped_quota | 0 |
+| agreement_valid | 1 |
+| deal_rate_given_zopa | 1 |
+| no_deal_correct | 1 |
+| escalation_correct | 1 |
+| unverified_figures_spoken | 0 |
+| sensitive_leaks | 0 |
+| guard_blocks | 0 |
+| rule_extraction_accuracy | 1 |
+| false_known_rate | 0.000 |
+| readback_count (mean) | 0.000 |
+| turns_to_proposal (mean) | 2.667 |
+| surplus_captured (mean) | 0.412 |
+
+## Latency (ms)
+
+| stage | p50 | p95 | n |
+|---|---|---|---|
+| nlu_ms | 0.139 | 5820.078 | 70 |
+| policy_ms | 0.038 | 0.116 | 70 |
+| nlg_ms | 0.117 | 0.224 | 70 |
+| server_total_ms | 1.374 | 5846.373 | 70 |
+```
+
+thresholds: PASS
+
+#### Run 2 — local
+
+Skipped after start: Ollama NLU too slow for 12×~26 turns (see Open issues).
+
+#### Run 3 — full LLM (`eval_20261001_011347_s7`, thresholds after clarify-cap fix + resume of s0007_007)
+
+```
+# Eval summary
+
+- run_id: `eval_20261001_011347_s7`  seed=7  profile=`eval`  nlg=`llm`  sim=`llm`
+- git: `acc121f90f340687f4acc435cdd336f826be4742`
+- model share: gemini/gemini-3.1-flash-lite=100.0%
+
+| metric | value |
+|---|---|
+| n_completed / n_scenarios | 12/12 |
+| skipped_quota | 0 |
+| agreement_valid | 1 |
+| deal_rate_given_zopa | 0.667 |
+| no_deal_correct | 0.000 |
+| escalation_correct | 1 |
+| unverified_figures_spoken | 0 |
+| sensitive_leaks | 0 |
+| guard_blocks | 0 |
+| rule_extraction_accuracy | 0.889 |
+| false_known_rate | 0.000 |
+| readback_count (mean) | 0.167 |
+| turns_to_proposal (mean) | 4 |
+| surplus_captured (mean) | 0.274 |
+
+## Latency (ms)
+
+| stage | p50 | p95 | n |
+|---|---|---|---|
+| nlu_ms | 4988.758 | 7009.362 | 57 |
+| policy_ms | 0.063 | 0.220 | 57 |
+| nlg_ms | 4097.445 | 6265.581 | 57 |
+| server_total_ms | 9528.143 | 12488.742 | 57 |
+```
+
+thresholds: PASS

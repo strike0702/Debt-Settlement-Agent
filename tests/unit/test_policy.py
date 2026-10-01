@@ -142,6 +142,22 @@ def test_rule5_contradiction_before_readback_before_ask() -> None:
     )
     assert action.intent == Intent.CLARIFY
     assert action.reason == "max_payments"
+    assert any(e.kind == "note_clarify" for e in action.effects)
+
+
+def test_rule5_contradiction_unresolved_escalates() -> None:
+    b = _belief()
+    b.observe("max_payments", 6, "six", 1, verified=True, hedged=False)
+    b.observe("max_payments", 8, "eight", 2, verified=True, hedged=False)
+    action = decide(
+        b,
+        _neg(turn_idx=5, clarify_counts={"max_payments": 2}),
+        TurnAnalysis(stance="info"),
+        None,
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.ESCALATE
+    assert action.reason == "contradiction_unresolved"
 
 
 def test_rule6_tentative_readback_before_ask() -> None:
@@ -357,6 +373,183 @@ def test_no_deal_after_max_counters_at_max_bp() -> None:
         TurnAnalysis(stance="reject"),
         _afford(5000, list(range(100, 5100, 100))),
         settings=_SETTINGS,
+    )
+    assert action.intent == Intent.NO_DEAL_WRAP
+    assert action.reason == "max_counters"
+
+
+def test_confirm_reject_asks_assumed_field_not_same_schedule() -> None:
+    """PLAN §6.2 rule 10: deny in CONFIRM re-enters discovery — never spam same confirm."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    # first_payment_date stays ASSUMED from BeliefState seed
+    assert b.get("first_payment_date").status == TermStatus.ASSUMED
+    fpd = b.get("first_payment_date").value
+    assert isinstance(fpd, date)
+    key = (4500, 6, 10000, "even", fpd.isoformat())
+    action = decide(
+        b,
+        _neg(
+            turn_idx=5,
+            ask_bp=4500,
+            phase=Phase.CONFIRM,
+            last_confirm_key=key,
+            confirm_rejects=0,
+        ),
+        TurnAnalysis(stance="reject"),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.ASK
+    assert action.reason == "first_payment_date"
+    assert action.intent != Intent.CONFIRM_SCHEDULE
+    assert any(e.kind == "inc_confirm_reject" for e in action.effects)
+    assert any(
+        e.kind == "note_assumed_asked" and e.data.get("field") == "first_payment_date"
+        for e in action.effects
+    )
+
+
+def test_confirm_assumed_asked_skips_to_next_or_no_deal() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    fpd = b.get("first_payment_date").value
+    assert isinstance(fpd, date)
+    key = (4500, 6, 10000, "even", fpd.isoformat())
+    # All assumed fields already probed once → no-deal, not infinite ASK.
+    asked = {"first_payment_date", "max_segments", "max_token_pays", "min_payment_tiers"}
+    action = decide(
+        b,
+        _neg(
+            turn_idx=8,
+            ask_bp=4500,
+            phase=Phase.CONFIRM,
+            last_confirm_key=key,
+            confirm_rejects=1,
+            assumed_asked=asked,
+        ),
+        TurnAnalysis(stance="reject"),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.NO_DEAL_WRAP
+    assert action.reason == "confirm_rejected"
+
+
+def test_confirm_identical_key_without_reject_stance_soft_retries() -> None:
+    """NLU miss on accept: soft re-offer CONFIRM, do not burn ASSUMED fields."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    fpd = b.get("first_payment_date").value
+    assert isinstance(fpd, date)
+    key = (4500, 6, 10000, "even", fpd.isoformat())
+    action = decide(
+        b,
+        _neg(
+            turn_idx=6,
+            ask_bp=4500,
+            phase=Phase.CONFIRM,
+            last_confirm_key=key,
+            confirm_rejects=1,
+        ),
+        TurnAnalysis(stance="other"),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.CONFIRM_SCHEDULE
+    assert any(e.kind == "inc_confirm_reject" for e in action.effects)
+
+
+def test_confirm_unacked_after_max_soft_retries() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    fpd = b.get("first_payment_date").value
+    assert isinstance(fpd, date)
+    key = (4500, 6, 10000, "even", fpd.isoformat())
+    action = decide(
+        b,
+        _neg(
+            turn_idx=8,
+            ask_bp=4500,
+            phase=Phase.CONFIRM,
+            last_confirm_key=key,
+            confirm_rejects=4,
+        ),
+        TurnAnalysis(stance="other"),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.NO_DEAL_WRAP
+    assert action.reason == "confirm_unacked"
+
+
+def test_confirm_reject_no_assumed_no_deal_after_max() -> None:
+    b = _belief(
+        max_payments=6,
+        min_payment_cents=10000,
+        payment_structure="even",
+        first_payment_date=date(2026, 4, 15),
+        max_segments=2,
+        max_token_pays=6,
+        min_payment_tiers=[],
+    )
+    # Force all non-required out of ASSUMED
+    for name in ("first_payment_date", "max_segments", "max_token_pays", "min_payment_tiers"):
+        b.terms[name].status = TermStatus.KNOWN
+    key = (4500, 6, 10000, "even", "2026-04-15")
+    action = decide(
+        b,
+        _neg(
+            turn_idx=8,
+            ask_bp=4500,
+            phase=Phase.CONFIRM,
+            last_confirm_key=key,
+            confirm_rejects=4,
+        ),
+        TurnAnalysis(stance="reject"),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.NO_DEAL_WRAP
+    assert action.reason == "confirm_rejected"
+
+
+def test_confirm_records_key_on_first_offer() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(turn_idx=3, ask_bp=4500, phase=Phase.NEGOTIATE),
+        TurnAnalysis(stance="offer"),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+        confirm_facts={
+            "offer_total": Fact(
+                id="offer_total",
+                kind="money",
+                value=50_000,
+                visibility="PUBLIC",
+                source="engine",
+            ),
+        },
+    )
+    assert action.intent == Intent.CONFIRM_SCHEDULE
+    rec = [e for e in action.effects if e.kind == "record_confirm"]
+    assert len(rec) == 1
+    assert rec[0].data["ask_bp"] == 4500
+
+
+def test_identical_counter_without_reject_stance_counts_toward_cap() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    feasible = list(range(100, 5100, 100))
+    action = decide(
+        b,
+        _neg(
+            turn_idx=10,
+            ask_bp=8000,
+            counters_offered=[5000],
+            rejects=3,
+            phase=Phase.NEGOTIATE,
+        ),
+        TurnAnalysis(stance="other"),
+        _afford(5000, feasible),
+        settings=_SETTINGS,
+        counter_offer_total_cents=40_000,
     )
     assert action.intent == Intent.NO_DEAL_WRAP
     assert action.reason == "max_counters"

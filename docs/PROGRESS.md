@@ -18,7 +18,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 9 | Eval runner and metrics | done |
 | 10 | Voice and UI | done |
 | 10.1 | Demo UX + non-price recovery | done |
-| 11 | README and final eval | pending |
+| 11 | README and final eval | done |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -543,3 +543,10 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - HTTP `GET /scenarios/{id}` (rebased to `date.today()`); 404 on unknown/invalid id.
 - Operator view: "Scenario brief" panel (Creditor / Client PRIVATE / Firm fees cards) refreshes on scenario change and on load.
 - Tests: 291 passed offline (+1 skipped live).
+
+### Phase 11 (2026-10-01) — README and final eval
+- Files: `README.md` (problem, architecture mermaid, how-to-run, eval/latency/guard tables, limitations, synthetic + unaffiliated notes).
+- Final checks: `pytest` 291 passed / 1 skipped; `ruff check .` clean.
+- Cheap eval `eval_20261001_134429_s7` (seed=7, profile=eval, nlg=template, sim=template, gemini-3.1-flash-lite 100%): thresholds PASS. Metrics match prior remediation run (agreement_valid / deal_rate_given_zopa / no_deal_correct / escalation_correct / rule_extraction_accuracy = 1; leaks/unverified/guard_blocks = 0).
+- Latency (cloud cheap): nlu p50≈4815 ms / p95≈10079 ms (n=70). Local latency table in README from `eval_20261001_012534_s7` (Ollama NLU p95≈185 s; quality fail retained as limitation).
+- All phases 0–11 marked done.

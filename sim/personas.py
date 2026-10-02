@@ -22,7 +22,7 @@ class Persona:
     name: PersonaName
     # contradictory: flip one revealed numeric rule once.
     contradict_once: bool = False
-    # pressuring: private ask on creditor-turn 3, again on turn 5.
+    # pressuring: private ask on creditor-turns 2 and 3; commit on turn 3.
     pressure_private_turns: tuple[int, ...] = ()
     pressure_commit_turns: tuple[int, ...] = ()
 

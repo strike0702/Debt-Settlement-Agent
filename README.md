@@ -39,7 +39,7 @@ flowchart LR
 
 One turn: verify the rep's utterance → update belief → policy picks an `Action` → NLG writes a template → guards → speak. Side effects (a counter was offered, wrap commits) stick only after the browser acks the sentences were spoken.
 
-Money is integer cents. Settlement % is integer basis points (4500 = 45%). Spoken numbers come only from `Fact.render()`, never from the model.
+Money is integer cents. Settlement % is integer basis points (4500 = 45%). After speech guards, only rendered `Fact` values reach TTS — the LLM may emit digits in drafts, but guards block them before speak.
 
 ## How to run
 

@@ -352,6 +352,34 @@ def test_ask_mismatched_value_cleared() -> None:
     assert out.ask_verified is False
 
 
+def test_ask_matches_uses_ask_pct_to_bp_half_up() -> None:
+    """F02: verify ask bp with ask_pct_to_bp (HALF_UP), not float round."""
+    from app.agent.policy import ask_pct_to_bp
+
+    assert ask_pct_to_bp(45.125) == 4513
+    assert int(round(45.125 * 100)) == 4512
+
+    # Quote token 4513 must match policy bp (fails under int(round)=4512).
+    analysis = TurnAnalysis(
+        settlement_ask_pct=45.125,
+        ask_quote="45.13 percent",
+        stance="info",
+    )
+    out = post_verify(analysis, "we need 45.13 percent settlement", ref=_REF)
+    assert out.settlement_ask_pct == 45.125
+    assert out.ask_verified is True
+
+    # Quote token 4512 must NOT match policy bp 4513.
+    bad = TurnAnalysis(
+        settlement_ask_pct=45.125,
+        ask_quote="45.12 percent",
+        stance="info",
+    )
+    out_bad = post_verify(bad, "we need 45.12 percent settlement", ref=_REF)
+    assert out_bad.settlement_ask_pct is None
+    assert out_bad.ask_verified is False
+
+
 def test_ask_verified_when_quote_matches() -> None:
     analysis = TurnAnalysis(
         settlement_ask_pct=45.0,

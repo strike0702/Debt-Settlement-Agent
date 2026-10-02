@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
 from app.agent.numbers import extract_tokens
+from app.agent.policy import ask_pct_to_bp
 from app.config import Settings, get_settings
 from app.domain.fields import FIELDS_BY_NAME
 from app.llm.client import LLMUnavailable, strip_json_fences
@@ -289,9 +290,10 @@ def _value_matches_tokens(field: str, value: Any, quote: str, *, ref: date) -> b
 
 
 def _ask_matches(pct: float, quote: str | None, *, ref: date) -> bool:
+    """True when quote tokens match ``ask_pct_to_bp(pct)`` (HALF_UP), not float round."""
     if not quote:
         return False
-    bp = int(round(pct * 100))
+    bp = ask_pct_to_bp(pct)
     tokens = extract_tokens(quote, ref=ref)
     for t in tokens:
         if t.kind == "pct" and t.value == bp:

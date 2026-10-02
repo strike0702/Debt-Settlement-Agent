@@ -62,6 +62,7 @@ _SETTINGS = Settings(
 def test_ask_pct_to_bp() -> None:
     assert ask_pct_to_bp(45.0) == 4500
     assert ask_pct_to_bp(45.5) == 4550
+    assert ask_pct_to_bp(45.125) == 4513
 
 
 def test_rule1_max_turns() -> None:

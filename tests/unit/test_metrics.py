@@ -134,6 +134,9 @@ def test_thresholds_pass_and_fail() -> None:
         "escalation_correct": 0.95,
         "no_deal_correct": 1.0,
         "deal_rate_given_zopa": 0.8,
+        "guard_blocks": 0,
+        "rule_extraction_accuracy": 0.9,
+        "false_known_rate": 0.0,
     }
     assert check_thresholds(good) == []
 
@@ -144,6 +147,9 @@ def test_thresholds_pass_and_fail() -> None:
         "escalation_correct": 0.5,
         "no_deal_correct": 0.0,
         "deal_rate_given_zopa": 0.0,
+        "guard_blocks": 0,
+        "rule_extraction_accuracy": 0.1,
+        "false_known_rate": 0.9,
     }
     fails = check_thresholds(bad)
     assert any("unverified_figures_spoken" in f for f in fails)
@@ -151,6 +157,8 @@ def test_thresholds_pass_and_fail() -> None:
     assert any("escalation_correct" in f for f in fails)
     assert any("no_deal_correct" in f for f in fails)
     assert any("deal_rate_given_zopa" in f for f in fails)
+    assert any("rule_extraction_accuracy" in f for f in fails)
+    assert any("false_known_rate" in f for f in fails)
 
 
 def test_vacuous_agreement_valid_is_null_not_one() -> None:

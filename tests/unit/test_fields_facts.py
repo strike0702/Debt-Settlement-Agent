@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+
 from app.domain.belief import BeliefState, TermStatus
 from app.domain.facts import Fact, FactSet
 from app.domain.fields import FIELD_REGISTRY, FIELDS_BY_NAME, REQUIRED_FIELDS
@@ -107,8 +109,6 @@ def test_fact_visibility_and_render() -> None:
 
 def test_private_fact_ids_enforced() -> None:
     """F27: PRIVATE_FACT_IDS registry rejects PUBLIC tagging."""
-    import pytest
-    from app.domain.facts import Fact, FactSet
     fs = FactSet()
     with pytest.raises(ValueError, match="must be PRIVATE"):
         fs.add(

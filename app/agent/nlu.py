@@ -699,10 +699,6 @@ async def analyze(
             last_err = str(e)
             analysis = None
             continue
-        except Exception as e:
-            last_err = str(e)
-            analysis = None
-            continue
 
     if analysis is None:
         if audit is not None and call_id is not None:

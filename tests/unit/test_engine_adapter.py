@@ -254,3 +254,23 @@ def test_validator_passes_demo_feasible() -> None:
         rules,
         fpd,
     ) == []
+
+
+def test_evaluate_offer_total_matches_decimal_half_up() -> None:
+    """F13: float Offer.settlement_pct must not drift offer_total vs Decimal bp."""
+    from decimal import Decimal
+
+    from app.domain.units import bp_to_decimal
+    from feasibility.util import round_half_up
+
+    scenario = load_scenario(DEMO)
+    belief = BeliefState(scenario.client)
+    _fill_required(belief, max_payments=6, min_payment_cents=2000, structure="even")
+    rules = build_rules(belief, scenario)
+    fpd = belief.get("first_payment_date").value
+    assert isinstance(fpd, date)
+    for bp in (1, 33, 125, 3375, 4501, 9999):
+        summary = evaluate(scenario, rules, bp, fpd, assumed=assumed_fields(belief))
+        expected = round_half_up(bp_to_decimal(bp), scenario.creditor_balance_cents)
+        assert summary.offer_total_cents == expected
+        assert isinstance(bp_to_decimal(bp), Decimal)

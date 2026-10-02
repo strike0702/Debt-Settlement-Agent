@@ -1,10 +1,12 @@
 # Debt Settlement Agent
 
-A voice agent that negotiates debt settlements on a call.
+A conversational agent that negotiates debt settlements. Same policy and engine whether you type or talk.
+
+**Text chat** — CLI or the browser compose box. **Voice** — mic → STT, agent replies through browser TTS, with barge-in. Both modes hit the same orchestrator; voice is speech I/O on top of the text turn loop.
 
 The hard part is not sounding natural. It is keeping the math honest. An LLM that invents a payment amount mid-sentence is worse than a clumsy script. So this system treats the model as untrusted for arithmetic: code picks every move and every number; the model only extracts terms and wraps them in words.
 
-All data here is synthetic. Built as a personal project, unaffiliated with any employer or take-home assignment.
+All data here is synthetic.
 
 ## The problem
 

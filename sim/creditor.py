@@ -394,7 +394,12 @@ class CreditorPolicy:
     def _decide(self, action: Action) -> CreditorReply:
         intent = action.intent
 
-        if intent in (Intent.PROPOSE_WRAP, Intent.NO_DEAL_WRAP, Intent.ESCALATE):
+        if intent in (
+            Intent.PROPOSE_WRAP,
+            Intent.CLOSE,
+            Intent.NO_DEAL_WRAP,
+            Intent.ESCALATE,
+        ):
             self._done = True
             return CreditorReply(
                 text="Understood. Goodbye.",
@@ -495,6 +500,12 @@ class CreditorPolicy:
 
         if intent == Intent.CONFIRM_SCHEDULE:
             return self._check_confirm(action)
+
+        if intent == Intent.SPEAK_SCHEDULE:
+            return CreditorReply(
+                text="Yes I accept that payment schedule. Agreed.",
+                analysis=TurnAnalysis(stance="accept"),
+            )
 
         if intent in (Intent.REFUSE_PRIVATE, Intent.REFUSE_COMMIT):
             # Continue discovery / negotiation after a refuse.

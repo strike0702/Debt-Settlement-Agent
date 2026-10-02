@@ -39,3 +39,4 @@ class TurnAnalysis(BaseModel):
     demands_commitment: bool = False
     hostility: float = 0.0
     wants_to_end: bool = False
+    asks_for_schedule: bool = False

@@ -78,6 +78,85 @@ def rebase_client(client: Client, to: date) -> Client:
     )
 
 
+def client_from_raw(raw: dict[str, Any]) -> Client:
+    """Build an engine ``Client`` from a JSON-shaped dict (file or upload)."""
+    return Client(
+        draft_amount_cents=int(raw["draft_amount_cents"]),
+        draft_day=int(raw["draft_day"]),
+        first_draft_date=date.fromisoformat(str(raw["first_draft_date"])),
+        last_draft_date=date.fromisoformat(str(raw["last_draft_date"])),
+        as_of_date=date.fromisoformat(str(raw["as_of_date"])),
+        current_balance_cents=int(raw["current_balance_cents"]),
+        ledger=[
+            LedgerEntry(
+                date=date.fromisoformat(str(e["date"])),
+                amount_cents=int(e["amount_cents"]),
+                type=e["type"],
+            )
+            for e in raw.get("ledger", [])
+        ],
+    )
+
+
+def scenario_from_parts(
+    *,
+    scenario_id: str,
+    client: Client,
+    offer_raw: dict[str, Any],
+    firm_raw: dict[str, Any],
+    rebase_to: date | None = None,
+) -> CallScenario:
+    """Assemble a ``CallScenario`` from offer/firm dicts and a ``Client``."""
+    if rebase_to is not None:
+        client = rebase_client(client, rebase_to)
+    return CallScenario(
+        id=scenario_id,
+        client=client,
+        creditor=str(offer_raw["creditor"]),
+        creditor_balance_cents=int(offer_raw["creditor_balance_cents"]),
+        original_balance_cents=int(offer_raw["original_balance_cents"]),
+        program_fee_pct=float(firm_raw["program_fee_pct"]),
+        bank_fee_cents=int(firm_raw["bank_fee_cents"]),
+    )
+
+
+def scenario_from_payload(
+    payload: dict[str, Any],
+    *,
+    scenario_id: str = "custom",
+    rebase_to: date | None = None,
+) -> CallScenario:
+    """Build a scenario from an uploaded/pasted test-case JSON object.
+
+    Expected keys: ``client``, ``offer``, ``firm``. Optional ``meta.id`` overrides
+    ``scenario_id``. Raises ``ValueError`` on missing/invalid fields.
+    """
+    try:
+        client_raw = payload["client"]
+        offer_raw = payload["offer"]
+        firm_raw = payload["firm"]
+    except KeyError as e:
+        raise ValueError(f"scenario payload missing {e.args[0]}") from e
+    meta = payload.get("meta") or {}
+    sid = str(meta.get("id") or scenario_id).strip() or scenario_id
+    if "/" in sid or "\\" in sid or sid.startswith(".") or ".." in sid:
+        raise ValueError(f"invalid scenario id: {sid!r}")
+    try:
+        client = client_from_raw(client_raw)
+    except (KeyError, TypeError, ValueError) as e:
+        raise ValueError(f"invalid client: {e}") from e
+    try:
+        return scenario_from_parts(
+            scenario_id=sid,
+            client=client,
+            offer_raw=offer_raw,
+            firm_raw=firm_raw,
+            rebase_to=rebase_to,
+        )
+    except (KeyError, TypeError, ValueError) as e:
+        raise ValueError(f"invalid offer/firm: {e}") from e
+
+
 def load_scenario(
     path: str | Path,
     *,
@@ -86,21 +165,69 @@ def load_scenario(
     """Load `client.json`, `offer.json`, and `firm.json` from a folder."""
     folder = Path(path)
     client = load_client(folder / "client.json")
-    if rebase_to is not None:
-        client = rebase_client(client, rebase_to)
-
     offer_raw = json.loads((folder / "offer.json").read_text())
     firm_raw = json.loads((folder / "firm.json").read_text())
-
-    return CallScenario(
-        id=folder.name,
+    return scenario_from_parts(
+        scenario_id=folder.name,
         client=client,
-        creditor=str(offer_raw["creditor"]),
-        creditor_balance_cents=int(offer_raw["creditor_balance_cents"]),
-        original_balance_cents=int(offer_raw["original_balance_cents"]),
-        program_fee_pct=float(firm_raw["program_fee_pct"]),
-        bank_fee_cents=int(firm_raw["bank_fee_cents"]),
+        offer_raw=offer_raw,
+        firm_raw=firm_raw,
+        rebase_to=rebase_to,
     )
+
+
+SCENARIO_TEMPLATE: dict[str, Any] = {
+    "meta": {
+        "id": "custom",
+        "title": "My test case",
+        "description": "Paste or edit this template, then Apply.",
+        "expected": "deal",
+    },
+    "offer": {
+        "creditor": "NorthPeak Collections",
+        "creditor_balance_cents": 125000,
+        "original_balance_cents": 160000,
+    },
+    "firm": {
+        "program_fee_pct": 0.18,
+        "bank_fee_cents": 950,
+    },
+    "client": {
+        "draft_amount_cents": 22000,
+        "draft_day": 15,
+        "first_draft_date": "2026-03-15",
+        "last_draft_date": "2026-10-15",
+        "as_of_date": "2026-03-01",
+        "current_balance_cents": 44000,
+        "ledger": [
+            {"date": "2026-03-15", "amount_cents": 22000, "type": "credit"},
+            {"date": "2026-04-15", "amount_cents": 22000, "type": "credit"},
+            {"date": "2026-05-15", "amount_cents": 22000, "type": "credit"},
+            {"date": "2026-06-15", "amount_cents": 22000, "type": "credit"},
+            {"date": "2026-07-15", "amount_cents": 22000, "type": "credit"},
+            {"date": "2026-08-15", "amount_cents": 22000, "type": "credit"},
+            {"date": "2026-09-15", "amount_cents": 22000, "type": "credit"},
+            {"date": "2026-10-15", "amount_cents": 22000, "type": "credit"},
+        ],
+    },
+    "rep_card": (
+        "# Creditor script\n\n"
+        "You are the **creditor collections rep**. The agent negotiates for the client.\n"
+        "Do not ask for the client's income, SDA balance, or draft amount.\n\n"
+        "## Creditor account\n\n"
+        "| Field | Value |\n|---|---|\n"
+        "| Creditor | NorthPeak Collections |\n"
+        "| Outstanding balance | $1,250.00 |\n"
+        "| Original balance | $1,600.00 |\n\n"
+        "## Your settlement rules\n\n"
+        "| Rule | Value |\n|---|---|\n"
+        "| Max payments | 8 |\n"
+        "| Minimum payment | $100 |\n"
+        "| Structure | even |\n"
+        "| Opening ask | 45% of balance |\n"
+        "| Floor | 40% (do not go below) |\n"
+    ),
+}
 
 
 def resolve_scenario_dir(scenario_id: str, *, root: Path | None = None) -> Path:
@@ -148,6 +275,62 @@ def load_rep_card(scenario_id: str, *, root: Path | None = None) -> str:
     return path.read_text()
 
 
+def details_from_scenario(
+    sc: CallScenario,
+    *,
+    title: str | None = None,
+    description: str = "",
+    expected: str = "deal",
+) -> dict[str, Any]:
+    """Operator brief dict for a loaded scenario (catalog or custom upload)."""
+    c = sc.client
+    upcoming = sorted((e for e in c.ledger if e.date > c.as_of_date), key=lambda e: e.date)
+    deposits = sum(e.amount_cents for e in upcoming if e.type == "credit")
+    withdrawals = sum(e.amount_cents for e in upcoming if e.type == "debit")
+    fee_bp = int((Decimal(str(sc.program_fee_pct)) * 10000).to_integral_value(ROUND_HALF_UP))
+    program_fee_cents = int(
+        (Decimal(fee_bp) / Decimal(10000) * sc.original_balance_cents).to_integral_value(
+            ROUND_HALF_UP
+        )
+    )
+    return {
+        "id": sc.id,
+        "title": title or sc.id,
+        "description": description,
+        "expected": expected,
+        "creditor": {
+            "name": sc.creditor,
+            "creditor_balance_cents": sc.creditor_balance_cents,
+            "original_balance_cents": sc.original_balance_cents,
+        },
+        "client": {
+            "as_of_date": c.as_of_date.isoformat(),
+            "sda_balance_cents": c.current_balance_cents,
+            "draft_amount_cents": c.draft_amount_cents,
+            "draft_day": c.draft_day,
+            "first_draft_date": c.first_draft_date.isoformat(),
+            "last_draft_date": c.last_draft_date.isoformat(),
+            "upcoming_drafts": sum(1 for e in upcoming if e.type == "credit"),
+            "upcoming_deposits_cents": deposits,
+            "upcoming_withdrawals_cents": withdrawals,
+            # Engine ledger after as-of: credits = SDA deposits; debits = scheduled pulls.
+            "upcoming_ledger": [
+                {
+                    "date": e.date.isoformat(),
+                    "amount_cents": e.amount_cents,
+                    "type": e.type,
+                }
+                for e in upcoming
+            ],
+        },
+        "firm": {
+            "program_fee_bp": fee_bp,
+            "program_fee_cents": program_fee_cents,
+            "bank_fee_cents": sc.bank_fee_cents,
+        },
+    }
+
+
 def scenario_details(
     scenario_id: str,
     *,
@@ -165,40 +348,9 @@ def scenario_details(
         ScenarioMeta(id=folder.name, title=folder.name, description="", expected="deal"),
     )
     sc = load_scenario(folder, rebase_to=rebase_to)
-    c = sc.client
-    upcoming = [e for e in c.ledger if e.date > c.as_of_date]
-    deposits = sum(e.amount_cents for e in upcoming if e.type == "credit")
-    withdrawals = sum(e.amount_cents for e in upcoming if e.type == "debit")
-    fee_bp = int((Decimal(str(sc.program_fee_pct)) * 10000).to_integral_value(ROUND_HALF_UP))
-    program_fee_cents = int(
-        (Decimal(fee_bp) / Decimal(10000) * sc.original_balance_cents).to_integral_value(
-            ROUND_HALF_UP
-        )
+    return details_from_scenario(
+        sc,
+        title=meta.title,
+        description=meta.description,
+        expected=meta.expected,
     )
-    return {
-        "id": meta.id,
-        "title": meta.title,
-        "description": meta.description,
-        "expected": meta.expected,
-        "creditor": {
-            "name": sc.creditor,
-            "creditor_balance_cents": sc.creditor_balance_cents,
-            "original_balance_cents": sc.original_balance_cents,
-        },
-        "client": {
-            "as_of_date": c.as_of_date.isoformat(),
-            "sda_balance_cents": c.current_balance_cents,
-            "draft_amount_cents": c.draft_amount_cents,
-            "draft_day": c.draft_day,
-            "first_draft_date": c.first_draft_date.isoformat(),
-            "last_draft_date": c.last_draft_date.isoformat(),
-            "upcoming_drafts": sum(1 for e in upcoming if e.type == "credit"),
-            "upcoming_deposits_cents": deposits,
-            "upcoming_withdrawals_cents": withdrawals,
-        },
-        "firm": {
-            "program_fee_bp": fee_bp,
-            "program_fee_cents": program_fee_cents,
-            "bank_fee_cents": sc.bank_fee_cents,
-        },
-    }

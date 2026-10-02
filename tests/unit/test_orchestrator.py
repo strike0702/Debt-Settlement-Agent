@@ -218,6 +218,13 @@ async def test_full_scripted_call_reaches_propose_wrap(tmp_path: Path) -> None:
     assert session.agreement is not None
     assert session.agreement.status == "pending_client_approval"
 
+    u = await orch.on_creditor_text(
+        "thanks",
+        oracle=TurnAnalysis(stance="other", wants_to_end=False),
+    )
+    assert u.action.intent == Intent.CLOSE
+    assert session.neg.phase == Phase.END
+
     # Agreement schedule passes the independent validator.
     rules = build_rules(session.belief, session.scenario)
     fpd = session.belief.get("first_payment_date").value

@@ -49,7 +49,13 @@ _INTENT_INSTRUCTION: dict[Intent, str] = {
         "Confirm a schedule with {num_payments} payments totaling {offer_total}, "
         "starting {first_payment_date}."
     ),
+    Intent.SPEAK_SCHEDULE: (
+        "Read the payment schedule date by date using only the given placeholders."
+    ),
     Intent.PROPOSE_WRAP: "Say you will take the proposal to the client for approval.",
+    Intent.CLOSE: (
+        "Thank the rep and say you will follow up after the client reviews. End the call."
+    ),
     Intent.NO_DEAL_WRAP: "Politely end using {no_deal_reason}.",
     Intent.ESCALATE: "Say a specialist must join. Include {escalate_reason}.",
 }
@@ -66,7 +72,8 @@ Reply with JSON only in this exact shape (no other top-level keys):
   "asks_client_private_info":false,
   "demands_commitment":false,
   "hostility":0.0,
-  "wants_to_end":false
+  "wants_to_end":false,
+  "asks_for_schedule":false
 }
 Field names for terms[].field (only these):
 max_payments, min_payment_cents, payment_structure, first_payment_date,
@@ -84,6 +91,8 @@ If pending_readback is set, fill readback_response with "confirm" or "deny".
 stance must be one of: offer, counter, accept, reject, stall, info, question, other.
 Use accept when the rep agrees to a schedule or counter ("agreed", "that works").
 Use reject when they refuse terms or say a schedule does not work.
+Set wants_to_end=true for thanks, thank you, goodbye, bye, that's all, or similar closings.
+Set asks_for_schedule=true when the rep asks for payment dates or amounts per payment.
 Omit unknown fields; use [] / null when nothing extracted.
 """
 

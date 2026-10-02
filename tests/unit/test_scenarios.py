@@ -37,9 +37,21 @@ def test_generate_different_seeds_differ() -> None:
 
 
 def test_generate_one_persona_stratum() -> None:
+    # Fixed seeds — avoid ``hash()`` (salted per process via PYTHONHASHSEED).
+    seeds = {
+        ("flexible", "deal"): 101,
+        ("flexible", "rescue"): 102,
+        ("flexible", "no_fix"): 103,
+        ("contradictory", "deal"): 104,
+        ("contradictory", "rescue"): 105,
+        ("contradictory", "no_fix"): 106,
+        ("pressuring", "deal"): 107,
+        ("pressuring", "rescue"): 108,
+        ("pressuring", "no_fix"): 109,
+    }
     for persona in PERSONAS:
         for stratum in STRATA:
-            sc = generate_one(persona, stratum, seed=42 + hash((persona, stratum)) % 1000)
+            sc = generate_one(persona, stratum, seed=seeds[(persona, stratum)])
             assert sc.persona == persona
             assert sc.stratum == stratum
             assert sc.opening_ask_bp > sc.floor_bp

@@ -24,7 +24,14 @@ SAFE_FALLBACK = "Let me check that figure and come back to it."
 # ``escalate_reason``). LLM rewrites wrap them in another sentence, producing
 # mid-sentence capitals and leaked field names, so they always use ``TEMPLATES``.
 TEMPLATE_ONLY_INTENTS: frozenset[Intent] = frozenset(
-    {Intent.ASK, Intent.ASK_SETTLEMENT, Intent.NO_DEAL_WRAP, Intent.ESCALATE}
+    {
+        Intent.ASK,
+        Intent.ASK_SETTLEMENT,
+        Intent.SPEAK_SCHEDULE,
+        Intent.CLOSE,
+        Intent.NO_DEAL_WRAP,
+        Intent.ESCALATE,
+    }
 )
 
 # One spoken template per intent. No digits, $, %, or number-words.
@@ -62,8 +69,15 @@ TEMPLATES: dict[Intent, str] = {
         "We can do {num_payments} payments totaling {offer_total}, "
         "starting {first_payment_date}."
     ),
+    Intent.SPEAK_SCHEDULE: (
+        "Here is the payment-by-payment schedule."
+    ),
     Intent.PROPOSE_WRAP: (
         "I can take this proposal to the client for approval."
+    ),
+    Intent.CLOSE: (
+        "Thank you. We will present this to the client and follow up "
+        "after their review. Have a good day."
     ),
     Intent.NO_DEAL_WRAP: (
         "{no_deal_reason} Thank you for your time."
@@ -187,8 +201,9 @@ def render_action(
     blocked_out: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     """Render the deterministic template, or ``SAFE_FALLBACK`` on guard fail."""
+    template = action.template_override or TEMPLATES[action.intent]
     return _render_filled(
-        TEMPLATES[action.intent],
+        template,
         action,
         ref_date,
         creditor_numbers=creditor_numbers,
@@ -220,9 +235,11 @@ async def speak_action(
     cfg = settings or get_settings()
     allowed = _allowed_ids(action)
     required = action.required
-    template = TEMPLATES[action.intent]
+    template = action.template_override or TEMPLATES[action.intent]
 
-    use_llm = action.intent not in TEMPLATE_ONLY_INTENTS
+    use_llm = (
+        action.intent not in TEMPLATE_ONLY_INTENTS and action.template_override is None
+    )
     if use_llm and cfg.nlg_mode == "llm" and llm is not None:
         placeholder_ids = sorted(allowed)
         messages = nlg_messages(action.intent, placeholder_ids, last_rep_line)

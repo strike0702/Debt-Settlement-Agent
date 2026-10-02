@@ -632,6 +632,74 @@ def test_wants_to_end_no_deal() -> None:
     assert action.reason == "wants_to_end"
 
 
+def test_thanks_after_confirm_closes_as_deal() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    neg = _neg(turn_idx=5, ask_bp=4500, phase=Phase.CONFIRM)
+    neg.last_confirm_key = ("x",)
+    action = decide(
+        b,
+        neg,
+        TurnAnalysis(stance="other", wants_to_end=True),
+        _afford(6000),
+        settings=_SETTINGS,
+        confirm_facts={
+            "offer_total": Fact(
+                id="offer_total",
+                kind="money",
+                value=50_000,
+                visibility="PUBLIC",
+                source="engine",
+            )
+        },
+    )
+    assert action.intent == Intent.CLOSE
+    assert action.reason == "thanks_accept"
+    assert action.next_phase == Phase.END
+
+
+def test_asks_for_schedule_after_confirm() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    neg = _neg(turn_idx=5, ask_bp=4500, phase=Phase.CONFIRM)
+    neg.last_confirm_key = ("x",)
+    action = decide(
+        b,
+        neg,
+        TurnAnalysis(stance="question", asks_for_schedule=True),
+        _afford(6000),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.SPEAK_SCHEDULE
+    assert action.reason == "schedule_detail"
+
+
+def test_post_wrap_thanks_closes() -> None:
+    """After PROPOSE_WRAP, further turns thank and end — never re-confirm."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(turn_idx=6, ask_bp=4500, phase=Phase.WRAP),
+        TurnAnalysis(stance="other", wants_to_end=True),
+        _afford(6000),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.CLOSE
+    assert action.next_phase == Phase.END
+    assert action.reason == "post_wrap"
+
+
+def test_post_wrap_any_followup_closes() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(turn_idx=6, ask_bp=4500, phase=Phase.WRAP),
+        TurnAnalysis(stance="info"),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.CLOSE
+    assert action.intent != Intent.CONFIRM_SCHEDULE
+
+
 def test_confirm_records_key_on_first_offer() -> None:
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
     action = decide(

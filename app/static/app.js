@@ -35,10 +35,30 @@ const PHASE_PLAIN = {
 };
 
 const QUIET_AUDIT = new Set(["sentence_done"]);
+const SCENARIO_KEY = "dsa_scenario_id";
+const CUSTOM_KEY = "dsa_custom_scenario";
+const CUSTOM_ID = "__custom__";
 
 const onnxBase = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
 const vadAssetBase =
   "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/";
+
+function savedScenarioId() {
+  try {
+    return localStorage.getItem(SCENARIO_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function rememberScenarioId(id) {
+  try {
+    if (id) localStorage.setItem(SCENARIO_KEY, id);
+    else localStorage.removeItem(SCENARIO_KEY);
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
 
 function createStore(initial) {
   let state = { ...initial };
@@ -69,8 +89,9 @@ const store = createStore({
   bargeInEnabled: true,
   sttMode: "auto",
   sttFallbackNotice: "",
-  scenarioId: "easy_deal",
+  scenarioId: savedScenarioId(),
   scenarios: [],
+  customPayload: null,
   interim: "",
   transcript: [],
   terms: {},
@@ -127,6 +148,13 @@ const el = {
   repWorkspace: document.getElementById("rep-workspace"),
   opWorkspace: document.getElementById("op-workspace"),
   splitter: document.getElementById("splitter"),
+  customCasePanel: document.getElementById("custom-case-panel"),
+  customCaseShell: document.getElementById("custom-case-shell"),
+  customJson: document.getElementById("custom-json"),
+  customStatus: document.getElementById("custom-status"),
+  btnLoadTemplate: document.getElementById("btn-load-template"),
+  btnApplyCustom: document.getElementById("btn-apply-custom"),
+  customFile: document.getElementById("custom-file"),
 };
 
 let ws = null;
@@ -361,6 +389,9 @@ function verdictState(s) {
   if (s.phase === "END" && s.lastIntent === "NO_DEAL_WRAP") {
     return { key: "infeasible", label: "No deal" };
   }
+  if (s.phase === "END" && s.lastIntent === "CLOSE") {
+    return { key: "feasible", label: "Closed — pending client approval" };
+  }
   if (s.phase === "WRAP") return { key: "feasible", label: "Deal pending approval" };
   if (s.eval) {
     if (s.eval.feasible) return { key: "feasible", label: "Feasible" };
@@ -372,14 +403,27 @@ function verdictState(s) {
   return { key: "pending", label: "Pending" };
 }
 
+function paymentSummary(ev) {
+  if (!ev?.rows?.length) return null;
+  const pays = ev.rows.filter((r) => (r.creditor_payment_cents || 0) > 0);
+  if (!pays.length) return null;
+  return {
+    count: pays.length,
+    firstDate: pays[0].date,
+    lastDate: pays[pays.length - 1].date,
+    amounts: pays.map((r) => r.creditor_payment_cents),
+  };
+}
+
 function renderHero() {
   const s = store.get();
   const plain = PHASE_PLAIN[s.phase] || s.phase || "—";
   const intent = s.lastIntent || "—";
+  const pay = paymentSummary(s.eval);
 
   el.heroMain.textContent = plain;
   el.heroMain.dataset.state =
-    s.phase === "WRAP"
+    s.phase === "WRAP" || (s.phase === "END" && intent === "CLOSE")
       ? "feasible"
       : s.phase === "ESCALATE" || (s.phase === "END" && intent === "NO_DEAL_WRAP")
         ? "infeasible"
@@ -397,15 +441,19 @@ function renderHero() {
   const v = verdictState(s);
   el.opHeroMain.textContent = v.label;
   el.opHeroMain.dataset.state = v.key;
-  el.opHeroSub.textContent = s.eval?.shape
-    ? `Shape ${s.eval.shape}`
+  const subBits = [];
+  if (intent && intent !== "—") subBits.push(`Intent ${intent}`);
+  if (s.eval?.shape) subBits.push(`shape ${s.eval.shape}`);
+  if (pay) subBits.push(`${pay.count} payments`);
+  el.opHeroSub.textContent = subBits.length
+    ? subBits.join(" · ")
     : s.phase
       ? `Phase ${s.phase}`
       : "No engine result yet";
   el.opHeroMetrics.innerHTML = `
     <div class="metric"><div class="k">Offer total</div><div class="v">${money(s.eval?.offer_total_cents)}</div></div>
     <div class="metric"><div class="k">Settlement</div><div class="v">${pct(s.eval?.agreed_bp)}</div></div>
-    <div class="metric"><div class="k">Shape</div><div class="v">${escapeHtml(s.eval?.shape || "—")}</div></div>
+    <div class="metric"><div class="k">Payments</div><div class="v">${pay ? pay.count : "—"}</div></div>
     <div class="metric"><div class="k">Max affordable <span class="badge private">PRIVATE</span></div><div class="v">${pct(s.eval?.max_bp)}</div></div>
   `;
   flash(el.heroMain);
@@ -516,9 +564,13 @@ function scheduleHtml(ev, isRep) {
     }</div>`;
   }
   const rows = ev.rows.filter((r) => (r.creditor_payment_cents || 0) > 0);
+  const pay = paymentSummary(ev);
+  const head = pay
+    ? `<div class="hint" style="margin-bottom:8px">Offer ${money(ev.offer_total_cents)} at ${pct(ev.agreed_bp)} · ${pay.count} payment${pay.count === 1 ? "" : "s"} · ${escapeHtml(formatDate(pay.firstDate))} → ${escapeHtml(formatDate(pay.lastDate))}</div>`
+    : `<div class="hint" style="margin-bottom:8px">Offer ${money(ev.offer_total_cents)} at ${pct(ev.agreed_bp)}</div>`;
   if (isRep) {
     return `
-      <div class="hint" style="margin-bottom:8px">Offer ${money(ev.offer_total_cents)} at ${pct(ev.agreed_bp)}</div>
+      ${head}
       <table class="sched">
         <thead><tr><th>Date</th><th>Creditor payment</th></tr></thead>
         <tbody>
@@ -534,6 +586,7 @@ function scheduleHtml(ev, isRep) {
       </table>`;
   }
   return `
+    ${head}
     <div class="hint" style="margin-bottom:8px">
       ${ev.feasible ? "Feasible" : "Infeasible"} · ${escapeHtml(ev.shape || "—")} ·
       max affordable ${pct(ev.max_bp)} <span class="badge private">PRIVATE</span>
@@ -725,9 +778,15 @@ function closeSocket() {
 function connectAndStart() {
   closeSocket();
   resetCallState();
+  const scenarioId = el.scenarioSelect.value || store.get().scenarioId || "";
+  if (!scenarioId) {
+    showNotice("Pick a scenario first (operator controls), or apply a custom test case.");
+    updateCallButton();
+    return;
+  }
   const callId = crypto.randomUUID();
-  const scenarioId = el.scenarioSelect.value || store.get().scenarioId || "easy_deal";
   store.set({ callId, connected: false, started: false, scenarioId });
+  rememberScenarioId(scenarioId === CUSTOM_ID ? CUSTOM_ID : scenarioId);
   updateCallButton();
   const sock = new WebSocket(wsUrl(callId));
   ws = sock;
@@ -736,7 +795,20 @@ function connectAndStart() {
   sock.onopen = () => {
     if (ws !== sock) return;
     store.set({ connected: true });
-    sock.send(JSON.stringify({ type: "start", scenario_id: scenarioId }));
+    const startMsg = { type: "start" };
+    if (scenarioId === CUSTOM_ID) {
+      const payload = store.get().customPayload;
+      if (!payload) {
+        showNotice("Custom case missing — open Operator and Apply custom case.");
+        closeSocket();
+        return;
+      }
+      startMsg.scenario_id = payload.meta?.id || "custom";
+      startMsg.scenario_payload = payload;
+    } else {
+      startMsg.scenario_id = scenarioId;
+    }
+    sock.send(JSON.stringify(startMsg));
     store.set({ started: true });
     setControlsEnabled(true);
   };
@@ -766,8 +838,13 @@ function sendText(textOverride, source) {
   if (textOverride == null) el.textInput.value = "";
   if (store.get().mock) return;
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  store.set({ waiting: true, interim: "" });
-  renderChat();
+  // Show the rep bubble immediately; server echo replaces the pending line later.
+  const transcript = [
+    ...store.get().transcript,
+    { role: "creditor", text, blocked: false, intent: null, pending: true },
+  ];
+  store.set({ waiting: true, interim: "", transcript });
+  renderTranscript();
   const payload = { type: "text", text };
   if (source) payload.source = source;
   ws.send(JSON.stringify(payload));
@@ -871,13 +948,22 @@ function applyEvent(msg) {
   const s = store.get();
 
   if (type === "transcript") {
+    let transcript = [...s.transcript];
+    const role = msg.role === "agent" ? "agent" : "creditor";
+    if (role === "creditor") {
+      // Drop the optimistic pending bubble that matches this server echo.
+      const idx = transcript.findIndex(
+        (line) => line.pending && line.role === "creditor" && line.text === msg.text,
+      );
+      if (idx >= 0) transcript = transcript.filter((_, i) => i !== idx);
+    }
     const line = {
-      role: msg.role,
+      role,
       text: msg.text,
       blocked: Boolean(msg.blocked),
-      intent: msg.role === "agent" ? s.lastIntent : null,
+      intent: role === "agent" ? s.lastIntent : null,
     };
-    store.set({ transcript: [...s.transcript, line], interim: "" });
+    store.set({ transcript: [...transcript, line], interim: "" });
     renderTranscript();
     return;
   }
@@ -1027,6 +1113,45 @@ function effectiveSttMode() {
   return store.get().sttMode;
 }
 
+function isMicPermissionError(err) {
+  const name = err?.name || "";
+  const msg = String(err?.message || err || "");
+  return (
+    name === "NotAllowedError" ||
+    name === "NotFoundError" ||
+    /Permission denied|not allowed|Requested device not found/i.test(msg)
+  );
+}
+
+function isVadBackendError(err) {
+  const msg = String(err?.message || err || "");
+  return /no available backend|initializeWebAssembly|onnx|wasm|wasmpack|ort-/i.test(
+    msg,
+  );
+}
+
+function shortMicError(err) {
+  if (isMicPermissionError(err)) {
+    return "Browser blocked the mic. Click the lock/site icon in the address bar → allow Microphone, then try again.";
+  }
+  if (isVadBackendError(err)) {
+    return "Voice-detect engine failed to load in this browser.";
+  }
+  const raw = String(err?.message || err || "unknown error");
+  return raw.length > 160 ? `${raw.slice(0, 157)}…` : raw;
+}
+
+function fallBackToBrowserStt(reason) {
+  store.set({
+    sttMode: "browser",
+    sttFallbackNotice: reason,
+  });
+  if (el.sttMode) el.sttMode.value = "browser";
+  showNotice(reason);
+  startBrowserRec();
+  updateMicButton();
+}
+
 async function startMic() {
   if (store.get().mock) return;
   // micOn flips immediately so a second click during VAD load routes to stopMic.
@@ -1069,10 +1194,22 @@ async function startMic() {
       },
     });
   } catch (err) {
-    if (gen === micGen) {
-      showNotice(`Microphone unavailable: ${err?.message || err}`);
-      await stopMic();
+    if (gen !== micGen) return;
+    destroyVad(instance);
+    stopTracks(stream);
+    stream = null;
+    // Auto/server: VAD is only the capture path — fall back to browser STT.
+    if (
+      !isMicPermissionError(err) &&
+      (mode === "auto" || mode === "server" || isVadBackendError(err))
+    ) {
+      fallBackToBrowserStt(
+        "Mic voice-detect failed to load — switched to browser speech recognition. Or just type.",
+      );
+      return;
     }
+    showNotice(shortMicError(err));
+    await stopMic();
     return;
   }
   if (gen !== micGen) {
@@ -1215,19 +1352,153 @@ async function loadScenarios() {
     const res = await fetch("/scenarios");
     const list = await res.json();
     store.set({ scenarios: list });
-    el.scenarioSelect.innerHTML = list
-      .map(
+    const saved = store.get().scenarioId;
+    const opts = [
+      `<option value="">Select scenario…</option>`,
+      ...list.map(
         (s) =>
           `<option value="${escapeAttr(s.id)}">${escapeHtml(s.title)}</option>`,
-      )
-      .join("");
-    const current = store.get().scenarioId;
-    if (list.some((s) => s.id === current)) el.scenarioSelect.value = current;
+      ),
+      `<option value="${CUSTOM_ID}">Custom test case</option>`,
+    ];
+    el.scenarioSelect.innerHTML = opts.join("");
+    if (saved === CUSTOM_ID || (saved && list.some((s) => s.id === saved))) {
+      el.scenarioSelect.value = saved;
+    } else {
+      el.scenarioSelect.value = "";
+      store.set({ scenarioId: "" });
+    }
     updateExpectedBadge();
+    syncCustomCasePanel();
   } catch (err) {
     console.warn(err);
   }
-  await loadScenarioInfo(el.scenarioSelect.value || store.get().scenarioId);
+  const id = el.scenarioSelect.value || store.get().scenarioId;
+  if (id === CUSTOM_ID) {
+    await restoreCustomCase();
+  } else {
+    await loadScenarioInfo(id);
+  }
+  syncCustomCasePanel();
+}
+
+function syncCustomCasePanel() {
+  const show = (el.scenarioSelect.value || store.get().scenarioId) === CUSTOM_ID;
+  if (el.customCaseShell) {
+    el.customCaseShell.hidden = !show;
+    el.customCaseShell.setAttribute("aria-hidden", show ? "false" : "true");
+  } else if (el.customCasePanel) {
+    el.customCasePanel.hidden = !show;
+  }
+}
+
+function setCustomStatus(msg, ok = false) {
+  if (!el.customStatus) return;
+  el.customStatus.textContent = msg || "";
+  el.customStatus.style.color = ok ? "var(--ok)" : "var(--muted)";
+}
+
+async function loadTemplateIntoEditor() {
+  try {
+    const res = await fetch("/scenarios/template");
+    const tpl = await res.json();
+    if (el.customJson) el.customJson.value = JSON.stringify(tpl, null, 2);
+    setCustomStatus("Template loaded — edit, then Apply.");
+    return tpl;
+  } catch (err) {
+    setCustomStatus(`Template fetch failed: ${err}`);
+    return null;
+  }
+}
+
+async function applyCustomCase() {
+  if (!el.customJson) return;
+  let payload;
+  try {
+    payload = JSON.parse(el.customJson.value);
+  } catch (err) {
+    setCustomStatus(`Invalid JSON: ${err.message || err}`);
+    showNotice("Custom case JSON is invalid.");
+    return;
+  }
+  try {
+    const res = await fetch("/scenarios/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const detail = (await res.json().catch(() => ({}))).detail || res.statusText;
+      setCustomStatus(`Reject: ${detail}`);
+      showNotice(`Custom case rejected: ${detail}`);
+      return;
+    }
+    const brief = await res.json();
+    store.set({ customPayload: payload, scenarioId: CUSTOM_ID });
+    el.scenarioSelect.value = CUSTOM_ID;
+    rememberScenarioId(CUSTOM_ID);
+    try {
+      localStorage.setItem(CUSTOM_KEY, JSON.stringify(payload));
+    } catch {
+      /* ignore */
+    }
+    renderScenarioBrief(brief);
+    updateExpectedBadge();
+    if (payload.rep_card) setRepCard(String(payload.rep_card));
+    else setRepCard("");
+    setCustomStatus(`Applied “${brief.title}”. Start chat to run it.`, true);
+    syncCustomCasePanel();
+    showNotice("");
+  } catch (err) {
+    setCustomStatus(`Apply failed: ${err}`);
+  }
+}
+
+async function restoreCustomCase() {
+  let payload = store.get().customPayload;
+  if (!payload) {
+    try {
+      const raw = localStorage.getItem(CUSTOM_KEY);
+      if (raw) payload = JSON.parse(raw);
+    } catch {
+      payload = null;
+    }
+  }
+  if (!payload) {
+    const tpl = await loadTemplateIntoEditor();
+    if (tpl && el.customJson) {
+      // Prefill + apply so brief/rep card aren't empty on first open.
+      await applyCustomCase();
+      setCustomStatus("Template applied — edit JSON and Apply to update.", true);
+    } else {
+      renderScenarioBrief(null);
+      setRepCard("");
+      setCustomStatus("No saved custom case — load template or paste JSON.");
+    }
+    return;
+  }
+  store.set({ customPayload: payload, scenarioId: CUSTOM_ID });
+  if (el.customJson) el.customJson.value = JSON.stringify(payload, null, 2);
+  try {
+    const res = await fetch("/scenarios/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const brief = await res.json();
+      renderScenarioBrief(brief);
+      updateExpectedBadge();
+      if (payload.rep_card) setRepCard(String(payload.rep_card));
+      setCustomStatus(`Restored “${brief.title}”.`, true);
+    } else {
+      renderScenarioBrief(null);
+      setCustomStatus("Saved custom case failed preview — edit and Apply.");
+    }
+  } catch (err) {
+    renderScenarioBrief(null);
+    setCustomStatus(`Restore failed: ${err}`);
+  }
 }
 
 async function loadScenarioInfo(id) {
@@ -1237,6 +1508,45 @@ async function loadScenarioInfo(id) {
 function kvRow(label, value, isPrivate = false) {
   const badge = isPrivate ? ` <span class="badge private">PRIVATE</span>` : "";
   return `<div class="kv"><span class="k">${escapeHtml(label)}${badge}</span><span class="mono">${escapeHtml(value)}</span></div>`;
+}
+
+function ledgerTypeLabel(type) {
+  if (type === "credit") return "SDA deposit";
+  if (type === "debit") return "Scheduled debit";
+  return type || "entry";
+}
+
+function renderUpcomingLedger(c) {
+  const rows = Array.isArray(c.upcoming_ledger) ? c.upcoming_ledger : [];
+  const nDep = c.upcoming_drafts || 0;
+  const nDeb = rows.filter((e) => e.type === "debit").length;
+  const summaryBits = [];
+  if (nDep) {
+    summaryBits.push(
+      `${nDep} SDA deposit${nDep === 1 ? "" : "s"} totaling ${money(c.upcoming_deposits_cents)}`,
+    );
+  }
+  if (nDeb || c.upcoming_withdrawals_cents) {
+    summaryBits.push(
+      `${nDeb} scheduled debit${nDeb === 1 ? "" : "s"} totaling ${money(c.upcoming_withdrawals_cents || 0)}`,
+    );
+  }
+  const summary = summaryBits.length
+    ? summaryBits.join("; ")
+    : "None after as-of date";
+  const list = rows.length
+    ? `<ul class="brief-ledger">${rows
+        .map(
+          (e) =>
+            `<li><span class="mono">${escapeHtml(formatDate(e.date))}</span>` +
+            `<span>${escapeHtml(ledgerTypeLabel(e.type))}</span>` +
+            `<span class="mono">${escapeHtml(money(e.amount_cents))}</span></li>`,
+        )
+        .join("")}</ul>`
+    : "";
+  return `
+    ${kvRow("Committed cash after as-of", summary)}
+    ${list}`;
 }
 
 function renderScenarioBrief(d) {
@@ -1250,7 +1560,6 @@ function renderScenarioBrief(d) {
   const cr = d.creditor;
   const f = d.firm;
   el.scenarioBrief.innerHTML = `
-    ${d.description ? `<p class="brief-desc">${escapeHtml(d.description)}</p>` : ""}
     <div class="brief-grid">
       <div class="brief-card">
         <h3>Creditor</h3>
@@ -1261,11 +1570,10 @@ function renderScenarioBrief(d) {
       <div class="brief-card">
         <h3>Client <span class="badge private">PRIVATE</span></h3>
         ${kvRow("As of", formatDate(c.as_of_date))}
-        ${kvRow("SDA balance", money(c.sda_balance_cents))}
-        ${kvRow("Monthly draft", `${money(c.draft_amount_cents)} on day ${c.draft_day}`)}
+        ${kvRow("SDA balance now", money(c.sda_balance_cents))}
+        ${kvRow("Recurring draft", `${money(c.draft_amount_cents)} on day ${c.draft_day} each month`)}
         ${kvRow("Draft window", `${formatDate(c.first_draft_date)} – ${formatDate(c.last_draft_date)}`)}
-        ${kvRow("Upcoming drafts", `${c.upcoming_drafts} · ${money(c.upcoming_deposits_cents)}`)}
-        ${c.upcoming_withdrawals_cents ? kvRow("Upcoming withdrawals", money(c.upcoming_withdrawals_cents)) : ""}
+        ${renderUpcomingLedger(c)}
       </div>
       <div class="brief-card">
         <h3>Firm fees</h3>
@@ -1291,6 +1599,13 @@ async function loadScenarioBrief(id) {
 
 function updateExpectedBadge() {
   const id = el.scenarioSelect.value;
+  if (id === CUSTOM_ID) {
+    const meta = store.get().customPayload?.meta;
+    el.expectedBadge.hidden = false;
+    el.expectedBadge.textContent = meta?.expected || "custom";
+    el.expectedBadge.title = meta?.description || "Custom test case";
+    return;
+  }
   const meta = store.get().scenarios.find((s) => s.id === id);
   if (!meta) {
     el.expectedBadge.hidden = true;
@@ -1377,8 +1692,20 @@ async function toggleCall() {
   await stopMic();
   stopMock();
   showNotice("");
-  if (el.togMock.checked) startMock();
-  else connectAndStart();
+  if (el.togMock.checked) {
+    startMock();
+    return;
+  }
+  const scenarioId = el.scenarioSelect.value || store.get().scenarioId || "";
+  if (!scenarioId) {
+    showNotice("Pick a scenario in Operator view (or apply a custom test case) before starting.");
+    return;
+  }
+  if (scenarioId === CUSTOM_ID && !store.get().customPayload) {
+    showNotice("Apply a custom test case on the Operator page first.");
+    return;
+  }
+  connectAndStart();
 }
 
 el.btnCall.addEventListener("click", () => {
@@ -1406,11 +1733,36 @@ el.btnMic.addEventListener("click", async () => {
   else await startMic();
 });
 el.scenarioSelect.addEventListener("change", async () => {
-  store.set({ scenarioId: el.scenarioSelect.value });
+  const id = el.scenarioSelect.value;
+  store.set({ scenarioId: id });
+  rememberScenarioId(id);
   updateExpectedBadge();
-  await loadScenarioInfo(el.scenarioSelect.value);
+  syncCustomCasePanel();
+  if (id === CUSTOM_ID) await restoreCustomCase();
+  else await loadScenarioInfo(id);
 });
 el.btnDownload.addEventListener("click", downloadLog);
+if (el.btnLoadTemplate) {
+  el.btnLoadTemplate.addEventListener("click", () => loadTemplateIntoEditor());
+}
+if (el.btnApplyCustom) {
+  el.btnApplyCustom.addEventListener("click", () => applyCustomCase());
+}
+if (el.customFile) {
+  el.customFile.addEventListener("change", async () => {
+    const file = el.customFile.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      JSON.parse(text);
+      if (el.customJson) el.customJson.value = text;
+      setCustomStatus(`Loaded ${file.name} — click Apply.`);
+    } catch (err) {
+      setCustomStatus(`File not valid JSON: ${err.message || err}`);
+    }
+    el.customFile.value = "";
+  });
+}
 el.auditFilters.addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-actor]");
   if (!btn) return;
@@ -1425,12 +1777,16 @@ if (params.get("mock") === "1") el.togMock.checked = true;
 if (params.get("view") === "operator") store.set({ view: "operator" });
 if (params.get("scenario")) {
   store.set({ scenarioId: params.get("scenario") });
+  rememberScenarioId(params.get("scenario"));
 }
 
 initSplitter();
 applyView();
 renderAll();
 renderScenarioBrief(null);
-loadScenarios();
+syncCustomCasePanel();
+loadScenarios().then(() => {
+  syncCustomCasePanel();
+});
 
 if (el.togMock.checked) startMock();

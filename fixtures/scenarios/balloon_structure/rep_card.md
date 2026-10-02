@@ -1,10 +1,13 @@
-# Rep card — Balloon (synthetic)
+# Creditor script
 
-| Rule | Play as |
+You are the **creditor collections rep**. Prefer a balloon structure.
+
+## Your settlement rules
+
+| Rule | Value |
 |---|---|
 | Max payments | 6 |
 | Minimum payment | $20 |
 | Structure | balloon |
 | Opening ask | 40% |
 
-Say you need a balloon payment allowed, then accept a feasible schedule.

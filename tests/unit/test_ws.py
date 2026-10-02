@@ -204,6 +204,11 @@ def test_scenario_brief_endpoint(tmp_path: Path) -> None:
         assert body["client"]["draft_amount_cents"] == 22_000
         assert body["client"]["upcoming_drafts"] == 8
         assert body["client"]["upcoming_deposits_cents"] == 176_000
+        assert body["client"]["upcoming_withdrawals_cents"] == 0
+        ledger = body["client"]["upcoming_ledger"]
+        assert len(ledger) == 8
+        assert all(e["type"] == "credit" for e in ledger)
+        assert ledger[0]["amount_cents"] == 22_000
         assert body["firm"] == {
             "program_fee_bp": 1800,
             "program_fee_cents": 28_800,
@@ -212,10 +217,38 @@ def test_scenario_brief_endpoint(tmp_path: Path) -> None:
         assert "rep_card" not in body
         assert client.get("/scenarios/nope").status_code == 404
 
+        tpl = client.get("/scenarios/template")
+        assert tpl.status_code == 200
+        assert "client" in tpl.json() and "offer" in tpl.json()
+
+        preview = client.post("/scenarios/preview", json=tpl.json())
+        assert preview.status_code == 200
+        assert preview.json()["creditor"]["creditor_balance_cents"] == 125_000
+
+        bad = client.post("/scenarios/preview", json={"offer": {}})
+        assert bad.status_code == 400
+
     from app.domain.scenario import scenario_details
 
     with pytest.raises(ValueError):
         scenario_details("..")
+
+
+def test_ws_custom_scenario_payload(tmp_path: Path) -> None:
+    from app.domain.scenario import SCENARIO_TEMPLATE
+
+    with _client(tmp_path) as client:
+        with client.websocket_connect("/ws/call/custom-1") as ws:
+            ws.send_json(
+                {
+                    "type": "start",
+                    "scenario_id": "custom",
+                    "scenario_payload": SCENARIO_TEMPLATE,
+                }
+            )
+            opening = _recv_until(ws, lambda m: m.get("type") == "turn_done")
+            assert any(m["type"] == "say" for m in opening)
+            assert any(m["type"] == "belief" for m in opening)
 
 
 def test_metrics_summary_shape(tmp_path: Path) -> None:

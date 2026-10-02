@@ -111,13 +111,19 @@ async def _run(scenario_path: Path) -> int:
             utt = await orch.on_creditor_text(line)
             _print_utterance(utt)
 
+            if utt.action.intent == Intent.PROPOSE_WRAP:
+                _print_verdict(session)
+                print(f"\n[phase] {session.neg.phase.value} — say thanks to close, or /quit.")
+                continue
             if utt.action.intent in (
-                Intent.PROPOSE_WRAP,
+                Intent.CLOSE,
                 Intent.NO_DEAL_WRAP,
                 Intent.ESCALATE,
             ):
                 _print_verdict(session)
-            if session.neg.phase in (Phase.WRAP, Phase.END, Phase.ESCALATE):
+                print(f"\n[phase] {session.neg.phase.value} — call complete.")
+                break
+            if session.neg.phase in (Phase.END, Phase.ESCALATE):
                 print(f"\n[phase] {session.neg.phase.value} — call complete.")
                 break
     finally:

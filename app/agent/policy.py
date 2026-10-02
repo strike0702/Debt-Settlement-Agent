@@ -280,6 +280,58 @@ def _confirm_action(
     )
 
 
+def speak_schedule_action(
+    rows: list[ScheduleRow],
+    *,
+    effects: list[Effect] | None = None,
+    next_phase: Phase = Phase.CONFIRM,
+    reason: str | None = "schedule_detail",
+) -> Action:
+    """Build a SPEAK_SCHEDULE action with one date/amount fact pair per payment.
+
+    Placeholder ids use letter suffixes (``pay_date_a``) so ``template_guard``
+    does not see digits in the template string.
+    """
+    pays = [r for r in rows if r.creditor_payment_cents > 0][:8]
+    letters = "abcdefgh"
+    facts: dict[str, Fact] = {}
+    parts: list[str] = []
+    for letter, row in zip(letters, pays, strict=False):
+        d_id = f"pay_date_{letter}"
+        a_id = f"pay_amt_{letter}"
+        facts[d_id] = Fact(
+            id=d_id,
+            kind="date",
+            value=row.date,
+            visibility="PUBLIC",
+            source="engine",
+        )
+        facts[a_id] = Fact(
+            id=a_id,
+            kind="money",
+            value=row.creditor_payment_cents,
+            visibility="PUBLIC",
+            source="engine",
+        )
+        parts.append(f"On {{{d_id}}} the creditor payment is {{{a_id}}}.")
+    if not parts:
+        return Action(
+            intent=Intent.SPEAK_SCHEDULE,
+            effects=list(effects or []),
+            next_phase=next_phase,
+            reason=reason,
+        )
+    return Action(
+        intent=Intent.SPEAK_SCHEDULE,
+        facts=facts,
+        required=set(facts),
+        effects=list(effects or []),
+        next_phase=next_phase,
+        reason=reason,
+        template_override=" ".join(parts),
+    )
+
+
 def _stall_after_confirm(
     *,
     belief: BeliefState,
@@ -325,6 +377,16 @@ def _no_deal(
     return Action(
         intent=Intent.NO_DEAL_WRAP,
         text_slots={"no_deal_reason": spoken_reason},
+        effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
+        next_phase=Phase.END,
+        reason=reason,
+    )
+
+
+def _close_after_wrap(effects: list[Effect], *, reason: str) -> Action:
+    """Polite thanks after a proposal was already sent to the client."""
+    return Action(
+        intent=Intent.CLOSE,
         effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
         next_phase=Phase.END,
         reason=reason,
@@ -417,8 +479,51 @@ def decide(
             reason="commitment",
         )
 
-    # Rep wants to end (not mid-accept of a schedule).
+    # Already wrapped: do not re-offer schedules. Thank the rep and end.
+    if neg.phase == Phase.WRAP:
+        return _close_after_wrap(effects, reason="post_wrap")
+
+    # Already ended / escalated: stay terminal (idle thanks if they keep typing).
+    if neg.phase in (Phase.END, Phase.ESCALATE):
+        if neg.phase == Phase.ESCALATE:
+            return Action(
+                intent=Intent.ESCALATE,
+                text_slots={
+                    "escalate_reason": "A specialist still needs to join this call."
+                },
+                effects=effects,
+                next_phase=Phase.ESCALATE,
+                reason="already_escalated",
+            )
+        return _close_after_wrap(effects, reason="already_ended")
+
+    # Rep wants the payment-by-payment schedule (after we already proposed one).
+    # Skip when they are accepting — "payment schedule" often appears in accept lines.
+    if (
+        analysis.asks_for_schedule
+        and neg.last_confirm_key is not None
+        and analysis.stance != "accept"
+    ):
+        return Action(
+            intent=Intent.SPEAK_SCHEDULE,
+            effects=effects,
+            next_phase=Phase.CONFIRM,
+            reason="schedule_detail",
+        )
+
+    # Rep wants to end.
     if analysis.wants_to_end and analysis.stance != "accept":
+        # Soft-accept a schedule already on the table, then close with thanks.
+        if neg.phase == Phase.CONFIRM and neg.last_confirm_key is not None:
+            facts = dict(confirm_facts or {})
+            return Action(
+                intent=Intent.CLOSE,
+                facts=facts,
+                effects=effects
+                + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
+                next_phase=Phase.END,
+                reason="thanks_accept",
+            )
         return _no_deal(
             effects,
             reason="wants_to_end",

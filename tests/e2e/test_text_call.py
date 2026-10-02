@@ -86,6 +86,7 @@ async def _run_call(
     for _ in range(max_turns):
         if action.intent in (
             Intent.PROPOSE_WRAP,
+            Intent.CLOSE,
             Intent.NO_DEAL_WRAP,
             Intent.ESCALATE,
         ):

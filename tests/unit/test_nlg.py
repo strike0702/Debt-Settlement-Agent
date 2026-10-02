@@ -105,8 +105,26 @@ def _sample_action(intent: Intent) -> Action:
             required={"num_payments", "offer_total", "first_payment_date"},
             next_phase=Phase.CONFIRM,
         )
+    if intent == Intent.SPEAK_SCHEDULE:
+        return Action(
+            intent=intent,
+            facts={
+                "pay_date_a": _date("pay_date_a", date(2026, 4, 15)),
+                "pay_amt_a": _money("pay_amt_a", 37_500),
+                "pay_date_b": _date("pay_date_b", date(2026, 5, 15)),
+                "pay_amt_b": _money("pay_amt_b", 37_500),
+            },
+            required={"pay_date_a", "pay_amt_a", "pay_date_b", "pay_amt_b"},
+            next_phase=Phase.CONFIRM,
+            template_override=(
+                "On {pay_date_a} the creditor payment is {pay_amt_a}. "
+                "On {pay_date_b} the creditor payment is {pay_amt_b}."
+            ),
+        )
     if intent == Intent.PROPOSE_WRAP:
         return Action(intent=intent, next_phase=Phase.WRAP)
+    if intent == Intent.CLOSE:
+        return Action(intent=intent, next_phase=Phase.END)
     if intent == Intent.NO_DEAL_WRAP:
         return Action(
             intent=intent,

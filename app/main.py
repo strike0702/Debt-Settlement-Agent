@@ -19,7 +19,14 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import Settings, get_settings
-from app.domain.scenario import list_scenario_metas, load_rep_card, scenario_details
+from app.domain.scenario import (
+    SCENARIO_TEMPLATE,
+    details_from_scenario,
+    list_scenario_metas,
+    load_rep_card,
+    scenario_details,
+    scenario_from_payload,
+)
 from app.llm.client import make_client
 from app.store.audit import AuditLog
 from app.voice import ws as voice_ws
@@ -75,6 +82,26 @@ def create_app(
             }
             for m in list_scenario_metas()
         ]
+
+    @application.get("/scenarios/template")
+    async def get_scenario_template() -> dict[str, Any]:
+        """JSON template for a custom operator test case (client/offer/firm/meta)."""
+        return SCENARIO_TEMPLATE
+
+    @application.post("/scenarios/preview")
+    async def preview_scenario(payload: dict[str, Any]) -> dict[str, Any]:
+        """Validate a custom test-case JSON and return the operator brief shape."""
+        try:
+            sc = scenario_from_payload(payload, rebase_to=date.today())
+        except (ValueError, TypeError, KeyError) as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        meta = payload.get("meta") or {}
+        return details_from_scenario(
+            sc,
+            title=str(meta.get("title") or sc.id),
+            description=str(meta.get("description") or ""),
+            expected=str(meta.get("expected") or "deal"),
+        )
 
     @application.get("/scenarios/{scenario_id}/rep_card")
     async def get_rep_card(scenario_id: str) -> dict[str, str]:

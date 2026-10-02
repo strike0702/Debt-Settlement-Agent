@@ -60,6 +60,7 @@ class VerifiedAnalysis(BaseModel):
     demands_commitment: bool = False
     hostility: float = 0.0
     wants_to_end: bool = False
+    asks_for_schedule: bool = False
 
     def to_turn_analysis(self) -> TurnAnalysis:
         """Drop verified flags for ``policy.decide``."""
@@ -81,6 +82,7 @@ class VerifiedAnalysis(BaseModel):
             demands_commitment=self.demands_commitment,
             hostility=self.hostility,
             wants_to_end=self.wants_to_end,
+            asks_for_schedule=self.asks_for_schedule,
         )
 
 
@@ -346,6 +348,37 @@ _REJECT_STANCE_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+_WANTS_TO_END_RE = re.compile(
+    r"(?:"
+    r"\bthanks\b"
+    r"|\bthank you\b"
+    r"|\bthx\b"
+    r"|\bbye\b"
+    r"|\bgoodbye\b"
+    r"|\bgood bye\b"
+    r"|\bthat's all\b"
+    r"|\bthats all\b"
+    r"|\bthat is all\b"
+    r"|\bnothing else\b"
+    r"|\bwe'?re (?:all )?done\b"
+    r"|\bwe are (?:all )?done\b"
+    r"|\bend (?:the )?(?:call|chat)\b"
+    r")",
+    re.IGNORECASE,
+)
+_ASKS_FOR_SCHEDULE_RE = re.compile(
+    r"(?:"
+    r"\bschedule\b"
+    r"|\bpayment dates?\b"
+    r"|\bper[- ]date\b"
+    r"|\beach payment\b"
+    r"|\bby date\b"
+    r"|\bbreak(?:down)? (?:the )?payments?\b"
+    r"|\blist (?:the )?payments?\b"
+    r"|\bdates? (?:and|for) (?:the )?amounts?\b"
+    r")",
+    re.IGNORECASE,
+)
 
 
 def repair_stance(stance: str, utterance: str) -> str:
@@ -355,6 +388,20 @@ def repair_stance(stance: str, utterance: str) -> str:
     if _ACCEPT_STANCE_RE.search(utterance):
         return "accept"
     return stance
+
+
+def repair_wants_to_end(wants_to_end: bool, utterance: str) -> bool:
+    """Set wants_to_end when the rep clearly closes (thanks / bye / done)."""
+    if wants_to_end:
+        return True
+    return _WANTS_TO_END_RE.search(utterance) is not None
+
+
+def repair_asks_for_schedule(asks: bool, utterance: str) -> bool:
+    """True when the rep asks for payment dates / schedule detail."""
+    if asks:
+        return True
+    return _ASKS_FOR_SCHEDULE_RE.search(utterance) is not None
 
 
 def post_verify(
@@ -465,7 +512,10 @@ def post_verify(
         asks_client_private_info=analysis.asks_client_private_info,
         demands_commitment=analysis.demands_commitment,
         hostility=analysis.hostility,
-        wants_to_end=analysis.wants_to_end,
+        wants_to_end=repair_wants_to_end(analysis.wants_to_end, utterance),
+        asks_for_schedule=repair_asks_for_schedule(
+            analysis.asks_for_schedule, utterance
+        ),
     )
 
 
@@ -562,7 +612,10 @@ async def analyze(
                 "asks_client_private_info": oracle.asks_client_private_info,
                 "demands_commitment": oracle.demands_commitment,
                 "hostility": oracle.hostility,
-                "wants_to_end": oracle.wants_to_end,
+                "wants_to_end": repair_wants_to_end(oracle.wants_to_end, utterance),
+                "asks_for_schedule": repair_asks_for_schedule(
+                    oracle.asks_for_schedule, utterance
+                ),
             }
         )
     return verified

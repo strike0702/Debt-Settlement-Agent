@@ -30,6 +30,12 @@
       --mono: "IBM Plex Mono", ui-monospace, monospace;
       --flash: rgba(46, 196, 182, 0.28);
       --chat-width: 52%;
+      /* Content-fit floors (empty state). Panels grow with content above these. */
+      --op-panel-min-h: 0px;
+      --op-schedule-min-h: 88px;
+      --op-terms-min-h: 88px;
+      --op-brief-min-h: 88px;
+      --op-resize-min-h: 200px;
     }
     * { box-sizing: border-box; }
     html, body {
@@ -108,6 +114,13 @@
       background: var(--bg-1); border: 1px solid var(--line);
       border-radius: calc(var(--radius) + 2px);
       display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+    }
+    /* Author display:flex beats the UA [hidden] rule — force hide. */
+    .panel[hidden],
+    [hidden].panel,
+    .resizer-shell[hidden],
+    [hidden].resizer-shell {
+      display: none !important;
     }
     .panel h2 {
       margin: 0; padding: 10px 14px; font-size: 12px; font-weight: 600;
@@ -306,10 +319,111 @@
       display: grid; grid-template-columns: 1fr; gap: 12px; min-height: 0;
     }
     .op-split {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-height: 0;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      align-items: start;
+      min-width: 0;
     }
-    #op-workspace { row-gap: 12px; overflow-y: auto; align-content: start; }
-    .brief-desc { margin: 0 0 12px; color: var(--muted); }
+    #op-workspace {
+      grid-template-columns: 1fr;
+      row-gap: 12px;
+      overflow-x: hidden;
+      overflow-y: auto;
+      align-content: start;
+      height: 100%;
+      min-width: 0;
+    }
+
+    /* Shell is a flow wrapper — never absolute, never eats siblings. */
+    .resizer-shell {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+    }
+    .resizer-shell > .panel {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+    }
+
+    /*
+      panel-fit  — height = content (schedule, terms, brief, verdict, custom).
+      panel-resize — user can drag bottom-right; used for long scroll areas.
+    */
+    .panel.panel-fit {
+      height: auto;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .panel.panel-fit > .body,
+    .panel.panel-fit > .op-schedule-wrap,
+    .panel.panel-fit > .custom-case {
+      flex: 0 0 auto;
+      min-height: auto;
+      overflow: visible;
+    }
+    .panel.panel-fit > .status-card {
+      flex: 0 0 auto;
+    }
+
+    .panel.panel-resize {
+      min-height: var(--op-resize-min-h);
+      max-height: 70vh;
+      overflow: auto;
+      resize: vertical;
+    }
+    .panel.panel-resize > .body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+    }
+
+    #op-schedule-shell > .panel,
+    #rep-schedule-shell > .panel { min-height: var(--op-schedule-min-h); }
+    #op-terms-shell > .panel,
+    #rep-terms-shell > .panel { min-height: var(--op-terms-min-h); }
+    #op-brief-shell > .panel { min-height: var(--op-brief-min-h); }
+    #op-workspace > .resizer-shell:first-child > .panel { min-height: 0; }
+    #custom-case-shell > .panel { min-height: 0; }
+
+    .op-schedule-wrap {
+      padding: 12px 14px;
+    }
+    .custom-case {
+      display: flex; flex-direction: column; gap: 8px; padding: 12px;
+      min-width: 0;
+    }
+    .custom-case textarea {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      height: 18rem;
+      min-height: 12rem;
+      max-height: 40rem;
+      flex: 0 0 auto;
+      resize: vertical;
+      box-sizing: border-box;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      overflow: auto;
+      background: var(--bg-0); border: 1px solid var(--line); border-radius: var(--radius);
+      color: var(--text); font-family: var(--mono); font-size: 11px; padding: 10px;
+      line-height: 1.4;
+    }
+    .custom-case .row {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    }
+    .custom-case .row button {
+      background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 7px 12px; cursor: pointer;
+    }
+    .custom-case .row button.primary {
+      background: var(--accent-dim); border-color: rgba(46, 196, 182, 0.45);
+      color: var(--accent); font-weight: 600;
+    }
     .brief-grid {
       display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;
     }
@@ -326,7 +440,21 @@
       padding: 4px 0; font-size: 13px; border-bottom: 1px solid rgba(42, 56, 72, 0.45);
     }
     .kv:last-child { border-bottom: 0; }
-    .kv .k { color: var(--muted); }
+    .kv .k { color: var(--muted); flex: 0 1 42%; }
+    .kv .mono { text-align: right; flex: 1 1 auto; }
+    .brief-ledger {
+      list-style: none; margin: 6px 0 0; padding: 0;
+      /* No max-height — brief panel grows to show every ledger row. */
+      overflow: visible;
+      border-top: 1px solid rgba(42, 56, 72, 0.45);
+    }
+    .brief-ledger li {
+      display: grid; grid-template-columns: 7.5rem 1fr auto; gap: 8px;
+      padding: 4px 0; font-size: 12px; color: var(--text);
+      border-bottom: 1px solid rgba(42, 56, 72, 0.35);
+    }
+    .brief-ledger li:last-child { border-bottom: 0; }
+    .brief-ledger li span:nth-child(2) { color: var(--muted); }
     @media (max-width: 1100px) {
       .brief-grid { grid-template-columns: 1fr; }
     }
@@ -348,8 +476,8 @@
     .transcript-block.agent .role { color: var(--accent); }
     .transcript-block .text { white-space: pre-wrap; word-break: break-word; }
     .transcript-block.blocked .text { text-decoration: line-through; color: var(--muted); }
-    #transcript { resize: vertical; min-height: 180px; max-height: 70vh; }
-    #audit { resize: vertical; min-height: 180px; max-height: 70vh; }
+    #transcript { min-height: 160px; }
+    #audit { min-height: 120px; }
 
     .audit-group {
       border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 8px;
@@ -405,7 +533,7 @@
       </div>
       <div class="controls op-only" id="op-controls" hidden>
         <select id="scenario-select" aria-label="Demo scenario" title="Demo scenario">
-          <option value="easy_deal">Easy deal</option>
+          <option value="">Select scenario…</option>
         </select>
         <span id="expected-badge" class="badge expected" hidden></span>
         <button type="button" class="btn-call" id="btn-call-op">Start chat</button>
@@ -452,21 +580,27 @@
           <div class="hint" id="hero-sub" style="margin-top:6px">Awaiting start</div>
           <div class="metrics" id="hero-metrics"></div>
         </div>
-        <div class="panel">
-          <h2>Extracted terms</h2>
-          <div class="body" id="terms"></div>
+        <div class="resizer-shell" id="rep-terms-shell">
+          <div class="panel panel-fit" id="rep-terms-panel">
+            <h2>Extracted terms</h2>
+            <div class="body" id="terms"></div>
+          </div>
         </div>
-        <div class="panel">
-          <h2 id="sched-title">Proposed schedule</h2>
-          <div class="body" id="schedule"></div>
+        <div class="resizer-shell" id="rep-schedule-shell">
+          <div class="panel panel-fit" id="rep-schedule-panel">
+            <h2 id="sched-title">Proposed schedule</h2>
+            <div class="body" id="schedule"></div>
+          </div>
         </div>
-        <div class="panel">
-          <h2>Your role (creditor script)</h2>
-          <div class="body">
-            <details class="card-fold" open>
-              <summary>Show / hide playbook</summary>
-              <div class="rep-card" id="rep-card"></div>
-            </details>
+        <div class="resizer-shell">
+          <div class="panel panel-resize">
+            <h2>Your role (creditor script)</h2>
+            <div class="body">
+              <details class="card-fold" open>
+                <summary>Show / hide playbook</summary>
+                <div class="rep-card" id="rep-card"></div>
+              </details>
+            </div>
           </div>
         </div>
       </div>
@@ -474,60 +608,93 @@
 
     <!-- OPERATOR VIEW -->
     <section class="workspace op-only" id="op-workspace" hidden>
-      <div class="panel" style="grid-column: 1 / -1">
-        <div class="status-card" style="border:0;border-radius:0;border-bottom:1px solid var(--line)">
-          <div class="status-label" id="op-hero-label">Engine verdict</div>
-          <div class="status-main" id="op-hero-main" data-state="pending">Pending</div>
-          <div class="hint" id="op-hero-sub" style="margin-top:6px">Awaiting start</div>
-          <div class="metrics" id="op-hero-metrics"></div>
+      <div class="resizer-shell">
+        <div class="panel panel-fit">
+          <div class="status-card" style="border:0;border-radius:0;border-bottom:1px solid var(--line)">
+            <div class="status-label" id="op-hero-label">Engine verdict</div>
+            <div class="status-main" id="op-hero-main" data-state="pending">Pending</div>
+            <div class="hint" id="op-hero-sub" style="margin-top:6px">Awaiting start</div>
+            <div class="metrics" id="op-hero-metrics"></div>
+          </div>
         </div>
       </div>
-      <div class="panel" style="grid-column: 1 / -1">
-        <h2>
-          <span>Scenario brief</span>
-          <span class="hint" id="brief-title"></span>
-        </h2>
-        <div class="body" id="scenario-brief"></div>
+      <div class="op-split">
+        <div class="resizer-shell" id="op-schedule-shell">
+          <div class="panel panel-fit" id="op-schedule-panel">
+            <h2>Proposed schedule</h2>
+            <div class="op-schedule-wrap" id="op-schedule"></div>
+          </div>
+        </div>
+        <div class="resizer-shell" id="op-terms-shell">
+          <div class="panel panel-fit" id="op-terms-panel">
+            <h2>Extracted terms</h2>
+            <div class="body" id="op-terms"></div>
+          </div>
+        </div>
       </div>
-      <div class="op-grid" style="grid-column: 1 / -1; display:grid; grid-template-rows: 1fr auto; min-height:560px">
-        <div class="op-split">
-          <div class="panel">
+      <div class="resizer-shell" id="op-brief-shell">
+        <div class="panel panel-fit" id="op-brief-panel">
+          <h2>
+            <span>Scenario brief</span>
+            <span class="hint" id="brief-title"></span>
+          </h2>
+          <div class="body" id="scenario-brief"></div>
+        </div>
+      </div>
+      <div class="resizer-shell" id="custom-case-shell" hidden>
+        <div class="panel panel-fit" id="custom-case-panel">
+          <h2>Custom test case</h2>
+          <div class="custom-case">
+            <div class="hint">
+              Paste a full scenario JSON (template prefilled). Apply to use it for the next chat.
+              Money is integer cents.
+            </div>
+            <div class="row">
+              <button type="button" id="btn-load-template">Load template</button>
+              <button type="button" id="btn-apply-custom" class="primary">Apply custom case</button>
+              <label class="hint" style="cursor:pointer">
+                <input type="file" id="custom-file" accept="application/json,.json" hidden />
+                Upload JSON…
+              </label>
+              <span class="hint" id="custom-status"></span>
+            </div>
+            <textarea id="custom-json" spellcheck="false" aria-label="Custom scenario JSON"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="op-grid" style="display:grid; grid-template-rows: auto auto; min-height:0; gap:12px">
+        <div class="resizer-shell">
+          <div class="panel panel-resize">
             <h2>Live transcript</h2>
             <div class="body" id="transcript"></div>
           </div>
-          <div class="col-stack" style="display:flex;flex-direction:column;gap:12px;min-height:0">
-            <div class="panel" style="flex:1.1">
-              <h2>Extracted terms</h2>
-              <div class="body" id="op-terms"></div>
-            </div>
-            <div class="panel" style="flex:1">
-              <h2>Engine schedule</h2>
-              <div class="body" id="op-schedule"></div>
-            </div>
-          </div>
         </div>
         <div class="op-split">
-          <div class="panel">
-            <h2>Guardrails &amp; latency</h2>
-            <div class="body">
-              <div id="guards"></div>
-              <div id="latency" style="margin-top:12px"></div>
+          <div class="resizer-shell">
+            <div class="panel panel-fit">
+              <h2>Guardrails &amp; latency</h2>
+              <div class="body">
+                <div id="guards"></div>
+                <div id="latency" style="margin-top:12px"></div>
+              </div>
             </div>
           </div>
-          <div class="panel">
-            <h2>
-              Audit trail
-              <span class="hint" id="audit-count"></span>
-            </h2>
-            <div class="filters" id="audit-filters">
-              <button type="button" data-actor="all" class="active">All</button>
-              <button type="button" data-actor="orchestrator">Orchestrator</button>
-              <button type="button" data-actor="policy">Policy</button>
-              <button type="button" data-actor="nlu">NLU</button>
-              <button type="button" data-actor="engine">Engine</button>
-              <button type="button" data-actor="belief">Belief</button>
+          <div class="resizer-shell">
+            <div class="panel panel-resize">
+              <h2>
+                Audit trail
+                <span class="hint" id="audit-count"></span>
+              </h2>
+              <div class="filters" id="audit-filters">
+                <button type="button" data-actor="all" class="active">All</button>
+                <button type="button" data-actor="orchestrator">Orchestrator</button>
+                <button type="button" data-actor="policy">Policy</button>
+                <button type="button" data-actor="nlu">NLU</button>
+                <button type="button" data-actor="engine">Engine</button>
+                <button type="button" data-actor="belief">Belief</button>
+              </div>
+              <div class="body" id="audit"></div>
             </div>
-            <div class="body" id="audit"></div>
           </div>
         </div>
       </div>

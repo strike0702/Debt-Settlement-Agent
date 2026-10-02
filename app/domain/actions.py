@@ -36,7 +36,9 @@ class Intent(StrEnum):
     COUNTER = "COUNTER"
     COUNTER_TERMS = "COUNTER_TERMS"
     CONFIRM_SCHEDULE = "CONFIRM_SCHEDULE"
+    SPEAK_SCHEDULE = "SPEAK_SCHEDULE"
     PROPOSE_WRAP = "PROPOSE_WRAP"
+    CLOSE = "CLOSE"
     NO_DEAL_WRAP = "NO_DEAL_WRAP"
     ESCALATE = "ESCALATE"
 
@@ -75,3 +77,5 @@ class Action(BaseModel):
     next_phase: Phase
     # Optional free-form reason for ESCALATE / tests.
     reason: str | None = None
+    # When set, NLG uses this template instead of ``TEMPLATES[intent]``.
+    template_override: str | None = None

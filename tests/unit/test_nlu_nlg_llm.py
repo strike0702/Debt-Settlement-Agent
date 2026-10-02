@@ -213,6 +213,18 @@ def test_post_verify_repairs_reject_stance() -> None:
     assert out.stance == "reject"
 
 
+def test_post_verify_repairs_wants_to_end_thanks() -> None:
+    analysis = TurnAnalysis(stance="other", wants_to_end=False)
+    out = post_verify(analysis, "thanks", ref=_REF)
+    assert out.wants_to_end is True
+
+
+def test_post_verify_repairs_asks_for_schedule() -> None:
+    analysis = TurnAnalysis(stance="question", asks_for_schedule=False)
+    out = post_verify(analysis, "I mean on a per date basis", ref=_REF)
+    assert out.asks_for_schedule is True
+
+
 def test_six_not_verified_inside_sixteen() -> None:
     analysis = TurnAnalysis(
         terms=[

@@ -23,7 +23,11 @@ from app.agent.orchestrator import Orchestrator, Utterance
 from app.agent.policy import Intent
 from app.agent.session import CallSession
 from app.config import Settings, get_settings
-from app.domain.scenario import load_scenario, resolve_scenario_dir
+from app.domain.scenario import (
+    load_scenario,
+    resolve_scenario_dir,
+    scenario_from_payload,
+)
 from app.llm.client import LLMUnavailable
 from app.store.audit import AuditLog
 from app.voice.metrics_buf import LATENCY_BUFFER
@@ -347,10 +351,19 @@ async def call_socket(websocket: WebSocket, call_id: str) -> None:
                 scenario_id = data.get("scenario_id")
                 rebased_as_of = None
                 try:
-                    if scenario_id:
-                        path = resolve_scenario_dir(str(scenario_id))
-                        from datetime import date as _date
+                    from datetime import date as _date
 
+                    custom = data.get("scenario_payload")
+                    if isinstance(custom, dict):
+                        scenario = scenario_from_payload(
+                            custom,
+                            scenario_id=str(scenario_id or "custom"),
+                            rebase_to=_date.today(),
+                        )
+                        scenario_id = scenario.id
+                        rebased_as_of = scenario.client.as_of_date.isoformat()
+                    elif scenario_id:
+                        path = resolve_scenario_dir(str(scenario_id))
                         scenario = load_scenario(path, rebase_to=_date.today())
                         rebased_as_of = scenario.client.as_of_date.isoformat()
                     else:
@@ -377,7 +390,7 @@ async def call_socket(websocket: WebSocket, call_id: str) -> None:
                             continue
                         scenario = load_scenario(path)
                         scenario_id = scenario.id
-                except (ValueError, FileNotFoundError) as e:
+                except (ValueError, FileNotFoundError, TypeError, KeyError) as e:
                     await _send(
                         websocket,
                         {"type": "error", "message": str(e)},

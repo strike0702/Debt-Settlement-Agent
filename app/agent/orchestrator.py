@@ -41,6 +41,7 @@ from app.agent.policy import (
     draft_agreement,
     next_counter,
     opening_action,
+    speak_schedule_action,
 )
 from app.agent.session import CallSession, PendingSpeech, Turn
 from app.config import Settings, get_settings
@@ -457,7 +458,13 @@ class Orchestrator:
             self.session.agreed_bp = pending.pending_agreed_bp
 
         agreement = self._maybe_draft_agreement(pending.action)
-        if pending.action.intent == Intent.PROPOSE_WRAP and agreement is None:
+        if (
+            pending.action.intent == Intent.PROPOSE_WRAP
+            or (
+                pending.action.intent == Intent.CLOSE
+                and pending.action.reason == "thanks_accept"
+            )
+        ) and agreement is None:
             self.session.neg.phase = Phase.END
             self._audit(
                 "orchestrator",
@@ -530,15 +537,23 @@ class Orchestrator:
         """Rep ended the chat; speak a short close and move to END."""
         async with self._lock:
             t0 = time.perf_counter()
-            action = Action(
-                intent=Intent.NO_DEAL_WRAP,
-                text_slots={
-                    "no_deal_reason": "Understood — we will end the call here."
-                },
-                effects=[Effect(kind="set_phase", data={"phase": Phase.END.value})],
-                next_phase=Phase.END,
-                reason="rep_ended",
-            )
+            if self.session.neg.phase == Phase.WRAP:
+                action = Action(
+                    intent=Intent.CLOSE,
+                    effects=[Effect(kind="set_phase", data={"phase": Phase.END.value})],
+                    next_phase=Phase.END,
+                    reason="rep_ended_after_wrap",
+                )
+            else:
+                action = Action(
+                    intent=Intent.NO_DEAL_WRAP,
+                    text_slots={
+                        "no_deal_reason": "Understood — we will end the call here."
+                    },
+                    effects=[Effect(kind="set_phase", data={"phase": Phase.END.value})],
+                    next_phase=Phase.END,
+                    reason="rep_ended",
+                )
             sentences = await self._speak(action, last_rep_line="")
             timings = {
                 "nlu_ms": 0.0,
@@ -848,6 +863,17 @@ class Orchestrator:
     async def _enrich_action(self, action: Action) -> Action:
         turn_eval = self._turn_eval
         turn_bp = self._turn_agreed_bp
+        if action.intent == Intent.SPEAK_SCHEDULE:
+            summary = turn_eval or self.session.last_eval
+            if summary is None or summary.rows is None:
+                return action
+            return speak_schedule_action(
+                summary.rows,
+                effects=list(action.effects),
+                next_phase=action.next_phase,
+                reason=action.reason,
+            )
+
         if action.intent == Intent.CONFIRM_SCHEDULE and turn_eval is not None:
             facts = dict(action.facts)
             for fid, fact in turn_eval.facts.public().items():
@@ -899,7 +925,11 @@ class Orchestrator:
         return action
 
     def _maybe_draft_agreement(self, action: Action) -> Agreement | None:
-        if action.intent != Intent.PROPOSE_WRAP:
+        if action.intent == Intent.PROPOSE_WRAP:
+            pass
+        elif action.intent == Intent.CLOSE and action.reason == "thanks_accept":
+            pass
+        else:
             return None
         session = self.session
         if session.last_eval is None or session.agreed_bp is None:

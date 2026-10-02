@@ -561,3 +561,46 @@ async def test_screenshot_transcript_revises_terms(tmp_path: Path) -> None:
     ]
     assert revise_events
     audit.close()
+
+
+@pytest.mark.asyncio
+async def test_unacked_pending_barged_before_new_text(tmp_path: Path) -> None:
+    """F07: second creditor line while pending unacked must barge, not overwrite."""
+    orch, session, audit = _orch(tmp_path, auto_ack=False)
+    await orch.start()
+    assert session.pending is not None
+    await orch.on_sentence_done(session.pending.sentence_ids)
+
+    await orch.on_creditor_text(
+        "Maximum six payments.",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(field="max_payments", value=6, quote="six", hedged=False),
+            ],
+            stance="info",
+        ),
+    )
+    first_ids = list(session.pending.sentence_ids)
+    assert first_ids
+
+    u2 = await orch.on_creditor_text(
+        "minimum one hundred dollars, even structure",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(
+                    field="min_payment_cents",
+                    value=10000,
+                    quote="one hundred",
+                    hedged=False,
+                ),
+                ExtractedTerm(
+                    field="payment_structure", value="even", quote="even", hedged=False
+                ),
+            ],
+            stance="info",
+        ),
+    )
+    assert session.pending is not None
+    assert session.pending.sentence_ids != first_ids
+    assert u2.action.intent is not None
+    audit.close()

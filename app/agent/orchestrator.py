@@ -239,6 +239,11 @@ class Orchestrator:
         """NLU → belief → afford → decide → NLG. Cancel-and-merge during NLU."""
         out_timings = timings if timings is not None else {}
 
+        # F07: new creditor text while prior TTS unacked — barge first so pending
+        # is not overwritten without applying/dropping effects.
+        if self.session.pending is not None:
+            await self.on_barge_in(list(self.session.pending.acked))
+
         async with self._meta:
             merge_fut: asyncio.Future[Utterance] | None = None
             if self._stage == "nlu":

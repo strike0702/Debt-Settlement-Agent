@@ -30,7 +30,6 @@ from app.config import Settings, get_settings
 from app.domain.actions import Intent, Phase
 from app.domain.belief import TermStatus
 from app.domain.facts import Fact
-from app.domain.fields import REQUIRED_FIELDS
 from app.llm.client import LLMUnavailable, make_client
 from app.store.audit import AuditLog
 from eval.metrics import (
@@ -126,13 +125,12 @@ def _belief_metrics(scenario: Scenario, session: CallSession) -> dict[str, int]:
     total = 0
     false_known = 0
     known_count = 0
-    for field in REQUIRED_FIELDS:
-        term = session.belief.get(field)
-        total += 1
-        if term.status in (TermStatus.KNOWN, TermStatus.ASSUMED) and term.value == truth[field]:
-            correct += 1
+    # Score every TrueRules field; only KNOWN (not ASSUMED) counts as extracted.
     for field, true_v in truth.items():
         term = session.belief.get(field)
+        total += 1
+        if term.status == TermStatus.KNOWN and term.value == true_v:
+            correct += 1
         if term.status != TermStatus.KNOWN:
             continue
         known_count += 1

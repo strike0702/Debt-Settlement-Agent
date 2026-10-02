@@ -44,6 +44,16 @@ def test_extract_abbrev_hidden() -> None:
     assert toks[0].value == 250_000
 
 
+def test_extract_abbrev_uses_decimal_not_float() -> None:
+    """F12: k/m abbrevs must not go through binary float."""
+    from app.agent.numbers import _parse_abbrev
+
+    # 0.1 * 1000 * 100 is exact in Decimal; float path is latent risk.
+    assert _parse_abbrev("0.1k") == ("money", 10_000)
+    assert _parse_abbrev("1.25k") == ("money", 125_000)
+    assert _parse_abbrev("2.5m") == ("money", 250_000_000)
+
+
 def test_extract_dates_named_iso_slash() -> None:
     ref = date(2026, 3, 1)
     named = extract_tokens("due April 15", ref=ref)

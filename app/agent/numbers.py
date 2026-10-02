@@ -275,14 +275,16 @@ def _parse_pct_raw(raw: str) -> int:
 
 def _parse_abbrev(raw: str) -> tuple[TokenKind, int]:
     """``2.5k`` / ``10K`` / ``1.2m`` → money cents (k=thousand, m=million dollars)."""
+    from decimal import Decimal
+
     s = raw.strip()
     suffix = s[-1].lower()
-    num = float(s[:-1])
+    num = Decimal(s[:-1])
     if suffix == "k":
-        dollars = num * 1_000
+        dollars = num * Decimal(1_000)
     else:
-        dollars = num * 1_000_000
-    return ("money", int(round(dollars * 100)))
+        dollars = num * Decimal(1_000_000)
+    return ("money", int((dollars * Decimal(100)).to_integral_value()))
 
 
 def _parse_bare(raw: str) -> tuple[TokenKind, int]:

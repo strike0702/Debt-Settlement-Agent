@@ -35,13 +35,13 @@ _PLACEHOLDER_RE = re.compile(r"\{([a-z_]+)\}")
 _DIGIT_RE = re.compile(r"\d")
 # Premature deal language — agent must not lock terms before policy says so.
 _COMMITMENT_RE = re.compile(
+    # Intentionally no bare \bdeal\b (F23) — too many false positives.
     r"\b(?:we|i|my client|the client)\s+"
     r"(?:agrees?|accepts?|commits?|guarantees?|promises?)\b"
     r"|\bit'?s a deal\b"
     r"|\bwe have a deal\b"
     r"|\bsounds like a deal\b"
     r"|\ba deal\b"
-    r"|\bdeal\b"
     r"|\bagreed\b"
     r"|\bwe have an agreement\b",
     re.IGNORECASE,

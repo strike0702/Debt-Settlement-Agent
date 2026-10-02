@@ -103,3 +103,20 @@ def test_fact_visibility_and_render() -> None:
     assert set(fs.private()) == {"max_affordable_bp"}
     assert "offer_total" in fs
     assert fs["offer_total"].value == 62500
+
+
+def test_private_fact_ids_enforced() -> None:
+    """F27: PRIVATE_FACT_IDS registry rejects PUBLIC tagging."""
+    import pytest
+    from app.domain.facts import Fact, FactSet
+    fs = FactSet()
+    with pytest.raises(ValueError, match="must be PRIVATE"):
+        fs.add(
+            Fact(
+                id="program_fee",
+                kind="money",
+                value=100,
+                visibility="PUBLIC",
+                source="engine",
+            )
+        )

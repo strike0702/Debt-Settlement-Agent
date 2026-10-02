@@ -43,10 +43,30 @@ class Fact(BaseModel):
         raise ValueError(f"unknown fact kind: {self.kind}")
 
 
+# Exact private fact ids from the engine adapter (plus row prefixes below).
+PRIVATE_FACT_IDS: frozenset[str] = frozenset(
+    {
+        "program_fee",
+        "rescue_lump",
+        "rescue_increment",
+    }
+)
+_PRIVATE_ID_PREFIXES: tuple[str, ...] = ("balance_", "program_fee_", "bank_fee_")
+
+
+def fact_id_must_be_private(fact_id: str) -> bool:
+    """True when ``fact_id`` is in the private registry or a private row prefix."""
+    if fact_id in PRIVATE_FACT_IDS:
+        return True
+    return any(fact_id.startswith(p) for p in _PRIVATE_ID_PREFIXES)
+
+
 class FactSet(BaseModel):
     facts: dict[str, Fact] = Field(default_factory=dict)
 
     def add(self, fact: Fact) -> None:
+        if fact_id_must_be_private(fact.id) and fact.visibility != "PRIVATE":
+            raise ValueError(f"fact {fact.id!r} must be PRIVATE")
         self.facts[fact.id] = fact
 
     def get(self, fact_id: str) -> Fact | None:
@@ -67,13 +87,3 @@ class FactSet(BaseModel):
     def ids(self) -> set[str]:
         return set(self.facts)
 
-
-# Visibility guide (section 4.3) — used by later phases when tagging engine output.
-PRIVATE_FACT_IDS: frozenset[str] = frozenset(
-    {
-        "draft_amount",
-        "sda_balance",
-        "program_fee",
-        "max_affordable_bp",
-    }
-)

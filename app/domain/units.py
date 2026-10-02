@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 _MONTHS = {
     "january": 1,
@@ -45,12 +45,19 @@ def render_money(cents: int) -> str:
 
 
 def parse_money(text: str) -> int:
-    """Parse `$2,500` / `$2,500.50` / `2500.50` into integer cents."""
+    """Parse `$2,500` / `$2,500.50` / `2500.50` into integer cents.
+
+    Rejects more than two fractional digits (no silent truncation).
+    """
     s = text.strip().replace(",", "")
     if s.startswith("$"):
         s = s[1:].strip()
     if not s:
         raise ValueError(f"empty money string: {text!r}")
+    if "." in s:
+        _whole, frac = s.split(".", 1)
+        if len(frac) > 2:
+            raise ValueError(f"money has more than two decimals: {text!r}")
     return int(Decimal(s) * 100)
 
 
@@ -64,13 +71,15 @@ def render_pct(bp: int) -> str:
 
 
 def parse_pct(text: str) -> int:
-    """Parse `45%` / `45.5%` / `45.5` into integer basis points."""
+    """Parse `45%` / `45.5%` / `45.5` into integer basis points (HALF_UP)."""
     s = text.strip()
     if s.endswith("%"):
         s = s[:-1].strip()
     if not s:
         raise ValueError(f"empty pct string: {text!r}")
-    return int(Decimal(s) * 100)
+    return int(
+        (Decimal(s) * Decimal(100)).to_integral_value(rounding=ROUND_HALF_UP)
+    )
 
 
 def render_date(d: date, ref: date) -> str:

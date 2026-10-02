@@ -56,6 +56,18 @@ def test_bp_to_decimal() -> None:
     assert bp_to_decimal(4500) == Decimal("0.45")
 
 
+def test_parse_money_rejects_extra_decimals() -> None:
+    """F11: do not truncate 10.999 → 1099."""
+    with pytest.raises(ValueError, match="more than two decimals"):
+        parse_money("10.999")
+
+
+def test_parse_pct_half_up() -> None:
+    """F11: align with ask_pct_to_bp HALF_UP (45.125 → 4513)."""
+    assert parse_pct("45.125%") == 4513
+    assert parse_pct("45.125") == 4513
+
+
 @pytest.mark.parametrize(
     ("d", "ref", "spoken"),
     [

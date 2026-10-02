@@ -513,10 +513,8 @@ class CreditorPolicy:
             return self._check_confirm(action)
 
         if intent == Intent.SPEAK_SCHEDULE:
-            return CreditorReply(
-                text="Yes I accept that payment schedule. Agreed.",
-                analysis=TurnAnalysis(stance="accept"),
-            )
+            # Same true-rules validation as CONFIRM_SCHEDULE (F15).
+            return self._check_confirm(action)
 
         if intent in (Intent.REFUSE_PRIVATE, Intent.REFUSE_COMMIT):
             # Continue discovery / negotiation after a refuse.

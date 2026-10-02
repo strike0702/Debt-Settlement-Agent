@@ -7,3 +7,6 @@ agreement_valid: 1.0
 escalation_correct: ">=0.9"
 no_deal_correct: ">=0.9"
 deal_rate_given_zopa: ">=0.75"
+guard_blocks: ">=0"
+rule_extraction_accuracy: ">=0.5"
+false_known_rate: "<=0.25"

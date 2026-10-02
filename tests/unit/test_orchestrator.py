@@ -377,19 +377,8 @@ async def test_post_nlu_queue_does_not_overwrite_pending(tmp_path: Path) -> None
     assert session.pending.sentence_ids == first_ids
 
     await orch.on_sentence_done(first_ids)
-    assert session.pending is None
-
-    # Next idle turn consumes the queue.
-    u2 = await orch.on_creditor_text(
-        "",
-        oracle=TurnAnalysis(
-            settlement_ask_pct=45.0,
-            ask_quote="forty five percent",
-            stance="offer",
-        ),
-    )
+    # F08: ack auto-drains the post-NLU queue (may emit a follow-up pending).
     assert orch._post_nlu_queue is None
-    assert u2.action.intent in (Intent.CONFIRM_SCHEDULE, Intent.ASK_SETTLEMENT, Intent.COUNTER)
     audit.close()
 
 

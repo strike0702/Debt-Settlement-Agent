@@ -236,7 +236,13 @@ class Orchestrator:
         *,
         oracle: TurnAnalysis | None = None,
     ) -> Utterance:
-        """NLU → belief → afford → decide → NLG. Cancel-and-merge during NLU."""
+        """NLU → belief → afford → decide → NLG.
+
+        Cancel-and-merge during NLU and ``_post_nlu_queue`` during post need
+        concurrent ``on_creditor_text`` callers. The voice WS awaits each handler
+        sequentially, so those paths are for in-process/tests; queued post-NLU
+        text is auto-drained after speech ack (F08).
+        """
         out_timings = timings if timings is not None else {}
 
         # F07: new creditor text while prior TTS unacked — barge first so pending
@@ -488,6 +494,7 @@ class Orchestrator:
 
     async def on_sentence_done(self, ids: list[str] | set[str]) -> Agreement | None:
         """Ack spoken sentence ids; commit effects when all pending are done."""
+        queued: str | None = None
         async with self._lock:
             pending = self.session.pending
             if pending is None:
@@ -507,7 +514,19 @@ class Orchestrator:
 
             agreement = self._commit_pending(pending)
             self.session.pending = None
-            return agreement
+            async with self._meta:
+                queued = self._post_nlu_queue
+                self._post_nlu_queue = None
+        # F08: drain text that arrived during post-NLU now that speech is acked.
+        if queued:
+            self._audit("orchestrator", "post_nlu_drain", {"queued": queued[:120]})
+            drain_oracle = (
+                TurnAnalysis(stance="other")
+                if self.settings.nlu_mode == "oracle"
+                else None
+            )
+            await self.on_creditor_text(queued, timings=None, oracle=drain_oracle)
+        return agreement
 
     async def on_barge_in(self, spoken_ids: list[str] | set[str]) -> None:
         """Keep spoken ids; drop unspoken sentences and pending effects."""

@@ -241,3 +241,9 @@ def test_load_demo_scenario() -> None:
     assert scenario.program_fee_pct == 0.18
     assert scenario.bank_fee_cents == 950
     assert scenario.client.draft_amount_cents == 22000
+
+
+def test_values_equal_list_tuple() -> None:
+    """F28: list vs tuple tiers must not false-CONTRADICT."""
+    from app.domain.belief import _values_equal
+    assert _values_equal([(1, 100)], ((1, 100),))

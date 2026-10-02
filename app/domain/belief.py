@@ -49,6 +49,9 @@ class BeliefChange(BaseModel):
 
 
 def _values_equal(a: Any, b: Any) -> bool:
+    """Equality with list/tuple normalization for tier containers (F28)."""
+    if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+        return list(a) == list(b)
     return a == b
 
 

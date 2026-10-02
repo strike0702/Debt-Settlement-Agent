@@ -926,7 +926,12 @@ function drainSayQueue() {
     drainSayQueue();
   };
   utter.onerror = () => {
+    // F06: synthesis failure must still ack so server pending can commit.
+    sendJson({ type: "sentence_done", id: next.id });
+    const acked = [...store.get().ackedIds, next.id];
+    store.set({ ackedIds: acked });
     speakingIds.delete(next.id);
+    showNotice("Speech playback failed; continuing the turn.");
     drainSayQueue();
   };
   window.speechSynthesis.speak(utter);

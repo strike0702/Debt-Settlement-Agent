@@ -39,13 +39,12 @@ from app.agent.policy import (
     ask_pct_to_bp,
     decide,
     draft_agreement,
-    next_counter,
     opening_action,
     speak_schedule_action,
 )
 from app.agent.session import CallSession, PendingSpeech, Turn
 from app.config import Settings, get_settings
-from app.domain.belief import BeliefChange
+from app.domain.belief import BeliefChange, TermStatus
 from app.domain.facts import Fact
 from app.domain.scenario import CallScenario
 from app.llm.client import LLMUnavailable
@@ -151,6 +150,7 @@ def apply_effects(session: CallSession, effects: list[Effect]) -> None:
                 session.neg.last_confirm_key = raw_key
             else:
                 session.neg.last_confirm_key = (int(data["ask_bp"]),)
+            session.neg.confirmed_bp = int(data["ask_bp"])
         elif kind == "inc_confirm_reject":
             session.neg.confirm_rejects += 1
         elif kind == "note_assumed_asked":
@@ -391,9 +391,7 @@ class Orchestrator:
 
             self._turn_eval = None
             self._turn_agreed_bp = None
-            afford, confirm_facts, counter_total, rescue_ok, alt_fpd = (
-                await self._engine_context(verified)
-            )
+            afford, rescue_ok, alt_fpd = await self._engine_context(verified)
 
             t_pol = time.perf_counter()
             action = decide(
@@ -403,8 +401,6 @@ class Orchestrator:
                 afford,
                 settings=self.settings,
                 rescue_within_guardrail=rescue_ok,
-                confirm_facts=confirm_facts,
-                counter_offer_total_cents=counter_total,
                 alt_first_payment_date=alt_fpd,
             )
             action = await self._enrich_action(action)
@@ -682,6 +678,25 @@ class Orchestrator:
                 pass
 
         for term in verified.terms:
+            cur = session.belief.get(term.field)
+            # Post-proposal revision: accept new value without CONTRADICTED.
+            if (
+                session.neg.phase in (Phase.CONFIRM, Phase.NEGOTIATE)
+                and (
+                    verified.revises_terms
+                    or verified.stance in ("offer", "counter", "reject")
+                )
+                and term.verified
+                and not term.hedged
+                and cur.status == TermStatus.KNOWN
+                and cur.value != term.value
+            ):
+                ch = session.belief.accept_alternative(
+                    term.field, term.value, term.quote, turn
+                )
+                changes.append(ch)
+                self._audit("belief", "revise", ch.model_dump(mode="json"))
+                continue
             ch = session.belief.observe(
                 term.field,
                 term.value,
@@ -699,16 +714,30 @@ class Orchestrator:
         for tok in extract_tokens(text, ref=self._ref):
             self.session.creditor_numbers.add(tok.as_pair())
 
+    async def _eval_bp(self, bp: int) -> EvalSummary | None:
+        """Evaluate schedule at ``bp`` under current belief; None if needs info."""
+        session = self.session
+        try:
+            rules = build_rules(session.belief, session.scenario)
+        except NeedsInfo:
+            return None
+        fpd = session.belief.get("first_payment_date").value
+        assert isinstance(fpd, date)
+        summary = await asyncio.to_thread(
+            evaluate,
+            session.scenario,
+            rules,
+            bp,
+            fpd,
+            assumed=assumed_fields(session.belief),
+        )
+        session.absorb_private_facts(summary)
+        return summary
+
     async def _engine_context(
         self,
         verified: VerifiedAnalysis,
-    ) -> tuple[
-        Affordability | None,
-        dict[str, Fact] | None,
-        int | None,
-        bool,
-        date | None,
-    ]:
+    ) -> tuple[Affordability | None, bool, date | None]:
         session = self.session
         try:
             rules = build_rules(session.belief, session.scenario)
@@ -718,7 +747,7 @@ class Orchestrator:
                 "needs_info",
                 {"fields": session.belief.missing_required()},
             )
-            return None, None, None, False, None
+            return None, False, None
 
         fpd = session.belief.get("first_payment_date").value
         assert isinstance(fpd, date)
@@ -737,8 +766,6 @@ class Orchestrator:
         if verified.settlement_ask_pct is not None and verified.ask_verified:
             ask_bp = ask_pct_to_bp(verified.settlement_ask_pct)
 
-        confirm_facts: dict[str, Fact] | None = None
-        counter_total: int | None = None
         rescue_ok = False
         alt_fpd: date | None = None
 
@@ -780,91 +807,12 @@ class Orchestrator:
                     },
                 )
 
-        if ask_bp is not None and afford.max_bp is not None:
-            if ask_bp <= afford.max_bp and ask_bp in afford.feasible_bps:
-                summary = await asyncio.to_thread(
-                    evaluate,
-                    session.scenario,
-                    rules,
-                    ask_bp,
-                    fpd,
-                    assumed=assumed_fields(session.belief),
-                )
-                self._turn_eval = summary
-                self._turn_agreed_bp = ask_bp
-                session.absorb_private_facts(summary)
-                confirm_facts = dict(summary.facts.public())
-                confirm_facts["settlement_pct"] = Fact(
-                    id="settlement_pct",
-                    kind="pct",
-                    value=ask_bp,
-                    visibility="PUBLIC",
-                    source="engine",
-                )
-            elif verified.stance == "accept" and session.neg.counters_offered:
-                bp = session.neg.counters_offered[-1]
-                summary = await asyncio.to_thread(
-                    evaluate,
-                    session.scenario,
-                    rules,
-                    bp,
-                    fpd,
-                    assumed=assumed_fields(session.belief),
-                )
-                self._turn_eval = summary
-                self._turn_agreed_bp = bp
-                session.absorb_private_facts(summary)
-                confirm_facts = dict(summary.facts.public())
-                confirm_facts["settlement_pct"] = Fact(
-                    id="settlement_pct",
-                    kind="pct",
-                    value=bp,
-                    visibility="PUBLIC",
-                    source="engine",
-                )
-
-        if (
-            ask_bp is not None
-            and afford.max_bp is not None
-            and not (ask_bp <= afford.max_bp and ask_bp in afford.feasible_bps)
-            and verified.stance != "accept"
-            and not session.belief.missing_required()
-            and not session.belief.tentative_fields()
-            and not session.belief.contradicted_fields()
-        ):
-            c_prev = (
-                session.neg.counters_offered[-1] if session.neg.counters_offered else None
-            )
-            try:
-                c_next = next_counter(
-                    ask_bp=ask_bp,
-                    max_bp=afford.max_bp,
-                    feasible_bps=afford.feasible_bps,
-                    c_prev=c_prev,
-                    anchor_ratio=self.settings.anchor_ratio,
-                    concession_factor=self.settings.concession_factor,
-                )
-            except ValueError:
-                c_next = None
-            if c_next is not None and c_next < ask_bp:
-                summary = await asyncio.to_thread(
-                    evaluate,
-                    session.scenario,
-                    rules,
-                    c_next,
-                    fpd,
-                    assumed=assumed_fields(session.belief),
-                )
-                session.absorb_private_facts(summary)
-                counter_total = summary.offer_total_cents
-
-        return afford, confirm_facts, counter_total, rescue_ok, alt_fpd
+        return afford, rescue_ok, alt_fpd
 
     async def _enrich_action(self, action: Action) -> Action:
-        turn_eval = self._turn_eval
-        turn_bp = self._turn_agreed_bp
+        session = self.session
         if action.intent == Intent.SPEAK_SCHEDULE:
-            summary = turn_eval or self.session.last_eval
+            summary = self._turn_eval or session.last_eval
             if summary is None or summary.rows is None:
                 return action
             return speak_schedule_action(
@@ -874,21 +822,26 @@ class Orchestrator:
                 reason=action.reason,
             )
 
-        if action.intent == Intent.CONFIRM_SCHEDULE and turn_eval is not None:
+        if action.intent == Intent.CONFIRM_SCHEDULE:
+            bp_fact = action.facts.get("settlement_pct")
+            if bp_fact is None or not isinstance(bp_fact.value, int):
+                return action
+            bp = int(bp_fact.value)
+            summary = await self._eval_bp(bp)
+            if summary is None:
+                return action
+            self._turn_eval = summary
+            self._turn_agreed_bp = bp
             facts = dict(action.facts)
-            for fid, fact in turn_eval.facts.public().items():
-                facts.setdefault(fid, fact)
-            if turn_bp is not None:
-                facts.setdefault(
-                    "settlement_pct",
-                    Fact(
-                        id="settlement_pct",
-                        kind="pct",
-                        value=turn_bp,
-                        visibility="PUBLIC",
-                        source="engine",
-                    ),
-                )
+            for fid, fact in summary.facts.public().items():
+                facts[fid] = fact
+            facts["settlement_pct"] = Fact(
+                id="settlement_pct",
+                kind="pct",
+                value=bp,
+                visibility="PUBLIC",
+                source="engine",
+            )
             required = set(facts.keys()) & {
                 "offer_total",
                 "num_payments",
@@ -896,22 +849,35 @@ class Orchestrator:
             }
             return action.model_copy(update={"facts": facts, "required": required})
 
-        if action.intent == Intent.COUNTER and "offer_total" not in action.facts:
+        if action.intent == Intent.PROPOSE_WRAP or (
+            action.intent == Intent.CLOSE and action.reason == "thanks_accept"
+        ):
+            bp = session.neg.confirmed_bp
+            if bp is None:
+                return action
+            summary = await self._eval_bp(bp)
+            if summary is None:
+                return action
+            self._turn_eval = summary
+            self._turn_agreed_bp = bp
+            facts = dict(action.facts)
+            for fid, fact in summary.facts.public().items():
+                facts[fid] = fact
+            facts["settlement_pct"] = Fact(
+                id="settlement_pct",
+                kind="pct",
+                value=bp,
+                visibility="PUBLIC",
+                source="engine",
+            )
+            return action.model_copy(update={"facts": facts})
+
+        if action.intent == Intent.COUNTER:
             bp_fact = action.facts.get("counter_pct")
             if bp_fact is not None and isinstance(bp_fact.value, int):
-                try:
-                    rules = build_rules(self.session.belief, self.session.scenario)
-                    fpd = self.session.belief.get("first_payment_date").value
-                    assert isinstance(fpd, date)
-                    summary = await asyncio.to_thread(
-                        evaluate,
-                        self.session.scenario,
-                        rules,
-                        bp_fact.value,
-                        fpd,
-                        assumed=assumed_fields(self.session.belief),
-                    )
-                    self.session.absorb_private_facts(summary)
+                summary = await self._eval_bp(int(bp_fact.value))
+                if summary is not None:
+                    self._turn_eval = summary
                     facts = dict(action.facts)
                     facts["offer_total"] = summary.facts["offer_total"]
                     return action.model_copy(
@@ -920,8 +886,6 @@ class Orchestrator:
                             "required": {"counter_pct", "offer_total"},
                         }
                     )
-                except NeedsInfo:
-                    pass
         return action
 
     def _maybe_draft_agreement(self, action: Action) -> Agreement | None:

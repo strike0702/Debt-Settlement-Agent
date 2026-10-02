@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     anchor_ratio: float = 0.7
     concession_factor: float = 0.5
     max_counters: int = 4
+    # Confirm at ask when gap to next counter is this small or less (bp).
+    close_gap_bp: int = 200
 
     firm_name: str = "Synthetic Debt Relief"
     opening_disclosure: str = (

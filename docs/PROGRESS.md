@@ -550,3 +550,18 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - Cheap eval `eval_20261001_134429_s7` (seed=7, profile=eval, nlg=template, sim=template, gemini-3.1-flash-lite 100%): thresholds PASS. Metrics match prior remediation run (agreement_valid / deal_rate_given_zopa / no_deal_correct / escalation_correct / rule_extraction_accuracy = 1; leaks/unverified/guard_blocks = 0).
 - Latency (cloud cheap): nlu p50≈4815 ms / p95≈10079 ms (n=70). Local latency table in README from `eval_20261001_012534_s7` (Ollama NLU p95≈185 s; quality fail retained as limitation).
 - All phases 0–11 marked done.
+
+### Negotiation + revision fix (2026-10-02)
+
+- **Why:** Live `easy_deal` call `12ce9281` escalated on `contradiction_unresolved` after "3 payments instead", and never countered affordable asks (confirmed at 70% immediately). Root causes: (1) policy confirmed any affordable ask; (2) `BeliefState.observe` equality branch left CONTRADICTED stuck when clarify repeated the new value; (3) post-CONFIRM term changes went through contradiction/CLARIFY instead of revision.
+- Files: `app/domain/belief.py`, `app/domain/nlu_types.py`, `app/agent/{nlu,policy,orchestrator,nlg}.py`, `app/llm/prompts.py`, `app/config.py`, `sim/creditor.py`, unit/e2e tests.
+- Interfaces:
+  - `TurnAnalysis.firm: bool`
+  - `VerifiedAnalysis.firm` / `revises_terms` (orchestrator-only); `repair_firm`, `repair_revises_terms`
+  - `NegotiationState.confirmed_bp: int | None`; `Settings.close_gap_bp: int = 200`
+  - `policy._negotiate_affordable` / `_counter_action`; CONFIRM reasons: `ask_within_offer`, `rep_firm`, `counters_exhausted`, `no_lower_counter`, `ladder_stalled`, `gap_small`, `terms_revised`
+  - `Orchestrator._eval_bp(bp)`; schedule eval moved post-`decide` in `_enrich_action`
+- Deviation from PLAN: "confirm at ask when affordable" replaced by counter ladder; affordable path never NO_DEALs on counters.
+- Open: contradictory persona flipping during NEGOTIATE is treated as a revision (discovery-phase contradictions still CLARIFY).
+- Tests: 318 passed offline (+1 skipped live); `ruff check .` clean.
+- Cheap eval `eval_20261002_011825_s7` (seed=7, profile=eval, nlg=template, sim=template): thresholds PASS. `deal_rate_given_zopa` / `no_deal_correct` / `escalation_correct` / `agreement_valid` / `rule_extraction_accuracy` = 1; leaks/unverified/guard_blocks = 0. `surplus_captured` mean **0.689** (was 0.412); `turns_to_proposal` mean 3.667 (was 2.667).

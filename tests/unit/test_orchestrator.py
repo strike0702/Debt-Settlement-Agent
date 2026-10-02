@@ -204,8 +204,19 @@ async def test_full_scripted_call_reaches_propose_wrap(tmp_path: Path) -> None:
             stance="offer",
         ),
     )
+    assert u.action.intent == Intent.COUNTER
+    counter_bp = u.action.facts["counter_pct"].value
+    assert isinstance(counter_bp, int)
+    assert counter_bp < 4500
+    assert session.neg.counters_offered == [counter_bp]
+
+    u = await orch.on_creditor_text(
+        "We can accept that.",
+        oracle=TurnAnalysis(stance="accept"),
+    )
     assert u.action.intent == Intent.CONFIRM_SCHEDULE
     assert session.neg.phase == Phase.CONFIRM
+    assert session.neg.confirmed_bp == counter_bp
     assert session.last_eval is not None
     assert session.last_eval.feasible
 
@@ -217,6 +228,7 @@ async def test_full_scripted_call_reaches_propose_wrap(tmp_path: Path) -> None:
     assert session.neg.phase == Phase.WRAP
     assert session.agreement is not None
     assert session.agreement.status == "pending_client_approval"
+    assert session.agreement.bp == counter_bp
 
     u = await orch.on_creditor_text(
         "thanks",
@@ -293,7 +305,7 @@ async def test_barge_in_does_not_keep_agreed_bp(tmp_path: Path) -> None:
     )
     await orch.on_sentence_done([sid for sid, _ in u.sentences])
 
-    confirm = await orch.on_creditor_text(
+    counter = await orch.on_creditor_text(
         "We can do forty-five percent.",
         oracle=TurnAnalysis(
             settlement_ask_pct=45.0,
@@ -301,15 +313,25 @@ async def test_barge_in_does_not_keep_agreed_bp(tmp_path: Path) -> None:
             stance="offer",
         ),
     )
+    assert counter.action.intent == Intent.COUNTER
+    await orch.on_sentence_done([sid for sid, _ in counter.sentences])
+    counter_bp = counter.action.facts["counter_pct"].value
+    assert isinstance(counter_bp, int)
+
+    confirm = await orch.on_creditor_text(
+        "We can accept that.",
+        oracle=TurnAnalysis(stance="accept"),
+    )
     assert confirm.action.intent == Intent.CONFIRM_SCHEDULE
     assert session.agreed_bp is None  # not acked yet
     assert session.pending is not None
-    assert session.pending.pending_agreed_bp == 4500
+    assert session.pending.pending_agreed_bp == counter_bp
 
     await orch.on_barge_in([])
     assert session.pending is None
     assert session.agreed_bp is None
-    assert session.last_eval is None
+    # confirmed_bp only lands on CONFIRM ack — barge dropped it.
+    assert session.neg.confirmed_bp is None
     audit.close()
 
 
@@ -434,12 +456,108 @@ async def test_late_start_date_counters_terms_then_confirm(tmp_path: Path) -> No
             "yes that works",
             oracle=TurnAnalysis(stance="accept"),
         )
-        assert u_ok.action.intent == Intent.CONFIRM_SCHEDULE
+        # Affordable ask after alt date → negotiate (COUNTER) or confirm.
+        assert u_ok.action.intent in (Intent.COUNTER, Intent.CONFIRM_SCHEDULE)
     else:
-        # If policy went straight to confirm/no-deal, still assert we did not crash.
+        # If policy went straight to confirm/counter/no-deal, still assert we did not crash.
         assert u_rb.action.intent in (
             Intent.CONFIRM_SCHEDULE,
+            Intent.COUNTER,
             Intent.NO_DEAL_WRAP,
             Intent.ASK_SETTLEMENT,
             Intent.COUNTER_TERMS,
         )
+
+
+@pytest.mark.asyncio
+async def test_screenshot_transcript_revises_terms(tmp_path: Path) -> None:
+    """Audit-style: revise max_payments after CONFIRM must not CLARIFY/escalate."""
+    orch, session, audit = _orch(tmp_path)
+    await orch.start()
+
+    await orch.on_creditor_text(
+        "it's 8",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(field="max_payments", value=8, quote="8", hedged=False),
+            ],
+            stance="info",
+        ),
+    )
+    await orch.on_creditor_text(
+        "110",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(
+                    field="min_payment_cents", value=11000, quote="110", hedged=False
+                ),
+            ],
+            stance="info",
+        ),
+    )
+    await orch.on_creditor_text(
+        "even payment schedule",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(
+                    field="payment_structure", value="even", quote="even", hedged=False
+                ),
+            ],
+            stance="info",
+        ),
+    )
+    u = await orch.on_creditor_text(
+        "I am looking for 70%",
+        oracle=TurnAnalysis(
+            settlement_ask_pct=70.0,
+            ask_quote="70%",
+            stance="offer",
+        ),
+    )
+    assert u.action.intent == Intent.COUNTER
+    counter_bp = u.action.facts["counter_pct"].value
+    assert isinstance(counter_bp, int)
+    assert counter_bp < 7000
+
+    # Firm floor closes negotiation at the ask.
+    u = await orch.on_creditor_text(
+        "70 is our floor, we cannot go lower",
+        oracle=TurnAnalysis(
+            settlement_ask_pct=70.0,
+            ask_quote="70",
+            stance="reject",
+            firm=True,
+        ),
+    )
+    assert u.action.intent == Intent.CONFIRM_SCHEDULE
+    assert session.neg.confirmed_bp == 7000
+    assert u.action.facts["settlement_pct"].value == 7000
+
+    # Revision: 3 payments instead — must not CLARIFY.
+    u = await orch.on_creditor_text(
+        "can we do it in 3 payments instead",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(
+                    field="max_payments", value=3, quote="3 payments", hedged=False
+                ),
+            ],
+            stance="offer",
+        ),
+    )
+    assert u.action.intent != Intent.CLARIFY
+    assert u.action.intent != Intent.ESCALATE
+    assert session.belief.get("max_payments").status == TermStatus.KNOWN
+    assert session.belief.get("max_payments").value == 3
+    assert u.action.intent == Intent.CONFIRM_SCHEDULE
+    assert u.action.reason == "terms_revised"
+    assert u.action.facts["settlement_pct"].value == 7000
+    num = u.action.facts.get("num_payments")
+    assert num is not None and isinstance(num.value, int)
+    assert num.value <= 3
+
+    revise_events = [
+        e for e in audit.for_call(session.call_id) if e["type"] == "revise"
+    ]
+    assert revise_events
+    audit.close()

@@ -379,9 +379,20 @@ class CreditorPolicy:
         # Concede 5 percentage points toward the floor.
         self.current_ask_bp = max(floor, self.current_ask_bp - 500)
         spoken = render_pct(self.current_ask_bp)
-        text = (
-            f"That is too low. The best we can do right now is {spoken}."
-        )
+        if self.current_ask_bp <= floor:
+            text = (
+                f"That is too low. {spoken} is our floor; we cannot go lower."
+            )
+            return CreditorReply(
+                text=text,
+                analysis=TurnAnalysis(
+                    stance="reject",
+                    settlement_ask_pct=self.current_ask_bp / 100.0,
+                    ask_quote=spoken,
+                    firm=True,
+                ),
+            )
+        text = f"That is too low. We could come down to {spoken}."
         return CreditorReply(
             text=text,
             analysis=TurnAnalysis(

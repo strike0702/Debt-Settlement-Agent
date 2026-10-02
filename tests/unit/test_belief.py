@@ -202,6 +202,36 @@ def test_max_token_pays_syncs_from_max_payments() -> None:
     assert belief.get("max_token_pays").status == TermStatus.ASSUMED
 
 
+def test_contradicted_same_value_resolves_to_known() -> None:
+    """Clarify answer that repeats the new value must clear CONTRADICTED."""
+    belief = _fresh()
+    _observe(belief, "max_payments", 8, verified=True, hedged=False)
+    _observe(belief, "max_payments", 3, verified=True, hedged=False)
+    assert belief.get("max_payments").status == TermStatus.CONTRADICTED
+    _observe(belief, "max_payments", 3, verified=True, hedged=False)
+    assert belief.get("max_payments").status == TermStatus.KNOWN
+    assert belief.get("max_payments").value == 3
+
+
+def test_contradicted_old_value_resolves_to_known() -> None:
+    """Clarify answer that restates the original value → KNOWN old value."""
+    belief = _fresh()
+    _observe(belief, "max_payments", 8, verified=True, hedged=False)
+    _observe(belief, "max_payments", 3, verified=True, hedged=False)
+    _observe(belief, "max_payments", 8, verified=True, hedged=False)
+    assert belief.get("max_payments").status == TermStatus.KNOWN
+    assert belief.get("max_payments").value == 8
+
+
+def test_contradicted_hedged_resolves_to_tentative() -> None:
+    belief = _fresh()
+    _observe(belief, "max_payments", 8, verified=True, hedged=False)
+    _observe(belief, "max_payments", 3, verified=True, hedged=False)
+    _observe(belief, "max_payments", 3, verified=True, hedged=True)
+    assert belief.get("max_payments").status == TermStatus.TENTATIVE
+    assert belief.get("max_payments").value == 3
+
+
 def test_load_demo_scenario() -> None:
     scenario = load_scenario("fixtures/demo")
     assert scenario.id == "demo"

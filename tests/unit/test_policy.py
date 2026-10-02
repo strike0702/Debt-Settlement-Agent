@@ -55,6 +55,7 @@ _SETTINGS = Settings(
     max_counters=4,
     anchor_ratio=0.7,
     concession_factor=0.5,
+    close_gap_bp=200,
 )
 
 
@@ -288,33 +289,207 @@ def test_readback_uses_field_label_not_raw_name() -> None:
     assert "field" not in action.text_slots
 
 
-def test_rule9_confirm_when_ask_feasible() -> None:
+def test_rule9_affordable_ask_counters_at_anchor() -> None:
+    """Affordable ask no longer confirms immediately — counter at anchor."""
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
-    facts = {
-        "offer_total": Fact(
-            id="offer_total", kind="money", value=75_000, visibility="PUBLIC", source="engine"
-        ),
-        "num_payments": Fact(
-            id="num_payments", kind="count", value=6, visibility="PUBLIC", source="engine"
-        ),
-        "first_payment_date": Fact(
-            id="first_payment_date",
-            kind="date",
-            value=date(2026, 4, 15),
-            visibility="PUBLIC",
-            source="engine",
-        ),
-    }
     action = decide(
         b,
         _neg(turn_idx=3, ask_bp=4500, phase=Phase.NEGOTIATE),
         TurnAnalysis(stance="offer"),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
-        confirm_facts=facts,
+    )
+    assert action.intent == Intent.COUNTER
+    # anchor = largest <= 0.7 * min(4500, 6000) = 3150 → 3100
+    assert action.facts["counter_pct"].value == 3100
+
+
+def test_negotiate_ask_within_offer_confirms() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(
+            turn_idx=5,
+            ask_bp=4000,
+            counters_offered=[3100, 4200],
+            phase=Phase.NEGOTIATE,
+        ),
+        TurnAnalysis(stance="offer", settlement_ask_pct=40.0),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
     )
     assert action.intent == Intent.CONFIRM_SCHEDULE
-    assert action.next_phase == Phase.CONFIRM
+    assert action.reason == "ask_within_offer"
+    assert action.facts["settlement_pct"].value == 4000
+
+
+def test_negotiate_rep_firm_confirms_ask() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(
+            turn_idx=5,
+            ask_bp=4500,
+            counters_offered=[3100],
+            phase=Phase.NEGOTIATE,
+        ),
+        TurnAnalysis(stance="reject", firm=True),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.CONFIRM_SCHEDULE
+    assert action.reason == "rep_firm"
+    assert action.facts["settlement_pct"].value == 4500
+
+
+def test_negotiate_firm_first_turn_still_counters() -> None:
+    """Firm with no prior counter does not skip negotiation."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(turn_idx=3, ask_bp=4500, phase=Phase.NEGOTIATE),
+        TurnAnalysis(stance="reject", firm=True),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.COUNTER
+
+
+def test_negotiate_counters_exhausted_confirms() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(
+            turn_idx=8,
+            ask_bp=4500,
+            counters_offered=[3100, 3800, 4100, 4300],
+            phase=Phase.NEGOTIATE,
+        ),
+        TurnAnalysis(stance="reject"),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.CONFIRM_SCHEDULE
+    assert action.reason == "counters_exhausted"
+
+
+def test_negotiate_no_lower_counter_confirms() -> None:
+    """Ask is the only feasible point at/under max → confirm ask."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(turn_idx=3, ask_bp=4500, phase=Phase.NEGOTIATE),
+        TurnAnalysis(stance="offer"),
+        _afford(4500, [4500]),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.CONFIRM_SCHEDULE
+    assert action.reason == "no_lower_counter"
+
+
+def test_negotiate_gap_small_confirms() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    # c_prev=4300, ask=4500 → next step gap <= 200 → confirm
+    action = decide(
+        b,
+        _neg(
+            turn_idx=6,
+            ask_bp=4500,
+            counters_offered=[4300],
+            phase=Phase.NEGOTIATE,
+        ),
+        TurnAnalysis(stance="reject"),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.CONFIRM_SCHEDULE
+    assert action.reason == "gap_small"
+
+
+def test_negotiate_ladder_stalled_confirms() -> None:
+    """No legal bp between c_prev and ask → confirm ask."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(
+            turn_idx=6,
+            ask_bp=4500,
+            counters_offered=[4400],
+            phase=Phase.NEGOTIATE,
+        ),
+        TurnAnalysis(stance="reject"),
+        _afford(4500, [4400, 4500]),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.CONFIRM_SCHEDULE
+    assert action.reason in ("gap_small", "ladder_stalled", "no_lower_counter")
+
+
+def test_never_counter_below_confirmed_bp_on_restate() -> None:
+    """Restating the same ask in CONFIRM soft-retries, does not re-counter lower."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    key = _key(b, 4500)
+    action = decide(
+        b,
+        _neg(
+            turn_idx=6,
+            ask_bp=4500,
+            confirmed_bp=4500,
+            phase=Phase.CONFIRM,
+            last_confirm_key=key,
+            counters_offered=[3100],
+            confirm_rejects=0,
+        ),
+        TurnAnalysis(stance="other"),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.CONFIRM_SCHEDULE
+    assert action.facts["settlement_pct"].value == 4500
+
+
+def test_terms_revised_reconfirms_at_confirmed_bp() -> None:
+    b = _belief(max_payments=3, min_payment_cents=10000, payment_structure="even")
+    old = _belief(max_payments=8, min_payment_cents=10000, payment_structure="even")
+    old_key = _key(old, 4500)
+    action = decide(
+        b,
+        _neg(
+            turn_idx=7,
+            ask_bp=4500,
+            confirmed_bp=4500,
+            phase=Phase.CONFIRM,
+            last_confirm_key=old_key,
+        ),
+        TurnAnalysis(stance="offer"),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.CONFIRM_SCHEDULE
+    assert action.reason == "terms_revised"
+    assert action.facts["settlement_pct"].value == 4500
+
+
+def test_accept_with_changed_key_does_not_wrap() -> None:
+    b = _belief(max_payments=3, min_payment_cents=10000, payment_structure="even")
+    old = _belief(max_payments=8, min_payment_cents=10000, payment_structure="even")
+    old_key = _key(old, 4500)
+    action = decide(
+        b,
+        _neg(
+            turn_idx=7,
+            ask_bp=4500,
+            confirmed_bp=4500,
+            phase=Phase.CONFIRM,
+            last_confirm_key=old_key,
+        ),
+        TurnAnalysis(stance="accept"),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+    )
+    assert action.intent != Intent.PROPOSE_WRAP
+    assert action.intent == Intent.CONFIRM_SCHEDULE
+    assert action.reason == "terms_revised"
 
 
 def test_rule9_accept_last_counter_confirms() -> None:
@@ -341,13 +516,21 @@ def test_rule9_accept_last_counter_confirms() -> None:
         },
     )
     assert action.intent == Intent.CONFIRM_SCHEDULE
+    assert action.facts["settlement_pct"].value == 5000
 
 
 def test_rule10_confirm_phase_accept_propose_wrap() -> None:
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    key = _key(b, 4500)
     action = decide(
         b,
-        _neg(turn_idx=5, ask_bp=4500, phase=Phase.CONFIRM),
+        _neg(
+            turn_idx=5,
+            ask_bp=4500,
+            confirmed_bp=4500,
+            phase=Phase.CONFIRM,
+            last_confirm_key=key,
+        ),
         TurnAnalysis(stance="accept"),
         _afford(6000),
         settings=_SETTINGS,
@@ -445,6 +628,7 @@ def test_confirm_reject_asks_assumed_field_not_same_schedule() -> None:
         _neg(
             turn_idx=5,
             ask_bp=4500,
+            confirmed_bp=4500,
             phase=Phase.CONFIRM,
             last_confirm_key=key,
             confirm_rejects=0,
@@ -473,6 +657,7 @@ def test_confirm_assumed_asked_skips_to_next_or_no_deal() -> None:
         _neg(
             turn_idx=8,
             ask_bp=4500,
+            confirmed_bp=4500,
             phase=Phase.CONFIRM,
             last_confirm_key=key,
             confirm_rejects=1,
@@ -495,6 +680,7 @@ def test_confirm_identical_key_without_reject_stance_soft_retries() -> None:
         _neg(
             turn_idx=6,
             ask_bp=4500,
+            confirmed_bp=4500,
             phase=Phase.CONFIRM,
             last_confirm_key=key,
             confirm_rejects=1,
@@ -515,6 +701,7 @@ def test_confirm_unacked_after_max_soft_retries() -> None:
         _neg(
             turn_idx=8,
             ask_bp=4500,
+            confirmed_bp=4500,
             phase=Phase.CONFIRM,
             last_confirm_key=key,
             confirm_rejects=4,
@@ -546,6 +733,7 @@ def test_confirm_reject_no_assumed_no_deal_after_max() -> None:
         _neg(
             turn_idx=8,
             ask_bp=4500,
+            confirmed_bp=4500,
             phase=Phase.CONFIRM,
             last_confirm_key=key,
             confirm_rejects=4,
@@ -570,6 +758,7 @@ def test_max_segments_change_invalidates_confirm_key() -> None:
         _neg(
             turn_idx=6,
             ask_bp=4500,
+            confirmed_bp=4500,
             phase=Phase.CONFIRM,
             last_confirm_key=old_key,
             confirm_rejects=1,
@@ -588,6 +777,7 @@ def test_max_segments_change_invalidates_confirm_key() -> None:
         },
     )
     assert action.intent == Intent.CONFIRM_SCHEDULE
+    assert action.reason == "terms_revised"
     # Fresh confirm must not burn soft-retry counter.
     assert not any(e.kind == "inc_confirm_reject" for e in action.effects)
 
@@ -700,12 +890,18 @@ def test_post_wrap_any_followup_closes() -> None:
     assert action.intent != Intent.CONFIRM_SCHEDULE
 
 
-def test_confirm_records_key_on_first_offer() -> None:
+def test_confirm_records_key_on_firm_accept() -> None:
+    """After a counter, firm ask confirms and records fingerprint."""
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
     action = decide(
         b,
-        _neg(turn_idx=3, ask_bp=4500, phase=Phase.NEGOTIATE),
-        TurnAnalysis(stance="offer"),
+        _neg(
+            turn_idx=4,
+            ask_bp=4500,
+            counters_offered=[3100],
+            phase=Phase.NEGOTIATE,
+        ),
+        TurnAnalysis(stance="reject", firm=True),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
         confirm_facts={
@@ -722,6 +918,7 @@ def test_confirm_records_key_on_first_offer() -> None:
     rec = [e for e in action.effects if e.kind == "record_confirm"]
     assert len(rec) == 1
     assert rec[0].data["ask_bp"] == 4500
+    assert tuple(rec[0].data["key"]) == _key(b, 4500)
 
 
 def test_identical_counter_without_reject_stance_counts_toward_cap() -> None:

@@ -61,6 +61,9 @@ class VerifiedAnalysis(BaseModel):
     hostility: float = 0.0
     wants_to_end: bool = False
     asks_for_schedule: bool = False
+    firm: bool = False
+    # Orchestrator-only: post-proposal term change cue (not passed to policy).
+    revises_terms: bool = False
 
     def to_turn_analysis(self) -> TurnAnalysis:
         """Drop verified flags for ``policy.decide``."""
@@ -83,6 +86,7 @@ class VerifiedAnalysis(BaseModel):
             hostility=self.hostility,
             wants_to_end=self.wants_to_end,
             asks_for_schedule=self.asks_for_schedule,
+            firm=self.firm,
         )
 
 
@@ -343,6 +347,8 @@ _REJECT_STANCE_RE = re.compile(
     r"|doesn't work"
     r"|cannot go below"
     r"|can't go below"
+    r"|cannot go lower"
+    r"|can't go lower"
     r"|minimum is actually"
     r"|those payment amounts are off"
     r")\b",
@@ -379,6 +385,37 @@ _ASKS_FOR_SCHEDULE_RE = re.compile(
     r")",
     re.IGNORECASE,
 )
+_FIRM_RE = re.compile(
+    r"(?:"
+    r"\bfinal (?:offer|number)\b"
+    r"|\blowest we can (?:go|do)\b"
+    r"|\b(?:cannot|can ?not|can't|won't) go (?:any )?lower\b"
+    r"|\bour floor\b"
+    r"|\bis the floor\b"
+    r"|\bbottom line\b"
+    r"|\bnon-?negotiable\b"
+    r"|\btake it or leave it\b"
+    r"|\bbest (?:we|i) can do\b"
+    r")",
+    re.IGNORECASE,
+)
+# Post-proposal revision cues. Do NOT include "actually" / "make that" —
+# the contradictory persona uses those for false flips during discovery.
+_REVISION_RE = re.compile(
+    r"(?:"
+    r"\binstead\b"
+    r"|\brather\b"
+    r"|\bhow about\b"
+    r"|\bwhat about\b"
+    r"|\bcan we do\b"
+    r"|\bcould we do\b"
+    r"|\bcan (?:you|we) make it\b"
+    r"|\blet'?s do\b"
+    r"|\bchange (?:it|that|this) to\b"
+    r"|\bswitch to\b"
+    r")",
+    re.IGNORECASE,
+)
 
 
 def repair_stance(stance: str, utterance: str) -> str:
@@ -402,6 +439,18 @@ def repair_asks_for_schedule(asks: bool, utterance: str) -> bool:
     if asks:
         return True
     return _ASKS_FOR_SCHEDULE_RE.search(utterance) is not None
+
+
+def repair_firm(firm: bool, utterance: str) -> bool:
+    """True when the rep says the number is final / floor / cannot go lower."""
+    if firm:
+        return True
+    return _FIRM_RE.search(utterance) is not None
+
+
+def repair_revises_terms(utterance: str) -> bool:
+    """True when the utterance cues a post-proposal term change."""
+    return _REVISION_RE.search(utterance) is not None
 
 
 def post_verify(
@@ -516,6 +565,8 @@ def post_verify(
         asks_for_schedule=repair_asks_for_schedule(
             analysis.asks_for_schedule, utterance
         ),
+        firm=repair_firm(analysis.firm, utterance),
+        revises_terms=repair_revises_terms(utterance),
     )
 
 
@@ -616,6 +667,7 @@ async def analyze(
                 "asks_for_schedule": repair_asks_for_schedule(
                     oracle.asks_for_schedule, utterance
                 ),
+                "firm": repair_firm(oracle.firm, utterance),
             }
         )
     return verified

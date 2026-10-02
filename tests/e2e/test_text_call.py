@@ -151,6 +151,10 @@ async def test_text_call_persona_stratum(
         built = build_rules(session.belief, scenario.call)
         assert built.max_payments == scenario.true_rules.max_payments
         assert built.min_payment_cents == scenario.true_rules.min_payment_cents
+        # Flexible deals: agent must have negotiated below the opening ask.
+        if persona == "flexible":
+            assert session.agreed_bp is not None
+            assert session.agreed_bp < scenario.opening_ask_bp
         return
 
     if stratum == "rescue":

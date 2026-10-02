@@ -225,6 +225,39 @@ def test_post_verify_repairs_asks_for_schedule() -> None:
     assert out.asks_for_schedule is True
 
 
+def test_post_verify_revises_terms_instead() -> None:
+    analysis = TurnAnalysis(stance="offer")
+    out = post_verify(
+        analysis, "can we do it in 3 payments instead", ref=_REF
+    )
+    assert out.revises_terms is True
+
+
+def test_post_verify_firm_floor() -> None:
+    analysis = TurnAnalysis(stance="info")
+    out = post_verify(
+        analysis, "65 is our floor, we cannot go lower", ref=_REF
+    )
+    assert out.firm is True
+    assert out.stance == "reject"
+
+
+def test_post_verify_not_firm_could_come_down() -> None:
+    analysis = TurnAnalysis(stance="reject", firm=False)
+    out = post_verify(
+        analysis, "We could come down to 65", ref=_REF
+    )
+    assert out.firm is False
+
+
+def test_post_verify_actually_not_revises_terms() -> None:
+    analysis = TurnAnalysis(stance="info")
+    out = post_verify(
+        analysis, "Actually, make that a maximum of ten payments", ref=_REF
+    )
+    assert out.revises_terms is False
+
+
 def test_six_not_verified_inside_sixteen() -> None:
     analysis = TurnAnalysis(
         terms=[

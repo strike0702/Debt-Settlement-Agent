@@ -67,7 +67,7 @@ TEMPLATES: dict[Intent, str] = {
     ),
     Intent.CONFIRM_SCHEDULE: (
         "We can do {num_payments} payments totaling {offer_total}, "
-        "starting {first_payment_date}."
+        "starting {first_payment_date}. Would that work?"
     ),
     Intent.SPEAK_SCHEDULE: (
         "Here is the payment-by-payment schedule."

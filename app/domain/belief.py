@@ -127,6 +127,24 @@ class BeliefState:
                 quote=quote,
             )
 
+        # CONTRADICTED before equality: a clarify answer that repeats the new
+        # value must resolve (KNOWN/TENTATIVE), not stay stuck CONTRADICTED.
+        if old_status == TermStatus.CONTRADICTED:
+            # Rep answering our clarifying question.
+            term.value = value
+            term.status = TermStatus.KNOWN if strong else TermStatus.TENTATIVE
+            term.evidence.append(evidence)
+            self._maybe_sync_max_token_pays(field, value)
+            return BeliefChange(
+                field=field,
+                old_value=old_value,
+                new_value=term.value,
+                old_status=old_status,
+                new_status=term.status,
+                turn=turn,
+                quote=quote,
+            )
+
         if _values_equal(old_value, value):
             if old_status == TermStatus.TENTATIVE and strong:
                 term.status = TermStatus.KNOWN
@@ -173,22 +191,6 @@ class BeliefState:
                 quote=quote,
             )
 
-        if old_status == TermStatus.CONTRADICTED:
-            # Rep answering our clarifying question.
-            term.value = value
-            term.status = TermStatus.KNOWN if strong else TermStatus.TENTATIVE
-            term.evidence.append(evidence)
-            self._maybe_sync_max_token_pays(field, value)
-            return BeliefChange(
-                field=field,
-                old_value=old_value,
-                new_value=term.value,
-                old_status=old_status,
-                new_status=term.status,
-                turn=turn,
-                quote=quote,
-            )
-
         raise RuntimeError(f"unhandled status {old_status} for field {field}")
 
     def accept_alternative(
@@ -198,10 +200,11 @@ class BeliefState:
         quote: str,
         turn: int,
     ) -> BeliefChange:
-        """Agent-mediated term change (e.g. earlier start date) → KNOWN.
+        """Agent-mediated or post-proposal term change → KNOWN.
 
         Unlike ``observe``, this does not mark a prior KNOWN value as
-        CONTRADICTED — the rep accepted our proposed alternative.
+        CONTRADICTED — used when the rep accepts our alternative (e.g. earlier
+        start date) or revises a term after we already proposed a schedule.
         """
         if field not in self.terms or field not in FIELDS_BY_NAME:
             raise KeyError(field)

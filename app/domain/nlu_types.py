@@ -40,3 +40,5 @@ class TurnAnalysis(BaseModel):
     hostility: float = 0.0
     wants_to_end: bool = False
     asks_for_schedule: bool = False
+    # True when the rep says the number is final / their floor / cannot go lower.
+    firm: bool = False

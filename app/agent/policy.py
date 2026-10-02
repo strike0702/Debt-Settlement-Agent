@@ -57,6 +57,8 @@ class NegotiationState:
     turn_idx: int = 0
     # Last CONFIRM fingerprint (ask + rules that shape the schedule).
     last_confirm_key: tuple[Any, ...] | None = None
+    # Bp we last proposed in CONFIRM_SCHEDULE (may differ from ask_bp after counters).
+    confirmed_bp: int | None = None
     confirm_rejects: int = 0
     assumed_asked: set[str] = field(default_factory=set)
     clarify_counts: dict[str, int] = field(default_factory=dict)
@@ -246,18 +248,20 @@ def _confirm_action(
     confirm_facts: dict[str, Fact] | None,
     effects: list[Effect],
     required: set[str],
+    reason: str | None = None,
 ) -> Action:
-    """Emit CONFIRM_SCHEDULE and record its fingerprint on ack."""
+    """Emit CONFIRM_SCHEDULE and record its fingerprint on ack.
+
+    Always overwrites ``settlement_pct`` with ``ask_bp`` so stale confirm_facts
+    cannot speak a different percentage than the agreement.
+    """
     facts = dict(confirm_facts or {})
-    facts.setdefault(
-        "settlement_pct",
-        Fact(
-            id="settlement_pct",
-            kind="pct",
-            value=ask_bp,
-            visibility="PUBLIC",
-            source="engine",
-        ),
+    facts["settlement_pct"] = Fact(
+        id="settlement_pct",
+        kind="pct",
+        value=ask_bp,
+        visibility="PUBLIC",
+        source="engine",
     )
     key = _confirm_key(belief, ask_bp)
     return Action(
@@ -276,7 +280,163 @@ def _confirm_action(
             Effect(kind="set_phase", data={"phase": Phase.CONFIRM.value}),
         ],
         next_phase=Phase.CONFIRM,
-        reason=f"bp={ask_bp}",
+        reason=reason if reason is not None else f"bp={ask_bp}",
+    )
+
+
+def _counter_action(
+    c_next: int,
+    effects: list[Effect],
+    *,
+    counter_offer_total_cents: int | None = None,
+) -> Action:
+    """Emit COUNTER at ``c_next`` with optional spoken offer total."""
+    facts: dict[str, Fact] = {
+        "counter_pct": Fact(
+            id="counter_pct",
+            kind="pct",
+            value=c_next,
+            visibility="PUBLIC",
+            source="engine",
+        ),
+    }
+    if counter_offer_total_cents is not None:
+        facts["offer_total"] = Fact(
+            id="offer_total",
+            kind="money",
+            value=counter_offer_total_cents,
+            visibility="PUBLIC",
+            source="engine",
+        )
+    return Action(
+        intent=Intent.COUNTER,
+        facts=facts,
+        required={"counter_pct"},
+        effects=effects
+        + [
+            Effect(kind="offer_counter", data={"bp": c_next}),
+            Effect(kind="set_phase", data={"phase": Phase.NEGOTIATE.value}),
+        ],
+        next_phase=Phase.NEGOTIATE,
+        reason=f"bp={c_next}",
+    )
+
+
+def _negotiate_affordable(
+    *,
+    ask_bp: int,
+    belief: BeliefState,
+    neg: NegotiationState,
+    analysis: TurnAnalysis,
+    afford: Affordability,
+    effects: list[Effect],
+    confirm_facts: dict[str, Fact] | None,
+    counter_offer_total_cents: int | None,
+    cfg: Settings,
+) -> Action:
+    """Counter ladder when the ask is affordable; never NO_DEAL from this path.
+
+    Order: ask within prior offer → firm → counters exhausted → no lower
+    counter → ladder stall jump → close-gap confirm → COUNTER.
+    """
+    legal = [
+        bp
+        for bp in afford.feasible_bps
+        if bp <= afford.max_bp and bp < ask_bp
+    ]
+    prior = list(neg.counters_offered)
+    if neg.confirmed_bp is not None:
+        prior.append(neg.confirmed_bp)
+    our_best = max(prior) if prior else None
+
+    # 1. Ask at or below something we already offered → confirm ask.
+    if our_best is not None and ask_bp <= our_best:
+        return _confirm_action(
+            ask_bp=ask_bp,
+            belief=belief,
+            confirm_facts=confirm_facts,
+            effects=effects,
+            required=set((confirm_facts or {}).keys())
+            & {"offer_total", "num_payments", "first_payment_date"},
+            reason="ask_within_offer",
+        )
+
+    # 2. Rep firm after we have countered → accept their ask.
+    if analysis.firm and neg.counters_offered:
+        return _confirm_action(
+            ask_bp=ask_bp,
+            belief=belief,
+            confirm_facts=confirm_facts,
+            effects=effects,
+            required=set((confirm_facts or {}).keys())
+            & {"offer_total", "num_payments", "first_payment_date"},
+            reason="rep_firm",
+        )
+
+    # 3. Exhausted counter budget → confirm ask (affordable path never NO_DEAL).
+    if len(neg.counters_offered) >= cfg.max_counters:
+        return _confirm_action(
+            ask_bp=ask_bp,
+            belief=belief,
+            confirm_facts=confirm_facts,
+            effects=effects,
+            required=set((confirm_facts or {}).keys())
+            & {"offer_total", "num_payments", "first_payment_date"},
+            reason="counters_exhausted",
+        )
+
+    c_prev = neg.counters_offered[-1] if neg.counters_offered else None
+    c_next = next_counter(
+        ask_bp=ask_bp,
+        max_bp=afford.max_bp,  # type: ignore[arg-type]
+        feasible_bps=afford.feasible_bps,
+        c_prev=c_prev,
+        anchor_ratio=cfg.anchor_ratio,
+        concession_factor=cfg.concession_factor,
+    )
+
+    # 4. No legal counter below ask → confirm ask.
+    if c_next is None:
+        return _confirm_action(
+            ask_bp=ask_bp,
+            belief=belief,
+            confirm_facts=confirm_facts,
+            effects=effects,
+            required=set((confirm_facts or {}).keys())
+            & {"offer_total", "num_payments", "first_payment_date"},
+            reason="no_lower_counter",
+        )
+
+    # 5. Ladder stalled: jump toward ask once, else confirm.
+    if c_prev is not None and c_next <= c_prev:
+        jump = [bp for bp in legal if bp > c_prev]
+        if not jump:
+            return _confirm_action(
+                ask_bp=ask_bp,
+                belief=belief,
+                confirm_facts=confirm_facts,
+                effects=effects,
+                required=set((confirm_facts or {}).keys())
+                & {"offer_total", "num_payments", "first_payment_date"},
+                reason="ladder_stalled",
+            )
+        c_next = max(jump)
+
+    # 6. Close enough to ask → confirm ask.
+    if ask_bp - c_next <= cfg.close_gap_bp:
+        return _confirm_action(
+            ask_bp=ask_bp,
+            belief=belief,
+            confirm_facts=confirm_facts,
+            effects=effects,
+            required=set((confirm_facts or {}).keys())
+            & {"offer_total", "num_payments", "first_payment_date"},
+            reason="gap_small",
+        )
+
+    # 7. Counter.
+    return _counter_action(
+        c_next, effects, counter_offer_total_cents=counter_offer_total_cents
     )
 
 
@@ -615,15 +775,22 @@ def decide(
         )
 
     # 10: In CONFIRM, accept stance only → wrap (not readback_response).
+    # Key must still match confirmed_bp; otherwise fall through for re-confirm.
     if neg.phase == Phase.CONFIRM and analysis.stance == "accept":
-        facts = dict(confirm_facts or {})
-        return Action(
-            intent=Intent.PROPOSE_WRAP,
-            facts=facts,
-            effects=effects + [Effect(kind="set_phase", data={"phase": Phase.WRAP.value})],
-            next_phase=Phase.WRAP,
-            reason="confirmed",
-        )
+        if (
+            neg.confirmed_bp is not None
+            and neg.last_confirm_key is not None
+            and _confirm_key(belief, neg.confirmed_bp) == neg.last_confirm_key
+        ):
+            facts = dict(confirm_facts or {})
+            return Action(
+                intent=Intent.PROPOSE_WRAP,
+                facts=facts,
+                effects=effects
+                + [Effect(kind="set_phase", data={"phase": Phase.WRAP.value})],
+                next_phase=Phase.WRAP,
+                reason="confirmed",
+            )
 
     # 7. Missing required field
     missing = belief.missing_required()
@@ -709,22 +876,58 @@ def decide(
             ),
         )
 
-    # Rep accepted our last counter → confirm that bp.
+    # Rep accepted our last counter → confirm that bp (if still legal under rules).
     if analysis.stance == "accept" and neg.counters_offered:
         bp = neg.counters_offered[-1]
-        return _confirm_action(
-            ask_bp=bp,
-            belief=belief,
-            confirm_facts=confirm_facts,
-            effects=effects,
-            required=set((confirm_facts or {}).keys())
-            & {"offer_total", "num_payments", "first_payment_date"},
+        if bp <= afford.max_bp and bp in afford.feasible_bps:
+            return _confirm_action(
+                ask_bp=bp,
+                belief=belief,
+                confirm_facts=confirm_facts,
+                effects=effects,
+                required=set((confirm_facts or {}).keys())
+                & {"offer_total", "num_payments", "first_payment_date"},
+            )
+
+    # Ask is affordable and on the feasible grid.
+    if ask_bp <= afford.max_bp and ask_bp in afford.feasible_bps:
+        confirmed = neg.confirmed_bp
+        key_at_confirmed = (
+            _confirm_key(belief, confirmed) if confirmed is not None else None
+        )
+        new_ask_this_turn = analysis.settlement_ask_pct is not None
+        lower_ask = (
+            confirmed is not None
+            and ask_bp < confirmed
+            and new_ask_this_turn
         )
 
-    # Ask is affordable and on the feasible grid → confirm schedule at ask.
-    if ask_bp <= afford.max_bp and ask_bp in afford.feasible_bps:
-        key = _confirm_key(belief, ask_bp)
-        if neg.last_confirm_key == key:
+        # Terms revised after a proposal: re-confirm at confirmed_bp.
+        if (
+            confirmed is not None
+            and not new_ask_this_turn
+            and neg.last_confirm_key is not None
+            and key_at_confirmed != neg.last_confirm_key
+            and confirmed <= afford.max_bp
+            and confirmed in afford.feasible_bps
+        ):
+            return _confirm_action(
+                ask_bp=confirmed,
+                belief=belief,
+                confirm_facts=confirm_facts,
+                effects=effects,
+                required=set((confirm_facts or {}).keys())
+                & {"offer_total", "num_payments", "first_payment_date"},
+                reason="terms_revised",
+            )
+
+        # Same schedule already on the table (identical key, no lower ask).
+        if (
+            confirmed is not None
+            and neg.last_confirm_key is not None
+            and key_at_confirmed == neg.last_confirm_key
+            and not lower_ask
+        ):
             if analysis.stance == "reject":
                 return _stall_after_confirm(
                     belief=belief,
@@ -741,18 +944,24 @@ def decide(
                     spoken_reason="We still have not confirmed a schedule.",
                 )
             return _confirm_action(
-                ask_bp=ask_bp,
+                ask_bp=confirmed,
                 belief=belief,
                 confirm_facts=confirm_facts,
                 effects=soft,
                 required=set(),
             )
-        return _confirm_action(
+
+        # Negotiate: counter toward ask, or confirm under firm / gap / exhausted.
+        return _negotiate_affordable(
             ask_bp=ask_bp,
             belief=belief,
-            confirm_facts=confirm_facts,
+            neg=neg,
+            analysis=analysis,
+            afford=afford,
             effects=effects,
-            required=set(),
+            confirm_facts=confirm_facts,
+            counter_offer_total_cents=counter_offer_total_cents,
+            cfg=cfg,
         )
 
     # Counter ladder. Stop after MAX_COUNTERS rejections at the highest
@@ -818,35 +1027,8 @@ def decide(
             spoken_reason="We cannot propose a settlement under these terms.",
         )
 
-    facts = {
-        "counter_pct": Fact(
-            id="counter_pct",
-            kind="pct",
-            value=c_next,
-            visibility="PUBLIC",
-            source="engine",
-        ),
-    }
-    if counter_offer_total_cents is not None:
-        facts["offer_total"] = Fact(
-            id="offer_total",
-            kind="money",
-            value=counter_offer_total_cents,
-            visibility="PUBLIC",
-            source="engine",
-        )
-
-    return Action(
-        intent=Intent.COUNTER,
-        facts=facts,
-        required={"counter_pct"},
-        effects=effects
-        + [
-            Effect(kind="offer_counter", data={"bp": c_next}),
-            Effect(kind="set_phase", data={"phase": Phase.NEGOTIATE.value}),
-        ],
-        next_phase=Phase.NEGOTIATE,
-        reason=f"bp={c_next}",
+    return _counter_action(
+        c_next, effects, counter_offer_total_cents=counter_offer_total_cents
     )
 
 

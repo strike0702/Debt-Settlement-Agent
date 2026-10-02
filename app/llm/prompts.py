@@ -46,8 +46,8 @@ _INTENT_INSTRUCTION: dict[Intent, str] = {
         "{alt_first_payment_date} instead."
     ),
     Intent.CONFIRM_SCHEDULE: (
-        "Confirm a schedule with {num_payments} payments totaling {offer_total}, "
-        "starting {first_payment_date}."
+        "Propose (do not confirm) a schedule with {num_payments} payments "
+        "totaling {offer_total}, starting {first_payment_date}, and ask if it works."
     ),
     Intent.SPEAK_SCHEDULE: (
         "Read the payment schedule date by date using only the given placeholders."
@@ -73,7 +73,8 @@ Reply with JSON only in this exact shape (no other top-level keys):
   "demands_commitment":false,
   "hostility":0.0,
   "wants_to_end":false,
-  "asks_for_schedule":false
+  "asks_for_schedule":false,
+  "firm":false
 }
 Field names for terms[].field (only these):
 max_payments, min_payment_cents, payment_structure, first_payment_date,
@@ -93,6 +94,7 @@ Use accept when the rep agrees to a schedule or counter ("agreed", "that works")
 Use reject when they refuse terms or say a schedule does not work.
 Set wants_to_end=true for thanks, thank you, goodbye, bye, that's all, or similar closings.
 Set asks_for_schedule=true when the rep asks for payment dates or amounts per payment.
+firm=true only when the rep says the number is final, their floor, or they cannot go lower.
 Omit unknown fields; use [] / null when nothing extracted.
 """
 

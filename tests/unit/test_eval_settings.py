@@ -53,3 +53,11 @@ def test_belief_metrics_scores_all_true_rules_known_only() -> None:
     assert belief.get("first_payment_date").status == TermStatus.ASSUMED
     # ASSUMED matching truth must not count toward rule_fields_correct.
     assert metrics["rule_fields_correct"] == 0
+
+
+def test_cli_default_nlg_template() -> None:
+    """F29: bare eval CLI defaults to template NLG (cheap smoke)."""
+    from pathlib import Path
+    import eval.run_eval as run_eval
+    src = Path(run_eval.__file__).read_text(encoding="utf-8")
+    assert 'default="template"' in src

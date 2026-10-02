@@ -499,7 +499,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed", type=int, default=7)
     p.add_argument("--resume", type=str, default=None, metavar="RUN_ID")
     p.add_argument("--profile", type=str, default="eval")
-    p.add_argument("--nlg", choices=("llm", "template"), default="llm")
+    p.add_argument(
+        "--nlg",
+        choices=("llm", "template"),
+        default="template",
+        help="NLG mode (default template = cheap smoke; use llm for live phrasing)",
+    )
     p.add_argument(
         "--sim-phrasing",
         choices=("llm", "template"),

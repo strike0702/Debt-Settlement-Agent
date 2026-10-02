@@ -132,28 +132,17 @@ ruff check .
 
 ## Eval results
 
-Latest cheap run (`eval_20261001_134429_s7`): seed **7**, profile `eval`, `nlg=template`, `sim=template`, model share **gemini/gemini-3.1-flash-lite = 100%**. Thresholds: **PASS**.
+Run locally and keep artifacts under `eval/results/` (gitignored). Example command:
 
-| metric | value |
-|---|---|
-| n_completed / n_scenarios | 12/12 |
-| skipped_quota | 0 |
-| agreement_valid | 1 |
-| deal_rate_given_zopa | 1 |
-| no_deal_correct | 1 |
-| escalation_correct | 1 |
-| unverified_figures_spoken | 0 |
-| sensitive_leaks | 0 |
-| guard_blocks | 0 |
-| rule_extraction_accuracy | 1 |
-| false_known_rate | 0.000 |
-| readback_count (mean) | 0.000 |
-| turns_to_proposal (mean) | 2.667 |
-| surplus_captured (mean) | 0.412 |
+```bash
+.venv/bin/python -m eval.run_eval --scenarios 12 --seed 7 --nlg template --sim-phrasing template
+```
+
+Gates live in `eval/thresholds.yaml` (including extraction accuracy, false-known rate, and guard blocks). Cite metrics from a summary JSON you produced — do not treat README tables as checked-in proof.
 
 ## Latency
 
-### Cloud (`eval` profile, template NLG — same run as above)
+### Cloud (`eval` profile, template NLG — illustrative local run)
 
 | stage | p50 | p95 | n |
 |---|---|---|---|
@@ -164,7 +153,7 @@ Latest cheap run (`eval_20261001_134429_s7`): seed **7**, profile `eval`, `nlg=t
 
 Policy and template NLG are sub-millisecond. Wall time is almost all NLU.
 
-### Local (`local` profile, Ollama `qwen3.5:9b` NLU — `eval_20261001_012534_s7`)
+### Local (`local` profile, Ollama `qwen3.5:9b` NLU — illustrative)
 
 | stage | p50 | p95 | n |
 |---|---|---|---|
@@ -182,14 +171,14 @@ Two layers: `template_guard` (no digits / number words / unknown placeholders be
 | source | result |
 |---|---|
 | Adversarial regression (`tests/unit/guard_adversarial.jsonl`) | 51 cases — 38 expect block, 13 expect pass |
-| Cheap eval above | `guard_blocks=0`, `unverified_figures_spoken=0`, `sensitive_leaks=0` |
+| Cheap template eval | Expect `guard_blocks=0`, `unverified_figures_spoken=0`, `sensitive_leaks=0` when NLG is template |
 
-Zero blocks on the cheap run is expected: template NLG never invents figures. The corpus is there for the failure modes.
+Zero blocks on a template-NLG run is expected: template NLG never invents figures. The corpus is there for the failure modes.
 
 ## Limitations
 
 - **Structured candidate set, not exhaustive search.** The vendored engine scores a fixed family of schedule shapes. Feasibility is non-monotonic across settlement %. Counters snap to the 100-point grid (`1%…100%`). If a legal schedule exists outside that candidate set, the engine can still say infeasible.
-- **Oracle NLU in e2e.** Offline `tests/e2e` and the simulator feed a ground-truth `TurnAnalysis` when `NLU_MODE=oracle`. That proves policy and guards without paying for live extraction. It does not prove live NLU quality — the eval table above does.
+- **Oracle NLU in e2e.** Offline `tests/e2e` and the simulator feed a ground-truth `TurnAnalysis` when `NLU_MODE=oracle`. That proves policy and guards without paying for live extraction. It does not prove live NLU quality — run `eval.run_eval` for that.
 - **The sim sees Actions, not only words.** CreditorPolicy gets the agent's intent and PUBLIC facts plus the spoken text. A human rep only hears words. So e2e negotiation can be cleaner than a real call when phrasing is ambiguous.
 - **Browser TTS echo.** `speechSynthesis` plus an open mic will re-hear the agent. Headphones help; barge-in helps. It is still a demo hack, not a telephony stack.
 - **Free-tier model drift.** Provider free slugs disappear (OpenRouter did). Rate limits flip overnight. Mistral Experiment keys often 429 until workspace setup. Pin models in `providers.yaml` and expect to edit them.

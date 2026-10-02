@@ -208,6 +208,7 @@ def _build_settings(
         concession_factor=src.concession_factor,
         firm_name=src.firm_name,
         opening_disclosure=src.opening_disclosure,
+        close_gap_bp=src.close_gap_bp,
     )
 
 

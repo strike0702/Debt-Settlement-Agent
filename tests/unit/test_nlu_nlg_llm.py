@@ -290,6 +290,44 @@ def test_250_not_verified_inside_1250() -> None:
     assert out.terms == []
 
 
+def test_post_verify_inflexible_not_flexible() -> None:
+    """F01: value 'flexible' must not verify against quote 'inflexible'."""
+    analysis = TurnAnalysis(
+        terms=[
+            ExtractedTerm(
+                field="payment_structure",
+                value="flexible",
+                quote="inflexible",
+                hedged=False,
+            )
+        ],
+        stance="info",
+    )
+    out = post_verify(analysis, "we are inflexible on structure", ref=_REF)
+    assert len(out.terms) == 1
+    assert out.terms[0].value == "flexible"
+    assert out.terms[0].verified is False
+
+
+def test_post_verify_evening_quote_not_even() -> None:
+    """F01: value 'even' must not verify against quote 'evening'."""
+    analysis = TurnAnalysis(
+        terms=[
+            ExtractedTerm(
+                field="payment_structure",
+                value="even",
+                quote="evening",
+                hedged=False,
+            )
+        ],
+        stance="info",
+    )
+    out = post_verify(analysis, "call me this evening", ref=_REF)
+    assert len(out.terms) == 1
+    assert out.terms[0].value == "even"
+    assert out.terms[0].verified is False
+
+
 def test_ask_without_quote_cleared() -> None:
     analysis = TurnAnalysis(
         settlement_ask_pct=95.0,

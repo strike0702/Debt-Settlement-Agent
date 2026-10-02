@@ -273,7 +273,8 @@ def _value_matches_tokens(field: str, value: Any, quote: str, *, ref: date) -> b
             return False
         return any(t.kind in ("count", "ordinal") and t.value == value for t in tokens)
     if spec.kind == "enum":
-        return normalize_for_quote(str(value)) in normalize_for_quote(quote)
+        # Word-boundary only — "flexible" must not match inside "inflexible".
+        return quote_in_utterance(str(value), quote)
     if spec.kind == "date":
         if isinstance(value, str):
             try:
@@ -498,9 +499,8 @@ def post_verify(
             )
             continue
         if spec is not None and spec.kind == "enum":
-            matched = normalize_for_quote(str(value)) in normalize_for_quote(
-                term.quote
-            )
+            # Word-boundary only — "even" must not match quote "evening".
+            matched = quote_in_utterance(str(value), term.quote)
         elif spec is not None and spec.kind == "tiers":
             matched = False
         else:

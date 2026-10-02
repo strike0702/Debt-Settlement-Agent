@@ -367,7 +367,8 @@ async def call_socket(websocket: WebSocket, call_id: str) -> None:
                         scenario = load_scenario(path, rebase_to=_date.today())
                         rebased_as_of = scenario.client.as_of_date.isoformat()
                     else:
-                        # Legacy path for unit tests (fixtures/demo, no rebase).
+                        # Legacy ``start.scenario`` path (fixtures/demo) for unit tests.
+                        # UI sends ``scenario_id`` only (F26).
                         scenario_path = data.get("scenario") or "fixtures/demo"
                         path = Path(scenario_path)
                         if not path.is_dir():
@@ -470,7 +471,16 @@ async def call_socket(websocket: WebSocket, call_id: str) -> None:
                 )
             elif event == "sentence_done":
                 sid = data.get("id")
-                ids = [str(sid)] if sid is not None else []
+                if sid is None or str(sid).strip() == "":
+                    await _send(
+                        websocket,
+                        {
+                            "type": "error",
+                            "message": "sentence_done requires id",
+                        },
+                    )
+                    continue
+                ids = [str(sid)]
                 agreement = await orch.on_sentence_done(ids)
                 await _send(websocket, _phase_payload(orch.session))
                 if orch.session.last_eval is not None:

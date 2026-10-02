@@ -219,6 +219,47 @@ def test_post_verify_repairs_wants_to_end_thanks() -> None:
     assert out.wants_to_end is True
 
 
+def test_post_verify_clears_hostility_without_cues() -> None:
+    """F03: LLM hostility alone must not escalate — need utterance cues."""
+    analysis = TurnAnalysis(stance="other", hostility=0.95)
+    out = post_verify(analysis, "six payments max please", ref=_REF)
+    assert out.hostility == 0.0
+
+
+def test_post_verify_keeps_hostility_with_cues() -> None:
+    analysis = TurnAnalysis(stance="other", hostility=0.95)
+    out = post_verify(analysis, "this is a waste of time you idiot", ref=_REF)
+    assert out.hostility == 0.95
+
+
+def test_post_verify_clears_private_flag_without_cues() -> None:
+    """F03: false asks_client_private_info must not refuse/escalate."""
+    analysis = TurnAnalysis(stance="other", asks_client_private_info=True)
+    out = post_verify(analysis, "even payments only", ref=_REF)
+    assert out.asks_client_private_info is False
+
+
+def test_post_verify_keeps_private_flag_with_cues() -> None:
+    analysis = TurnAnalysis(stance="other", asks_client_private_info=True)
+    out = post_verify(
+        analysis, "What is the client's bank balance?", ref=_REF
+    )
+    assert out.asks_client_private_info is True
+
+
+def test_post_verify_clears_commitment_flag_without_cues() -> None:
+    analysis = TurnAnalysis(stance="other", demands_commitment=True)
+    out = post_verify(analysis, "can you send the schedule?", ref=_REF)
+    assert out.demands_commitment is False
+
+
+def test_post_verify_keeps_commitment_flag_with_cues() -> None:
+    analysis = TurnAnalysis(stance="other", demands_commitment=True)
+    out = post_verify(
+        analysis, "I need a firm commitment that this deal is locked in.", ref=_REF
+    )
+    assert out.demands_commitment is True
+
 def test_post_verify_repairs_asks_for_schedule() -> None:
     analysis = TurnAnalysis(stance="question", asks_for_schedule=False)
     out = post_verify(analysis, "I mean on a per date basis", ref=_REF)

@@ -421,6 +421,44 @@ _REVISION_RE = re.compile(
 )
 
 
+# LLM side-channel flags — keep only when the utterance corroborates.
+_HOSTILITY_RE = re.compile(
+    r"(?:"
+    r"\b(?:idiot|stupid|incompetent|moron|dumb)\b"
+    r"|\bshut up\b"
+    r"|\bwaste of (?:my )?time\b"
+    r"|\blawsuit\b"
+    r"|\bsue (?:you|us)\b"
+    r"|\bhostile\b"
+    r"|\babusive\b"
+    r"|\bf+u+c?k+(?:ing)?\b"
+    r"|\basshole\b"
+    r")",
+    re.IGNORECASE,
+)
+_PRIVATE_INFO_RE = re.compile(
+    r"(?:"
+    r"\b(?:client'?s?|their|his|her)\s+"
+    r"(?:bank\s+)?(?:balance|income|draft|ssn|salary|paycheck|routing|account)\b"
+    r"|\b(?:bank balance|monthly income|social security|ssn|routing number)\b"
+    r"|\bdraft amount\b"
+    r"|\bwhat (?:is|are) (?:the )?client\b"
+    r")",
+    re.IGNORECASE,
+)
+_DEMANDS_COMMITMENT_RE = re.compile(
+    r"(?:"
+    r"\bcommit(?:ment)?\b"
+    r"|\block(?:ed)? in\b"
+    r"|\bguarantee (?:this|that|it|the)\b"
+    r"|\bfirm (?:yes|commitment|deal)\b"
+    r"|\bsign (?:today|now)\b"
+    r"|\bbinding (?:today|now|agreement)\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
 def repair_stance(stance: str, utterance: str) -> str:
     """Override LLM stance when the utterance clearly accepts or rejects."""
     if _REJECT_STANCE_RE.search(utterance):
@@ -454,6 +492,28 @@ def repair_firm(firm: bool, utterance: str) -> bool:
 def repair_revises_terms(utterance: str) -> bool:
     """True when the utterance cues a post-proposal term change."""
     return _REVISION_RE.search(utterance) is not None
+
+
+def repair_hostility(hostility: float, utterance: str) -> float:
+    """Keep LLM hostility only when the utterance has hostile cues; else 0."""
+    h = max(0.0, min(1.0, float(hostility)))
+    if h <= 0.0:
+        return 0.0
+    if _HOSTILITY_RE.search(utterance) is None:
+        return 0.0
+    return h
+
+
+def repair_asks_client_private_info(claimed: bool, utterance: str) -> bool:
+    """True only when the utterance asks for client financials / private data."""
+    del claimed  # LLM claim alone is not trusted.
+    return _PRIVATE_INFO_RE.search(utterance) is not None
+
+
+def repair_demands_commitment(claimed: bool, utterance: str) -> bool:
+    """True only when the utterance demands a firm lock-in / commitment."""
+    del claimed
+    return _DEMANDS_COMMITMENT_RE.search(utterance) is not None
 
 
 def post_verify(
@@ -560,9 +620,13 @@ def post_verify(
         ask_verified=ask_verified,
         stance=stance,  # type: ignore[arg-type]
         readback_response=readback,
-        asks_client_private_info=analysis.asks_client_private_info,
-        demands_commitment=analysis.demands_commitment,
-        hostility=analysis.hostility,
+        asks_client_private_info=repair_asks_client_private_info(
+            analysis.asks_client_private_info, utterance
+        ),
+        demands_commitment=repair_demands_commitment(
+            analysis.demands_commitment, utterance
+        ),
+        hostility=repair_hostility(analysis.hostility, utterance),
         wants_to_end=repair_wants_to_end(analysis.wants_to_end, utterance),
         asks_for_schedule=repair_asks_for_schedule(
             analysis.asks_for_schedule, utterance

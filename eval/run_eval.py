@@ -219,9 +219,10 @@ async def run_one_scenario(
     llm: Any,
     sim_phrasing: PhrasingMode,
     audit_dir: Path,
-    max_turns: int = 30,
+    max_turns: int | None = None,
 ) -> dict[str, Any]:
     """Run one full text call; return a serializable result dict."""
+    turns = settings.max_turns if max_turns is None else max_turns
     audit_path = audit_dir / f"audit_{scenario.id}.db"
     audit = AuditLog(audit_path)
     session = CallSession(scenario=scenario.call)
@@ -254,7 +255,7 @@ async def run_one_scenario(
             timings.append(dict(utt.timings))
         action = utt.action
 
-        for _ in range(max_turns):
+        for _ in range(turns):
             if action.intent in (
                 Intent.PROPOSE_WRAP,
                 Intent.NO_DEAL_WRAP,

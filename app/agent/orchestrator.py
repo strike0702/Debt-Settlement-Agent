@@ -1,10 +1,13 @@
 """Turn pipeline: NLU → belief → affordability → policy → NLG → speech ack.
 
 ``Orchestrator`` owns the per-session ``asyncio.Lock``, cancel-and-merge when
-new creditor text arrives during NLU, and defers ``Action.effects`` until
-``on_sentence_done``. Barge-in drops pending effects but keeps belief updates.
-Does not own policy rules or LLM prompts — those live in ``policy`` / ``nlu`` /
-``nlg``.
+new creditor text arrives during NLU, and defers most ``Action.effects`` until
+``on_sentence_done``. COUNTER / CONFIRM / COUNTER_TERMS bookkeeping
+(``offer_counter``, ``record_confirm``, ``set_phase``, …) applies eagerly on
+emit so a fast typed or voice accept wraps instead of re-confirming mid-TTS.
+Barge-in still keeps those kinds when any sentence was heard; other pending
+effects are dropped. Does not own policy rules or LLM prompts — those live in
+``policy`` / ``nlu`` / ``nlg``.
 """
 
 from __future__ import annotations
@@ -13,6 +16,7 @@ import asyncio
 import time
 import uuid
 from dataclasses import dataclass, field
+from dataclasses import replace as dc_replace
 from datetime import date
 from typing import Any
 
@@ -27,7 +31,7 @@ from app.adapter.engine_adapter import (
 )
 from app.adapter.validator import validate
 from app.agent.nlg import SAFE_FALLBACK, render_action, speak_action
-from app.agent.nlu import VerifiedAnalysis, analyze
+from app.agent.nlu import VerifiedAnalysis, analyze, try_resolve_cents_clarify
 from app.agent.nlu_types import TurnAnalysis
 from app.agent.numbers import extract_tokens
 from app.agent.policy import (
@@ -37,10 +41,14 @@ from app.agent.policy import (
     Intent,
     Phase,
     ask_pct_to_bp,
+    cents_ambiguity_clarify_action,
     decide,
     draft_agreement,
+    field_already_countered,
     opening_action,
+    parse_pending_terms_value,
     speak_schedule_action,
+    terms_counter_key,
 )
 from app.agent.session import CallSession, PendingSpeech, Turn
 from app.config import Settings, get_settings
@@ -108,17 +116,164 @@ def find_alt_first_payment_date(
         if aff.max_bp is None:
             continue
         if ask_bp is not None and ask_bp not in aff.feasible_bps:
-            # Still usable if *something* is feasible; prefer ask-feasible first.
             ask_ok = False
         else:
             ask_ok = True
         dist = abs((cand - requested).days)
-        # Prefer ask-feasible; among equals, closest to requested.
         rank_dist = dist if ask_ok else dist + 100_000
         if best is None or best_dist is None or rank_dist < best_dist:
             best = cand
             best_dist = rank_dist
     return best
+
+
+def find_alt_min_payment_cents(
+    scenario: CallScenario,
+    rules: CreditorRules,
+    *,
+    ask_bp: int | None,
+    fpd: date,
+    current: int,
+) -> int | None:
+    """Search lower min-payment floors that unlock a non-empty affordability curve.
+
+    Steps down by $10 (1000¢) toward the field floor (1000¢). Prefers the
+    highest (least invasive) candidate that works; among those, prefer
+    ask-feasible.
+    """
+    floor = 1000
+    if current <= floor:
+        return None
+
+    best: int | None = None
+    best_rank: tuple[int, int] | None = None  # (ask_penalty, distance_from_current)
+    # Closest-to-current first so we prefer small concessions.
+    cand = current - 1000
+    scanned = 0
+    while cand >= floor and scanned < 20:
+        trial = dc_replace(rules, min_payment_cents=cand)
+        aff = affordability(scenario, trial, fpd)
+        if aff.max_bp is not None:
+            ask_ok = ask_bp is None or ask_bp in aff.feasible_bps
+            rank = (0 if ask_ok else 1, current - cand)
+            if best is None or best_rank is None or rank < best_rank:
+                best = cand
+                best_rank = rank
+                # Earliest (highest) ask-ok candidate wins; can stop early.
+                if ask_ok:
+                    return best
+        cand -= 1000
+        scanned += 1
+    return best
+
+
+def find_alt_max_payments(
+    scenario: CallScenario,
+    rules: CreditorRules,
+    *,
+    ask_bp: int | None,
+    fpd: date,
+    current: int,
+) -> int | None:
+    """Search higher max-payment counts that unlock a non-empty affordability curve.
+
+    Steps up by 1 toward 60. Prefers the lowest (least invasive) count that
+    works; among those, prefer ask-feasible.
+    """
+    ceiling = 60
+    if current >= ceiling:
+        return None
+
+    best: int | None = None
+    best_rank: tuple[int, int] | None = None
+    cand = current + 1
+    scanned = 0
+    while cand <= ceiling and scanned < 20:
+        # Keep "no token limit" semantics when token pays tracked max_payments.
+        new_token = (
+            cand if rules.max_token_pays == rules.max_payments else rules.max_token_pays
+        )
+        trial = dc_replace(
+            rules,
+            max_payments=cand,
+            max_terms=cand,
+            max_token_pays=new_token,
+        )
+        aff = affordability(scenario, trial, fpd)
+        if aff.max_bp is not None:
+            ask_ok = ask_bp is None or ask_bp in aff.feasible_bps
+            rank = (0 if ask_ok else 1, cand - current)
+            if best is None or best_rank is None or rank < best_rank:
+                best = cand
+                best_rank = rank
+                if ask_ok:
+                    return best
+        cand += 1
+        scanned += 1
+    return best
+
+
+def find_next_term_alt(
+    scenario: CallScenario,
+    rules: CreditorRules,
+    *,
+    ask_bp: int | None,
+    fpd: date,
+    max_payments: int,
+    min_payment_cents: int,
+    terms_countered: list[str],
+) -> tuple[str, Any] | None:
+    """Next staggered non-price alt: FPD → lower min → higher max_payments."""
+    if not field_already_countered(terms_countered, "first_payment_date"):
+        already_iso = {
+            k.split(":", 1)[1]
+            for k in terms_countered
+            if k.startswith("first_payment_date:")
+        }
+        alt = find_alt_first_payment_date(
+            scenario,
+            rules,
+            ask_bp=ask_bp,
+            requested=fpd,
+            already=already_iso,
+        )
+        if alt is not None and alt != fpd:
+            return ("first_payment_date", alt)
+
+    if not field_already_countered(terms_countered, "min_payment_cents"):
+        alt_min = find_alt_min_payment_cents(
+            scenario,
+            rules,
+            ask_bp=ask_bp,
+            fpd=fpd,
+            current=min_payment_cents,
+        )
+        if alt_min is not None and alt_min < min_payment_cents:
+            return ("min_payment_cents", alt_min)
+
+    if not field_already_countered(terms_countered, "max_payments"):
+        alt_max = find_alt_max_payments(
+            scenario,
+            rules,
+            ask_bp=ask_bp,
+            fpd=fpd,
+            current=max_payments,
+        )
+        if alt_max is not None and alt_max > max_payments:
+            return ("max_payments", alt_max)
+
+    return None
+
+
+_BOOKKEEPING_EFFECT_KINDS: frozenset[str] = frozenset(
+    {
+        "offer_counter",
+        "record_confirm",
+        "record_ask",
+        "set_phase",
+        "note_terms_countered",
+    }
+)
 
 
 def apply_effects(session: CallSession, effects: list[Effect]) -> None:
@@ -127,7 +282,10 @@ def apply_effects(session: CallSession, effects: list[Effect]) -> None:
         kind = effect.kind
         data = effect.data
         if kind == "offer_counter":
-            session.neg.counters_offered.append(int(data["bp"]))
+            bp = int(data["bp"])
+            # Idempotent: eager emit + barge-in/ack must not double-count.
+            if not session.neg.counters_offered or session.neg.counters_offered[-1] != bp:
+                session.neg.counters_offered.append(bp)
         elif kind == "set_pending_readback":
             session.neg.pending_readback = str(data["field"])
         elif kind == "clear_pending_readback":
@@ -159,12 +317,23 @@ def apply_effects(session: CallSession, effects: list[Effect]) -> None:
             fname = str(data["field"])
             session.neg.clarify_counts[fname] = session.neg.clarify_counts.get(fname, 0) + 1
         elif kind == "note_terms_countered":
-            iso = str(data["value"])
-            if iso not in session.neg.terms_countered:
-                session.neg.terms_countered.append(iso)
-            session.neg.pending_terms_alt = iso
+            key = str(data.get("key") or terms_counter_key(str(data["field"]), data["value"]))
+            if key not in session.neg.terms_countered:
+                session.neg.terms_countered.append(key)
+            session.neg.pending_terms_alt = {
+                "field": str(data["field"]),
+                "value": data["value"],
+            }
         elif kind == "clear_pending_terms_alt":
             session.neg.pending_terms_alt = None
+        elif kind == "clear_wrap":
+            session.agreement = None
+            session.agreed_bp = None
+            session.last_eval = None
+        elif kind == "set_pending_cents_clarify":
+            session.neg.pending_cents_clarify = dict(data)
+        elif kind == "clear_pending_cents_clarify":
+            session.neg.pending_cents_clarify = None
         elif kind == "set_phase":
             session.neg.phase = Phase(str(data["phase"]))
 
@@ -377,9 +546,72 @@ class Orchestrator:
                     "stance": verified.stance,
                     "terms": [t.model_dump(mode="json") for t in verified.terms],
                     "settlement_ask_pct": verified.settlement_ask_pct,
+                    "cents_ambiguity_bare": verified.cents_ambiguity_bare,
                     "nlu_ms": timings["nlu_ms"],
                 },
             )
+
+            # Resolve / emit dollars-vs-cents clarify for bare money replies.
+            if session.neg.pending_cents_clarify is not None:
+                resolved = try_resolve_cents_clarify(
+                    working, session.neg.pending_cents_clarify, ref=self._ref
+                )
+                if resolved is not None and resolved.terms:
+                    verified = resolved
+                    session.neg.pending_cents_clarify = None
+                    self._audit(
+                        "nlu",
+                        "cents_clarify_resolved",
+                        {
+                            "field": resolved.terms[0].field,
+                            "value": resolved.terms[0].value,
+                        },
+                    )
+                elif resolved is not None and not resolved.terms:
+                    # Chose an out-of-range reading — drop pending and re-ask.
+                    session.neg.pending_cents_clarify = None
+                    self._audit("nlu", "cents_clarify_out_of_range", {})
+                else:
+                    pending = session.neg.pending_cents_clarify
+                    action = cents_ambiguity_clarify_action(
+                        field=str(pending["field"]),
+                        bare=int(pending["bare"]),
+                    )
+                    t_nlg = time.perf_counter()
+                    sentences = await self._speak(action, last_rep_line=working)
+                    timings["policy_ms"] = 0.0
+                    timings["nlg_ms"] = _ms_since(t_nlg)
+                    timings["server_total_ms"] = _ms_since(t_server)
+                    return await self._emit(action, sentences, timings, [])
+
+            if (
+                verified.cents_ambiguity_bare is not None
+                and verified.cents_ambiguity_field is not None
+            ):
+                action = cents_ambiguity_clarify_action(
+                    field=verified.cents_ambiguity_field,
+                    bare=verified.cents_ambiguity_bare,
+                )
+                # Eager: so a fast reply still resolves even if TTS ack is late.
+                for eff in action.effects:
+                    if eff.kind == "set_pending_cents_clarify":
+                        apply_effects(session, [eff])
+                t_nlg = time.perf_counter()
+                sentences = await self._speak(action, last_rep_line=working)
+                timings["policy_ms"] = 0.0
+                timings["nlg_ms"] = _ms_since(t_nlg)
+                timings["server_total_ms"] = _ms_since(t_server)
+                self._audit(
+                    "policy",
+                    "decide",
+                    {
+                        "intent": action.intent.value,
+                        "reason": action.reason,
+                        "next_phase": action.next_phase.value,
+                        "policy_ms": 0.0,
+                    },
+                )
+                return await self._emit(action, sentences, timings, [])
 
             belief_changes = self._apply_belief(verified, turn)
             session.last_belief_changes = belief_changes
@@ -389,11 +621,13 @@ class Orchestrator:
                 session.neg.pending_terms_alt is not None
                 and verified.stance == "accept"
             ):
-                alt = date.fromisoformat(session.neg.pending_terms_alt)
+                pending = session.neg.pending_terms_alt
+                alt_field = str(pending["field"])
+                alt_value = parse_pending_terms_value(pending)
                 ch = session.belief.accept_alternative(
-                    "first_payment_date",
-                    alt,
-                    "accepted alternate start",
+                    alt_field,
+                    alt_value,
+                    f"accepted alternate {alt_field}",
                     turn,
                 )
                 belief_changes.append(ch)
@@ -402,7 +636,7 @@ class Orchestrator:
 
             self._turn_eval = None
             self._turn_agreed_bp = None
-            afford, rescue_ok, alt_fpd = await self._engine_context(verified)
+            afford, rescue_ok, term_alt = await self._engine_context(verified)
 
             t_pol = time.perf_counter()
             action = decide(
@@ -412,7 +646,7 @@ class Orchestrator:
                 afford,
                 settings=self.settings,
                 rescue_within_guardrail=rescue_ok,
-                alt_first_payment_date=alt_fpd,
+                term_alt=term_alt,
             )
             action = await self._enrich_action(action)
             timings["policy_ms"] = _ms_since(t_pol)
@@ -529,7 +763,12 @@ class Orchestrator:
         return agreement
 
     async def on_barge_in(self, spoken_ids: list[str] | set[str]) -> None:
-        """Keep spoken ids; drop unspoken sentences and pending effects."""
+        """Keep spoken ids; drop unspoken sentences.
+
+        If the rep heard any sentence of a COUNTER / CONFIRM, still commit the
+        offer/confirm bookkeeping effects so a follow-up accept does not latch
+        onto a stale prior counter.
+        """
         async with self._lock:
             pending = self.session.pending
             spoken = set(spoken_ids)
@@ -541,15 +780,49 @@ class Orchestrator:
                 if turn.sentence_id is not None and turn.sentence_id in pending.sentence_ids:
                     turn.spoken = turn.sentence_id in spoken
 
+            heard = bool(spoken.intersection(pending.sentence_ids))
+            kept: list[Effect] = []
+            if heard and pending.action.intent in (
+                Intent.COUNTER,
+                Intent.CONFIRM_SCHEDULE,
+                Intent.COUNTER_TERMS,
+            ):
+                keep_kinds = {
+                    "offer_counter",
+                    "record_confirm",
+                    "record_ask",
+                    "set_phase",
+                    "note_terms_countered",
+                }
+                kept = [e for e in pending.action.effects if e.kind in keep_kinds]
+                if kept:
+                    apply_effects(self.session, kept)
+                    if (
+                        pending.action.intent == Intent.CONFIRM_SCHEDULE
+                        and pending.pending_eval is not None
+                    ):
+                        self.session.last_eval = pending.pending_eval
+                    if (
+                        pending.action.intent == Intent.CONFIRM_SCHEDULE
+                        and pending.pending_agreed_bp is not None
+                    ):
+                        self.session.agreed_bp = pending.pending_agreed_bp
+
             dropped = pending.action
             self.session.pending = None
+            kept_ids = {id(e) for e in kept}
             self._audit(
                 "orchestrator",
                 "barge_in",
                 {
                     "spoken_ids": list(spoken),
                     "dropped_intent": dropped.intent.value,
-                    "dropped_effects": [e.model_dump() for e in dropped.effects],
+                    "kept_effects": [e.model_dump() for e in kept],
+                    "dropped_effects": [
+                        e.model_dump()
+                        for e in dropped.effects
+                        if id(e) not in kept_ids
+                    ],
                 },
             )
 
@@ -614,14 +887,28 @@ class Orchestrator:
             field = action.reason
             if field:
                 self.session.neg.pending_readback = field
-        # Eager COUNTER_TERMS pending so accept can apply before ack.
-        if action.intent == Intent.COUNTER_TERMS:
-            fact = action.facts.get("alt_first_payment_date")
-            if fact is not None and isinstance(fact.value, date):
-                iso = fact.value.isoformat()
-                self.session.neg.pending_terms_alt = iso
-                if iso not in self.session.neg.terms_countered:
-                    self.session.neg.terms_countered.append(iso)
+        # Eager COUNTER / CONFIRM / COUNTER_TERMS bookkeeping so a fast typed/voice
+        # accept wraps (or accepts a term alt) while TTS is still playing.
+        if action.intent in (
+            Intent.COUNTER,
+            Intent.CONFIRM_SCHEDULE,
+            Intent.COUNTER_TERMS,
+        ):
+            kept = [
+                e for e in action.effects if e.kind in _BOOKKEEPING_EFFECT_KINDS
+            ]
+            if kept:
+                apply_effects(self.session, kept)
+            if (
+                action.intent == Intent.CONFIRM_SCHEDULE
+                and self._turn_eval is not None
+            ):
+                self.session.last_eval = self._turn_eval
+            if (
+                action.intent == Intent.CONFIRM_SCHEDULE
+                and self._turn_agreed_bp is not None
+            ):
+                self.session.agreed_bp = self._turn_agreed_bp
         result = Utterance(
             sentences=pairs,
             action=action,
@@ -761,7 +1048,7 @@ class Orchestrator:
     async def _engine_context(
         self,
         verified: VerifiedAnalysis,
-    ) -> tuple[Affordability | None, bool, date | None]:
+    ) -> tuple[Affordability | None, bool, tuple[str, Any] | None]:
         session = self.session
         try:
             rules = build_rules(session.belief, session.scenario)
@@ -791,7 +1078,7 @@ class Orchestrator:
             ask_bp = ask_pct_to_bp(verified.settlement_ask_pct)
 
         rescue_ok = False
-        alt_fpd: date | None = None
+        term_alt: tuple[str, Any] | None = None
 
         if ask_bp is not None and afford.max_bp is None:
             summary = await asyncio.to_thread(
@@ -813,25 +1100,33 @@ class Orchestrator:
                 "rescue_check",
                 {"ask_bp": ask_bp, "within_guardrail": rescue_ok},
             )
-            if not rescue_ok:
-                alt_fpd = await asyncio.to_thread(
-                    find_alt_first_payment_date,
-                    session.scenario,
-                    rules,
-                    ask_bp=ask_bp,
-                    requested=fpd,
-                    already=set(session.neg.terms_countered),
-                )
-                self._audit(
-                    "engine",
-                    "alt_first_payment_date",
-                    {
-                        "requested": fpd.isoformat(),
-                        "alt": alt_fpd.isoformat() if alt_fpd else None,
-                    },
-                )
+            max_payments = int(session.belief.get("max_payments").value)
+            min_payment_cents = int(session.belief.get("min_payment_cents").value)
+            term_alt = await asyncio.to_thread(
+                find_next_term_alt,
+                session.scenario,
+                rules,
+                ask_bp=ask_bp,
+                fpd=fpd,
+                max_payments=max_payments,
+                min_payment_cents=min_payment_cents,
+                terms_countered=list(session.neg.terms_countered),
+            )
+            self._audit(
+                "engine",
+                "term_alt",
+                {
+                    "requested_fpd": fpd.isoformat(),
+                    "alt_field": term_alt[0] if term_alt else None,
+                    "alt_value": (
+                        term_alt[1].isoformat()
+                        if term_alt and isinstance(term_alt[1], date)
+                        else (term_alt[1] if term_alt else None)
+                    ),
+                },
+            )
 
-        return afford, rescue_ok, alt_fpd
+        return afford, rescue_ok, term_alt
 
     async def _enrich_action(self, action: Action) -> Action:
         session = self.session
@@ -870,6 +1165,7 @@ class Orchestrator:
                 "offer_total",
                 "num_payments",
                 "first_payment_date",
+                "settlement_pct",
             }
             return action.model_copy(update={"facts": facts, "required": required})
 
@@ -899,9 +1195,12 @@ class Orchestrator:
         if action.intent == Intent.COUNTER:
             bp_fact = action.facts.get("counter_pct")
             if bp_fact is not None and isinstance(bp_fact.value, int):
-                summary = await self._eval_bp(int(bp_fact.value))
+                bp = int(bp_fact.value)
+                summary = await self._eval_bp(bp)
                 if summary is not None:
                     self._turn_eval = summary
+                    # So the schedule panel % matches the spoken counter.
+                    self._turn_agreed_bp = bp
                     facts = dict(action.facts)
                     facts["offer_total"] = summary.facts["offer_total"]
                     return action.model_copy(

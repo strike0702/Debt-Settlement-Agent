@@ -6,7 +6,7 @@ from datetime import date
 
 from app.adapter.engine_adapter import Affordability
 from app.agent import policy as policy_mod
-from app.agent.nlu_types import TurnAnalysis
+from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
 from app.agent.policy import (
     Intent,
     NegotiationState,
@@ -250,21 +250,114 @@ def test_rule9_infeasible_with_alt_date_counters_terms() -> None:
         _afford(None),
         settings=_SETTINGS,
         rescue_within_guardrail=False,
-        alt_first_payment_date=alt,
+        term_alt=("first_payment_date", alt),
     )
     assert action.intent == Intent.COUNTER_TERMS
     assert action.facts["alt_first_payment_date"].value == alt
-    # Already offered → no deal.
+    # Already offered this field → no deal when no further alt.
     action2 = decide(
         b,
-        _neg(turn_idx=4, ask_bp=4500, terms_countered=[alt.isoformat()]),
+        _neg(
+            turn_idx=4,
+            ask_bp=4500,
+            terms_countered=[f"first_payment_date:{alt.isoformat()}"],
+        ),
         TurnAnalysis(stance="reject"),
         _afford(None),
         settings=_SETTINGS,
         rescue_within_guardrail=False,
-        alt_first_payment_date=alt,
+        term_alt=("first_payment_date", alt),
     )
     assert action2.intent == Intent.NO_DEAL_WRAP
+
+
+def test_rule9_alt_date_beats_rescue_escalate() -> None:
+    """A workable start date wins over rescue-within-guardrail escalate."""
+    b = _belief(max_payments=5, min_payment_cents=10000, payment_structure="balloon")
+    alt = date(2027, 1, 31)
+    action = decide(
+        b,
+        _neg(turn_idx=5, ask_bp=8000, phase=Phase.NEGOTIATE),
+        TurnAnalysis(stance="offer", settlement_ask_pct=80.0),
+        _afford(None),
+        settings=_SETTINGS,
+        rescue_within_guardrail=True,
+        term_alt=("first_payment_date", alt),
+    )
+    assert action.intent == Intent.COUNTER_TERMS
+    assert action.reason == "alt_first_payment_date"
+    assert action.facts["alt_first_payment_date"].value == alt
+
+
+def test_rule9_alt_min_payment_beats_rescue() -> None:
+    b = _belief(max_payments=5, min_payment_cents=10000, payment_structure="balloon")
+    action = decide(
+        b,
+        _neg(
+            turn_idx=6,
+            ask_bp=8000,
+            phase=Phase.NEGOTIATE,
+            terms_countered=["first_payment_date:2027-01-31"],
+        ),
+        TurnAnalysis(stance="reject"),
+        _afford(None),
+        settings=_SETTINGS,
+        rescue_within_guardrail=True,
+        term_alt=("min_payment_cents", 5000),
+    )
+    assert action.intent == Intent.COUNTER_TERMS
+    assert action.reason == "alt_min_payment_cents"
+    assert action.facts["alt_min_payment_cents"].value == 5000
+
+
+def test_rule9_reject_terms_cascades_to_next_alt() -> None:
+    """Reject pending FPD alt → clear pending and offer min payment, not NO_DEAL."""
+    b = _belief(max_payments=5, min_payment_cents=10000, payment_structure="balloon")
+    action = decide(
+        b,
+        _neg(
+            turn_idx=6,
+            ask_bp=8000,
+            phase=Phase.NEGOTIATE,
+            terms_countered=["first_payment_date:2027-01-31"],
+            pending_terms_alt={
+                "field": "first_payment_date",
+                "value": "2027-01-31",
+            },
+        ),
+        TurnAnalysis(stance="reject"),
+        _afford(None),
+        settings=_SETTINGS,
+        rescue_within_guardrail=True,
+        term_alt=("min_payment_cents", 4000),
+    )
+    assert action.intent == Intent.COUNTER_TERMS
+    assert action.reason == "alt_min_payment_cents"
+    assert any(e.kind == "clear_pending_terms_alt" for e in action.effects)
+
+
+def test_rule9_alt_max_payments_beats_rescue() -> None:
+    b = _belief(max_payments=4, min_payment_cents=10000, payment_structure="balloon")
+    action = decide(
+        b,
+        _neg(
+            turn_idx=7,
+            ask_bp=8000,
+            phase=Phase.NEGOTIATE,
+            terms_countered=[
+                "first_payment_date:2027-01-31",
+                "min_payment_cents:5000",
+            ],
+        ),
+        TurnAnalysis(stance="reject"),
+        _afford(None),
+        settings=_SETTINGS,
+        rescue_within_guardrail=True,
+        term_alt=("max_payments", 8),
+    )
+    assert action.intent == Intent.COUNTER_TERMS
+    assert action.reason == "alt_max_payments"
+    assert action.facts["alt_max_payments"].value == 8
 
 
 def test_readback_uses_field_label_not_raw_name() -> None:
@@ -540,6 +633,47 @@ def test_rule10_confirm_phase_accept_propose_wrap() -> None:
     assert action.next_phase == Phase.WRAP
 
 
+def test_confirm_accept_with_corrected_pct_does_not_wrap() -> None:
+    """'we agreed at 71%' after a wrong 63% confirm must re-confirm, not wrap."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    key = _key(b, 6300)
+    action = decide(
+        b,
+        _neg(
+            turn_idx=6,
+            ask_bp=8000,
+            confirmed_bp=6300,
+            counters_offered=[6300, 7100],
+            phase=Phase.CONFIRM,
+            last_confirm_key=key,
+        ),
+        TurnAnalysis(stance="accept", settlement_ask_pct=71.0, ask_quote="71%"),
+        _afford(10000),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.CONFIRM_SCHEDULE
+    assert action.facts["settlement_pct"].value == 7100
+    assert action.intent != Intent.PROPOSE_WRAP
+
+
+def test_accept_confirms_last_counter() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(
+            turn_idx=4,
+            ask_bp=8000,
+            counters_offered=[6300, 7100],
+            phase=Phase.NEGOTIATE,
+        ),
+        TurnAnalysis(stance="accept"),
+        _afford(10000),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.CONFIRM_SCHEDULE
+    assert action.facts["settlement_pct"].value == 7100
+
+
 def test_counters_snap_to_feasible_never_at_or_above_ask_never_decreasing() -> None:
     # Feasible: 1000, 2000, 3000, 4000, 5000. Ask 5500, max 5000.
     feasible = [1000, 2000, 3000, 4000, 5000]
@@ -670,6 +804,28 @@ def test_confirm_assumed_asked_skips_to_next_or_no_deal() -> None:
     )
     assert action.intent == Intent.NO_DEAL_WRAP
     assert action.reason == "confirm_rejected"
+
+
+def test_confirm_identical_key_accept_wraps_not_soft_retry() -> None:
+    """Accept on an identical schedule wraps — never a second CONFIRM_SCHEDULE."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    key = _key(b, 4500)
+    action = decide(
+        b,
+        _neg(
+            turn_idx=6,
+            ask_bp=4500,
+            confirmed_bp=4500,
+            phase=Phase.CONFIRM,
+            last_confirm_key=key,
+            confirm_rejects=0,
+        ),
+        TurnAnalysis(stance="accept"),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.PROPOSE_WRAP
+    assert action.reason == "confirmed"
 
 
 def test_confirm_identical_key_without_reject_stance_soft_retries() -> None:
@@ -889,6 +1045,74 @@ def test_post_wrap_any_followup_closes() -> None:
     )
     assert action.intent == Intent.CLOSE
     assert action.intent != Intent.CONFIRM_SCHEDULE
+
+
+def test_post_wrap_renegotiate_new_ask() -> None:
+    """New settlement ask after WRAP reopens negotiation (does not CLOSE)."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    key = _key(b, 4500)
+    action = decide(
+        b,
+        _neg(
+            turn_idx=6,
+            ask_bp=4500,
+            confirmed_bp=4500,
+            phase=Phase.WRAP,
+            last_confirm_key=key,
+        ),
+        TurnAnalysis(stance="offer", settlement_ask_pct=70.0, ask_quote="seventy"),
+        _afford(8000),
+        settings=_SETTINGS,
+    )
+    assert action.intent != Intent.CLOSE
+    assert action.intent != Intent.PROPOSE_WRAP
+    assert any(e.kind == "clear_wrap" for e in action.effects)
+    assert action.next_phase in (Phase.CONFIRM, Phase.NEGOTIATE)
+
+
+def test_post_wrap_renegotiate_new_terms() -> None:
+    """Revised creditor terms after WRAP reopen; do not CLOSE."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    key = _key(b, 4500)
+    action = decide(
+        b,
+        _neg(
+            turn_idx=6,
+            ask_bp=4500,
+            confirmed_bp=4500,
+            phase=Phase.WRAP,
+            last_confirm_key=key,
+        ),
+        TurnAnalysis(
+            stance="info",
+            terms=[
+                ExtractedTerm(
+                    field="max_payments",
+                    value=3,
+                    quote="three payments",
+                    hedged=False,
+                )
+            ],
+        ),
+        _afford(6000),
+        settings=_SETTINGS,
+    )
+    assert action.intent != Intent.CLOSE
+    assert any(e.kind == "clear_wrap" for e in action.effects)
+
+
+def test_post_wrap_schedule_detail_stays_wrap() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(turn_idx=6, ask_bp=4500, phase=Phase.WRAP, last_confirm_key=("x",)),
+        TurnAnalysis(stance="question", asks_for_schedule=True),
+        _afford(6000),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.SPEAK_SCHEDULE
+    assert action.next_phase == Phase.WRAP
+    assert action.reason == "schedule_detail_post_wrap"
 
 
 def test_confirm_records_key_on_firm_accept() -> None:

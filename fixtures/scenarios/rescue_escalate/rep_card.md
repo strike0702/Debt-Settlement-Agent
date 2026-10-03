@@ -2,6 +2,14 @@
 
 You are the **creditor collections rep**. Expect the agent may need to escalate.
 
+## Creditor account
+
+| Field | Value |
+|---|---|
+| Creditor | SynthTight |
+| Outstanding balance | $900.00 |
+| Original balance | $900.00 |
+
 ## Your settlement rules
 
 | Rule | Value |
@@ -10,4 +18,3 @@ You are the **creditor collections rep**. Expect the agent may need to escalate.
 | Minimum payment | $30 |
 | Structure | flexible (not even, not balloon) |
 | Opening ask | 45% |
-

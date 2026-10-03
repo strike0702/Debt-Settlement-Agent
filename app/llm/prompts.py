@@ -19,10 +19,13 @@ PLACEHOLDER_MEANINGS: dict[str, str] = {
     "clarify_old": "earlier value the rep gave",
     "clarify_new": "newer conflicting value the rep gave",
     "counter_pct": "settlement percentage we are proposing",
+    "settlement_pct": "settlement percentage both sides are aligning on",
     "offer_total": "dollar total of the proposed settlement",
     "num_payments": "number of payments in the schedule",
     "first_payment_date": "date of the first payment",
-    "alt_first_payment_date": "alternate earlier first payment date we propose",
+    "alt_first_payment_date": "alternate first payment date we propose",
+    "alt_min_payment_cents": "lower minimum payment we propose",
+    "alt_max_payments": "higher maximum payment count we propose",
     "no_deal_reason": "brief reason we cannot settle",
     "escalate_reason": "brief reason we need a specialist",
 }
@@ -42,17 +45,22 @@ _INTENT_INSTRUCTION: dict[Intent, str] = {
     Intent.REFUSE_COMMIT: "Refuse to commit; say we can only propose to the client.",
     Intent.COUNTER: "Propose {counter_pct} of the balance equaling {offer_total}.",
     Intent.COUNTER_TERMS: (
-        "Explain the requested start date does not fit, and propose "
-        "{alt_first_payment_date} instead."
+        "Propose a non-price adjustment using whichever alt placeholder is present: "
+        "{alt_first_payment_date}, {alt_min_payment_cents}, or {alt_max_payments}."
     ),
     Intent.CONFIRM_SCHEDULE: (
-        "Propose (do not confirm) a schedule with {num_payments} payments "
-        "totaling {offer_total}, starting {first_payment_date}, and ask if it works."
+        "First acknowledge {settlement_pct} works, then propose (do not confirm) "
+        "a schedule with {num_payments} payments totaling {offer_total}, "
+        "starting {first_payment_date}, and ask if it works. "
+        "Never say deal, agree, or commit."
     ),
     Intent.SPEAK_SCHEDULE: (
         "Read the payment schedule date by date using only the given placeholders."
     ),
-    Intent.PROPOSE_WRAP: "Say you will take the proposal to the client for approval.",
+    Intent.PROPOSE_WRAP: (
+        "Say the proposal was sent to the client for approval, then ask if they "
+        "need anything else before ending the call. Never say deal, agree, or commit."
+    ),
     Intent.CLOSE: (
         "Thank the rep and say you will follow up after the client reviews. End the call."
     ),
@@ -81,7 +89,8 @@ max_payments, min_payment_cents, payment_structure, first_payment_date,
 max_segments, max_token_pays, min_payment_tiers.
 Units:
 - max_payments / max_segments / max_token_pays: integers
-- min_payment_cents: dollars as integer cents ($250 → 25000)
+- min_payment_cents: dollars as integer cents ($250 → 25000).
+  Bare digits with no $ / dollars / cents stay empty so the agent can clarify.
 - payment_structure: "even" | "balloon" | "flexible"
 - first_payment_date: YYYY-MM-DD
 - min_payment_tiers: list of {"up_to_payments":int,"min_cents":int}

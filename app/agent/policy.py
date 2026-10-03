@@ -8,7 +8,7 @@ live in ``Action.facts`` (PUBLIC only); side effects apply on speech ack via
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from math import ceil
@@ -37,8 +37,11 @@ __all__ = [
     "ask_pct_to_bp",
     "decide",
     "draft_agreement",
+    "field_already_countered",
     "next_counter",
     "opening_action",
+    "parse_pending_terms_value",
+    "terms_counter_key",
 ]
 
 
@@ -62,10 +65,111 @@ class NegotiationState:
     confirm_rejects: int = 0
     assumed_asked: set[str] = field(default_factory=set)
     clarify_counts: dict[str, int] = field(default_factory=dict)
-    # Non-price alternatives already offered (ISO dates for first_payment_date).
+    # Non-price alternatives already offered (``field:value`` keys).
     terms_countered: list[str] = field(default_factory=list)
-    # Last COUNTER_TERMS date awaiting accept/reject (ISO).
-    pending_terms_alt: str | None = None
+    # Last COUNTER_TERMS awaiting accept/reject: ``{"field", "value"}``
+    # (date values stored as ISO strings).
+    pending_terms_alt: dict[str, Any] | None = None
+    # Bare money reply awaiting dollars-vs-cents disambiguation.
+    # ``{"field", "bare", "as_dollars", "as_cents"}`` — amounts in integer cents.
+    pending_cents_clarify: dict[str, Any] | None = None
+
+
+def terms_counter_key(field: str, value: Any) -> str:
+    """Stable key for ``terms_countered`` (dates as ISO)."""
+    if isinstance(value, date):
+        return f"{field}:{value.isoformat()}"
+    return f"{field}:{value}"
+
+
+def field_already_countered(terms_countered: list[str], field: str) -> bool:
+    """True when any prior COUNTER_TERMS was for ``field`` (one try per field)."""
+    prefix = f"{field}:"
+    return any(k.startswith(prefix) for k in terms_countered)
+
+
+def parse_pending_terms_value(pending: dict[str, Any]) -> Any:
+    """Deserialize pending alt value (ISO date → ``date``)."""
+    field = str(pending["field"])
+    raw = pending["value"]
+    if field == "first_payment_date":
+        return date.fromisoformat(str(raw))
+    if field in ("min_payment_cents", "max_payments"):
+        return int(raw)
+    return raw
+
+
+def _counter_terms_action(
+    *,
+    field: str,
+    value: Any,
+    effects: list[Effect],
+) -> Action:
+    """Build a field-aware COUNTER_TERMS move with the right Fact + template."""
+    key = terms_counter_key(field, value)
+    if field == "first_payment_date":
+        assert isinstance(value, date)
+        fact_id = "alt_first_payment_date"
+        fact = Fact(
+            id=fact_id,
+            kind="date",
+            value=value,
+            visibility="PUBLIC",
+            source="engine",
+        )
+        template = (
+            "That start date does not fit the client's program. "
+            "Could payment start on {alt_first_payment_date} instead?"
+        )
+        pending_value: Any = value.isoformat()
+    elif field == "min_payment_cents":
+        assert isinstance(value, int)
+        fact_id = "alt_min_payment_cents"
+        fact = Fact(
+            id=fact_id,
+            kind="money",
+            value=value,
+            visibility="PUBLIC",
+            source="engine",
+        )
+        template = (
+            "These terms do not fit the client's program at that minimum. "
+            "Could you allow a lower minimum of {alt_min_payment_cents}?"
+        )
+        pending_value = value
+    elif field == "max_payments":
+        assert isinstance(value, int)
+        fact_id = "alt_max_payments"
+        fact = Fact(
+            id=fact_id,
+            kind="count",
+            value=value,
+            visibility="PUBLIC",
+            source="engine",
+        )
+        template = (
+            "These terms do not fit the client's program at that payment count. "
+            "Could you allow up to {alt_max_payments} payments?"
+        )
+        pending_value = value
+    else:
+        raise ValueError(f"unsupported term alt field: {field!r}")
+
+    return Action(
+        intent=Intent.COUNTER_TERMS,
+        facts={fact_id: fact},
+        required={fact_id},
+        effects=effects
+        + [
+            Effect(
+                kind="note_terms_countered",
+                data={"field": field, "value": pending_value, "key": key},
+            )
+        ],
+        next_phase=Phase.NEGOTIATE,
+        reason=fact_id,
+        template_override=template,
+    )
 
 
 class Agreement(BaseModel):
@@ -202,6 +306,63 @@ def _fact_for_value(fact_id: str, field: str, value: Any) -> Fact:
     )
 
 
+def cents_ambiguity_clarify_action(
+    *,
+    field: str,
+    bare: int,
+    effects: list[Effect] | None = None,
+) -> Action:
+    """Ask whether a bare number is dollars or cents before storing the term."""
+    as_dollars = bare * 100
+    as_cents = bare
+    label = FIELDS_BY_NAME[field].label
+    pending = {
+        "field": field,
+        "bare": bare,
+        "as_dollars": as_dollars,
+        "as_cents": as_cents,
+    }
+    return Action(
+        intent=Intent.CLARIFY,
+        facts={
+            "bare_amount": Fact(
+                id="bare_amount",
+                kind="count",
+                value=bare,
+                visibility="PUBLIC",
+                source="creditor",
+            ),
+            "clarify_old": Fact(
+                id="clarify_old",
+                kind="money",
+                value=as_dollars,
+                visibility="PUBLIC",
+                source="creditor",
+            ),
+            "clarify_new": Fact(
+                id="clarify_new",
+                kind="money",
+                value=as_cents,
+                visibility="PUBLIC",
+                source="creditor",
+            ),
+        },
+        text_slots={"field_label": label},
+        required={"bare_amount", "clarify_old", "clarify_new"},
+        effects=list(effects or [])
+        + [
+            Effect(kind="set_pending_cents_clarify", data=pending),
+            Effect(kind="note_clarify", data={"field": field}),
+        ],
+        next_phase=Phase.DISCOVERY,
+        reason="cents_ambiguity",
+        template_override=(
+            "I heard {bare_amount} for the {field_label}. "
+            "Is that {clarify_old}, or {clarify_new}?"
+        ),
+    )
+
+
 def _confirm_key(belief: BeliefState, ask_bp: int) -> tuple[Any, ...]:
     """Fingerprint of ask + rule values that shape a CONFIRM schedule.
 
@@ -267,7 +428,7 @@ def _confirm_action(
     return Action(
         intent=Intent.CONFIRM_SCHEDULE,
         facts=facts,
-        required=required,
+        required=set(required) | {"settlement_pct"},
         effects=effects
         + [
             Effect(
@@ -553,6 +714,17 @@ def _close_after_wrap(effects: list[Effect], *, reason: str) -> Action:
     )
 
 
+def _wrap_should_renegotiate(analysis: TurnAnalysis) -> bool:
+    """True when the rep reopens price or terms after PROPOSE_WRAP."""
+    if analysis.settlement_ask_pct is not None:
+        return True
+    if analysis.stance in ("reject", "counter", "offer"):
+        return True
+    if analysis.terms:
+        return True
+    return False
+
+
 def decide(
     belief: BeliefState,
     neg: NegotiationState,
@@ -563,9 +735,13 @@ def decide(
     rescue_within_guardrail: bool = False,
     confirm_facts: dict[str, Fact] | None = None,
     counter_offer_total_cents: int | None = None,
-    alt_first_payment_date: date | None = None,
+    term_alt: tuple[str, Any] | None = None,
 ) -> Action:
-    """Apply §6.2 rules in order; return the next agent ``Action``."""
+    """Apply §6.2 rules in order; return the next agent ``Action``.
+
+    ``term_alt`` is ``(field, value)`` for the next non-price recovery stage
+    when ``afford.max_bp is None`` (first_payment_date → min_payment → max_payments).
+    """
     cfg = settings or get_settings()
 
     # Track ask from this turn's analysis (orchestrator also persists via effects).
@@ -574,6 +750,15 @@ def decide(
     if analysis.settlement_ask_pct is not None:
         ask_bp = ask_pct_to_bp(analysis.settlement_ask_pct)
         effects.append(Effect(kind="record_ask", data={"bp": ask_bp}))
+
+    # Rejected a pending non-price alternative → clear pending and try next stage.
+    if (
+        neg.pending_terms_alt is not None
+        and analysis.stance == "reject"
+        and analysis.settlement_ask_pct is None
+    ):
+        effects.append(Effect(kind="clear_pending_terms_alt", data={}))
+        neg = replace(neg, pending_terms_alt=None)
 
     # 1. Turn cap
     if neg.turn_idx > cfg.max_turns:
@@ -639,8 +824,41 @@ def decide(
             reason="commitment",
         )
 
-    # Already wrapped: do not re-offer schedules. Thank the rep and end.
+    # Already wrapped: conclude unless the rep reopens price/terms.
     if neg.phase == Phase.WRAP:
+        # Schedule detail stays in WRAP — do not end or renegotiate yet.
+        if analysis.asks_for_schedule and analysis.stance != "accept":
+            return Action(
+                intent=Intent.SPEAK_SCHEDULE,
+                effects=effects,
+                next_phase=Phase.WRAP,
+                reason="schedule_detail_post_wrap",
+            )
+        if _wrap_should_renegotiate(analysis):
+            # Re-enter policy as CONFIRM/NEGOTIATE; clear drafted agreement on ack.
+            reopen_phase = (
+                Phase.CONFIRM if neg.confirmed_bp is not None else Phase.NEGOTIATE
+            )
+            action = decide(
+                belief,
+                replace(neg, phase=reopen_phase),
+                analysis,
+                afford,
+                settings=cfg,
+                rescue_within_guardrail=rescue_within_guardrail,
+                confirm_facts=confirm_facts,
+                counter_offer_total_cents=counter_offer_total_cents,
+                term_alt=term_alt,
+            )
+            return action.model_copy(
+                update={
+                    "effects": [
+                        Effect(kind="clear_wrap", data={}),
+                        *action.effects,
+                    ],
+                    "reason": action.reason or "wrap_renegotiate",
+                }
+            )
         return _close_after_wrap(effects, reason="post_wrap")
 
     # Already ended / escalated: stay terminal (idle thanks if they keep typing).
@@ -690,21 +908,7 @@ def decide(
             spoken_reason="Understood — we will end the call here.",
         )
 
-    # Rejected a pending non-price alternative → no deal.
-    if (
-        neg.pending_terms_alt is not None
-        and analysis.stance == "reject"
-        and analysis.settlement_ask_pct is None
-    ):
-        return _no_deal(
-            list(effects)
-            + [Effect(kind="clear_pending_terms_alt", data={})],
-            reason="terms_alt_rejected",
-            spoken_reason=(
-                "Without an earlier start date we cannot fit a schedule "
-                "within the client's program."
-            ),
-        )
+    # Rejected pending non-price alt cleared above — cascade to next stage below.
 
     # 5. Contradictions before read-backs / wrap / asks
     contradicted = belief.contradicted_fields()
@@ -776,9 +980,21 @@ def decide(
 
     # 10: In CONFIRM, accept stance only → wrap (not readback_response).
     # Key must still match confirmed_bp; otherwise fall through for re-confirm.
+    # A restated different settlement % is a correction, not a wrap.
     if neg.phase == Phase.CONFIRM and analysis.stance == "accept":
+        stated_bp = (
+            ask_pct_to_bp(analysis.settlement_ask_pct)
+            if analysis.settlement_ask_pct is not None
+            else None
+        )
+        correcting = (
+            stated_bp is not None
+            and neg.confirmed_bp is not None
+            and stated_bp != neg.confirmed_bp
+        )
         if (
-            neg.confirmed_bp is not None
+            not correcting
+            and neg.confirmed_bp is not None
             and neg.last_confirm_key is not None
             and _confirm_key(belief, neg.confirmed_bp) == neg.last_confirm_key
         ):
@@ -828,6 +1044,18 @@ def decide(
 
     if afford.max_bp is None:
         # Nothing feasible at the current first_payment_date.
+        # Stagger non-price recovery before rescue escalate: FPD → min → max_pay.
+        if term_alt is not None:
+            alt_field, alt_value = term_alt
+            key = terms_counter_key(alt_field, alt_value)
+            if key not in neg.terms_countered and not field_already_countered(
+                neg.terms_countered, alt_field
+            ):
+                return _counter_terms_action(
+                    field=alt_field,
+                    value=alt_value,
+                    effects=effects,
+                )
         if rescue_within_guardrail:
             return Action(
                 intent=Intent.ESCALATE,
@@ -841,32 +1069,6 @@ def decide(
                 next_phase=Phase.ESCALATE,
                 reason="out_of_guardrail",
             )
-        # Non-price recovery: propose an earlier start date once.
-        if alt_first_payment_date is not None:
-            alt_iso = alt_first_payment_date.isoformat()
-            if alt_iso not in neg.terms_countered:
-                return Action(
-                    intent=Intent.COUNTER_TERMS,
-                    facts={
-                        "alt_first_payment_date": Fact(
-                            id="alt_first_payment_date",
-                            kind="date",
-                            value=alt_first_payment_date,
-                            visibility="PUBLIC",
-                            source="engine",
-                        )
-                    },
-                    required={"alt_first_payment_date"},
-                    effects=effects
-                    + [
-                        Effect(
-                            kind="note_terms_countered",
-                            data={"field": "first_payment_date", "value": alt_iso},
-                        )
-                    ],
-                    next_phase=Phase.NEGOTIATE,
-                    reason="alt_first_payment_date",
-                )
         return _no_deal(
             effects,
             reason="infeasible",
@@ -877,9 +1079,18 @@ def decide(
         )
 
     # Rep accepted our last counter → confirm that bp (if still legal under rules).
-    if analysis.stance == "accept" and neg.counters_offered:
-        bp = neg.counters_offered[-1]
-        if bp <= afford.max_bp and bp in afford.feasible_bps:
+    # Prefer an explicit restated % when the rep corrects the figure.
+    if analysis.stance == "accept":
+        bp: int | None = None
+        if analysis.settlement_ask_pct is not None:
+            stated = ask_pct_to_bp(analysis.settlement_ask_pct)
+            if stated <= afford.max_bp and stated in afford.feasible_bps:
+                bp = stated
+        if bp is None and neg.counters_offered:
+            cand = neg.counters_offered[-1]
+            if cand <= afford.max_bp and cand in afford.feasible_bps:
+                bp = cand
+        if bp is not None:
             return _confirm_action(
                 ask_bp=bp,
                 belief=belief,
@@ -934,6 +1145,18 @@ def decide(
                     neg=neg,
                     effects=effects,
                     max_counters=cfg.max_counters,
+                )
+            # Accept on an identical schedule already on the table → wrap.
+            # (Safety net when CONFIRM-phase rule 10 did not fire, e.g. phase lag.)
+            if analysis.stance == "accept":
+                facts = dict(confirm_facts or {})
+                return Action(
+                    intent=Intent.PROPOSE_WRAP,
+                    facts=facts,
+                    effects=effects
+                    + [Effect(kind="set_phase", data={"phase": Phase.WRAP.value})],
+                    next_phase=Phase.WRAP,
+                    reason="confirmed",
                 )
             # Same schedule already offered; NLU may have missed accept — soft retry.
             soft = list(effects) + [Effect(kind="inc_confirm_reject")]

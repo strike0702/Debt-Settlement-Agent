@@ -20,7 +20,7 @@ from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
 from app.agent.numbers import extract_tokens
 from app.agent.policy import ask_pct_to_bp
 from app.config import Settings, get_settings
-from app.domain.fields import FIELDS_BY_NAME
+from app.domain.fields import FIELD_REGISTRY, FIELDS_BY_NAME
 from app.llm.client import LLMUnavailable, strip_json_fences
 from app.llm.prompts import nlu_messages
 from app.store.audit import AuditLog
@@ -65,6 +65,9 @@ class VerifiedAnalysis(BaseModel):
     firm: bool = False
     # Orchestrator-only: post-proposal term change cue (not passed to policy).
     revises_terms: bool = False
+    # Bare number for a cents field with no $/dollars/cents cue — ask which unit.
+    cents_ambiguity_bare: int | None = None
+    cents_ambiguity_field: str | None = None
 
     def to_turn_analysis(self) -> TurnAnalysis:
         """Drop verified flags for ``policy.decide``."""
@@ -197,6 +200,212 @@ def try_fast_readback(utterance: str, pending_readback: str | None) -> VerifiedA
             stance="info",
             readback_response="deny",
         )
+    return None
+
+
+def _field_for_ask_line(last_agent_line: str) -> str | None:
+    """Return the registry field when the agent last asked that field's question."""
+    line = (last_agent_line or "").strip()
+    if not line:
+        return None
+    for spec in FIELD_REGISTRY:
+        if line == spec.ask_text or spec.ask_text in line:
+            return spec.name
+    return None
+
+
+_MONEY_UNIT_RE = re.compile(
+    r"(?:\$|\bdollars?\b|\bcents?\b|\bbucks?\b)",
+    re.IGNORECASE,
+)
+_BARE_DIGIT_QUOTE_RE = re.compile(r"^\d[\d,]*$")
+_CENTS_CLARIFY_DOLLARS_RE = re.compile(
+    r"(?:"
+    r"\bdollars?\b"
+    r"|\bbucks?\b"
+    r"|\bfirst\b"
+    r"|\bthe first\b"
+    r"|\$"
+    r")",
+    re.IGNORECASE,
+)
+_CENTS_CLARIFY_CENTS_RE = re.compile(
+    r"(?:"
+    r"\bcents?\b"
+    r"|\bsecond\b"
+    r"|\bthe second\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _utterance_has_money_unit(text: str) -> bool:
+    return bool(_MONEY_UNIT_RE.search(text))
+
+
+def _is_bare_digit_money(quote: str, utterance: str) -> bool:
+    """True when the amount is only digits — no $ / dollars / cents / number-words."""
+    if _utterance_has_money_unit(quote) or _utterance_has_money_unit(utterance):
+        return False
+    return bool(_BARE_DIGIT_QUOTE_RE.match(quote.strip()))
+
+
+def try_fast_field_answer(
+    utterance: str,
+    last_agent_line: str,
+    *,
+    ref: date | None = None,
+) -> VerifiedAnalysis | None:
+    """Skip the LLM for a bare numeric/enum reply to the agent's last ASK.
+
+    Bare amounts for cents fields (no ``$`` / dollars / cents) are ambiguous —
+    return ``cents_ambiguity_*`` so policy can ask which unit.
+    """
+    field = _field_for_ask_line(last_agent_line)
+    if field is None:
+        return None
+    spec = FIELDS_BY_NAME[field]
+    text = utterance.strip()
+    if not text:
+        return None
+    # Only bare / near-bare answers — leave "about two-fifty a month" to the LLM.
+    if len(text) > 40 or len(text.split()) > 4:
+        return None
+    ref_d = ref or date.today()
+    tokens = extract_tokens(text, ref=ref_d)
+
+    value: Any = None
+    quote = text
+    if spec.kind == "cents":
+        money = [t for t in tokens if t.kind == "money"]
+        counts = [t for t in tokens if t.kind == "count"]
+        if len(money) == 1:
+            value = money[0].value
+            quote = money[0].raw
+        elif len(counts) == 1 and not money:
+            bare = counts[0].value
+            quote = counts[0].raw
+            if _is_bare_digit_money(quote, text):
+                return VerifiedAnalysis(
+                    stance="info",
+                    cents_ambiguity_bare=bare,
+                    cents_ambiguity_field=field,
+                )
+            if _utterance_has_money_unit(text):
+                # "110 dollars" without a money-token — treat as dollars.
+                value = bare * 100
+            else:
+                # Number-words without a unit — let the LLM handle it.
+                return None
+        else:
+            return None
+    elif spec.kind == "int":
+        counts = [t for t in tokens if t.kind in ("count", "ordinal")]
+        if len(counts) != 1:
+            return None
+        value = counts[0].value
+        quote = counts[0].raw
+    elif spec.kind == "enum":
+        # Word-boundary only — "evening" must not match "even".
+        for opt in spec.prior_range or ():
+            if quote_in_utterance(str(opt), text):
+                value = opt
+                quote = str(opt)
+                break
+        if value is None:
+            return None
+    else:
+        return None
+
+    if not _in_prior_range(field, value):
+        return None
+    return VerifiedAnalysis(
+        terms=[
+            VerifiedTerm(
+                field=field,
+                value=value,
+                quote=quote,
+                hedged=False,
+                verified=True,
+            )
+        ],
+        stance="info",
+    )
+
+
+def try_resolve_cents_clarify(
+    utterance: str,
+    pending: dict[str, Any],
+    *,
+    ref: date | None = None,
+) -> VerifiedAnalysis | None:
+    """Resolve a pending dollars-vs-cents clarify into a verified cents term."""
+    field = str(pending.get("field") or "")
+    if field not in FIELDS_BY_NAME or FIELDS_BY_NAME[field].kind != "cents":
+        return None
+    as_dollars = int(pending["as_dollars"])
+    as_cents = int(pending["as_cents"])
+    ref_d = ref or date.today()
+    text = utterance.strip()
+    chosen: int | None = None
+    quote = text
+
+    if _CENTS_CLARIFY_DOLLARS_RE.search(text) and not _CENTS_CLARIFY_CENTS_RE.search(
+        text
+    ):
+        chosen = as_dollars
+    elif _CENTS_CLARIFY_CENTS_RE.search(text) and not _CENTS_CLARIFY_DOLLARS_RE.search(
+        text
+    ):
+        chosen = as_cents
+    else:
+        for tok in extract_tokens(text, ref=ref_d):
+            if tok.kind == "money" and tok.value in (as_dollars, as_cents):
+                chosen = int(tok.value)
+                quote = tok.raw
+                break
+            if tok.kind == "count" and tok.value * 100 == as_dollars:
+                # Restated bare → prefer dollars reading once clarifying.
+                if _utterance_has_money_unit(text) and "cent" in text.lower():
+                    chosen = as_cents
+                elif _utterance_has_money_unit(text):
+                    chosen = as_dollars
+                break
+
+    if chosen is None and _PLAIN_YES_RE.match(text):
+        # "yes" after "is that $110 or $1.10?" is too vague — require an option.
+        return None
+
+    if chosen is None:
+        return None
+    if not _in_prior_range(field, chosen):
+        # Picked an out-of-range reading — clear pending via empty resolve marker.
+        return VerifiedAnalysis(
+            stance="info",
+            cents_ambiguity_bare=None,
+            cents_ambiguity_field=None,
+            terms=[],
+        )
+    return VerifiedAnalysis(
+        terms=[
+            VerifiedTerm(
+                field=field,
+                value=chosen,
+                quote=quote,
+                hedged=False,
+                verified=True,
+            )
+        ],
+        stance="info",
+    )
+
+
+def _bare_count_from_quote(quote: str, *, ref: date) -> int | None:
+    tokens = extract_tokens(quote, ref=ref)
+    counts = [t for t in tokens if t.kind == "count"]
+    money = [t for t in tokens if t.kind == "money"]
+    if len(counts) == 1 and not money:
+        return int(counts[0].value)
     return None
 
 
@@ -340,6 +549,12 @@ _ACCEPT_STANCE_RE = re.compile(
     r"|we accept"
     r"|schedule works"
     r"|payment schedule works"
+    r"|\bfine\b"
+    r"|\bok\b"
+    r"|\bokay\b"
+    r"|\bsure\b"
+    r"|\balright\b"
+    r"|\ball right\b"
     r")\b",
     re.IGNORECASE,
 )
@@ -419,8 +634,6 @@ _REVISION_RE = re.compile(
     r")",
     re.IGNORECASE,
 )
-
-
 # LLM side-channel flags — keep only when the utterance corroborates.
 _HOSTILITY_RE = re.compile(
     r"(?:"
@@ -527,6 +740,8 @@ def post_verify(
     """Deterministic quote / number / prior-range checks (PLAN §6.1)."""
     ref_d = ref or date.today()
     verified_terms: list[VerifiedTerm] = []
+    cents_ambiguity_bare: int | None = None
+    cents_ambiguity_field: str | None = None
 
     def _log(event: str, payload: dict[str, Any]) -> None:
         if audit is not None and call_id is not None:
@@ -536,14 +751,55 @@ def post_verify(
         if not quote_in_utterance(term.quote, utterance):
             _log("nlu_rejected_quote", {"field": term.field, "quote": term.quote})
             continue
-        if not _in_prior_range(term.field, term.value):
-            _log(
-                "nlu_rejected_range",
-                {"field": term.field, "value": term.value, "quote": term.quote},
-            )
-            continue
         value: Any = term.value
         spec = FIELDS_BY_NAME.get(term.field)
+        # Pure digit amount for a cents field → clarify dollars vs cents.
+        if (
+            spec is not None
+            and spec.kind == "cents"
+            and cents_ambiguity_bare is None
+            and _is_bare_digit_money(term.quote, utterance)
+        ):
+            bare = _bare_count_from_quote(term.quote, ref=ref_d)
+            if bare is None and isinstance(value, int):
+                bare = value // 100 if value >= 1000 and value % 100 == 0 else value
+            if bare is not None and bare > 0:
+                dollars = bare * 100
+                if _in_prior_range(term.field, dollars) or _in_prior_range(
+                    term.field, bare
+                ):
+                    cents_ambiguity_bare = bare
+                    cents_ambiguity_field = term.field
+                    _log(
+                        "nlu_cents_ambiguity",
+                        {"field": term.field, "bare": bare, "quote": term.quote},
+                    )
+                    continue
+        if not _in_prior_range(term.field, value):
+            # Forgotten *100 with an explicit dollar cue → promote.
+            if (
+                spec is not None
+                and spec.kind == "cents"
+                and isinstance(value, int)
+                and _utterance_has_money_unit(utterance)
+                and _in_prior_range(term.field, value * 100)
+            ):
+                value = value * 100
+                _log(
+                    "nlu_repaired_cents",
+                    {
+                        "field": term.field,
+                        "from": term.value,
+                        "to": value,
+                        "quote": term.quote,
+                    },
+                )
+            else:
+                _log(
+                    "nlu_rejected_range",
+                    {"field": term.field, "value": value, "quote": term.quote},
+                )
+                continue
         if spec is not None and spec.kind == "date" and isinstance(value, str):
             try:
                 value = date.fromisoformat(value)
@@ -633,6 +889,8 @@ def post_verify(
         ),
         firm=repair_firm(analysis.firm, utterance),
         revises_terms=repair_revises_terms(utterance),
+        cents_ambiguity_bare=cents_ambiguity_bare,
+        cents_ambiguity_field=cents_ambiguity_field,
     )
 
 
@@ -668,6 +926,22 @@ async def analyze(
                 {"response": fast.readback_response, "utterance": utterance[:80]},
             )
         return fast
+
+    # Bare number/enum reply to the agent's last ASK — skip the LLM.
+    fast_ask = try_fast_field_answer(utterance, last_agent_line, ref=ref)
+    if fast_ask is not None:
+        if audit is not None and call_id is not None:
+            audit.append(
+                call_id,
+                "nlu",
+                "fast_field_answer",
+                {
+                    "field": fast_ask.terms[0].field if fast_ask.terms else None,
+                    "value": fast_ask.terms[0].value if fast_ask.terms else None,
+                    "utterance": utterance[:80],
+                },
+            )
+        return fast_ask
 
     if llm is None:
         raise ValueError("llm is required when nlu_mode is not oracle")
@@ -722,9 +996,13 @@ async def analyze(
                 "readback_response": _verify_readback_response(
                     oracle.readback_response, utterance
                 ),
-                "asks_client_private_info": oracle.asks_client_private_info,
-                "demands_commitment": oracle.demands_commitment,
-                "hostility": oracle.hostility,
+                "asks_client_private_info": repair_asks_client_private_info(
+                    oracle.asks_client_private_info, utterance
+                ),
+                "demands_commitment": repair_demands_commitment(
+                    oracle.demands_commitment, utterance
+                ),
+                "hostility": repair_hostility(oracle.hostility, utterance),
                 "wants_to_end": repair_wants_to_end(oracle.wants_to_end, utterance),
                 "asks_for_schedule": repair_asks_for_schedule(
                     oracle.asks_for_schedule, utterance

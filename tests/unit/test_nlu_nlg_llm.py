@@ -203,6 +203,12 @@ def test_post_verify_repairs_accept_stance() -> None:
     assert out.stance == "accept"
 
 
+def test_post_verify_repairs_accept_fine() -> None:
+    analysis = TurnAnalysis(stance="other")
+    out = post_verify(analysis, "fine", ref=_REF)
+    assert out.stance == "accept"
+
+
 def test_post_verify_repairs_reject_stance() -> None:
     analysis = TurnAnalysis(stance="info")
     out = post_verify(
@@ -259,6 +265,7 @@ def test_post_verify_keeps_commitment_flag_with_cues() -> None:
         analysis, "I need a firm commitment that this deal is locked in.", ref=_REF
     )
     assert out.demands_commitment is True
+
 
 def test_post_verify_repairs_asks_for_schedule() -> None:
     analysis = TurnAnalysis(stance="question", asks_for_schedule=False)
@@ -329,6 +336,128 @@ def test_250_not_verified_inside_1250() -> None:
     )
     out = post_verify(analysis, "minimum is 1250 dollars", ref=_REF)
     assert out.terms == []
+
+
+def test_post_verify_bare_cents_is_ambiguous() -> None:
+    """Bare '110' must not silently become $110 — flag ambiguity instead."""
+    analysis = TurnAnalysis(
+        terms=[
+            ExtractedTerm(
+                field="min_payment_cents",
+                value=110,
+                quote="110",
+                hedged=False,
+            )
+        ],
+        stance="info",
+    )
+    out = post_verify(analysis, "110", ref=_REF)
+    assert out.terms == []
+    assert out.cents_ambiguity_bare == 110
+    assert out.cents_ambiguity_field == "min_payment_cents"
+
+
+def test_post_verify_dollar_cue_repairs_forgotten_cents() -> None:
+    analysis = TurnAnalysis(
+        terms=[
+            ExtractedTerm(
+                field="min_payment_cents",
+                value=110,
+                quote="110",
+                hedged=False,
+            )
+        ],
+        stance="info",
+    )
+    out = post_verify(analysis, "110 dollars", ref=_REF)
+    assert len(out.terms) == 1
+    assert out.terms[0].value == 11000
+    assert out.cents_ambiguity_bare is None
+
+
+def test_fast_field_answer_bare_min_payment_ambiguous() -> None:
+    from app.agent.nlu import try_fast_field_answer
+    from app.domain.fields import FIELDS_BY_NAME
+
+    ask = FIELDS_BY_NAME["min_payment_cents"].ask_text
+    out = try_fast_field_answer("110", ask, ref=_REF)
+    assert out is not None
+    assert out.terms == []
+    assert out.cents_ambiguity_bare == 110
+    assert out.cents_ambiguity_field == "min_payment_cents"
+
+
+def test_fast_field_answer_dollar_min_payment() -> None:
+    from app.agent.nlu import try_fast_field_answer
+    from app.domain.fields import FIELDS_BY_NAME
+
+    ask = FIELDS_BY_NAME["min_payment_cents"].ask_text
+    out = try_fast_field_answer("$110", ask, ref=_REF)
+    assert out is not None
+    assert out.terms[0].value == 11000
+
+
+def test_resolve_cents_clarify_dollars() -> None:
+    from app.agent.nlu import try_resolve_cents_clarify
+
+    out = try_resolve_cents_clarify(
+        "dollars",
+        {
+            "field": "min_payment_cents",
+            "bare": 110,
+            "as_dollars": 11000,
+            "as_cents": 110,
+        },
+        ref=_REF,
+    )
+    assert out is not None
+    assert out.terms[0].value == 11000
+
+
+def test_cents_ambiguity_clarify_action_template() -> None:
+    from app.agent.nlg import render_action
+    from app.agent.policy import cents_ambiguity_clarify_action
+
+    action = cents_ambiguity_clarify_action(field="min_payment_cents", bare=110)
+    sentences = render_action(action, _REF)
+    assert sentences
+    joined = " ".join(sentences)
+    assert "110" in joined
+    assert "$110" in joined or "110.00" in joined
+    assert "$1.10" in joined
+
+
+def test_fast_field_answer_bare_max_payments() -> None:
+    from app.agent.nlu import try_fast_field_answer
+    from app.domain.fields import FIELDS_BY_NAME
+
+    ask = FIELDS_BY_NAME["max_payments"].ask_text
+    out = try_fast_field_answer("4", ask, ref=_REF)
+    assert out is not None
+    assert out.terms[0].field == "max_payments"
+    assert out.terms[0].value == 4
+
+
+def test_fast_field_answer_evening_not_even() -> None:
+    """F01: substring 'even' must not match utterance 'evening'."""
+    from app.agent.nlu import try_fast_field_answer
+    from app.domain.fields import FIELDS_BY_NAME
+
+    ask = FIELDS_BY_NAME["payment_structure"].ask_text
+    out = try_fast_field_answer("evening", ask, ref=_REF)
+    assert out is None
+
+
+def test_fast_field_answer_even_still_matches() -> None:
+    from app.agent.nlu import try_fast_field_answer
+    from app.domain.fields import FIELDS_BY_NAME
+
+    ask = FIELDS_BY_NAME["payment_structure"].ask_text
+    out = try_fast_field_answer("even", ask, ref=_REF)
+    assert out is not None
+    assert out.terms[0].field == "payment_structure"
+    assert out.terms[0].value == "even"
+    assert out.terms[0].verified is True
 
 
 def test_post_verify_inflexible_not_flexible() -> None:

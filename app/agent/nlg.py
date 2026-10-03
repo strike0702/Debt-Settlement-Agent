@@ -28,6 +28,7 @@ TEMPLATE_ONLY_INTENTS: frozenset[Intent] = frozenset(
         Intent.ASK,
         Intent.ASK_SETTLEMENT,
         Intent.SPEAK_SCHEDULE,
+        Intent.PROPOSE_WRAP,
         Intent.CLOSE,
         Intent.NO_DEAL_WRAP,
         Intent.ESCALATE,
@@ -66,14 +67,15 @@ TEMPLATES: dict[Intent, str] = {
         "Could payment start on {alt_first_payment_date} instead?"
     ),
     Intent.CONFIRM_SCHEDULE: (
-        "We can do {num_payments} payments totaling {offer_total}, "
-        "starting {first_payment_date}. Would that work?"
+        "{settlement_pct} works for us. We can do {num_payments} payments "
+        "totaling {offer_total}, starting {first_payment_date}. Would that work?"
     ),
     Intent.SPEAK_SCHEDULE: (
         "Here is the payment-by-payment schedule."
     ),
     Intent.PROPOSE_WRAP: (
-        "I can take this proposal to the client for approval."
+        "I have sent this proposal to the client for approval. "
+        "Do you need anything else before we end the call?"
     ),
     Intent.CLOSE: (
         "Thank you. We will present this to the client and follow up "

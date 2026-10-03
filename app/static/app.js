@@ -39,7 +39,7 @@ const SCENARIO_KEY = "dsa_scenario_id";
 const CUSTOM_KEY = "dsa_custom_scenario";
 const CUSTOM_ID = "__custom__";
 
-const onnxBase = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
+const onnxBase = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/";
 const vadAssetBase =
   "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/";
 
@@ -656,6 +656,8 @@ function summarizeAudit(r) {
       return `ask ${p.ask_bp} bp, within_guardrail=${p.within_guardrail}`;
     case "alt_first_payment_date":
       return `requested ${p.requested} → alt ${p.alt ?? "none"}`;
+    case "term_alt":
+      return `alt ${p.alt_field ?? "none"}=${p.alt_value ?? "none"} (fpd ${p.requested_fpd ?? ""})`;
     case "turn_complete":
       return `${p.intent}: ${(p.sentences || []).join(" / ")}`;
     case "analysis":
@@ -838,6 +840,8 @@ function sendText(textOverride, source) {
   if (textOverride == null) el.textInput.value = "";
   if (store.get().mock) return;
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  // Typed reply mid-TTS must barge first so confirm/counter bookkeeping lands.
+  if (store.get().speaking || pendingSayQueue.length) bargeIn();
   // Show the rep bubble immediately; server echo replaces the pending line later.
   const transcript = [
     ...store.get().transcript,
@@ -863,7 +867,7 @@ function endChat() {
     return;
   }
   if (store.get().ending) return;
-  stopMic();
+  void stopMic();
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     store.set({ ending: true });
     finishEnd();
@@ -942,7 +946,8 @@ function bargeIn() {
   if (!store.get().speaking && !pendingSayQueue.length) return;
   window.speechSynthesis.cancel();
   pendingSayQueue = [];
-  const spoken = [...store.get().ackedIds];
+  // Include the in-flight sentence — ackedIds only updates on utter.onend.
+  const spoken = [...new Set([...store.get().ackedIds, ...speakingIds])];
   store.set({ speaking: false });
   speakingIds.clear();
   sendJson({ type: "barge_in", spoken_ids: spoken });
@@ -1153,15 +1158,29 @@ function fallBackToBrowserStt(reason) {
   });
   if (el.sttMode) el.sttMode.value = "browser";
   showNotice(reason);
-  startBrowserRec();
+  // Only start listening if the user still wants the mic on.
+  if (store.get().micOn) {
+    startBrowserRec();
+  }
   updateMicButton();
+}
+
+async function resumeVadAudioContext(instance) {
+  const ctx = instance?.audioContext;
+  if (ctx && ctx.state === "suspended") {
+    try {
+      await ctx.resume();
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 async function startMic() {
   if (store.get().mock) return;
   // micOn flips immediately so a second click during VAD load routes to stopMic.
   const gen = ++micGen;
-  store.set({ micOn: true });
+  store.set({ micOn: true, sttFallbackNotice: "" });
   updateMicButton();
   const mode = effectiveSttMode();
   if (mode === "browser") {
@@ -1175,19 +1194,41 @@ async function startMic() {
       "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/+esm"
     );
     if (gen !== micGen) return;
+    // vad-web@0.0.22 takes a ready ``stream`` (not ``getStream`` from newer docs).
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        autoGainControl: true,
+        noiseSuppression: true,
+      },
+    });
+    if (gen !== micGen) {
+      stopTracks(stream);
+      return;
+    }
+    micStream = stream;
+    // Defaults (legacy): positiveSpeechThreshold=0.5 is too deaf for quiet mics.
+    // frameSamples=1536 @ 16 kHz ≈ 96 ms/frame.
     instance = await MicVAD.new({
+      stream,
       onnxWASMBasePath: onnxBase,
       baseAssetPath: vadAssetBase,
-      getStream: async () => {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true },
-        });
-        micStream = stream;
-        return stream;
-      },
+      positiveSpeechThreshold: 0.35,
+      negativeSpeechThreshold: 0.2,
+      // ~1.5 s of silence before cutting — mid-sentence pauses stay in one clip.
+      redemptionFrames: 16,
+      // ~1 s of audio before first speech-positive frame (catch word onsets).
+      preSpeechPadFrames: 10,
+      // ~290 ms minimum utterance; shorter → onVADMisfire.
+      minSpeechFrames: 3,
       onSpeechStart: () => {
         if (gen !== micGen) return;
         if (store.get().speaking || pendingSayQueue.length) bargeIn();
+      },
+      onVADMisfire: () => {
+        if (gen !== micGen) return;
+        // Too short to send — keep listening; no toast spam.
       },
       onSpeechEnd: (audio) => {
         if (gen !== micGen) return;
@@ -1198,11 +1239,15 @@ async function startMic() {
         renderChat();
       },
     });
+    // Async import often loses the user-gesture; AudioContext stays suspended
+    // until a later click/TTS — mic appears "dead" for the first several turns.
+    await resumeVadAudioContext(instance);
   } catch (err) {
     if (gen !== micGen) return;
     destroyVad(instance);
     stopTracks(stream);
     stream = null;
+    micStream = null;
     // Auto/server: VAD is only the capture path — fall back to browser STT.
     if (
       !isMicPermissionError(err) &&
@@ -1221,16 +1266,28 @@ async function startMic() {
     // Stopped while loading: tear down what was just created.
     destroyVad(instance);
     stopTracks(stream);
+    micStream = null;
     return;
   }
   vad = instance;
   vad.start();
+  await resumeVadAudioContext(instance);
 }
 
 function destroyVad(instance) {
   if (!instance) return;
   try {
     instance.pause();
+  } catch {
+    /* ignore */
+  }
+  try {
+    // Prefer stopping tracks we own; also stop library stream if present.
+    stopTracks(instance.stream);
+  } catch {
+    /* ignore */
+  }
+  try {
     instance.destroy();
   } catch {
     /* ignore */
@@ -1238,18 +1295,26 @@ function destroyVad(instance) {
 }
 
 function stopTracks(stream) {
-  stream?.getTracks().forEach((t) => t.stop());
+  stream?.getTracks?.().forEach((t) => {
+    try {
+      t.stop();
+    } catch {
+      /* ignore */
+    }
+  });
 }
 
 async function stopMic() {
   micGen += 1;
-  store.set({ micOn: false, interim: "" });
+  store.set({ micOn: false, interim: "", sttFallbackNotice: "" });
   updateMicButton();
-  destroyVad(vad);
+  const instance = vad;
   vad = null;
+  destroyVad(instance);
   stopTracks(micStream);
   micStream = null;
   stopBrowserRec();
+  showNotice("");
   renderChat();
 }
 
@@ -1315,6 +1380,11 @@ function stopBrowserRec() {
     const rec = browserRec;
     browserRec = null;
     rec.onend = rec.onresult = rec.onspeechstart = rec.onerror = null;
+    try {
+      rec.stop();
+    } catch {
+      /* ignore */
+    }
     try {
       rec.abort();
     } catch {

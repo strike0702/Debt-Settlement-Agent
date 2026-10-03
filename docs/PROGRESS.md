@@ -565,3 +565,64 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - Open: contradictory persona flipping during NEGOTIATE is treated as a revision (discovery-phase contradictions still CLARIFY).
 - Tests: 318 passed offline (+1 skipped live); `ruff check .` clean.
 - Cheap eval `eval_20261002_011825_s7` (seed=7, profile=eval, nlg=template, sim=template): thresholds PASS. `deal_rate_given_zopa` / `no_deal_correct` / `escalation_correct` / `agreement_valid` / `rule_extraction_accuracy` = 1; leaks/unverified/guard_blocks = 0. `surplus_captured` mean **0.689** (was 0.412); `turns_to_proposal` mean 3.667 (was 2.667).
+
+### WRAP close prompt (2026-10-02)
+
+- **Why:** After accept, agent hedged with `SAFE_FALLBACK` (LLM `PROPOSE_WRAP` hit commitment guard) and stayed in `WRAP` until an extra turn; user expected a clear “sent for approval / anything else?” then end or renegotiate.
+- Files: `app/agent/{nlg,policy,orchestrator}.py`, `app/domain/actions.py`, `app/llm/prompts.py`, `tests/unit/test_policy.py`.
+- Behavior:
+  - `PROPOSE_WRAP` template: sent for client approval + ask if anything else before ending; added to `TEMPLATE_ONLY_INTENTS`.
+  - `WRAP`: conclude → `CLOSE`; new ask/reject/counter/offer/terms → `clear_wrap` + reopen `CONFIRM`/`NEGOTIATE`; schedule detail stays in `WRAP`.
+  - Effect `clear_wrap` clears `agreement` / `agreed_bp` / `last_eval`.
+- Open: none.
+- Tests: 321 passed offline (+1 skipped live); `ruff check .` clean.
+
+### CONFIRM pct ack (2026-10-02)
+
+- **Why:** After accepting a counter (e.g. 60%), agent jumped straight into schedule details without acknowledging the percentage.
+- `CONFIRM_SCHEDULE` template leads with `{settlement_pct} works for us. …`; `settlement_pct` always required; orchestrator enrich keeps it in `required`; NLG prompt matches.
+- Files: `app/agent/{nlg,policy,orchestrator}.py`, `app/llm/prompts.py`, `tests/unit/test_nlg.py`.
+- Open: none.
+- Tests: 322 passed offline (+1 skipped live); `ruff check .` clean.
+
+### VAD sensitivity (2026-10-02)
+
+- **Why:** Mic often missed utterances. `vad-web@0.0.22` defaults `positiveSpeechThreshold=0.5`; UI also passed unused `getStream` (API is `stream` in 0.0.22).
+- Files: `app/static/app.js`.
+- Settings: threshold 0.35/0.2, `redemptionFrames=16`, `preSpeechPadFrames=10`, `autoGainControl` on; pass `stream` explicitly.
+
+### Accept/counter + mic release (2026-10-02)
+
+- **Why:** Accepting "fine" after a 71% counter confirmed stale 63%; "we agreed at 71%" wrapped the wrong deal. Mic deaf for early turns then hot; tab mic stayed on after end; VAD→browser STT banner.
+- Root causes: barge-in omitted in-flight sentence ids so `offer_counter` never committed; `"fine"` not in accept repair; CONFIRM wrap ignored a corrected %; AudioContext suspended after async VAD import; onnx `1.18.0` vs vad-web's `1.14.0`.
+- Fixes:
+  - Client barge includes `speakingIds`; server barge keeps `offer_counter`/`record_confirm` when any sentence heard.
+  - Accept repair: fine/ok/okay/sure/alright; CONFIRM accept with different stated % re-confirms (no wrap).
+  - Resume AudioContext; pin onnx 1.14.0; hard-stop mic tracks + browser STT on end.
+- Files: `app/agent/{nlu,policy,orchestrator}.py`, `app/static/app.js`, unit tests.
+- Tests: 326 passed offline (+1 skipped live); `ruff check .` clean.
+
+### Min-payment ASK loop (2026-10-02)
+
+- **Why:** Bare `"110"` while asking minimum payment re-asked forever.
+- Cause: LLM often emits `min_payment_cents=110` (dollars, not cents); prior_range `(1000,100000)` rejects → empty terms → ASK again.
+- Fix: bare digits → dollars-vs-cents `CLARIFY` (`cents_ambiguity_clarify_action`); resolve on "dollars"/"cents"/$amount; `$`/`dollars` cues still bind without clarify.
+- Files: `app/agent/{nlu,policy,orchestrator}.py`, `app/domain/actions.py`, `app/llm/prompts.py`, unit tests.
+- Tests: 334 passed offline (+1 skipped live); `ruff check .` clean.
+
+### Double CONFIRM_SCHEDULE on accept (2026-10-02)
+
+- **Why:** After accepting a counter ("cool"), agent asked for schedule confirm twice before wrap.
+- Cause: `record_confirm` / `set_phase` waited for TTS `sentence_done`. Typed/voice "yes" mid-speech saw no `confirmed_bp` → policy re-emitted `CONFIRM_SCHEDULE`. Soft-retry also re-confirmed on accept.
+- Fix:
+  - Eager COUNTER/CONFIRM bookkeeping on emit (idempotent `offer_counter`).
+  - Identical-key accept → `PROPOSE_WRAP` (not soft re-confirm).
+  - Typed `sendText` barges in before send.
+- Files: `app/agent/{orchestrator,policy}.py`, `app/static/app.js`, unit tests.
+- Tests: 335 passed offline (+1 skipped live); `ruff check .` clean.
+
+### Rep-card creditor account (2026-10-02)
+
+- **Why:** Only `easy_deal/rep_card.md` had a Creditor account table; other scenarios showed settlement rules only in rep view.
+- Fix: add Creditor / outstanding / original balance (from each `offer.json`) to `counter_ladder`, `no_space`, `balloon_structure`, `late_start_date`, `rescue_escalate` rep cards.
+- Not a UI filter — content was missing from the markdown fixtures.

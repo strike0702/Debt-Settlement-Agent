@@ -117,6 +117,13 @@ def _serialize_additional(summary: EvalSummary) -> dict[str, Any] | None:
 def _eval_payload(session: CallSession, summary: EvalSummary | None) -> dict[str, Any] | None:
     if summary is None:
         return None
+    # Prefer the bp tied to this turn's pending eval (COUNTER/CONFIRM) over a
+    # stale session.agreed_bp so the schedule header matches spoken offer.
+    agreed_bp: int | None = None
+    if session.pending is not None and session.pending.pending_agreed_bp is not None:
+        agreed_bp = session.pending.pending_agreed_bp
+    elif session.agreed_bp is not None:
+        agreed_bp = session.agreed_bp
     return {
         "type": "eval",
         "feasible": summary.feasible,
@@ -124,11 +131,7 @@ def _eval_payload(session: CallSession, summary: EvalSummary | None) -> dict[str
         "offer_total_cents": summary.offer_total_cents,
         "program_fee_cents": summary.program_fee_cents,
         "assumed_fields": list(summary.assumed_fields),
-        "agreed_bp": session.agreed_bp
-        if session.agreed_bp is not None
-        else (
-            session.pending.pending_agreed_bp if session.pending is not None else None
-        ),
+        "agreed_bp": agreed_bp,
         "rows": _serialize_rows(summary),
         "additional_funds": _serialize_additional(summary),
         "max_bp": session.last_max_bp,

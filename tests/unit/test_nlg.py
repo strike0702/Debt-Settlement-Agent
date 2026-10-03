@@ -98,11 +98,17 @@ def _sample_action(intent: Intent) -> Action:
         return Action(
             intent=intent,
             facts={
+                "settlement_pct": _pct("settlement_pct", 4500),
                 "num_payments": _count("num_payments", 6),
                 "offer_total": _money("offer_total", 75_000),
                 "first_payment_date": _date("first_payment_date", date(2026, 4, 15)),
             },
-            required={"num_payments", "offer_total", "first_payment_date"},
+            required={
+                "settlement_pct",
+                "num_payments",
+                "offer_total",
+                "first_payment_date",
+            },
             next_phase=Phase.CONFIRM,
         )
     if intent == Intent.SPEAK_SCHEDULE:
@@ -158,6 +164,13 @@ def test_every_intent_template_passes_guards(intent: Intent) -> None:
         assert s.strip()
 
 
+def test_confirm_schedule_acks_settlement_pct() -> None:
+    action = _sample_action(Intent.CONFIRM_SCHEDULE)
+    sentences = render_action(action, _REF)
+    assert sentences[0].startswith("45%")
+    assert "works for us" in sentences[0].lower()
+
+
 def test_bad_template_falls_back() -> None:
     action = Action(
         intent=Intent.COUNTER,
@@ -166,3 +179,37 @@ def test_bad_template_falls_back() -> None:
         next_phase=Phase.NEGOTIATE,
     )
     assert render_action(action, _REF) == [SAFE_FALLBACK]
+
+
+def test_counter_terms_min_payment_override_passes_guards() -> None:
+    action = Action(
+        intent=Intent.COUNTER_TERMS,
+        facts={"alt_min_payment_cents": _money("alt_min_payment_cents", 5000)},
+        required={"alt_min_payment_cents"},
+        next_phase=Phase.NEGOTIATE,
+        template_override=(
+            "These terms do not fit the client's program at that minimum. "
+            "Could you allow a lower minimum of {alt_min_payment_cents}?"
+        ),
+    )
+    sentences = render_action(action, _REF)
+    assert sentences != [SAFE_FALLBACK]
+    joined = " ".join(sentences)
+    assert "$50" in joined or "fifty" in joined.lower()
+
+
+def test_counter_terms_max_payments_override_passes_guards() -> None:
+    action = Action(
+        intent=Intent.COUNTER_TERMS,
+        facts={"alt_max_payments": _count("alt_max_payments", 8)},
+        required={"alt_max_payments"},
+        next_phase=Phase.NEGOTIATE,
+        template_override=(
+            "These terms do not fit the client's program at that payment count. "
+            "Could you allow up to {alt_max_payments} payments?"
+        ),
+    )
+    sentences = render_action(action, _REF)
+    assert sentences != [SAFE_FALLBACK]
+    joined = " ".join(sentences).lower()
+    assert "eight" in joined or "8" in joined

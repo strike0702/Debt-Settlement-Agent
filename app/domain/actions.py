@@ -60,6 +60,9 @@ class Effect(BaseModel):
         "note_clarify",
         "note_terms_countered",
         "clear_pending_terms_alt",
+        "clear_wrap",
+        "set_pending_cents_clarify",
+        "clear_pending_cents_clarify",
         "set_phase",
     ]
     data: dict[str, Any] = Field(default_factory=dict)

@@ -50,8 +50,8 @@ def _orch(tmp_path: Path, *, auto_ack: bool = True) -> tuple[Orchestrator, CallS
 
 
 @pytest.mark.asyncio
-async def test_barge_in_drops_pending_counter(tmp_path: Path) -> None:
-    """Barge-in before ack drops offer_counter; next turn re-offers the same bp."""
+async def test_barge_in_keeps_eager_counter(tmp_path: Path) -> None:
+    """offer_counter is eager; empty barge does not undo it; reject climbs ladder."""
     orch, session, audit = _orch(tmp_path, auto_ack=False)
     await orch.start()
     # Ack opening so phase advances.
@@ -90,15 +90,13 @@ async def test_barge_in_drops_pending_counter(tmp_path: Path) -> None:
     assert counter1.action.intent == Intent.COUNTER
     bp1 = counter1.action.facts["counter_pct"].value
     assert isinstance(bp1, int)
-    assert session.neg.counters_offered == []  # not acked yet
+    assert session.neg.counters_offered == [bp1]
 
-    # Barge-in: drop pending counter effects.
+    # Barge-in: drop pending speech; offer_counter stays (idempotent).
     await orch.on_barge_in([])
     assert session.pending is None
-    assert session.neg.counters_offered == []
-    # Ask was also in pending effects — re-state ask on next turn.
-    # Seed ask via a prior acked record: apply ask manually for the re-offer test.
-    # After barge-in, ask_bp may be unset; send ask again with reject stance.
+    assert session.neg.counters_offered == [bp1]
+
     counter2 = await orch.on_creditor_text(
         "Still need ninety-five percent, that is too low.",
         oracle=TurnAnalysis(
@@ -109,9 +107,12 @@ async def test_barge_in_drops_pending_counter(tmp_path: Path) -> None:
     )
     assert counter2.action.intent == Intent.COUNTER
     bp2 = counter2.action.facts["counter_pct"].value
-    assert bp2 == bp1
+    assert isinstance(bp2, int)
+    assert bp2 > bp1
+    assert session.neg.counters_offered == [bp1, bp2]
     await orch.on_sentence_done([sid for sid, _ in counter2.sentences])
-    assert session.neg.counters_offered == [bp1]
+    # Ack must not double-append the same bp.
+    assert session.neg.counters_offered == [bp1, bp2]
     audit.close()
 
 
@@ -278,8 +279,8 @@ async def test_timings_recorded(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_barge_in_does_not_keep_agreed_bp(tmp_path: Path) -> None:
-    """Engine deal state must not stick after barge-in of an unacked CONFIRM."""
+async def test_confirm_bookkeeping_eager_before_ack(tmp_path: Path) -> None:
+    """CONFIRM record_confirm lands on emit so a fast accept can wrap."""
     orch, session, audit = _orch(tmp_path, auto_ack=False)
     await orch.start()
     assert session.pending is not None
@@ -323,15 +324,69 @@ async def test_barge_in_does_not_keep_agreed_bp(tmp_path: Path) -> None:
         oracle=TurnAnalysis(stance="accept"),
     )
     assert confirm.action.intent == Intent.CONFIRM_SCHEDULE
-    assert session.agreed_bp is None  # not acked yet
     assert session.pending is not None
-    assert session.pending.pending_agreed_bp == counter_bp
+    # Eager: confirmed before TTS ack so a typed "yes" wraps, not re-confirms.
+    assert session.neg.confirmed_bp == counter_bp
+    assert session.neg.phase == Phase.CONFIRM
+    assert session.agreed_bp == counter_bp
+    assert session.last_eval is not None
 
-    await orch.on_barge_in([])
+    wrap = await orch.on_creditor_text(
+        "yes",
+        oracle=TurnAnalysis(stance="accept"),
+    )
+    assert wrap.action.intent == Intent.PROPOSE_WRAP
+    assert wrap.action.next_phase == Phase.WRAP
+    await orch.on_sentence_done([sid for sid, _ in wrap.sentences])
+    assert session.neg.phase == Phase.WRAP
+    audit.close()
+
+
+@pytest.mark.asyncio
+async def test_barge_in_keeps_counter_if_heard(tmp_path: Path) -> None:
+    """Partial barge after hearing a COUNTER must still record offer_counter."""
+    orch, session, audit = _orch(tmp_path, auto_ack=False)
+    await orch.start()
+    assert session.pending is not None
+    await orch.on_sentence_done(session.pending.sentence_ids)
+
+    u = await orch.on_creditor_text(
+        "Up to eight payments, minimum one hundred dollars, even structure.",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(field="max_payments", value=8, quote="eight", hedged=False),
+                ExtractedTerm(
+                    field="min_payment_cents",
+                    value=10000,
+                    quote="one hundred dollars",
+                    hedged=False,
+                ),
+                ExtractedTerm(
+                    field="payment_structure", value="even", quote="even", hedged=False
+                ),
+            ],
+            stance="info",
+        ),
+    )
+    await orch.on_sentence_done([sid for sid, _ in u.sentences])
+
+    counter = await orch.on_creditor_text(
+        "We can do forty-five percent.",
+        oracle=TurnAnalysis(
+            settlement_ask_pct=45.0,
+            ask_quote="forty-five percent",
+            stance="offer",
+        ),
+    )
+    assert counter.action.intent == Intent.COUNTER
+    counter_bp = counter.action.facts["counter_pct"].value
+    assert isinstance(counter_bp, int)
+    assert session.neg.counters_offered == [counter_bp]
+
+    heard = [counter.sentences[0][0]]
+    await orch.on_barge_in(heard)
     assert session.pending is None
-    assert session.agreed_bp is None
-    # confirmed_bp only lands on CONFIRM ack — barge dropped it.
-    assert session.neg.confirmed_bp is None
+    assert session.neg.counters_offered == [counter_bp]
     audit.close()
 
 
@@ -343,9 +398,6 @@ async def test_post_nlu_queue_does_not_overwrite_pending(tmp_path: Path) -> None
     assert session.pending is not None
     await orch.on_sentence_done(session.pending.sentence_ids)
 
-    # Simulate text arriving during post-NLU by seeding the queue before emit ends.
-    # Drive a normal turn, then set queue and ensure a second on_creditor_text
-    # after ack processes it without having overwritten the first pending.
     u1 = await orch.on_creditor_text(
         "Maximum six payments, minimum one hundred, even.",
         oracle=TurnAnalysis(
@@ -369,16 +421,58 @@ async def test_post_nlu_queue_does_not_overwrite_pending(tmp_path: Path) -> None
     assert session.pending is not None
     assert first_ids
 
-    # Inject queued text as if it arrived during post; must remain until after ack.
+    # Inject queued text as if it arrived during post; must remain until ack.
     orch._post_nlu_queue = "Also we need forty five percent."
-    # Pending must still be the first action.
     assert session.pending is not None
     assert session.pending.action.intent == first_intent
     assert session.pending.sentence_ids == first_ids
 
     await orch.on_sentence_done(first_ids)
-    # F08: ack auto-drains the post-NLU queue (may emit a follow-up pending).
+    # F08: ack auto-drains the post-NLU queue (no extra idle message required).
     assert orch._post_nlu_queue is None
+    audit.close()
+
+
+@pytest.mark.asyncio
+async def test_unacked_pending_barged_before_new_text(tmp_path: Path) -> None:
+    """F07: second creditor line while pending unacked must barge, not overwrite."""
+    orch, session, audit = _orch(tmp_path, auto_ack=False)
+    await orch.start()
+    assert session.pending is not None
+    await orch.on_sentence_done(session.pending.sentence_ids)
+
+    await orch.on_creditor_text(
+        "Maximum six payments.",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(field="max_payments", value=6, quote="six", hedged=False),
+            ],
+            stance="info",
+        ),
+    )
+    first_ids = list(session.pending.sentence_ids)
+    assert first_ids
+
+    u2 = await orch.on_creditor_text(
+        "minimum one hundred dollars, even structure",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(
+                    field="min_payment_cents",
+                    value=10000,
+                    quote="one hundred",
+                    hedged=False,
+                ),
+                ExtractedTerm(
+                    field="payment_structure", value="even", quote="even", hedged=False
+                ),
+            ],
+            stance="info",
+        ),
+    )
+    assert session.pending is not None
+    assert session.pending.sentence_ids != first_ids
+    assert u2.action.intent is not None
     audit.close()
 
 
@@ -459,6 +553,53 @@ async def test_late_start_date_counters_terms_then_confirm(tmp_path: Path) -> No
 
 
 @pytest.mark.asyncio
+async def test_bare_min_payment_asks_dollars_or_cents(tmp_path: Path) -> None:
+    """Bare '110' must clarify unit; 'dollars' then stores 11000 cents."""
+    orch, session, audit = _orch(tmp_path)
+    await orch.start()
+
+    await orch.on_creditor_text(
+        "4",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(field="max_payments", value=4, quote="4", hedged=False),
+            ],
+            stance="info",
+        ),
+    )
+    # Live NLU path is what flags ambiguity; simulate via VerifiedAnalysis by
+    # using empty oracle terms + non-oracle would need LLM. Instead drive the
+    # ambiguity action through a second turn that post_verify would produce:
+    # use settings with a stub by calling the action path via empty terms and
+    # injecting pending — easiest: use analyze fast-path via non-oracle is hard.
+    # Call on_creditor_text with oracle that has bare quote "110" (triggers post_verify ambiguity).
+    u = await orch.on_creditor_text(
+        "110",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(
+                    field="min_payment_cents", value=110, quote="110", hedged=False
+                ),
+            ],
+            stance="info",
+        ),
+    )
+    assert u.action.intent == Intent.CLARIFY
+    assert u.action.reason == "cents_ambiguity"
+    assert session.neg.pending_cents_clarify is not None
+    assert session.belief.get("min_payment_cents").status != TermStatus.KNOWN
+
+    u2 = await orch.on_creditor_text(
+        "dollars",
+        oracle=TurnAnalysis(stance="info"),
+    )
+    assert session.belief.get("min_payment_cents").value == 11000
+    assert session.neg.pending_cents_clarify is None
+    assert u2.action.intent != Intent.CLARIFY or u2.action.reason != "cents_ambiguity"
+    audit.close()
+
+
+@pytest.mark.asyncio
 async def test_screenshot_transcript_revises_terms(tmp_path: Path) -> None:
     """Audit-style: revise max_payments after CONFIRM must not CLARIFY/escalate."""
     orch, session, audit = _orch(tmp_path)
@@ -474,11 +615,14 @@ async def test_screenshot_transcript_revises_terms(tmp_path: Path) -> None:
         ),
     )
     await orch.on_creditor_text(
-        "110",
+        "110 dollars",
         oracle=TurnAnalysis(
             terms=[
                 ExtractedTerm(
-                    field="min_payment_cents", value=11000, quote="110", hedged=False
+                    field="min_payment_cents",
+                    value=11000,
+                    quote="110 dollars",
+                    hedged=False,
                 ),
             ],
             stance="info",
@@ -553,43 +697,141 @@ async def test_screenshot_transcript_revises_terms(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_unacked_pending_barged_before_new_text(tmp_path: Path) -> None:
-    """F07: second creditor line while pending unacked must barge, not overwrite."""
-    orch, session, audit = _orch(tmp_path, auto_ack=False)
+async def test_balloon_high_min_offers_alt_fpd_not_rescue_escalate(
+    tmp_path: Path,
+) -> None:
+    """balloon_structure + high min: default FPD empty curve but later FPD works.
+
+    Must COUNTER_TERMS (not ESCALATE out_of_guardrail) so we can still negotiate.
+    """
+    from datetime import date
+
+    scenario = load_scenario(
+        "fixtures/scenarios/balloon_structure", rebase_to=date.today()
+    )
+    audit = AuditLog(tmp_path / "audit.db")
+    session = CallSession(scenario=scenario)
+    orch = Orchestrator(
+        session,
+        llm=None,
+        settings=_settings(),
+        audit=audit,
+        auto_ack=True,
+    )
     await orch.start()
-    assert session.pending is not None
-    await orch.on_sentence_done(session.pending.sentence_ids)
 
     await orch.on_creditor_text(
-        "Maximum six payments.",
+        "Five payments, minimum one hundred dollars, balloon is fine.",
         oracle=TurnAnalysis(
             terms=[
-                ExtractedTerm(field="max_payments", value=6, quote="six", hedged=False),
-            ],
-            stance="info",
-        ),
-    )
-    first_ids = list(session.pending.sentence_ids)
-    assert first_ids
-
-    u2 = await orch.on_creditor_text(
-        "minimum one hundred dollars, even structure",
-        oracle=TurnAnalysis(
-            terms=[
+                ExtractedTerm(field="max_payments", value=5, quote="Five", hedged=False),
                 ExtractedTerm(
                     field="min_payment_cents",
                     value=10000,
-                    quote="one hundred",
+                    quote="one hundred dollars",
                     hedged=False,
                 ),
                 ExtractedTerm(
-                    field="payment_structure", value="even", quote="even", hedged=False
+                    field="payment_structure",
+                    value="balloon",
+                    quote="balloon",
+                    hedged=False,
                 ),
             ],
             stance="info",
         ),
     )
-    assert session.pending is not None
-    assert session.pending.sentence_ids != first_ids
-    assert u2.action.intent is not None
+
+    u = await orch.on_creditor_text(
+        "Eighty percent.",
+        oracle=TurnAnalysis(
+            settlement_ask_pct=80.0,
+            ask_quote="Eighty percent",
+            stance="offer",
+        ),
+    )
+    assert u.action.intent == Intent.COUNTER_TERMS
+    assert u.action.reason == "alt_first_payment_date"
+    alt = u.action.facts["alt_first_payment_date"].value
+    assert isinstance(alt, date)
+
+    # Accept alt → should negotiate (counter), not escalate.
+    u2 = await orch.on_creditor_text(
+        "yes that start date works",
+        oracle=TurnAnalysis(stance="accept"),
+    )
+    assert u2.action.intent in (Intent.COUNTER, Intent.CONFIRM_SCHEDULE)
+    assert session.neg.phase != Phase.ESCALATE
+    if u2.action.intent == Intent.COUNTER:
+        bp = u2.action.facts["counter_pct"].value
+        assert isinstance(bp, int)
+        assert session.agreed_bp == bp
+    audit.close()
+
+
+@pytest.mark.asyncio
+async def test_balloon_reject_fpd_cascades_to_min_or_max(tmp_path: Path) -> None:
+    """Reject alt FPD → next term stage (min or max), not immediate escalate."""
+    from datetime import date
+
+    scenario = load_scenario(
+        "fixtures/scenarios/balloon_structure", rebase_to=date.today()
+    )
+    audit = AuditLog(tmp_path / "audit.db")
+    session = CallSession(scenario=scenario)
+    orch = Orchestrator(
+        session,
+        llm=None,
+        settings=_settings(),
+        audit=audit,
+        auto_ack=True,
+    )
+    await orch.start()
+
+    await orch.on_creditor_text(
+        "Five payments, minimum one hundred dollars, balloon is fine.",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(field="max_payments", value=5, quote="Five", hedged=False),
+                ExtractedTerm(
+                    field="min_payment_cents",
+                    value=10000,
+                    quote="one hundred dollars",
+                    hedged=False,
+                ),
+                ExtractedTerm(
+                    field="payment_structure",
+                    value="balloon",
+                    quote="balloon",
+                    hedged=False,
+                ),
+            ],
+            stance="info",
+        ),
+    )
+
+    u = await orch.on_creditor_text(
+        "Eighty percent.",
+        oracle=TurnAnalysis(
+            settlement_ask_pct=80.0,
+            ask_quote="Eighty percent",
+            stance="offer",
+        ),
+    )
+    assert u.action.intent == Intent.COUNTER_TERMS
+    assert u.action.reason == "alt_first_payment_date"
+
+    u2 = await orch.on_creditor_text(
+        "No, that start date will not work.",
+        oracle=TurnAnalysis(stance="reject"),
+    )
+    # Cascade: min payment or max payments or escalate/no-deal — not stuck on FPD.
+    assert u2.action.intent in (
+        Intent.COUNTER_TERMS,
+        Intent.ESCALATE,
+        Intent.NO_DEAL_WRAP,
+    )
+    if u2.action.intent == Intent.COUNTER_TERMS:
+        assert u2.action.reason in ("alt_min_payment_cents", "alt_max_payments")
+        assert "alt_first_payment_date" not in u2.action.facts
     audit.close()

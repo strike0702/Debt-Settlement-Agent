@@ -626,3 +626,32 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - **Why:** Only `easy_deal/rep_card.md` had a Creditor account table; other scenarios showed settlement rules only in rep view.
 - Fix: add Creditor / outstanding / original balance (from each `offer.json`) to `counter_ladder`, `no_space`, `balloon_structure`, `late_start_date`, `rescue_escalate` rep cards.
 - Not a UI filter — content was missing from the markdown fixtures.
+
+### Unreachable-ask term-alt loop (2026-10-03)
+
+- **Why:** Live `balloon_structure` call re-offered 8% forever after creditor rejected and asked for 50%. Weak min alt ($50) unlocked only `max_bp=800`; term-alt search stopped once the curve was non-empty; min field blocked from a deeper cut ($30) that unlocks 50%+.
+- Fix:
+  - `_engine_context` hunts term alts when ask > `max_bp` / not feasible, not only when `max_bp is None`.
+  - Min/max scanners take `baseline_max_bp` and only return improving alts; progressive min/max counters allowed (FPD still one try).
+  - Policy prefers `COUNTER_TERMS` over ceiling re-offer when ask is above `max_bp`.
+- Files: `app/agent/{orchestrator,policy}.py`, unit tests.
+- Tests: 376 passed offline (+1 skipped live); `ruff check .` clean.
+
+### 8% lock when a later start unlocks 77% (2026-10-04)
+
+- **Why:** `balloon_structure` with 5 payments, $50 minimum, balloon, ask 80%. Current month ceiling is 8% ($56). December 31 ceiling is 77%, and 60% is feasible there. The agent offered 8%, treated "okay" on the later start as accepting that 8%, then re-read 8% until no-deal.
+- Causes: FPD search ranked the closest non-empty curve, so the current month beat December whenever 80% fit nowhere; "cool" was not an accept; a term-alt yes confirmed the last price counter; a confirm below the outstanding ask stalled into assumed-field questions.
+- Fix: when the ask fits on no date, pick the highest ceiling; `cool`/`yes`/`yeah`/`yep` repair to accept; `decide(..., accepted_term_alt=)` does not confirm a stale lower counter; a confirm still under the ask reopens the ladder when that ask is feasible.
+- Files: `app/agent/{orchestrator,policy,nlu}.py`, unit tests.
+- Tests: 382 passed offline (+1 skipped live); `ruff check .` clean.
+
+### Remove Mock UI replay (2026-10-04)
+
+- Dropped operator Mock checkbox, `?mock=1`, and `app/static/mock_script.js`. Live scenario/WS only.
+- Follow-up: `Cache-Control: no-cache` on `/`, cache-bust `app.js`, default scenario to `easy_deal` when unset so Start still works without Mock.
+
+### Skip useless max-payment +1 alts (2026-10-04)
+
+- **Why:** Live call asked 4→5→6 when 5 only raised the ceiling and 6 was the first count that unlocked a real ladder (ask 80% still infeasible; settle path started at 6).
+- Fix: `find_alt_max_payments` / `find_alt_min_payment_cents` match FPD ranking — lowest/highest ask-feasible first; else jump to best ceiling (least invasive among ties), not progressive +1 / −$10.
+- Files: `app/agent/orchestrator.py`, `tests/unit/test_term_alts.py`.

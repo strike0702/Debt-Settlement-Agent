@@ -83,7 +83,11 @@ def terms_counter_key(field: str, value: Any) -> str:
 
 
 def field_already_countered(terms_countered: list[str], field: str) -> bool:
-    """True when any prior COUNTER_TERMS was for ``field`` (one try per field)."""
+    """True when any prior COUNTER_TERMS was for ``field``.
+
+    Used for ``first_payment_date`` (one try). Min / max may progress to a
+    better value when a prior alt left the ask unreachable.
+    """
     prefix = f"{field}:"
     return any(k.startswith(prefix) for k in terms_countered)
 
@@ -736,11 +740,16 @@ def decide(
     confirm_facts: dict[str, Fact] | None = None,
     counter_offer_total_cents: int | None = None,
     term_alt: tuple[str, Any] | None = None,
+    accepted_term_alt: bool = False,
 ) -> Action:
     """Apply §6.2 rules in order; return the next agent ``Action``.
 
     ``term_alt`` is ``(field, value)`` for the next non-price recovery stage
-    when ``afford.max_bp is None`` (first_payment_date → min_payment → max_payments).
+    when the curve is empty or the ask sits above the ceiling
+    (first_payment_date → min_payment → max_payments).
+
+    ``accepted_term_alt`` is true when this turn's accept applied a pending
+    non-price alternative. That yes is not acceptance of the last price.
     """
     cfg = settings or get_settings()
 
@@ -849,6 +858,7 @@ def decide(
                 confirm_facts=confirm_facts,
                 counter_offer_total_cents=counter_offer_total_cents,
                 term_alt=term_alt,
+                accepted_term_alt=accepted_term_alt,
             )
             return action.model_copy(
                 update={
@@ -981,7 +991,12 @@ def decide(
     # 10: In CONFIRM, accept stance only → wrap (not readback_response).
     # Key must still match confirmed_bp; otherwise fall through for re-confirm.
     # A restated different settlement % is a correction, not a wrap.
-    if neg.phase == Phase.CONFIRM and analysis.stance == "accept":
+    # A yes to a pending term alt is not a yes to the schedule on the table.
+    if (
+        neg.phase == Phase.CONFIRM
+        and analysis.stance == "accept"
+        and not accepted_term_alt
+    ):
         stated_bp = (
             ask_pct_to_bp(analysis.settlement_ask_pct)
             if analysis.settlement_ask_pct is not None
@@ -1048,9 +1063,12 @@ def decide(
         if term_alt is not None:
             alt_field, alt_value = term_alt
             key = terms_counter_key(alt_field, alt_value)
-            if key not in neg.terms_countered and not field_already_countered(
-                neg.terms_countered, alt_field
-            ):
+            # FPD: one try per field. Min/max may progress to a better value.
+            fpd_blocked = (
+                alt_field == "first_payment_date"
+                and field_already_countered(neg.terms_countered, alt_field)
+            )
+            if key not in neg.terms_countered and not fpd_blocked:
                 return _counter_terms_action(
                     field=alt_field,
                     value=alt_value,
@@ -1078,19 +1096,40 @@ def decide(
             ),
         )
 
+    # Ask above ceiling but a further non-price alt can raise it — prefer that
+    # over re-offering the same max counter in a loop.
+    if ask_bp > afford.max_bp and term_alt is not None:
+        alt_field, alt_value = term_alt
+        key = terms_counter_key(alt_field, alt_value)
+        fpd_blocked = (
+            alt_field == "first_payment_date"
+            and field_already_countered(neg.terms_countered, alt_field)
+        )
+        if key not in neg.terms_countered and not fpd_blocked:
+            return _counter_terms_action(
+                field=alt_field,
+                value=alt_value,
+                effects=effects,
+            )
+
     # Rep accepted our last counter → confirm that bp (if still legal under rules).
     # Prefer an explicit restated % when the rep corrects the figure.
+    # A yes to a start-date / min / payment-count alt is not a yes to the
+    # previous price — that counter can be a token percent the new terms
+    # just made obsolete.
     if analysis.stance == "accept":
         bp: int | None = None
         if analysis.settlement_ask_pct is not None:
             stated = ask_pct_to_bp(analysis.settlement_ask_pct)
             if stated <= afford.max_bp and stated in afford.feasible_bps:
                 bp = stated
-        if bp is None and neg.counters_offered:
+        if bp is None and neg.counters_offered and not accepted_term_alt:
             cand = neg.counters_offered[-1]
             if cand <= afford.max_bp and cand in afford.feasible_bps:
                 bp = cand
-        if bp is not None:
+        if bp is not None and not (
+            accepted_term_alt and ask_bp is not None and bp < ask_bp
+        ):
             return _confirm_action(
                 ask_bp=bp,
                 belief=belief,
@@ -1121,6 +1160,7 @@ def decide(
             and key_at_confirmed != neg.last_confirm_key
             and confirmed <= afford.max_bp
             and confirmed in afford.feasible_bps
+            and ask_bp <= confirmed
         ):
             return _confirm_action(
                 ask_bp=confirmed,
@@ -1132,9 +1172,12 @@ def decide(
                 reason="terms_revised",
             )
 
-        # Same schedule already on the table (identical key, no lower ask).
+        # Same schedule already on the table, and that price meets the ask.
+        # A confirm still below the ask (8% on the table, rep wants 60% and
+        # the ceiling can cover it) must reopen the ladder, not stall.
         if (
             confirmed is not None
+            and ask_bp <= confirmed
             and neg.last_confirm_key is not None
             and key_at_confirmed == neg.last_confirm_key
             and not lower_ask

@@ -58,16 +58,16 @@ async def test_barge_in_keeps_eager_counter(tmp_path: Path) -> None:
     assert session.pending is not None
     await orch.on_sentence_done(session.pending.sentence_ids)
 
-    # Strict rules → max_bp < 95% ask so we COUNTER.
+    # Soft rules → ask affordable; counter ladder (not term-alt recovery).
     utt = await orch.on_creditor_text(
-        "Max three payments, minimum payment two hundred fifty dollars, even payments.",
+        "Max six payments, minimum payment twenty five dollars, even payments.",
         oracle=TurnAnalysis(
             terms=[
-                ExtractedTerm(field="max_payments", value=3, quote="three", hedged=False),
+                ExtractedTerm(field="max_payments", value=6, quote="six", hedged=False),
                 ExtractedTerm(
                     field="min_payment_cents",
-                    value=25000,
-                    quote="two hundred fifty dollars",
+                    value=2500,
+                    quote="twenty five dollars",
                     hedged=False,
                 ),
                 ExtractedTerm(
@@ -80,10 +80,10 @@ async def test_barge_in_keeps_eager_counter(tmp_path: Path) -> None:
     await orch.on_sentence_done([sid for sid, _ in utt.sentences])
 
     counter1 = await orch.on_creditor_text(
-        "We need ninety-five percent.",
+        "We need seventy percent.",
         oracle=TurnAnalysis(
-            settlement_ask_pct=95.0,
-            ask_quote="ninety-five percent",
+            settlement_ask_pct=70.0,
+            ask_quote="seventy percent",
             stance="offer",
         ),
     )
@@ -98,10 +98,10 @@ async def test_barge_in_keeps_eager_counter(tmp_path: Path) -> None:
     assert session.neg.counters_offered == [bp1]
 
     counter2 = await orch.on_creditor_text(
-        "Still need ninety-five percent, that is too low.",
+        "Still need seventy percent, that is too low.",
         oracle=TurnAnalysis(
-            settlement_ask_pct=95.0,
-            ask_quote="ninety-five percent",
+            settlement_ask_pct=70.0,
+            ask_quote="seventy percent",
             stance="reject",
         ),
     )
@@ -834,4 +834,184 @@ async def test_balloon_reject_fpd_cascades_to_min_or_max(tmp_path: Path) -> None
     if u2.action.intent == Intent.COUNTER_TERMS:
         assert u2.action.reason in ("alt_min_payment_cents", "alt_max_payments")
         assert "alt_first_payment_date" not in u2.action.facts
+    audit.close()
+
+
+@pytest.mark.asyncio
+async def test_balloon_weak_min_then_ask_50_offers_deeper_min(
+    tmp_path: Path,
+) -> None:
+    """balloon_structure: jump past a token $50 floor to $30 so 50% is negotiable."""
+    from datetime import date
+
+    scenario = load_scenario(
+        "fixtures/scenarios/balloon_structure", rebase_to=date.today()
+    )
+    audit = AuditLog(tmp_path / "audit.db")
+    session = CallSession(scenario=scenario)
+    orch = Orchestrator(
+        session,
+        llm=None,
+        settings=_settings(),
+        audit=audit,
+        auto_ack=True,
+    )
+    await orch.start()
+
+    await orch.on_creditor_text(
+        "Five payments, minimum one hundred dollars, balloon is fine.",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(field="max_payments", value=5, quote="Five", hedged=False),
+                ExtractedTerm(
+                    field="min_payment_cents",
+                    value=10000,
+                    quote="one hundred dollars",
+                    hedged=False,
+                ),
+                ExtractedTerm(
+                    field="payment_structure",
+                    value="balloon",
+                    quote="balloon",
+                    hedged=False,
+                ),
+            ],
+            stance="info",
+        ),
+    )
+
+    u = await orch.on_creditor_text(
+        "Eighty percent.",
+        oracle=TurnAnalysis(
+            settlement_ask_pct=80.0,
+            ask_quote="Eighty percent",
+            stance="offer",
+        ),
+    )
+    # May be FPD or min depending on rebase; reject FPD to reach min alt.
+    if u.action.intent == Intent.COUNTER_TERMS and u.action.reason == "alt_first_payment_date":
+        u = await orch.on_creditor_text(
+            "No, that start date will not work.",
+            oracle=TurnAnalysis(stance="reject"),
+        )
+    assert u.action.intent == Intent.COUNTER_TERMS
+    assert u.action.reason == "alt_min_payment_cents"
+    # Jump to the floor that unlocks a real ceiling ($30), not a weak $50 step.
+    first_min = u.action.facts["alt_min_payment_cents"].value
+    assert isinstance(first_min, int)
+    assert first_min == 3000
+
+    u2 = await orch.on_creditor_text(
+        "yes, thirty is fine. We need fifty percent minimum.",
+        oracle=TurnAnalysis(
+            stance="accept",
+            settlement_ask_pct=50.0,
+            ask_quote="fifty percent",
+        ),
+    )
+    # After the min cut, 50% should be negotiable (counter or confirm), not 8% loop.
+    assert u2.action.intent in (Intent.COUNTER, Intent.CONFIRM_SCHEDULE)
+    if u2.action.intent == Intent.COUNTER:
+        bp = u2.action.facts["counter_pct"].value
+        assert isinstance(bp, int)
+        assert bp > 800
+    audit.close()
+
+
+@pytest.mark.asyncio
+async def test_balloon_fifty_dollar_min_accepts_later_start_above_eight_percent(
+    tmp_path: Path,
+) -> None:
+    """$50 min + 80% ask: later start unlocks ~77%. Accepting it must not lock 8%."""
+    from datetime import date
+
+    scenario = load_scenario(
+        "fixtures/scenarios/balloon_structure", rebase_to=date.today()
+    )
+    audit = AuditLog(tmp_path / "audit.db")
+    session = CallSession(scenario=scenario)
+    orch = Orchestrator(
+        session,
+        llm=None,
+        settings=_settings(),
+        audit=audit,
+        auto_ack=True,
+    )
+    await orch.start()
+
+    await orch.on_creditor_text(
+        "Five payments.",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(field="max_payments", value=5, quote="Five", hedged=False),
+            ],
+            stance="info",
+        ),
+    )
+    await orch.on_creditor_text(
+        "50 dollars.",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(
+                    field="min_payment_cents",
+                    value=5000,
+                    quote="50 dollars",
+                    hedged=False,
+                ),
+            ],
+            stance="info",
+        ),
+    )
+    await orch.on_creditor_text(
+        "balloon works",
+        oracle=TurnAnalysis(
+            terms=[
+                ExtractedTerm(
+                    field="payment_structure",
+                    value="balloon",
+                    quote="balloon",
+                    hedged=False,
+                ),
+            ],
+            stance="info",
+        ),
+    )
+
+    u = await orch.on_creditor_text(
+        "80%",
+        oracle=TurnAnalysis(
+            settlement_ask_pct=80.0,
+            ask_quote="80%",
+            stance="offer",
+        ),
+    )
+    assert u.action.intent == Intent.COUNTER_TERMS
+    assert u.action.reason == "alt_first_payment_date"
+
+    u2 = await orch.on_creditor_text(
+        "okay",
+        oracle=TurnAnalysis(stance="accept"),
+    )
+    assert u2.action.intent == Intent.COUNTER
+    bp = u2.action.facts["counter_pct"].value
+    assert isinstance(bp, int)
+    assert bp > 800
+    assert session.last_max_bp is not None and session.last_max_bp >= 6000
+
+    u3 = await orch.on_creditor_text(
+        "no we need 60%",
+        oracle=TurnAnalysis(
+            stance="reject",
+            settlement_ask_pct=60.0,
+            ask_quote="60%",
+        ),
+    )
+    assert u3.action.intent in (Intent.COUNTER, Intent.CONFIRM_SCHEDULE)
+    spoken_bp = (
+        u3.action.facts["counter_pct"].value
+        if u3.action.intent == Intent.COUNTER
+        else u3.action.facts["settlement_pct"].value
+    )
+    assert isinstance(spoken_bp, int)
+    assert spoken_bp > 800
     audit.close()

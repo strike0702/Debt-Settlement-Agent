@@ -141,7 +141,14 @@ def create_app(
 
     @application.get("/")
     async def index() -> FileResponse:
-        return FileResponse(_STATIC / "index.html")
+        # Avoid sticky HTML that still references removed static assets (e.g. mock).
+        return FileResponse(
+            _STATIC / "index.html",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+            },
+        )
 
     application.mount("/static", StaticFiles(directory=_STATIC), name="static")
     return application

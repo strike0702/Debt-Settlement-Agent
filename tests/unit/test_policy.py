@@ -310,6 +310,33 @@ def test_rule9_alt_min_payment_beats_rescue() -> None:
     assert action.facts["alt_min_payment_cents"].value == 5000
 
 
+def test_ask_above_ceiling_prefers_further_term_alt() -> None:
+    """Tiny unlocked ceiling + better min alt → COUNTER_TERMS, not 8% loop."""
+    b = _belief(max_payments=5, min_payment_cents=5000, payment_structure="balloon")
+    action = decide(
+        b,
+        _neg(
+            turn_idx=8,
+            ask_bp=5000,
+            counters_offered=[800],
+            rejects=1,
+            phase=Phase.NEGOTIATE,
+            terms_countered=[
+                "first_payment_date:2027-01-31",
+                "min_payment_cents:5000",
+            ],
+        ),
+        TurnAnalysis(stance="reject", settlement_ask_pct=50.0),
+        _afford(800, [800]),
+        settings=_SETTINGS,
+        term_alt=("min_payment_cents", 3000),
+        counter_offer_total_cents=5600,
+    )
+    assert action.intent == Intent.COUNTER_TERMS
+    assert action.reason == "alt_min_payment_cents"
+    assert action.facts["alt_min_payment_cents"].value == 3000
+
+
 def test_rule9_reject_terms_cascades_to_next_alt() -> None:
     """Reject pending FPD alt → clear pending and offer min payment, not NO_DEAL."""
     b = _belief(max_payments=5, min_payment_cents=10000, payment_structure="balloon")
@@ -654,6 +681,80 @@ def test_confirm_accept_with_corrected_pct_does_not_wrap() -> None:
     assert action.intent == Intent.CONFIRM_SCHEDULE
     assert action.facts["settlement_pct"].value == 7100
     assert action.intent != Intent.PROPOSE_WRAP
+
+
+def test_term_alt_accept_does_not_lock_stale_low_counter() -> None:
+    """Yes to a term change must not confirm 8% when the ask is still 60%."""
+    b = _belief(max_payments=5, min_payment_cents=5000, payment_structure="balloon")
+    feasible = list(range(100, 7800, 100))
+    action = decide(
+        b,
+        _neg(
+            turn_idx=6,
+            ask_bp=6000,
+            counters_offered=[800],
+            phase=Phase.NEGOTIATE,
+        ),
+        TurnAnalysis(stance="accept"),
+        _afford(7700, feasible),
+        settings=_SETTINGS,
+        accepted_term_alt=True,
+    )
+    assert action.intent == Intent.COUNTER
+    bp = action.facts["counter_pct"].value
+    assert isinstance(bp, int)
+    assert 800 < bp < 6000
+
+
+def test_low_confirm_reject_reopens_ladder_when_ask_affordable() -> None:
+    """Rejecting an 8% confirm while 60% fits must counter up, not probe ASSUMED fields."""
+    b = _belief(max_payments=5, min_payment_cents=5000, payment_structure="balloon")
+    key = _key(b, 800)
+    feasible = list(range(100, 7800, 100))
+    action = decide(
+        b,
+        _neg(
+            turn_idx=8,
+            ask_bp=800,
+            confirmed_bp=800,
+            counters_offered=[800],
+            phase=Phase.CONFIRM,
+            last_confirm_key=key,
+        ),
+        TurnAnalysis(stance="reject", settlement_ask_pct=60.0, ask_quote="sixty percent"),
+        _afford(7700, feasible),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.COUNTER
+    bp = action.facts["counter_pct"].value
+    assert isinstance(bp, int)
+    assert 800 < bp < 6000
+
+
+def test_low_confirm_other_stance_does_not_repeat_eight_percent() -> None:
+    """A non-reject line after a too-low confirm must climb, not re-read 8%."""
+    b = _belief(max_payments=5, min_payment_cents=5000, payment_structure="balloon")
+    key = _key(b, 800)
+    feasible = list(range(100, 7800, 100))
+    action = decide(
+        b,
+        _neg(
+            turn_idx=8,
+            ask_bp=6000,
+            confirmed_bp=800,
+            counters_offered=[800],
+            phase=Phase.CONFIRM,
+            last_confirm_key=key,
+            confirm_rejects=1,
+        ),
+        TurnAnalysis(stance="other"),
+        _afford(7700, feasible),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.COUNTER
+    bp = action.facts["counter_pct"].value
+    assert isinstance(bp, int)
+    assert bp > 800
 
 
 def test_accept_confirms_last_counter() -> None:

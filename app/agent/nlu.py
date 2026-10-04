@@ -555,6 +555,10 @@ _ACCEPT_STANCE_RE = re.compile(
     r"|\bsure\b"
     r"|\balright\b"
     r"|\ball right\b"
+    r"|\bcool\b"
+    r"|\byes\b"
+    r"|\byeah\b"
+    r"|\byep\b"
     r")\b",
     re.IGNORECASE,
 )

@@ -209,6 +209,12 @@ def test_post_verify_repairs_accept_fine() -> None:
     assert out.stance == "accept"
 
 
+def test_post_verify_repairs_accept_cool() -> None:
+    analysis = TurnAnalysis(stance="other")
+    out = post_verify(analysis, "cool", ref=_REF)
+    assert out.stance == "accept"
+
+
 def test_post_verify_repairs_reject_stance() -> None:
     analysis = TurnAnalysis(stance="info")
     out = post_verify(

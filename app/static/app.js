@@ -82,7 +82,6 @@ const store = createStore({
   connected: false,
   started: false,
   ending: false,
-  mock: false,
   micOn: false,
   speaking: false,
   waiting: false,
@@ -115,7 +114,6 @@ const el = {
   btnMic: document.getElementById("btn-mic"),
   btnSend: document.getElementById("btn-send"),
   btnDownload: document.getElementById("btn-download"),
-  togMock: document.getElementById("tog-mock"),
   sttMode: document.getElementById("stt-mode"),
   scenarioSelect: document.getElementById("scenario-select"),
   expectedBadge: document.getElementById("expected-badge"),
@@ -162,8 +160,6 @@ let vad = null;
 let vadEndAt = null;
 let pendingSayQueue = [];
 const speakingIds = new Set();
-let mockTimer = null;
-let mockIdx = 0;
 let endTimer = null;
 const END_TIMEOUT_MS = 3000;
 let micGen = 0;
@@ -838,7 +834,6 @@ function sendText(textOverride, source) {
   const text = (textOverride ?? el.textInput.value).trim();
   if (!text) return;
   if (textOverride == null) el.textInput.value = "";
-  if (store.get().mock) return;
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   // Typed reply mid-TTS must barge first so confirm/counter bookkeeping lands.
   if (store.get().speaking || pendingSayQueue.length) bargeIn();
@@ -860,12 +855,6 @@ function sendJson(obj) {
 }
 
 function endChat() {
-  if (store.get().mock) {
-    stopMock();
-    setControlsEnabled(false);
-    updateCallButton();
-    return;
-  }
   if (store.get().ending) return;
   void stopMic();
   if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -1177,7 +1166,6 @@ async function resumeVadAudioContext(instance) {
 }
 
 async function startMic() {
-  if (store.get().mock) return;
   // micOn flips immediately so a second click during VAD load routes to stopMic.
   const gen = ++micGen;
   store.set({ micOn: true, sttFallbackNotice: "" });
@@ -1394,34 +1382,6 @@ function stopBrowserRec() {
   browserActive = false;
 }
 
-function startMock() {
-  resetCallState();
-  store.set({ mock: true, started: true, connected: true });
-  setControlsEnabled(false);
-  el.btnMic.disabled = true;
-  updateCallButton();
-  mockIdx = 0;
-  runMockStep();
-}
-
-function stopMock() {
-  if (mockTimer) clearTimeout(mockTimer);
-  mockTimer = null;
-  mockIdx = 0;
-  store.set({ mock: false, started: false, connected: false, ending: false });
-  updateCallButton();
-}
-
-function runMockStep() {
-  const script = window.MOCK_SCRIPT || [];
-  if (mockIdx >= script.length) return;
-  const step = script[mockIdx++];
-  mockTimer = setTimeout(() => {
-    for (const ev of step.events) applyEvent(ev);
-    runMockStep();
-  }, step.delay || 500);
-}
-
 async function loadScenarios() {
   try {
     const res = await fetch("/scenarios");
@@ -1440,8 +1400,16 @@ async function loadScenarios() {
     if (saved === CUSTOM_ID || (saved && list.some((s) => s.id === saved))) {
       el.scenarioSelect.value = saved;
     } else {
-      el.scenarioSelect.value = "";
-      store.set({ scenarioId: "" });
+      // Prefer a real demo case so Start works without the old Mock replay.
+      const fallback = list.find((s) => s.id === "easy_deal") || list[0];
+      if (fallback) {
+        el.scenarioSelect.value = fallback.id;
+        store.set({ scenarioId: fallback.id });
+        rememberScenarioId(fallback.id);
+      } else {
+        el.scenarioSelect.value = "";
+        store.set({ scenarioId: "" });
+      }
     }
     updateExpectedBadge();
     syncCustomCasePanel();
@@ -1765,18 +1733,18 @@ async function toggleCall() {
     return;
   }
   await stopMic();
-  stopMock();
   showNotice("");
-  if (el.togMock.checked) {
-    startMock();
-    return;
-  }
   const scenarioId = el.scenarioSelect.value || store.get().scenarioId || "";
   if (!scenarioId) {
+    store.set({ view: "operator" });
+    applyView();
     showNotice("Pick a scenario in Operator view (or apply a custom test case) before starting.");
+    el.scenarioSelect?.focus();
     return;
   }
   if (scenarioId === CUSTOM_ID && !store.get().customPayload) {
+    store.set({ view: "operator" });
+    applyView();
     showNotice("Apply a custom test case on the Operator page first.");
     return;
   }
@@ -1848,7 +1816,6 @@ el.auditFilters.addEventListener("click", (e) => {
 });
 
 const params = new URLSearchParams(location.search);
-if (params.get("mock") === "1") el.togMock.checked = true;
 if (params.get("view") === "operator") store.set({ view: "operator" });
 if (params.get("scenario")) {
   store.set({ scenarioId: params.get("scenario") });
@@ -1863,5 +1830,3 @@ syncCustomCasePanel();
 loadScenarios().then(() => {
   syncCustomCasePanel();
 });
-
-if (el.togMock.checked) startMock();

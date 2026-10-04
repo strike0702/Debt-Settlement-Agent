@@ -97,6 +97,14 @@ def test_ws_start_text_say_sentence_done_barge_in(tmp_path: Path) -> None:
             )
             turn1 = _recv_until(ws, lambda m: m.get("type") == "turn_done")
             assert any(m["type"] == "transcript" and m["role"] == "creditor" for m in turn1)
+            # Creditor line must arrive before the agent say (early echo for UI).
+            cred_i = next(
+                i
+                for i, m in enumerate(turn1)
+                if m["type"] == "transcript" and m["role"] == "creditor"
+            )
+            say_i = next(i for i, m in enumerate(turn1) if m["type"] == "say")
+            assert cred_i < say_i
             assert any(m["type"] == "say" for m in turn1)
             assert any(m["type"] == "belief" for m in turn1)
 

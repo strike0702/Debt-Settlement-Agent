@@ -25,6 +25,7 @@ SAFE_FALLBACK = "Let me check that figure and come back to it."
 # mid-sentence capitals and leaked field names, so they always use ``TEMPLATES``.
 TEMPLATE_ONLY_INTENTS: frozenset[Intent] = frozenset(
     {
+        Intent.OPENING,
         Intent.ASK,
         Intent.ASK_SETTLEMENT,
         Intent.SPEAK_SCHEDULE,
@@ -38,8 +39,8 @@ TEMPLATE_ONLY_INTENTS: frozenset[Intent] = frozenset(
 # One spoken template per intent. No digits, $, %, or number-words.
 TEMPLATES: dict[Intent, str] = {
     Intent.OPENING: (
-        "Hello, this is {firm_name}. {opening_disclosure} "
-        "How can I help with this account today?"
+        "Good morning, thank you for calling {firm_name}. {opening_disclosure} "
+        "How may I assist you today?"
     ),
     Intent.ASK: "{ask_text}",
     Intent.ASK_SETTLEMENT: (

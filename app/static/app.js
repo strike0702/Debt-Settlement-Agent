@@ -162,11 +162,27 @@ let pendingSayQueue = [];
 const speakingIds = new Set();
 let endTimer = null;
 const END_TIMEOUT_MS = 3000;
+/** Call id whose audit export stays available after End chat (this page load). */
+let downloadCallId = null;
 let micGen = 0;
 let micStream = null;
 let chatGroupCount = 0;
 let browserRec = null;
 let browserActive = false;
+/** Bump on cancel/barge so stale utter.onend/onerror are ignored. */
+let ttsGen = 0;
+/** Keep alive — Chrome GC of Utterance aborts playback. */
+let currentUtter = null;
+/** Ignore VAD/browser barge briefly after TTS starts (speaker onset echo). */
+let bargeSuppressUntil = 0;
+const BARGE_ECHO_GUARD_MS = 750;
+/**
+ * Drop the in-flight mic utterance if it started while the agent was talking.
+ * Lets voice barge work, but blocks agent TTS from becoming STT text.
+ */
+let utteranceContaminated = false;
+/** Browser STT: ignore finals until the next clean speechstart. */
+let browserIgnoreResults = false;
 
 function money(cents) {
   if (cents == null) return "—";
@@ -484,7 +500,7 @@ function renderChat() {
   const parts = groups.map((g, i) => bubbleHtml(g.side, g.texts, "", i >= chatGroupCount));
   chatGroupCount = groups.length;
   if (s.interim) parts.push(bubbleHtml("rep", [s.interim], " interim"));
-  if (s.waiting) parts.push(bubbleHtml("agent", ["Thinking…"], " typing"));
+  else if (s.waiting) parts.push(bubbleHtml("agent", ["Thinking…"], " typing"));
   el.chatLog.innerHTML = parts.join("");
   el.chatLog.scrollTop = el.chatLog.scrollHeight;
 }
@@ -720,8 +736,14 @@ function renderAll() {
 
 function resetCallState() {
   chatGroupCount = 0;
+  ttsGen += 1;
   pendingSayQueue = [];
   speakingIds.clear();
+  currentUtter = null;
+  bargeSuppressUntil = 0;
+  utteranceContaminated = false;
+  browserIgnoreResults = false;
+  browserPausedForTts = false;
   window.speechSynthesis?.cancel();
   store.set({
     callId: null,
@@ -750,11 +772,16 @@ function wsUrl(callId) {
   return `${proto}://${location.host}/ws/call/${callId}`;
 }
 
+function syncDownloadButton() {
+  // End chat turns off compose controls; the last started call's log stays downloadable.
+  el.btnDownload.disabled = !downloadCallId;
+}
+
 function setControlsEnabled(on) {
   el.textInput.disabled = !on;
   el.btnSend.disabled = !on;
   el.btnMic.disabled = !on;
-  el.btnDownload.disabled = !on || !store.get().callId;
+  syncDownloadButton();
   updateCallButton();
   updateMicButton();
 }
@@ -807,6 +834,7 @@ function connectAndStart() {
       startMsg.scenario_id = scenarioId;
     }
     sock.send(JSON.stringify(startMsg));
+    downloadCallId = callId;
     store.set({ started: true });
     setControlsEnabled(true);
   };
@@ -887,20 +915,163 @@ function finishEnd() {
   renderChat();
 }
 
+/** Mic stays live for barge on server VAD; browser STT must pause or it hears TTS. */
+let browserPausedForTts = false;
+const BROWSER_STT_SETTLE_MS = 500;
+
+/** Chrome TTS chokes on `%` / `$` — expand for speech only (chat keeps symbols). */
+function speakableText(text) {
+  return String(text)
+    .replace(/\$(\d{1,3}(?:,\d{3})*(?:\.\d+)?)/g, "$1 dollars")
+    .replace(/(\d+(?:\.\d+)?)\s*%/g, "$1 percent")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function enqueueSay(id, text) {
   pendingSayQueue.push({ id, text });
   if (!store.get().speaking) drainSayQueue();
 }
 
+function agentIsTalking() {
+  return store.get().speaking || pendingSayQueue.length > 0;
+}
+
+/** Show ready Listening cue when mic is armed (not only after VAD/Chrome hears speech). */
+function maybeShowListening() {
+  if (!store.get().micOn) return;
+  if (agentIsTalking() || store.get().waiting) return;
+  if (performance.now() < bargeSuppressUntil) return;
+  if (browserPausedForTts) return;
+  // VAD still loading — don't pretend we can hear yet.
+  if (effectiveSttMode() !== "browser" && !vad) return;
+  const cur = store.get().interim;
+  // Keep live partial transcript; only fill empty / placeholder slots.
+  if (cur && cur !== "Listening…" && cur !== "Transcribing…" && cur !== "Loading mic…") {
+    return;
+  }
+  store.set({ interim: "Listening…" });
+  renderChat();
+}
+
+/** After short TTS, echo-guard may still be active — defer the Listening cue. */
+function scheduleListening() {
+  const wait = Math.max(0, bargeSuppressUntil - performance.now());
+  if (wait <= 0) {
+    void armMicAfterAgent();
+    return;
+  }
+  setTimeout(() => {
+    void armMicAfterAgent();
+  }, wait + 20);
+}
+
+/**
+ * Drop any in-flight VAD clip that heard agent TTS, then re-arm capture.
+ * Without this, redemptionFrames (~1.5s) keeps your next words inside a
+ * contaminated utterance that gets discarded — feels like 3–5s of deafness.
+ */
+async function resetVadCapture() {
+  utteranceContaminated = false;
+  if (!store.get().micOn || !vad) return;
+  const instance = vad;
+  try {
+    instance.pause();
+  } catch {
+    /* ignore */
+  }
+  try {
+    instance.start();
+  } catch {
+    /* ignore */
+  }
+  await resumeVadAudioContext(instance);
+}
+
+/** Stop browser STT for the whole TTS turn so agent audio cannot barge/speakback. */
+function pauseBrowserRecForTts() {
+  if (effectiveSttMode() !== "browser") return;
+  browserPausedForTts = true;
+  browserIgnoreResults = true;
+  store.set({ interim: "" });
+  renderChat();
+  stopBrowserRec();
+}
+
+async function armMicAfterAgent() {
+  utteranceContaminated = false;
+  browserIgnoreResults = false;
+  if (effectiveSttMode() !== "browser") {
+    await resetVadCapture();
+    maybeShowListening();
+    return;
+  }
+  // Restart recognition after settle so trailing speaker audio is not captured.
+  browserPausedForTts = false;
+  if (!store.get().micOn) {
+    maybeShowListening();
+    return;
+  }
+  stopBrowserRec();
+  setTimeout(() => {
+    if (!store.get().micOn || agentIsTalking()) return;
+    if (effectiveSttMode() !== "browser") return;
+    startBrowserRec();
+  }, BROWSER_STT_SETTLE_MS);
+}
+
+function cancelTtsEngine() {
+  ttsGen += 1;
+  currentUtter = null;
+  try {
+    window.speechSynthesis?.cancel();
+  } catch {
+    /* ignore */
+  }
+}
+
+function isBenignTtsError(err) {
+  const e = String(err || "").toLowerCase();
+  return e === "interrupted" || e === "canceled" || e === "cancelled";
+}
+
+function ensureVoicesLoaded() {
+  const synth = window.speechSynthesis;
+  if (!synth) return;
+  try {
+    synth.getVoices();
+  } catch {
+    /* ignore */
+  }
+}
+
 function drainSayQueue() {
   if (!pendingSayQueue.length) {
     store.set({ speaking: false });
+    currentUtter = null;
+    // Re-arm mic after the full agent turn (not mid-sentence).
+    scheduleListening();
+    return;
+  }
+  // Browser STT must not hear TTS — otherwise it barges at "65%" and gets stuck.
+  pauseBrowserRecForTts();
+  if (!window.speechSynthesis) {
+    // No TTS — still ack so server pending commits.
+    const next = pendingSayQueue.shift();
+    sendJson({ type: "sentence_done", id: next.id });
+    const acked = [...store.get().ackedIds, next.id];
+    store.set({ ackedIds: acked, speaking: false });
+    showNotice("Speech playback unavailable in this browser.");
+    drainSayQueue();
     return;
   }
   const next = pendingSayQueue.shift();
   store.set({ speaking: true });
   speakingIds.add(next.id);
-  const utter = new SpeechSynthesisUtterance(next.text);
+  ensureVoicesLoaded();
+  const gen = ++ttsGen;
+  const utter = new SpeechSynthesisUtterance(speakableText(next.text));
+  currentUtter = utter;
   utter.rate = 1.05;
   if (vadEndAt != null) {
     const ms = performance.now() - vadEndAt;
@@ -911,35 +1082,81 @@ function drainSayQueue() {
     });
     vadEndAt = null;
   }
-  utter.onend = () => {
+  // Chrome pauses long/multi-sentence TTS unless periodically resumed.
+  const keepAlive = setInterval(() => {
+    if (gen !== ttsGen) {
+      clearInterval(keepAlive);
+      return;
+    }
+    try {
+      window.speechSynthesis.resume();
+    } catch {
+      /* ignore */
+    }
+  }, 8000);
+  const finishOk = () => {
+    clearInterval(keepAlive);
+    if (gen !== ttsGen) return;
     sendJson({ type: "sentence_done", id: next.id });
     const acked = [...store.get().ackedIds, next.id];
     store.set({ ackedIds: acked });
     speakingIds.delete(next.id);
     drainSayQueue();
   };
-  utter.onerror = () => {
-    // F06: synthesis failure must still ack so server pending can commit.
+  utter.onend = finishOk;
+  utter.onerror = (ev) => {
+    clearInterval(keepAlive);
+    // Our cancel/barge bumps ttsGen — ignore stale handlers (barge owns the ack).
+    if (gen !== ttsGen) return;
+    speakingIds.delete(next.id);
+    // F06: still ack so server pending can commit.
     sendJson({ type: "sentence_done", id: next.id });
     const acked = [...store.get().ackedIds, next.id];
     store.set({ ackedIds: acked });
-    speakingIds.delete(next.id);
-    showNotice("Speech playback failed; continuing the turn.");
+    if (!isBenignTtsError(ev?.error)) {
+      showNotice("Speech playback failed; continuing the turn.");
+    }
     drainSayQueue();
   };
-  window.speechSynthesis.speak(utter);
+  // Speaker onset should not instantly barge the line we just started.
+  bargeSuppressUntil = performance.now() + BARGE_ECHO_GUARD_MS;
+  try {
+    window.speechSynthesis.resume();
+  } catch {
+    /* ignore */
+  }
+  // Chrome often drops speak() if it races a prior cancel(); tick once.
+  setTimeout(() => {
+    if (gen !== ttsGen || currentUtter !== utter) return;
+    try {
+      window.speechSynthesis.speak(utter);
+    } catch {
+      utter.onerror?.({ error: "synthesis-failed" });
+    }
+  }, 20);
+}
+
+function maybeBargeFromMic() {
+  // Browser STT is paused during TTS; typed sendText still barges.
+  if (browserPausedForTts) return false;
+  if (performance.now() < bargeSuppressUntil) return false;
+  if (!store.get().speaking && !pendingSayQueue.length) return false;
+  bargeIn();
+  return true;
 }
 
 function bargeIn() {
   if (!store.get().bargeInEnabled) return;
   if (!store.get().speaking && !pendingSayQueue.length) return;
-  window.speechSynthesis.cancel();
-  pendingSayQueue = [];
   // Include the in-flight sentence — ackedIds only updates on utter.onend.
   const spoken = [...new Set([...store.get().ackedIds, ...speakingIds])];
+  pendingSayQueue = [];
+  cancelTtsEngine();
   store.set({ speaking: false });
   speakingIds.clear();
   sendJson({ type: "barge_in", spoken_ids: spoken });
+  // Abandon the mixed barge clip; next words start a clean utterance.
+  void armMicAfterAgent();
 }
 
 function applyEvent(msg) {
@@ -1032,6 +1249,8 @@ function applyEvent(msg) {
     return;
   }
   if (type === "stt_error") {
+    store.set({ waiting: false, interim: "" });
+    renderChat();
     const mode = store.get().sttMode;
     if (mode === "auto" || mode === "server") {
       store.set({
@@ -1062,6 +1281,7 @@ function applyEvent(msg) {
   if (type === "turn_done") {
     store.set({ waiting: false });
     renderChat();
+    maybeShowListening();
     if (store.get().ending) {
       finishEnd();
     } else if (store.get().phase === "END") {
@@ -1168,9 +1388,15 @@ async function resumeVadAudioContext(instance) {
 async function startMic() {
   // micOn flips immediately so a second click during VAD load routes to stopMic.
   const gen = ++micGen;
-  store.set({ micOn: true, sttFallbackNotice: "" });
-  updateMicButton();
   const mode = effectiveSttMode();
+  // Don't claim Listening until capture is actually running (CDN/ONNX can take seconds).
+  store.set({
+    micOn: true,
+    sttFallbackNotice: "",
+    interim: mode === "browser" ? "Listening…" : "Loading mic…",
+  });
+  updateMicButton();
+  renderChat();
   if (mode === "browser") {
     startBrowserRec();
     return;
@@ -1212,18 +1438,37 @@ async function startMic() {
       minSpeechFrames: 3,
       onSpeechStart: () => {
         if (gen !== micGen) return;
-        if (store.get().speaking || pendingSayQueue.length) bargeIn();
+        // Speech that overlaps agent TTS is barge-eligible but not STT-safe.
+        if (agentIsTalking() || performance.now() < bargeSuppressUntil) {
+          utteranceContaminated = true;
+          if (maybeBargeFromMic()) {
+            store.set({ interim: "Listening…" });
+            renderChat();
+          }
+          return;
+        }
+        utteranceContaminated = false;
+        store.set({ interim: "Listening…" });
+        renderChat();
       },
       onVADMisfire: () => {
         if (gen !== micGen) return;
-        // Too short to send — keep listening; no toast spam.
+        // Too short to send — stay armed, don't blank the Listening cue.
+        utteranceContaminated = false;
+        maybeShowListening();
       },
       onSpeechEnd: (audio) => {
         if (gen !== micGen) return;
+        if (utteranceContaminated) {
+          // Drop TTS bleed / mixed barge clip; wait for a clean utterance.
+          utteranceContaminated = false;
+          maybeShowListening();
+          return;
+        }
         vadEndAt = performance.now();
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
         ws.send(encodeWav(audio, 16000));
-        store.set({ waiting: true });
+        store.set({ waiting: true, interim: "Transcribing…" });
         renderChat();
       },
     });
@@ -1260,6 +1505,7 @@ async function startMic() {
   vad = instance;
   vad.start();
   await resumeVadAudioContext(instance);
+  maybeShowListening();
 }
 
 function destroyVad(instance) {
@@ -1294,6 +1540,9 @@ function stopTracks(stream) {
 
 async function stopMic() {
   micGen += 1;
+  utteranceContaminated = false;
+  browserIgnoreResults = false;
+  browserPausedForTts = false;
   store.set({ micOn: false, interim: "", sttFallbackNotice: "" });
   updateMicButton();
   const instance = vad;
@@ -1314,6 +1563,11 @@ function startBrowserRec() {
     updateMicButton();
     return;
   }
+  // Don't re-arm while agent TTS owns the speakers.
+  if (browserPausedForTts || agentIsTalking()) {
+    browserPausedForTts = true;
+    return;
+  }
   stopBrowserRec();
   const rec = new SR();
   browserRec = rec;
@@ -1321,18 +1575,32 @@ function startBrowserRec() {
   rec.interimResults = true;
   rec.onstart = () => {
     browserActive = true;
+    // Engine armed — don't wait for onspeechstart (that lags after you already talk).
+    maybeShowListening();
   };
   rec.onspeechstart = () => {
-    if (store.get().speaking || pendingSayQueue.length) bargeIn();
+    if (browserPausedForTts || agentIsTalking() || performance.now() < bargeSuppressUntil) {
+      browserIgnoreResults = true;
+      return;
+    }
+    browserIgnoreResults = false;
+    store.set({ interim: "Listening…" });
+    renderChat();
   };
   rec.onresult = (event) => {
     if (browserRec !== rec) return;
+    if (browserPausedForTts) return;
     let interim = "";
     let finalText = "";
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const res = event.results[i];
       if (res.isFinal) finalText += res[0].transcript;
       else interim += res[0].transcript;
+    }
+    // Drop speakback finals that overlapped agent TTS / barge.
+    if (browserIgnoreResults || agentIsTalking()) {
+      if (finalText.trim()) browserIgnoreResults = true;
+      return;
     }
     if (interim) {
       store.set({ interim });
@@ -1351,7 +1619,15 @@ function startBrowserRec() {
   rec.onend = () => {
     browserActive = false;
     // Chrome ends continuous recognition on silence; restart only while still the live recognizer.
-    if (browserRec === rec && store.get().micOn && effectiveSttMode() === "browser") {
+    if (
+      browserRec === rec &&
+      store.get().micOn &&
+      effectiveSttMode() === "browser" &&
+      !browserPausedForTts &&
+      !agentIsTalking()
+    ) {
+      // Brief gap while Chrome re-arms — keep the Listening cue visible.
+      maybeShowListening();
       try {
         rec.start();
       } catch {
@@ -1361,6 +1637,7 @@ function startBrowserRec() {
   };
   rec.start();
   browserActive = true;
+  maybeShowListening();
 }
 
 function stopBrowserRec() {
@@ -1678,7 +1955,7 @@ async function loadRepCard(id) {
 }
 
 async function downloadLog() {
-  const id = store.get().callId;
+  const id = downloadCallId;
   if (!id) return;
   const res = await fetch(`/calls/${encodeURIComponent(id)}/export`);
   if (!res.ok) {
@@ -1827,6 +2104,10 @@ applyView();
 renderAll();
 renderScenarioBrief(null);
 syncCustomCasePanel();
+ensureVoicesLoaded();
+if (window.speechSynthesis && typeof window.speechSynthesis.addEventListener === "function") {
+  window.speechSynthesis.addEventListener("voiceschanged", ensureVoicesLoaded);
+}
 loadScenarios().then(() => {
   syncCustomCasePanel();
 });

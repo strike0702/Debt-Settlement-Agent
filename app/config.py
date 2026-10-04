@@ -40,7 +40,6 @@ class Settings(BaseSettings):
 
     firm_name: str = "Synthetic Debt Relief"
     opening_disclosure: str = (
-        "This call uses synthetic data for demonstration only. "
         "You are speaking with an automated agent authorized to discuss settlement options."
     )
 

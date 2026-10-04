@@ -179,6 +179,21 @@ async def _send_audit_tail(
     return latest
 
 
+async def _send_creditor_transcript(ws: WebSocket, text: str) -> None:
+    """Push the rep line as soon as STT/text is known (before NLU/NLG)."""
+    await _send(
+        ws,
+        {
+            "type": "transcript",
+            "role": "creditor",
+            "text": text,
+            "spoken": True,
+            "sentence_id": None,
+            "blocked": False,
+        },
+    )
+
+
 async def _emit_utterance(
     ws: WebSocket,
     orch: Orchestrator,
@@ -191,18 +206,9 @@ async def _emit_utterance(
     session = orch.session
     blocked = bool(session.last_blocked)
 
+    # Prefer callers that already emitted via ``_send_creditor_transcript``.
     if creditor_text is not None:
-        await _send(
-            ws,
-            {
-                "type": "transcript",
-                "role": "creditor",
-                "text": creditor_text,
-                "spoken": True,
-                "sentence_id": None,
-                "blocked": False,
-            },
-        )
+        await _send_creditor_transcript(ws, creditor_text)
 
     for sid, text in utt.sentences:
         await _send(ws, {"type": "say", "id": sid, "text": text})
@@ -326,15 +332,20 @@ async def call_socket(websocket: WebSocket, call_id: str) -> None:
                     audit_after = await _send_audit_tail(
                         websocket, _audit, call_id, after_id=audit_after
                     )
+                    # Client set waiting=true on WAV send — unblock the UI.
+                    await _send(websocket, {"type": "turn_done"})
                     continue
                 if not text.strip():
+                    await _send(websocket, {"type": "turn_done"})
                     continue
+                # Show the rep line immediately; agent reply follows after NLU/NLG.
+                await _send_creditor_transcript(websocket, text)
                 utt = await orch.on_creditor_text(text)
                 audit_after = await _emit_utterance(
                     websocket,
                     orch,
                     utt,
-                    creditor_text=text,
+                    creditor_text=None,
                     stt_ms=stt_ms,
                     audit_after=audit_after,
                 )
@@ -463,12 +474,14 @@ async def call_socket(websocket: WebSocket, call_id: str) -> None:
                 oracle = None
                 if settings.nlu_mode == "oracle" and "oracle" in data:
                     oracle = _parse_oracle(data.get("oracle"))
+                # Echo before NLU so the chat shows the line while the agent thinks.
+                await _send_creditor_transcript(websocket, text)
                 utt = await orch.on_creditor_text(text, oracle=oracle)
                 audit_after = await _emit_utterance(
                     websocket,
                     orch,
                     utt,
-                    creditor_text=text,
+                    creditor_text=None,
                     stt_ms=None,
                     audit_after=audit_after,
                 )

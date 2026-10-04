@@ -12,7 +12,7 @@ from app.domain.actions import Intent
 # Meanings only — never interpolate spoken values or digits here.
 PLACEHOLDER_MEANINGS: dict[str, str] = {
     "firm_name": "our firm name",
-    "opening_disclosure": "synthetic-data disclosure sentence",
+    "opening_disclosure": "authorization / agent-role sentence",
     "ask_text": "question asking for a missing creditor term",
     "readback_value": "the tentative term value being confirmed",
     "field_label": "human label for the creditor term under discussion",

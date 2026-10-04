@@ -9,6 +9,7 @@ dependencies = [
     "pydantic>=2",
     "pydantic-settings",
     "openai",
+    "httpx",  # LLM client HTTP (Groq STT multipart + provider calls)
     "pyyaml",
 ]
 
@@ -16,7 +17,6 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-asyncio",
-    "httpx",
     "ruff",
 ]
 

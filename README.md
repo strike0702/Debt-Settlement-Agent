@@ -2,17 +2,99 @@
 
 A conversational agent that negotiates debt settlements. Same policy and engine whether you type or talk.
 
+**Live demo:** [debt-settlement-agent-ggor.onrender.com](https://debt-settlement-agent-ggor.onrender.com/)
+
+![Demo walkthrough](docs/assets/demo.gif)
+
 **Text chat** — CLI or the browser compose box. **Voice** — mic → STT, agent replies through browser TTS, with barge-in. Both modes hit the same orchestrator; voice is speech I/O on top of the text turn loop.
 
 The hard part is not sounding natural. It is keeping the math honest. An LLM that invents a payment amount mid-sentence is worse than a clumsy script. So this system treats the model as untrusted for arithmetic: code picks every move and every number; the model only extracts terms and wraps them in words.
 
 All data here is synthetic.
 
-## The problem
+## Negotiation strategy
 
-A settlement call needs two things at once: flexible language, and numbers that must match a feasibility engine. If the model writes the numbers, you spend latency on retries and still miss paraphrases ("twenty-five hundred," "2.5k," "about two-fifty"). If you announce how much the client can afford, you give away your walk-away price.
+Policy lives in `app/agent/policy.py`. It is pure code. The LLM never chooses whether to counter, confirm, escalate, or walk away.
 
-So the agent asks for creditor rules, proposes schedules the engine already checked, counters only on feasible settlement percentages, and never says the private max.
+Phases, in order of a normal call: `OPENING` → `DISCOVERY` → `NEGOTIATE` → `CONFIRM` → `WRAP` → `END`. Side paths: `ESCALATE`, or `NO_DEAL_WRAP` into `END`.
+
+### What the agent is optimizing for
+
+Settle as high as the client can actually fund, without saying that ceiling out loud. The private max (`max_bp`) comes from the feasibility engine. Counters snap to the 100-point grid of feasible settlement percentages. The walk-away number never enters speech.
+
+Defaults (env / `.env`):
+
+| Knob | Default | Role |
+|---|---|---|
+| `ANCHOR_RATIO` | `0.7` | First counter anchors near 70% of `min(ask, max)` |
+| `CONCESSION_FACTOR` | `0.5` | Each later step closes half the remaining gap |
+| `MAX_COUNTERS` | `4` | Cap on stalls / ceiling rejects |
+| `CLOSE_GAP_BP` | `200` | If the next counter is within 2 points of the ask, just confirm |
+| `MAX_TURNS` | `24` | Hard call length |
+
+### Decision order (every turn)
+
+`decide()` runs fixed rules, top to bottom:
+
+1. **Turn cap** → no-deal
+2. **Hostility** → escalate
+3. **Private-info ask** → refuse once, then escalate
+4. **Commitment demand** → refuse once ("we can propose this to the client"), then escalate
+5. **Contradiction** (discovery) → clarify
+6. **Tentative extraction** → read back
+7. **Missing creditor rule** → ask for it
+8. **No settlement % yet** → ask for the ask
+9. **Affordability / price / terms** (below)
+10. **In CONFIRM**, accept stance → wrap; new terms reopen negotiation
+
+### Price negotiation (the ladder)
+
+Early versions confirmed any affordable ask on the spot. That left surplus on the table. The live policy counters first.
+
+When the ask is feasible and at or under `max_bp`:
+
+1. Ask already at or below something we offered → confirm
+2. Rep sounds firm after we have countered → confirm their ask
+3. Counter budget used up → confirm (affordable path never no-deals just to be stubborn)
+4. No legal counter below the ask → confirm
+5. Ladder stalled on the grid → jump once toward the ask, else confirm
+6. Next step within `CLOSE_GAP_BP` of the ask → confirm
+7. Otherwise → `COUNTER` at `next_counter()`
+
+`next_counter()`:
+
+- Target = `min(ask_bp, max_bp)`
+- First offer = largest feasible bp ≤ `ANCHOR_RATIO * target` (else the smallest legal bp)
+- Later offers move halfway toward the target, then snap **down** onto a feasible point
+- Stay strictly below the ask and at or under `max_bp`. And keep that private ceiling out of speech.
+
+If the ask sits **above** the ceiling, the agent does not loop the same low counter forever. It tries non-price recovery first (next section), then either escalates for rescue funds or no-deals.
+
+### Non-price recovery (when the curve is empty or the ask won't fit)
+
+Sometimes the % is fine but the payment rules block every schedule. Or the ask is above today's ceiling, but a later start date / softer minimum / more payments unlocks room.
+
+The orchestrator searches term alternatives in order: **first payment date → min payment → max payments**. Policy emits `COUNTER_TERMS` for the best alt (highest ceiling when the ask fits nowhere; otherwise the least invasive change that makes the ask feasible).
+
+A "yes" on a term alt is **not** a yes on the last price counter. After the curve opens, price negotiation continues under the new rules.
+
+### Confirm → wrap → reopen
+
+`CONFIRM_SCHEDULE` reads back settlement %, payment count, dates, and totals from engine facts. On accept, `PROPOSE_WRAP` drafts an agreement marked `pending_client_approval` — spoken as "sent for client approval," never as a hard commit.
+
+From `WRAP`, the rep can end the call, or reopen with a new ask / reject / counter. That clears the draft and returns to `CONFIRM` or `NEGOTIATE`.
+
+### Escalation vs no-deal
+
+| Situation | Outcome |
+|---|---|
+| Hostile tone, repeated private ask, repeated commitment demand | Escalation |
+| Infeasible, but lump/increment rescue is inside the guardrail | Escalation ("needs client approval for extra funds") — amount never spoken |
+| Infeasible, no rescue, no useful term alt | No-deal |
+| Ask above ceiling, counters exhausted at the highest legal bp | No-deal |
+| Affordable ask, counters exhausted | Confirm the ask |
+
+Every belief change, block, escalation, and LLM call lands in the SQLite audit log.
 
 ## Architecture: LLM is untrusted for arithmetic
 
@@ -105,7 +187,7 @@ Auto-acks speech. Prints agent lines, belief changes, timings, and the engine ve
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000. Use headphones so browser TTS does not echo into the mic. Operator view shows PRIVATE max affordable; the rep view does not.
+Open http://127.0.0.1:8000 (or the [hosted demo](https://debt-settlement-agent-ggor.onrender.com/)). Use headphones so browser TTS does not echo into the mic. Operator view shows PRIVATE max affordable; the rep view does not. Pick a scenario (or paste a custom case), then Start chat.
 
 ### Eval
 
@@ -130,6 +212,12 @@ Offline tests:
 ruff check .
 ```
 
+## Demo media
+
+Walkthrough GIF: `docs/assets/demo.gif` (linked at the top).
+
+To replace it: record a short clip (15–40 s), export a GIF at ~800–1200px wide, ideally under ~10 MB so GitHub stays snappy, overwrite `docs/assets/demo.gif`. Tools that work: [LICEcap](https://www.cockos.com/licecap/), Gifox, Kap, or `ffmpeg`.
+
 ## Eval results
 
 Run locally and keep artifacts under `eval/results/` (gitignored). Example command:
@@ -139,6 +227,8 @@ Run locally and keep artifacts under `eval/results/` (gitignored). Example comma
 ```
 
 Gates live in `eval/thresholds.yaml` (including extraction accuracy, false-known rate, and guard blocks). Cite metrics from a summary JSON you produced — do not treat README tables as checked-in proof.
+
+Cheap template evals after the counter-ladder change still clear thresholds. `surplus_captured` rose (mean ~0.69 vs ~0.41 when the agent confirmed affordable asks immediately) because the agent now climbs before accepting.
 
 ## Latency
 
@@ -182,6 +272,7 @@ Zero blocks on a template-NLG run is expected: template NLG never invents figure
 - **The sim sees Actions, not only words.** CreditorPolicy gets the agent's intent and PUBLIC facts plus the spoken text. A human rep only hears words. So e2e negotiation can be cleaner than a real call when phrasing is ambiguous.
 - **Browser TTS echo.** `speechSynthesis` plus an open mic will re-hear the agent. Headphones help; barge-in helps. It is still a demo hack, not a telephony stack.
 - **Free-tier model drift.** Provider free slugs disappear (OpenRouter did). Rate limits flip overnight. Mistral Experiment keys often 429 until workspace setup. Pin models in `providers.yaml` and expect to edit them.
+- **Hosted demo cold starts.** The Render free tier can sleep; the first request after idle may take a minute.
 
 ## Synthetic data
 

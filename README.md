@@ -12,6 +12,35 @@ The hard part is not sounding natural. It is keeping the math honest. An LLM tha
 
 All data here is synthetic.
 
+**Stack:** Python 3.12, FastAPI, Pydantic v2, SQLite audit log, browser VAD + TTS, Groq Whisper STT, LLM routed by role via `config/providers.yaml`. Feasibility math is the vendored `feasibility/` engine.
+
+## Architecture: LLM is untrusted for arithmetic
+
+Policy is code. The LLM does NLU (turn → structured terms) and NLG (intent → template with `{placeholders}`). Fact rendering fills the numbers. Guards catch anything that still looks like a digit, a private figure, or a commitment phrase that was never offered.
+
+```mermaid
+flowchart LR
+  Mic[Browser VAD] -->|wav blob| STT[Groq Whisper]
+  Typed[Text input] --> Orch
+  STT --> Orch[Orchestrator]
+  Orch --> NLU["NLU LLM: TurnAnalysis JSON"]
+  NLU --> Verify["Quote + number verification"]
+  Verify --> Belief[BeliefState]
+  Belief --> Policy["Policy (code)"]
+  Policy <--> Adapter["Engine adapter + cache"]
+  Adapter <--> Engine["feasibility.evaluate_offer"]
+  Policy -->|"Action + PUBLIC facts"| NLG["NLG LLM: template with placeholders"]
+  NLG --> TGuard["Template guard"]
+  TGuard --> Render["Render facts"]
+  Render --> RGuard["Rendered guard: numbers, boundary, commitment"]
+  RGuard -->|say events| TTS[Browser speechSynthesis]
+  Orch --> Audit[(SQLite events)]
+```
+
+One turn: verify the rep's utterance → update belief → policy picks an `Action` → NLG writes a template → guards → speak. Side effects (a counter was offered, wrap commits) stick only after the browser acks the sentences were spoken.
+
+Money is integer cents. Settlement % is integer basis points (4500 = 45%). After speech guards, only rendered `Fact` values reach TTS — the LLM may emit digits in drafts, but guards block them before speak.
+
 ## Negotiation strategy
 
 Policy lives in `app/agent/policy.py`. It is pure code. The LLM never chooses whether to counter, confirm, escalate, or walk away.
@@ -96,188 +125,21 @@ From `WRAP`, the rep can end the call, or reopen with a new ask / reject / count
 
 Every belief change, block, escalation, and LLM call lands in the SQLite audit log.
 
-## Architecture: LLM is untrusted for arithmetic
+## Run locally
 
-Policy is code. The LLM does NLU (turn → structured terms) and NLG (intent → template with `{placeholders}`). Fact rendering fills the numbers. Guards catch anything that still looks like a digit, a private figure, or a commitment phrase that was never offered.
-
-```mermaid
-flowchart LR
-  Mic[Browser VAD] -->|wav blob| STT[Groq Whisper]
-  Typed[Text input] --> Orch
-  STT --> Orch[Orchestrator]
-  Orch --> NLU["NLU LLM: TurnAnalysis JSON"]
-  NLU --> Verify["Quote + number verification"]
-  Verify --> Belief[BeliefState]
-  Belief --> Policy["Policy (code)"]
-  Policy <--> Adapter["Engine adapter + cache"]
-  Adapter <--> Engine["feasibility.evaluate_offer"]
-  Policy -->|"Action + PUBLIC facts"| NLG["NLG LLM: template with placeholders"]
-  NLG --> TGuard["Template guard"]
-  TGuard --> Render["Render facts"]
-  Render --> RGuard["Rendered guard: numbers, boundary, commitment"]
-  RGuard -->|say events| TTS[Browser speechSynthesis]
-  Orch --> Audit[(SQLite events)]
-```
-
-One turn: verify the rep's utterance → update belief → policy picks an `Action` → NLG writes a template → guards → speak. Side effects (a counter was offered, wrap commits) stick only after the browser acks the sentences were spoken.
-
-Money is integer cents. Settlement % is integer basis points (4500 = 45%). After speech guards, only rendered `Fact` values reach TTS — the LLM may emit digits in drafts, but guards block them before speak.
-
-## How to run
-
-### Setup
-
-Python 3.12 (system 3.14 is a bad idea for wheels here):
+Python 3.12, keys in `.env` (see `.env.example`):
 
 ```bash
-uv venv --python 3.12
-source .venv/bin/activate
+uv venv --python 3.12 && source .venv/bin/activate
 uv sync --group dev
 cp .env.example .env
-```
-
-### Keys
-
-Put provider keys in `.env`. Unset keys are skipped at startup.
-
-| Env var | Used by |
-|---|---|
-| `GROQ_API_KEY` | demo NLU/NLG, Whisper STT |
-| `GEMINI_API_KEY` | eval/demo failover |
-| `MISTRAL_API_KEY` | last-resort fallback |
-| `OPENROUTER_API_KEY` | eval free-tier failover |
-| `CEREBRAS_API_KEY` | optional; not on main routes today |
-
-`LLM_PROFILE` picks the routing table in `config/providers.yaml`.
-
-### Profiles
-
-| Profile | Purpose |
-|---|---|
-| `demo` | Live UI / CLI. Latency first (Groq, then Gemini). |
-| `eval` | Batch eval. Quota first (Gemini lead). |
-| `local` | Ollama first; cloud only if local is down. |
-| `offline` | CI / FakeLLM. No network. |
-
-```bash
-export LLM_PROFILE=demo
-```
-
-### Ollama (local profile)
-
-```bash
-ollama pull qwen3.5:9b
-ollama pull gemma4:e4b
-export LLM_PROFILE=local
-```
-
-Local NLU works but is slow (p95 on the order of minutes) and the quality run below did not clear thresholds. Fine for plumbing checks; use `eval` for the numbers that matter.
-
-### CLI (type as the creditor rep)
-
-```bash
-python -m app.cli fixtures/demo
-```
-
-Auto-acks speech. Prints agent lines, belief changes, timings, and the engine verdict.
-
-### Server (voice UI)
-
-```bash
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000 (or the [hosted demo](https://debt-settlement-agent-ggor.onrender.com/)). Use headphones so browser TTS does not echo into the mic. Operator view shows PRIVATE max affordable; the rep view does not. Pick a scenario (or paste a custom case), then Start chat.
-
-### Eval
-
-Cheap smoke (template NLG + template sim phrasing, live NLU):
-
-```bash
-python -m eval.run_eval --scenarios 12 --seed 7 --nlg template --sim-phrasing template --profile eval
-```
-
-Full LLM phrasing:
-
-```bash
-python -m eval.run_eval --scenarios 12 --seed 7 --nlg llm --sim-phrasing llm --profile eval
-```
-
-Resume a partial run with `--resume RUN_ID`. Results land in `eval/results/<run_id>/` (`summary.md`, `summary.json`, `run.json`). Exit code 1 if `eval/thresholds.yaml` fails.
-
-Offline tests:
-
-```bash
-.venv/bin/python -m pytest -q
-ruff check .
-```
-
-## Demo media
-
-Walkthrough GIF: `docs/assets/demo.gif` (linked at the top).
-
-To replace it: record a short clip (15–40 s), export a GIF at ~800–1200px wide, ideally under ~10 MB so GitHub stays snappy, overwrite `docs/assets/demo.gif`. Tools that work: [LICEcap](https://www.cockos.com/licecap/), Gifox, Kap, or `ffmpeg`.
-
-## Eval results
-
-Run locally and keep artifacts under `eval/results/` (gitignored). Example command:
-
-```bash
-.venv/bin/python -m eval.run_eval --scenarios 12 --seed 7 --nlg template --sim-phrasing template
-```
-
-Gates live in `eval/thresholds.yaml` (including extraction accuracy, false-known rate, and guard blocks). Cite metrics from a summary JSON you produced — do not treat README tables as checked-in proof.
-
-Cheap template evals after the counter-ladder change still clear thresholds. `surplus_captured` rose (mean ~0.69 vs ~0.41 when the agent confirmed affordable asks immediately) because the agent now climbs before accepting.
-
-## Latency
-
-### Cloud (`eval` profile, template NLG — illustrative local run)
-
-| stage | p50 | p95 | n |
-|---|---|---|---|
-| nlu_ms | 4815 | 10079 | 70 |
-| policy_ms | 0.07 | 0.17 | 70 |
-| nlg_ms | 0.20 | 0.53 | 70 |
-| server_total_ms | 4818 | 10082 | 70 |
-
-Policy and template NLG are sub-millisecond. Wall time is almost all NLU.
-
-### Local (`local` profile, Ollama `qwen3.5:9b` NLU — illustrative)
-
-| stage | p50 | p95 | n |
-|---|---|---|---|
-| nlu_ms | 0.12 | 185257 | 312 |
-| policy_ms | 0.01 | 0.99 | 312 |
-| nlg_ms | 0.04 | 1.09 | 312 |
-| server_total_ms | 0.46 | 185261 | 312 |
-
-That local run finished all 12 scenarios but failed quality gates (`escalation_correct=0`, no deals in ZOPA). The p50 near zero is oracle/cache-style turns interleaved with very slow live Ollama calls.
-
-## Guard statistics
-
-Two layers: `template_guard` (no digits / number words / unknown placeholders before fill) and `rendered_guard` (every spoken figure must match a PUBLIC fact or a known creditor number; private values and commitment language are blocked).
-
-| source | result |
-|---|---|
-| Adversarial regression (`tests/unit/guard_adversarial.jsonl`) | 51 cases — 38 expect block, 13 expect pass |
-| Cheap template eval | Expect `guard_blocks=0`, `unverified_figures_spoken=0`, `sensitive_leaks=0` when NLG is template |
-
-Zero blocks on a template-NLG run is expected: template NLG never invents figures. The corpus is there for the failure modes.
+Open http://127.0.0.1:8000. Headphones help (browser TTS can echo into the mic). CLI alternative: `python -m app.cli fixtures/demo`.
 
 ## Limitations
 
-- **Structured candidate set, not exhaustive search.** The vendored engine scores a fixed family of schedule shapes. Feasibility is non-monotonic across settlement %. Counters snap to the 100-point grid (`1%…100%`). If a legal schedule exists outside that candidate set, the engine can still say infeasible.
-- **Oracle NLU in e2e.** Offline `tests/e2e` and the simulator feed a ground-truth `TurnAnalysis` when `NLU_MODE=oracle`. That proves policy and guards without paying for live extraction. It does not prove live NLU quality — run `eval.run_eval` for that.
-- **The sim sees Actions, not only words.** CreditorPolicy gets the agent's intent and PUBLIC facts plus the spoken text. A human rep only hears words. So e2e negotiation can be cleaner than a real call when phrasing is ambiguous.
-- **Browser TTS echo.** `speechSynthesis` plus an open mic will re-hear the agent. Headphones help; barge-in helps. It is still a demo hack, not a telephony stack.
-- **Free-tier model drift.** Provider free slugs disappear (OpenRouter did). Rate limits flip overnight. Mistral Experiment keys often 429 until workspace setup. Pin models in `providers.yaml` and expect to edit them.
-- **Hosted demo cold starts.** The Render free tier can sleep; the first request after idle may take a minute.
-
-## Synthetic data
-
-Every client, creditor, balance, and schedule in this repo is made up for demos and tests. Do not treat fixtures as real accounts. The UI shows a synthetic-data banner for a reason.
-
-## Unaffiliated project
-
-Independent work. Not affiliated with, endorsed by, or derived from any company's take-home materials beyond a vendored feasibility engine kept read-only under `feasibility/`. No third-party assignment text ships in this repository.
+- **Candidate schedules, not exhaustive search.** The vendored engine scores a fixed family of shapes. Feasibility is non-monotonic across settlement %. Counters snap to the 1%…100% grid.
+- **Browser TTS echo.** Headphones and barge-in help; this is not a telephony stack.
+- **Hosted demo cold starts.** Render free tier can sleep; the first hit after idle may take a minute.

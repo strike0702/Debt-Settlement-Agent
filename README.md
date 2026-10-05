@@ -12,7 +12,7 @@ The hard part is not sounding natural. It is keeping the math honest. An LLM tha
 
 All data here is synthetic.
 
-**Stack:** Python 3.12, FastAPI, Pydantic v2, SQLite audit log, browser VAD + TTS, Groq Whisper STT, LLM routed by role via `config/providers.yaml`. Feasibility math is the vendored `feasibility/` engine.
+**Stack:** Python 3.12, FastAPI, Pydantic v2, SQLite audit log, browser VAD + TTS, Groq Whisper STT, LLM routed by role via `config/providers.yaml`. Settlement math lives in `feasibility/`.
 
 ## Architecture: LLM is untrusted for arithmetic
 
@@ -40,6 +40,14 @@ flowchart LR
 One turn: verify the rep's utterance → update belief → policy picks an `Action` → NLG writes a template → guards → speak. Side effects (a counter was offered, wrap commits) stick only after the browser acks the sentences were spoken.
 
 Money is integer cents. Settlement % is integer basis points (4500 = 45%). After speech guards, only rendered `Fact` values reach TTS — the LLM may emit digits in drafts, but guards block them before speak.
+
+## Feasibility engine
+
+`feasibility/` answers one question for a given client, creditor rules, and settlement %: can we fund this, and if so, what's the schedule?
+
+It does not chat. It does not negotiate. It scores candidate payment vectors (even, staircase, balloon) under floors, cadence, fee placement, and a balance buffer, then picks a winner. If nothing works, it computes closed-form rescue options — a lump sum or a monthly draft bump — and flags whether each stays inside a guardrail. That rescue amount stays private; policy only gets a yes/no.
+
+Weird detail that bites you in practice: feasibility across settlement % is non-monotonic. 40% can fail while 45% works, often because payment floors refuse a low offer. So the agent scans a 100-point grid (`1%…100%`) and treats that curve as ground truth for counters. Numbers that leave the engine as PUBLIC facts are the only ones allowed into speech.
 
 ## Negotiation strategy
 
@@ -140,6 +148,6 @@ Open http://127.0.0.1:8000. Headphones help (browser TTS can echo into the mic).
 
 ## Limitations
 
-- **Candidate schedules, not exhaustive search.** The vendored engine scores a fixed family of shapes. Feasibility is non-monotonic across settlement %. Counters snap to the 1%…100% grid.
+- **Candidate schedules, not exhaustive search.** The engine scores a fixed family of shapes. Feasibility is non-monotonic across settlement %. Counters snap to the 1%…100% grid.
 - **Browser TTS echo.** Headphones and barge-in help; this is not a telephony stack.
 - **Hosted demo cold starts.** Render free tier can sleep; the first hit after idle may take a minute.

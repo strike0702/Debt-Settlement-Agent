@@ -4,7 +4,15 @@ Every metric named in PLAN §10: agreement_valid, deal_rate_given_zopa,
 no_deal_correct, escalation_correct, unverified_figures_spoken,
 sensitive_leaks, guard_blocks, rule_extraction_accuracy, false_known_rate,
 readback_count, turns_to_proposal, surplus_captured, plus latency p50/p95.
-Does not run scenarios — that is ``eval.run_eval``.
+
+Deterministic call-quality metrics: counters_spoken_max / _mean (vs
+max_counters), identical_consecutive_agent_moves, turns_to_outcome,
+stuck_calls / stuck_rate (hit max_turns).
+
+Every rate ships with ``<rate>_n`` and a 95% Wilson interval ``<rate>_ci95``.
+Rule-field rates pool 7 fields per call, so their interval is optimistic
+(fields within a call are correlated). Does not run scenarios — that is
+``eval.run_eval``.
 """
 
 from __future__ import annotations
@@ -17,6 +25,17 @@ from typing import Any
 
 import yaml
 
+# Rates reported with n + Wilson CI, in summary.md row order.
+RATE_METRICS: tuple[str, ...] = (
+    "agreement_valid",
+    "deal_rate_given_zopa",
+    "no_deal_correct",
+    "escalation_correct",
+    "rule_extraction_accuracy",
+    "false_known_rate",
+    "stuck_rate",
+)
+
 
 def _mean(xs: list[float]) -> float | None:
     return statistics.mean(xs) if xs else None
@@ -26,6 +45,25 @@ def _rate(num: int, den: int) -> float | None:
     if den == 0:
         return None
     return num / den
+
+
+def wilson_interval(k: int, n: int, z: float = 1.96) -> tuple[float, float] | None:
+    """95% Wilson score interval for ``k`` successes in ``n`` trials (None if n=0)."""
+    if n == 0:
+        return None
+    p = k / n
+    denom = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return (max(0.0, centre - half), min(1.0, centre + half))
+
+
+def _rate_block(name: str, k: int, n: int) -> dict[str, Any]:
+    return {
+        name: _rate(k, n),
+        f"{name}_n": n,
+        f"{name}_ci95": wilson_interval(k, n),
+    }
 
 
 def _percentile(xs: list[float], p: float) -> float | None:
@@ -137,6 +175,17 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
         if r.get("surplus_captured") is not None
     ]
 
+    # --- call quality ---
+    counters = [int(r.get("counters_spoken", 0)) for r in completed]
+    identical = sum(int(r.get("identical_consecutive_agent_moves", 0)) for r in completed)
+    stuck = sum(1 for r in completed if r.get("hit_max_turns"))
+    outcome_turns = [
+        float(r["turns_to_outcome"])
+        for r in completed
+        if r.get("turns_to_outcome") is not None and not r.get("hit_max_turns")
+    ]
+    caps = [int(r["max_counters"]) for r in completed if r.get("max_counters") is not None]
+
     # --- latency ---
     stages = ("nlu_ms", "policy_ms", "nlg_ms", "server_total_ms")
     latency: dict[str, dict[str, float | None]] = {}
@@ -158,25 +207,26 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
         "n_skipped_quota": len(skipped),
         "n_error": len(errors),
         # null when empty denom — thresholds fail closed (never vacuous 1.0).
-        "agreement_valid": _rate(agr_ok, agr_n),
-        "agreement_valid_n": agr_n,
-        "deal_rate_given_zopa": _rate(zopa_deal_ok, zopa_n),
-        "deal_rate_given_zopa_n": zopa_n,
-        "no_deal_correct": _rate(no_deal_ok, no_deal_n),
-        "no_deal_correct_n": no_deal_n,
-        "escalation_correct": _rate(esc_ok, esc_n),
-        "escalation_correct_n": esc_n,
+        **_rate_block("agreement_valid", agr_ok, agr_n),
+        **_rate_block("deal_rate_given_zopa", zopa_deal_ok, zopa_n),
+        **_rate_block("no_deal_correct", no_deal_ok, no_deal_n),
+        **_rate_block("escalation_correct", esc_ok, esc_n),
         "unverified_figures_spoken": unverified,
         "sensitive_leaks": leaks,
         "guard_blocks": blocks,
-        "rule_extraction_accuracy": _rate(rule_correct, rule_total),
-        "rule_extraction_n": rule_total,
-        "false_known_rate": _rate(false_known, known_total),
-        "false_known_n": known_total,
+        **_rate_block("rule_extraction_accuracy", rule_correct, rule_total),
+        **_rate_block("false_known_rate", false_known, known_total),
         "readback_count": _mean(readbacks),
         "turns_to_proposal": _mean(turns),
         "surplus_captured": _mean(surplus),
         "surplus_n": len(surplus),
+        "counters_spoken_max": max(counters) if counters else None,
+        "counters_spoken_mean": _mean([float(c) for c in counters]),
+        "max_counters": max(caps) if caps else None,
+        "identical_consecutive_agent_moves": identical,
+        "turns_to_outcome": _mean(outcome_turns),
+        "stuck_calls": stuck,
+        **_rate_block("stuck_rate", stuck, len(completed)),
         "latency": latency,
     }
 
@@ -198,7 +248,9 @@ def render_summary_md(summary: dict[str, Any], *, run_meta: dict[str, Any] | Non
         lines.append(
             f"- run_id: `{run_meta.get('run_id', '')}`  "
             f"seed={run_meta.get('seed')}  profile=`{run_meta.get('profile')}`  "
-            f"nlg=`{run_meta.get('nlg')}`  sim=`{run_meta.get('sim_phrasing')}`"
+            f"nlu=`{run_meta.get('nlu')}`  nlg=`{run_meta.get('nlg')}`  "
+            f"sim=`{run_meta.get('sim_phrasing')}`  "
+            f"oracle_overlay=`{run_meta.get('oracle_overlay')}`"
         )
         lines.append(f"- git: `{run_meta.get('git_sha', '')}`")
         share = run_meta.get("call_share") or {}
@@ -207,25 +259,33 @@ def render_summary_md(summary: dict[str, Any], *, run_meta: dict[str, Any] | Non
             lines.append(f"- model share: {parts}")
         lines.append("")
 
-    rows = [
-        ("n_completed / n_scenarios", f"{summary['n_completed']}/{summary['n_scenarios']}"),
-        ("skipped_quota", summary["n_skipped_quota"]),
-        ("agreement_valid", summary["agreement_valid"]),
-        ("deal_rate_given_zopa", summary["deal_rate_given_zopa"]),
-        ("no_deal_correct", summary["no_deal_correct"]),
-        ("escalation_correct", summary["escalation_correct"]),
+    lines += ["| metric | value | n | 95% CI |", "|---|---|---|---|"]
+    lines.append(
+        f"| n_completed / n_scenarios | {summary['n_completed']}/{summary['n_scenarios']} | | |"
+    )
+    lines.append(f"| skipped_quota | {summary['n_skipped_quota']} | | |")
+    for name in RATE_METRICS:
+        ci = summary.get(f"{name}_ci95")
+        ci_s = f"{ci[0]:.3f}–{ci[1]:.3f}" if ci else "n/a"
+        lines.append(
+            f"| {name} | {_fmt(summary.get(name))} | {summary.get(f'{name}_n', 0)} | {ci_s} |"
+        )
+    plain = [
         ("unverified_figures_spoken", summary["unverified_figures_spoken"]),
         ("sensitive_leaks", summary["sensitive_leaks"]),
         ("guard_blocks", summary["guard_blocks"]),
-        ("rule_extraction_accuracy", summary["rule_extraction_accuracy"]),
-        ("false_known_rate", summary["false_known_rate"]),
+        ("counters_spoken_max", summary.get("counters_spoken_max")),
+        ("max_counters", summary.get("max_counters")),
+        ("counters_spoken (mean)", summary.get("counters_spoken_mean")),
+        ("identical_consecutive_agent_moves", summary.get("identical_consecutive_agent_moves")),
+        ("stuck_calls", summary.get("stuck_calls")),
+        ("turns_to_outcome (mean)", summary.get("turns_to_outcome")),
         ("readback_count (mean)", summary["readback_count"]),
         ("turns_to_proposal (mean)", summary["turns_to_proposal"]),
         ("surplus_captured (mean)", summary["surplus_captured"]),
     ]
-    lines += ["| metric | value |", "|---|---|"]
-    for name, val in rows:
-        lines.append(f"| {name} | {_fmt(val)} |")
+    for name, val in plain:
+        lines.append(f"| {name} | {_fmt(val)} | | |")
 
     lines += ["", "## Latency (ms)", "", "| stage | p50 | p95 | n |", "|---|---|---|---|"]
     for stage, stats in (summary.get("latency") or {}).items():
@@ -260,21 +320,37 @@ def load_thresholds(path: Path | None = None) -> dict[str, Any]:
     return data
 
 
-def _compare(actual: Any, expect: Any) -> bool:
+def _operand(raw: str, summary: dict[str, Any]) -> float | None:
+    """Threshold RHS: a number, or the name of another summary key (e.g. ``max_counters``)."""
+    s = raw.strip()
+    try:
+        return float(s)
+    except ValueError:
+        v = summary.get(s)
+        return None if v is None else float(v)
+
+
+def _compare(actual: Any, expect: Any, summary: dict[str, Any]) -> bool:
     """Return True if ``actual`` meets the threshold ``expect``."""
     if actual is None:
         return False
     if isinstance(expect, str):
         s = expect.strip()
-        if s.startswith(">="):
-            return float(actual) >= float(s[2:].strip())
-        if s.startswith(">"):
-            return float(actual) > float(s[1:].strip())
-        if s.startswith("<="):
-            return float(actual) <= float(s[2:].strip())
-        if s.startswith("<"):
-            return float(actual) < float(s[1:].strip())
-        return float(actual) == float(s)
+        # Two-char operators first so ">=" is not read as ">".
+        for op in (">=", "<=", ">", "<"):
+            if s.startswith(op):
+                rhs = _operand(s[len(op) :], summary)
+                if rhs is None:
+                    return False
+                a = float(actual)
+                return {
+                    ">=": a >= rhs,
+                    "<=": a <= rhs,
+                    ">": a > rhs,
+                    "<": a < rhs,
+                }[op]
+        rhs = _operand(s, summary)
+        return rhs is not None and float(actual) == rhs
     if isinstance(expect, (int, float)):
         return float(actual) == float(expect) or (
             isinstance(expect, float)
@@ -292,6 +368,6 @@ def check_thresholds(
     failures: list[str] = []
     for key, expect in th.items():
         actual = summary.get(key)
-        if not _compare(actual, expect):
+        if not _compare(actual, expect, summary):
             failures.append(f"{key}: got {actual!r}, want {expect!r}")
     return failures

@@ -1,7 +1,15 @@
 """Sequential eval runner: scenarios → per-scenario JSON → metrics + thresholds.
 
 CLI: ``python -m eval.run_eval --scenarios 12 --seed 7 [--resume RUN_ID]
-[--profile eval] [--nlg llm|template] [--sim-phrasing llm|template]``.
+[--profile eval] [--nlu oracle|llm] [--nlg llm|template]
+[--sim-phrasing llm|template] [--no-oracle-overlay]``.
+
+Two layers:
+- ``--nlu oracle``: offline policy eval. Sim ground-truth ``TurnAnalysis``
+  replaces NLU, ``offline`` profile (FakeLLM), no network or API keys;
+  requires template NLG and template sim phrasing.
+- ``--nlu llm`` (default): live NLU. By default sim disposition flags are
+  overlaid on the LLM result; ``--no-oracle-overlay`` turns that off.
 
 Writes ``eval/results/<run_id>/<scenario_id>.json`` as each finishes; resume
 skips completed ``status=ok`` files and retries ``skipped_quota``. ``run.json``
@@ -21,6 +29,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Literal
 
+from app.adapter.engine_adapter import evaluate
 from app.adapter.validator import validate
 from app.agent.guards import rendered_guard
 from app.agent.numbers import extract_tokens
@@ -40,10 +49,12 @@ from eval.metrics import (
     write_summaries,
 )
 from sim.creditor import CreditorPolicy, PhrasingMode
-from sim.scenarios import Scenario, generate, to_creditor_rules
+from sim.scenarios import Scenario, TrueRules, generate, to_creditor_rules
 
 RESULTS_ROOT = Path(__file__).resolve().parent / "results"
 NlgMode = Literal["llm", "template"]
+NluMode = Literal["llm", "oracle"]
+_TERMINAL_INTENTS = (Intent.PROPOSE_WRAP, Intent.NO_DEAL_WRAP, Intent.ESCALATE)
 
 
 def _git_sha() -> str:
@@ -78,11 +89,50 @@ def _private_values(scenario: Scenario) -> set[tuple[str, int | date]]:
     return out
 
 
-def _count_leaks(texts: list[str], blocklist: set[tuple[str, int | date]]) -> int:
+def _engine_private_values(
+    scenario: Scenario,
+    truth: TrueRules,
+    events: list[dict[str, Any]],
+) -> set[tuple[str, int | date]]:
+    """Engine-derived PRIVATE figures: max affordable % and rescue amounts.
+
+    ``max_bp`` comes from ground truth plus every affordability result the
+    agent logged; rescue lump / increment from a ground-truth engine run at
+    the opening ask. Independent of the agent's own guard blocklist.
+    """
+    out: set[tuple[str, int | date]] = set()
+    if scenario.true_max_bp is not None:
+        out.add(("pct", scenario.true_max_bp))
+    for ev in events:
+        if ev.get("type") == "affordability":
+            mb = (ev.get("payload") or {}).get("max_bp")
+            if mb is not None:
+                out.add(("pct", int(mb)))
+    rules = to_creditor_rules(
+        truth,
+        program_fee_pct=scenario.call.program_fee_pct,
+        bank_fee_cents=scenario.call.bank_fee_cents,
+    )
+    summary = evaluate(scenario.call, rules, scenario.opening_ask_bp, truth.first_payment_date)
+    for fact in summary.facts.private().values():
+        if fact.id.startswith("rescue_") and isinstance(fact.value, int):
+            out.add((fact.kind, fact.value))
+    return out
+
+
+def _count_leaks(
+    texts: list[str],
+    blocklist: set[tuple[str, int | date]],
+    *,
+    exempt: set[tuple[str, int | date]] | None = None,
+) -> int:
+    """Spoken tokens in ``blocklist`` and not in ``exempt``."""
+    skip = exempt or set()
     leaks = 0
     for text in texts:
         for tok in extract_tokens(text):
-            if tok.as_pair() in blocklist:
+            pair = tok.as_pair()
+            if pair in blocklist and pair not in skip:
                 leaks += 1
     return leaks
 
@@ -110,8 +160,13 @@ def _count_unverified(
     return n
 
 
-def _belief_metrics(scenario: Scenario, session: CallSession) -> dict[str, int]:
-    tr = scenario.true_rules
+def _belief_metrics(
+    scenario: Scenario,
+    session: CallSession,
+    truth_rules: TrueRules | None = None,
+) -> dict[str, int]:
+    """Score all 7 rule fields; ``truth_rules`` defaults to the scenario's hidden rules."""
+    tr = truth_rules or scenario.true_rules
     truth: dict[str, Any] = {
         "max_payments": tr.max_payments,
         "min_payment_cents": tr.min_payment_cents,
@@ -144,7 +199,12 @@ def _belief_metrics(scenario: Scenario, session: CallSession) -> dict[str, int]:
     }
 
 
-def _agreement_valid(scenario: Scenario, session: CallSession) -> bool | None:
+def _agreement_valid(
+    scenario: Scenario,
+    session: CallSession,
+    truth_rules: TrueRules | None = None,
+) -> bool | None:
+    """Validate the drafted schedule under the creditor's (agreed) rules."""
     # Silent WRAP without a drafted agreement is always invalid.
     if session.neg.phase == Phase.WRAP and session.agreement is None:
         return False
@@ -152,8 +212,9 @@ def _agreement_valid(scenario: Scenario, session: CallSession) -> bool | None:
         return None
     if session.last_eval.rows is None:
         return False
+    tr = truth_rules or scenario.true_rules
     rules = to_creditor_rules(
-        scenario.true_rules,
+        tr,
         program_fee_pct=scenario.call.program_fee_pct,
         bank_fee_cents=scenario.call.bank_fee_cents,
     )
@@ -163,7 +224,7 @@ def _agreement_valid(scenario: Scenario, session: CallSession) -> bool | None:
         session.last_eval.offer_total_cents,
         session.last_eval.program_fee_cents,
         rules,
-        scenario.true_rules.first_payment_date,
+        tr.first_payment_date,
     )
     return violations == []
 
@@ -183,6 +244,7 @@ def _build_settings(
     *,
     profile: str,
     nlg: NlgMode,
+    nlu: NluMode = "llm",
     base: Settings | None = None,
 ) -> Settings:
     src = base or get_settings()
@@ -197,7 +259,7 @@ def _build_settings(
         llm_cache=False,
         llm_cache_path=src.llm_cache_path,
         nlg_mode=nlg,
-        nlu_mode="llm",
+        nlu_mode=nlu,
         db_path=src.db_path,
         hostility_threshold=src.hostility_threshold,
         max_turns=src.max_turns,
@@ -218,9 +280,16 @@ async def run_one_scenario(
     sim_phrasing: PhrasingMode,
     audit_dir: Path,
     max_turns: int | None = None,
+    oracle_overlay: bool = True,
 ) -> dict[str, Any]:
-    """Run one full text call; return a serializable result dict."""
+    """Run one full text call; return a serializable result dict.
+
+    The sim's ground-truth ``TurnAnalysis`` is always passed under
+    ``nlu_mode=oracle`` (it *is* the NLU); under live NLU it is passed only
+    when ``oracle_overlay`` is set (disposition flags overlay).
+    """
     turns = settings.max_turns if max_turns is None else max_turns
+    pass_oracle = settings.nlu_mode == "oracle" or oracle_overlay
     audit_path = audit_dir / f"audit_{scenario.id}.db"
     audit = AuditLog(audit_path)
     session = CallSession(scenario=scenario.call)
@@ -238,39 +307,39 @@ async def run_one_scenario(
     readback_count = 0
     turns_to_proposal: int | None = None
     intents: list[str] = []
+    # (intent, spoken sentences) per agent turn, for identical-move detection.
+    moves: list[tuple[str, tuple[str, ...]]] = []
+    creditor_turns = 0
 
-    def _absorb_facts(facts: dict[str, Fact]) -> None:
-        for fact in facts.values():
+    def _record(utt: Any) -> None:
+        sentences = tuple(t for _, t in utt.sentences)
+        agent_lines.extend(sentences)
+        for fact in utt.action.facts.values():
             if fact.visibility == "PUBLIC" and isinstance(fact.value, (int, date)):
                 public_pairs.add((fact.kind, fact.value))
+        intents.append(utt.action.intent.value)
+        moves.append((utt.action.intent.value, sentences))
+        if utt.timings:
+            timings.append(dict(utt.timings))
 
     try:
         utt = await orch.start()
-        agent_lines.extend(t for _, t in utt.sentences)
-        _absorb_facts(utt.action.facts)
-        intents.append(utt.action.intent.value)
-        if utt.timings:
-            timings.append(dict(utt.timings))
+        _record(utt)
         action = utt.action
 
         for _ in range(turns):
-            if action.intent in (
-                Intent.PROPOSE_WRAP,
-                Intent.NO_DEAL_WRAP,
-                Intent.ESCALATE,
-            ):
+            if action.intent in _TERMINAL_INTENTS:
                 break
             if session.neg.phase in (Phase.WRAP, Phase.ESCALATE, Phase.END):
                 break
             reply = await creditor.respond(
                 action, agent_text=agent_lines[-1] if agent_lines else ""
             )
-            # Live NLU for terms; oracle overlays disposition flags (stance /
-            # private / commitment) so LLM sim phrasing cannot false-escalate.
-            utt = await orch.on_creditor_text(reply.text, oracle=reply.analysis)
-            agent_lines.extend(t for _, t in utt.sentences)
-            _absorb_facts(utt.action.facts)
-            intents.append(utt.action.intent.value)
+            creditor_turns += 1
+            utt = await orch.on_creditor_text(
+                reply.text, oracle=reply.analysis if pass_oracle else None
+            )
+            _record(utt)
             if utt.action.intent == Intent.READ_BACK:
                 readback_count += 1
             if turns_to_proposal is None and utt.action.intent in (
@@ -278,8 +347,6 @@ async def run_one_scenario(
                 Intent.PROPOSE_WRAP,
             ):
                 turns_to_proposal = session.neg.turn_idx
-            if utt.timings:
-                timings.append(dict(utt.timings))
             action = utt.action
             if creditor.done:
                 break
@@ -310,9 +377,18 @@ async def run_one_scenario(
     guard_blocks = sum(1 for ev in events if ev.get("type") == "blocked")
     audit.close()
 
-    # Leak scan matches e2e: client/firm private amounts only (not engine
-    # PRIVATE facts that can collide with spoken PUBLIC offer totals).
+    truth = creditor.agreed_rules
+    ended = (
+        action.intent in _TERMINAL_INTENTS
+        or session.neg.phase in (Phase.WRAP, Phase.ESCALATE, Phase.END)
+        or creditor.done
+    )
+    hit_max_turns = not ended or action.reason == "max_turns"
+
     private = _private_values(scenario)
+    # Engine-private figures can legitimately equal a spoken PUBLIC fact
+    # (a counter at the ceiling, an offer total); only unsanctioned ones leak.
+    engine_private = _engine_private_values(scenario, truth, events)
     ref = scenario.call.client.as_of_date
     public_facts = {
         f"hist_{i}": Fact(
@@ -331,9 +407,12 @@ async def run_one_scenario(
         private,
         ref=ref,
     )
-    leaks = _count_leaks(agent_lines, private)
-    belief = _belief_metrics(scenario, session)
-    agr_valid = _agreement_valid(scenario, session)
+    leaks = _count_leaks(agent_lines, private) + _count_leaks(
+        agent_lines, engine_private - private, exempt=public_pairs
+    )
+    belief = _belief_metrics(scenario, session, truth)
+    agr_valid = _agreement_valid(scenario, session, truth)
+    identical = sum(1 for a, b in zip(moves, moves[1:], strict=False) if a == b)
     escalated = session.neg.phase == Phase.ESCALATE
     got_deal = session.agreement is not None
 
@@ -363,6 +442,12 @@ async def run_one_scenario(
         "unverified_figures_spoken": unverified,
         "sensitive_leaks": leaks,
         "surplus_captured": _surplus(scenario, session.agreed_bp),
+        "counters_spoken": intents.count(Intent.COUNTER.value),
+        "max_counters": settings.max_counters,
+        "identical_consecutive_agent_moves": identical,
+        "turns_to_outcome": creditor_turns,
+        "hit_max_turns": hit_max_turns,
+        "final_reason": action.reason,
         **belief,
     }
 
@@ -393,9 +478,12 @@ def _should_skip_existing(path: Path) -> bool:
 async def _async_main(args: argparse.Namespace) -> int:
     seed = args.seed
     n = args.scenarios
-    profile = args.profile
+    nlu: NluMode = args.nlu
     nlg: NlgMode = args.nlg
     sim_phrasing: PhrasingMode = args.sim_phrasing
+    oracle_overlay: bool = args.oracle_overlay
+    # Oracle NLU is the offline policy layer: FakeLLM, no network.
+    profile = "offline" if nlu == "oracle" else args.profile
 
     run_id = args.resume or _new_run_id(seed)
     run_dir = RESULTS_ROOT / run_id
@@ -403,7 +491,7 @@ async def _async_main(args: argparse.Namespace) -> int:
     audit_dir = run_dir / "audit"
     audit_dir.mkdir(exist_ok=True)
 
-    settings = _build_settings(profile=profile, nlg=nlg)
+    settings = _build_settings(profile=profile, nlg=nlg, nlu=nlu)
     call_counts: Counter[str] = Counter()
 
     def on_call(meta: dict[str, Any]) -> None:
@@ -417,8 +505,8 @@ async def _async_main(args: argparse.Namespace) -> int:
     scenarios = generate(n, seed)
 
     print(
-        f"run_id={run_id} scenarios={len(scenarios)} "
-        f"profile={profile} nlg={nlg} sim={sim_phrasing}"
+        f"run_id={run_id} scenarios={len(scenarios)} profile={profile} "
+        f"nlu={nlu} nlg={nlg} sim={sim_phrasing} oracle_overlay={oracle_overlay}"
     )
 
     for i, sc in enumerate(scenarios, 1):
@@ -433,6 +521,7 @@ async def _async_main(args: argparse.Namespace) -> int:
             llm=llm,
             sim_phrasing=sim_phrasing,
             audit_dir=audit_dir,
+            oracle_overlay=oracle_overlay,
         )
         out_path.write_text(json.dumps(result, indent=2, default=str) + "\n", encoding="utf-8")
         print(f"         → {result.get('status')} phase={result.get('phase')}", flush=True)
@@ -451,8 +540,10 @@ async def _async_main(args: argparse.Namespace) -> int:
         "n_scenarios": n,
         "git_sha": _git_sha(),
         "profile": profile,
+        "nlu": nlu,
         "nlg": nlg,
         "sim_phrasing": sim_phrasing,
+        "oracle_overlay": oracle_overlay,
         "settings": {
             "llm_profile": settings.llm_profile,
             "nlg_mode": settings.nlg_mode,
@@ -511,7 +602,24 @@ def main(argv: list[str] | None = None) -> int:
         default="llm",
         dest="sim_phrasing",
     )
+    p.add_argument(
+        "--nlu",
+        choices=("llm", "oracle"),
+        default="llm",
+        help="oracle = offline policy eval (sim ground truth as NLU, FakeLLM, no network)",
+    )
+    p.add_argument(
+        "--no-oracle-overlay",
+        action="store_false",
+        dest="oracle_overlay",
+        help="live NLU only: do not overlay sim disposition flags on the LLM result",
+    )
     args = p.parse_args(argv)
+    if args.nlu == "oracle":
+        if args.nlg != "template" or args.sim_phrasing != "template":
+            p.error("--nlu oracle requires --nlg template --sim-phrasing template")
+        if not args.oracle_overlay:
+            p.error("--no-oracle-overlay applies to --nlu llm only")
     return asyncio.run(_async_main(args))
 
 

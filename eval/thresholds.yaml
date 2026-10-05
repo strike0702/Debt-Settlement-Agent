@@ -1,12 +1,13 @@
 # Hard gates for eval/run_eval.py. Fail the process (exit 1) if any miss.
 # Rates are fractions in [0, 1]. Counts are absolute totals across the run.
 # Empty-denom rates are null and fail (never vacuous 1.0).
+# A right-hand side may name another summary key (e.g. max_counters).
 unverified_figures_spoken: 0
 sensitive_leaks: 0
 agreement_valid: 1.0
 escalation_correct: ">=0.9"
 no_deal_correct: ">=0.9"
 deal_rate_given_zopa: ">=0.75"
-guard_blocks: ">=0"
 rule_extraction_accuracy: ">=0.5"
 false_known_rate: "<=0.25"
+counters_spoken_max: "<=max_counters"

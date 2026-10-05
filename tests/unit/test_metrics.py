@@ -8,10 +8,12 @@ from pathlib import Path
 import pytest
 
 from eval.metrics import (
+    RATE_METRICS,
     aggregate,
     check_thresholds,
     load_thresholds,
     render_summary_md,
+    wilson_interval,
     write_summaries,
 )
 
@@ -137,6 +139,8 @@ def test_thresholds_pass_and_fail() -> None:
         "guard_blocks": 0,
         "rule_extraction_accuracy": 0.9,
         "false_known_rate": 0.0,
+        "counters_spoken_max": 4,
+        "max_counters": 4,
     }
     assert check_thresholds(good) == []
 
@@ -247,3 +251,77 @@ def test_thresholds_yaml_loads() -> None:
     assert th["escalation_correct"] == ">=0.9"
     assert th["no_deal_correct"] == ">=0.9"
     assert th["deal_rate_given_zopa"] == ">=0.75"
+    assert th["counters_spoken_max"] == "<=max_counters"
+    # Vacuous gate (always true) removed; metric is still reported.
+    assert "guard_blocks" not in th
+
+
+def test_wilson_interval_known_values() -> None:
+    assert wilson_interval(0, 0) is None
+    lo, hi = wilson_interval(10, 10)  # type: ignore[misc]
+    assert lo == pytest.approx(0.7225, abs=1e-3)
+    assert hi == 1.0
+    lo, hi = wilson_interval(5, 10)  # type: ignore[misc]
+    assert lo == pytest.approx(0.2366, abs=1e-3)
+    assert hi == pytest.approx(0.7634, abs=1e-3)
+
+
+def test_every_rate_has_n_and_ci_in_json_and_md() -> None:
+    summary = aggregate([_ok(scenario_id="d1"), _ok(scenario_id="d2")])
+    for name in RATE_METRICS:
+        assert f"{name}_n" in summary
+        assert f"{name}_ci95" in summary
+    md = render_summary_md(summary)
+    assert "| metric | value | n | 95% CI |" in md
+    assert "| deal_rate_given_zopa | 1 | 2 | 0.342–1.000 |" in md
+
+
+def test_quality_metrics_aggregate() -> None:
+    results = [
+        _ok(
+            scenario_id="a",
+            counters_spoken=2,
+            max_counters=4,
+            identical_consecutive_agent_moves=1,
+            turns_to_outcome=6,
+            hit_max_turns=False,
+        ),
+        _ok(
+            scenario_id="b",
+            counters_spoken=9,
+            max_counters=4,
+            identical_consecutive_agent_moves=3,
+            turns_to_outcome=30,
+            hit_max_turns=True,
+        ),
+    ]
+    s = aggregate(results)
+    assert s["counters_spoken_max"] == 9
+    assert s["counters_spoken_mean"] == pytest.approx(5.5)
+    assert s["max_counters"] == 4
+    assert s["identical_consecutive_agent_moves"] == 4
+    assert s["stuck_calls"] == 1
+    assert s["stuck_rate"] == pytest.approx(0.5)
+    assert s["stuck_rate_n"] == 2
+    # Stuck calls never reached an outcome; excluded from turns_to_outcome.
+    assert s["turns_to_outcome"] == pytest.approx(6.0)
+
+
+def test_counter_gate_compares_against_max_counters_key() -> None:
+    base = {
+        "unverified_figures_spoken": 0,
+        "sensitive_leaks": 0,
+        "agreement_valid": 1.0,
+        "escalation_correct": 1.0,
+        "no_deal_correct": 1.0,
+        "deal_rate_given_zopa": 1.0,
+        "rule_extraction_accuracy": 1.0,
+        "false_known_rate": 0.0,
+        "max_counters": 4,
+    }
+    assert check_thresholds({**base, "counters_spoken_max": 4}) == []
+    fails = check_thresholds({**base, "counters_spoken_max": 5})
+    assert fails == ["counters_spoken_max: got 5, want '<=max_counters'"]
+    # Missing reference key fails closed.
+    no_cap = {k: v for k, v in base.items() if k != "max_counters"}
+    assert check_thresholds({**no_cap, "counters_spoken_max": 0})

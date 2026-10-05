@@ -12,12 +12,14 @@ profiles:
   eval: # quota first; never put Mistral first
     nlu:
       - gemini/gemini-3.1-flash-lite
+      - cerebras/gpt-oss-120b
       - groq/openai/gpt-oss-120b
       - openrouter/cohere/north-mini-code:free
       - mistral/mistral-small-latest
     nlg: [gemini/gemini-3.1-flash-lite, groq/openai/gpt-oss-20b]
     sim:
       - gemini/gemini-3.1-flash-lite
+      - cerebras/gpt-oss-120b
       - groq/openai/gpt-oss-20b
       - mistral/mistral-small-latest
   local: # unlimited eval on the laptop; cloud only as fallback

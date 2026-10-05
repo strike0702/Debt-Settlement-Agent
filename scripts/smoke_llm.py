@@ -31,8 +31,8 @@ SMOKE_TARGETS = [
     ("groq", "openai/gpt-oss-120b", "GROQ_API_KEY"),
     ("mistral", "mistral-small-latest", "MISTRAL_API_KEY"),
     ("gemini", "gemini-3.1-flash-lite", "GEMINI_API_KEY"),
-    ("openrouter", "openai/gpt-oss-120b:free", "OPENROUTER_API_KEY"),
-    ("cerebras", "llama-3.3-70b", "CEREBRAS_API_KEY"),
+    ("openrouter", "cohere/north-mini-code:free", "OPENROUTER_API_KEY"),
+    ("cerebras", "gpt-oss-120b", "CEREBRAS_API_KEY"),
 ]
 
 

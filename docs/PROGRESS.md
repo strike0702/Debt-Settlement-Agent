@@ -19,6 +19,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 10 | Voice and UI | done |
 | 10.1 | Demo UX + non-price recovery | done |
 | 11 | README and final eval | done |
+| 12 | Honest offline policy eval (ROADMAP) | done |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -137,20 +138,31 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 
 ### `sim.creditor`
 - `CreditorReply(text, analysis: TurnAnalysis)`
+- `LATE_FIELDS = ("max_segments", "max_token_pays", "min_payment_tiers")`
 - `CreditorPolicy(scenario, phrasing="template"|"llm", llm=None)`
-  - `async respond(action, agent_text="") -> CreditorReply` — sees intent + PUBLIC facts only; validates `CONFIRM_SCHEDULE` under true rules; concedes 500 bp per rejected counter down to floor; emits oracle `TurnAnalysis`
+  - `async respond(action, agent_text="") -> CreditorReply` — sees intent + PUBLIC facts only; validates `CONFIRM_SCHEDULE` under agreed rules; concedes 500 bp per rejected counter down to floor; emits oracle `TurnAnalysis`
+  - Reveals all 7 fields: core four at OPENING; asked field on ASK; unspoken `LATE_FIELDS` prefixed to READ_BACK / CONFIRM_SCHEDULE / SPEAK_SCHEDULE replies
+  - `COUNTER_TERMS`: accept iff alt is inside hidden limits (fpd ≤ true, min ≥ true, max ≤ true), else reject (no rule restatement)
+  - `agreed_rules -> TrueRules` — true rules + accepted alternatives (eval ground truth)
 
 ### `eval.metrics`
+- `RATE_METRICS` — rates reported with `<rate>_n` and `<rate>_ci95`
+- `wilson_interval(k, n, z=1.96) -> tuple[float, float] | None`
 - `load_scenario_results(run_dir) -> list[dict]`
-- `aggregate(results) -> dict` — PLAN §10 metrics + latency p50/p95; empty denom → null (never vacuous 1.0); WRAP-sans-agreement counts invalid
-- `write_summaries(run_dir, summary, *, run_meta=None) -> (summary.json, summary.md)`
+- `aggregate(results) -> dict` — PLAN §10 metrics + latency p50/p95; empty denom → null (never vacuous 1.0); WRAP-sans-agreement counts invalid. Quality: `counters_spoken_max`, `counters_spoken_mean`, `max_counters`, `identical_consecutive_agent_moves`, `turns_to_outcome` (mean, non-stuck), `stuck_calls`, `stuck_rate`
+- `write_summaries(run_dir, summary, *, run_meta=None) -> (summary.json, summary.md)` — md table `metric | value | n | 95% CI`
 - `load_thresholds(path=None) -> dict`
-- `check_thresholds(summary, thresholds=None) -> list[str]` (empty ⇒ pass); gates include `no_deal_correct>=0.9`, `deal_rate_given_zopa>=0.75`
+- `check_thresholds(summary, thresholds=None) -> list[str]` (empty ⇒ pass); RHS may name another summary key (`counters_spoken_max: "<=max_counters"`); missing key fails closed
 
 ### `eval.run_eval`
-- CLI: `python -m eval.run_eval --scenarios N --seed S [--resume RUN_ID] [--profile] [--nlg llm|template] [--sim-phrasing llm|template]`
+- CLI: `python -m eval.run_eval --scenarios N --seed S [--resume RUN_ID] [--profile] [--nlu oracle|llm] [--nlg llm|template] [--sim-phrasing llm|template] [--no-oracle-overlay]`
+  - `--nlu oracle`: forces profile `offline` (FakeLLM), no network/keys; requires `--nlg template --sim-phrasing template`; rejects `--no-oracle-overlay`
+  - `--nlu llm` (default): live NLU, sim disposition overlay on unless `--no-oracle-overlay`
+- `_build_settings(*, profile, nlg, nlu="llm", base=None) -> Settings`
+- `run_one_scenario(scenario, *, settings, llm, sim_phrasing, audit_dir, max_turns=None, oracle_overlay=True) -> dict` — per-call keys add `counters_spoken`, `max_counters`, `identical_consecutive_agent_moves`, `turns_to_outcome`, `hit_max_turns`, `final_reason`
+- Leak scan = client/firm private amounts ∪ engine-private (`true_max_bp`, every logged affordability `max_bp`, true-rules rescue lump/increment); engine-private values that were spoken as a PUBLIC fact are exempt
 - Writes `eval/results/<run_id>/<scenario_id>.json` per finish; resume skips `status=ok`, retries `skipped_quota`
-- `run.json`: models, call_share, seed, git sha, settings; exit 1 on threshold fail
+- `run.json`: models, call_share, seed, git sha, settings, `nlu`, `oracle_overlay`; exit 1 on threshold fail
 
 ### `app.agent.nlg`
 - `SAFE_FALLBACK: str`; `TEMPLATES: dict[Intent, str]`
@@ -248,7 +260,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 ## Open issues
 
 - Mistral chat blocked until Experiment setup (`limit-req-minute=0`); routed last so demo/eval still work via Groq/Gemini.
-- Cerebras smoke still probes `llama-3.3-70b` (wrong id; live models are `gpt-oss-120b` / `qwen-3.8-27b`) — not in role routes.
+- `counters_spoken_max` gate fails (10 vs `max_counters=4`) until Phase 14 fixes the counter cap in `decide()`.
 - Local Ollama NLU (`qwen3.5:9b`): ~185 s p95; full 12-scenario local run finishes but quality fails thresholds (`escalation_correct=0`, all scenarios END).
 
 ## Code-review remediation (2026-10-01)
@@ -655,3 +667,19 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - **Why:** Live call asked 4→5→6 when 5 only raised the ceiling and 6 was the first count that unlocked a real ladder (ask 80% still infeasible; settle path started at 6).
 - Fix: `find_alt_max_payments` / `find_alt_min_payment_cents` match FPD ranking — lowest/highest ask-feasible first; else jump to best ceiling (least invasive among ties), not progressive +1 / −$10.
 - Files: `app/agent/orchestrator.py`, `tests/unit/test_term_alts.py`.
+
+### Phase 12 (2026-10-06) — Honest offline policy eval
+
+- Files: `sim/creditor.py`, `eval/{run_eval,metrics}.py`, `eval/thresholds.yaml`, `config/providers.yaml`, `scripts/smoke_llm.py`, `tests/unit/{test_sim_creditor,test_metrics,test_eval_settings}.py`.
+- New CLI flags: `--nlu oracle|llm`, `--no-oracle-overlay` (see `eval.run_eval` interface).
+- New metric names: `<rate>_n` + `<rate>_ci95` for `agreement_valid`, `deal_rate_given_zopa`, `no_deal_correct`, `escalation_correct`, `rule_extraction_accuracy`, `false_known_rate`, `stuck_rate`; quality `counters_spoken_max`, `counters_spoken_mean`, `max_counters`, `identical_consecutive_agent_moves`, `turns_to_outcome`, `stuck_calls`. Renamed `rule_extraction_n` → `rule_extraction_accuracy_n`, `false_known_n` → `false_known_rate_n`.
+- Gates: removed vacuous `guard_blocks: ">=0"` (metric still reported); added `counters_spoken_max: "<=max_counters"`.
+- Sim: all 7 TrueRules fields revealed (core four at opening incl. first payment date as a spoken date; late three on ask / read-back / schedule read-back). `COUNTER_TERMS` accepted or rejected under hidden rules.
+- Smoke (`scripts/smoke_llm.py`, 2026-10-06): OK groq/openai/gpt-oss-120b 522 ms; FAIL mistral 429; OK gemini-3.1-flash-lite 7365 ms; OK openrouter/cohere/north-mini-code:free 1750 ms; **OK cerebras/gpt-oss-120b 466 ms**; OK ollama/qwen3.5:9b 38476 ms. Cerebras added to the eval profile's `nlu` and `sim` routes, after gemini.
+- Offline oracle eval `eval_20261005_225429_s7` (`--nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7`): **65 s** wall, no keys needed (also verified with all keys blanked). 100/100 completed. agreement_valid 1 (n=23, CI 0.857–1.000); deal_rate_given_zopa 1 (n=23, 0.857–1.000); no_deal_correct 1 (n=22, 0.851–1.000); escalation_correct 1 (n=55, 0.935–1.000); rule_extraction_accuracy 0.670 (n=700 = 7×100, 0.634–0.704); false_known_rate 0 (n=469); stuck_rate 0 (n=100); leaks/unverified/guard_blocks 0; counters_spoken_max 10; identical_consecutive_agent_moves 54; turns_to_outcome mean 6.11.
+- Gate failures: **only `counters_spoken_max` (10 > max_counters 4)** — expected. 18/100 calls exceed the cap, all `no_fix` flexible (10) / contradictory (8), ending `max_counters` after 9–10 spoken COUNTERs; the same calls produce all 54 identical consecutive moves (re-offered ceiling counter). Left failing for Phase 14.
+- rule_extraction_accuracy 0.670 is honest, not a bug: escalated / no-deal calls never reach a schedule read-back, so their 3 late fields stay ASSUMED (4/7); deal calls score 7/7.
+- Deviations: eval scores rule extraction and agreement validity against `CreditorPolicy.agreed_rules` (true rules + accepted COUNTER_TERMS), not raw `true_rules`. Engine-private leak values exempt when spoken as a PUBLIC fact (a counter at the ceiling is not a leak).
+- Cleanup: creditor ASK branch duplicate removed; CLARIFY reuses `_reveal_field`; schedule-reject branches merged into `_min_reject`; CONFIRM/SPEAK_SCHEDULE share one branch; runner per-utterance bookkeeping in one `_record`; threshold operator parsing table-driven; smoke script OpenRouter slug updated to the routed `cohere/north-mini-code:free`.
+- Observed, not fixed: policy READ_BACK for tiers speaks `str([])` ("So I have [] for the payment tiers"); after the tiers read-back the agent re-sends an identical CONFIRM_SCHEDULE before wrapping (policy, Phase 14 territory).
+- Tests: 406 passed offline (+1 skipped live); `ruff check .` clean.

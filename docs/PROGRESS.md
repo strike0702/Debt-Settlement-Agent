@@ -20,6 +20,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 10.1 | Demo UX + non-price recovery | done |
 | 11 | README and final eval | done |
 | 12 | Honest offline policy eval (ROADMAP) | done |
+| 14 | `decide()` bugs, bounded extract, invariants (ROADMAP) | done |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -109,13 +110,13 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 
 ### `app.agent.policy`
 - `Phase`, `Intent`, `Effect`, `Action` re-exported from `app.domain.actions`
-- `Agreement`, `NegotiationState` (also `last_confirm_key`, `confirm_rejects`, `assumed_asked`, `clarify_counts`)
+- `Agreement`, `NegotiationState` (also `last_confirm_key`, `confirm_rejects`, `assumed_asked`, `clarify_counts`; no `rejects` since Phase 14)
 - `ask_pct_to_bp(pct: float) -> int`
 - `next_counter(*, ask_bp, max_bp, feasible_bps, c_prev, anchor_ratio, concession_factor) -> int`
 - `decide(belief, neg, analysis, afford, *, settings=None, rescue_within_guardrail=False, confirm_facts=None, counter_offer_total_cents=None) -> Action`
   - Identical CONFIRM: `reject` → ASK each ASSUMED once then NO_DEAL; other → soft retry then `confirm_unacked`
   - Unresolved CONTRADICTED after 2 CLARIFY → `ESCALATE(contradiction_unresolved)`
-  - Identical COUNTER re-offer counts toward `max_counters` even if NLU misses `reject`
+  - Ceiling ladder (ask above ceiling / off grid): at most `max_counters` COUNTERs, the last one at the ceiling; no same-bp re-offer — any non-accept once the ceiling is on the table → `NO_DEAL(max_counters)`
   - CONFIRM wrap only on `stance == "accept"` (not `readback_response`); contradiction/tentative before wrap
   - `wants_to_end` → NO_DEAL when not accepting
   - `_confirm_key` fingerprints all CreditorRules fields; `next_counter` → `None` when no legal bp
@@ -260,7 +261,6 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 ## Open issues
 
 - Mistral chat blocked until Experiment setup (`limit-req-minute=0`); routed last so demo/eval still work via Groq/Gemini.
-- `counters_spoken_max` gate fails (10 vs `max_counters=4`) until Phase 14 fixes the counter cap in `decide()`.
 - Local Ollama NLU (`qwen3.5:9b`): ~185 s p95; full 12-scenario local run finishes but quality fails thresholds (`escalation_correct=0`, all scenarios END).
 
 ## Code-review remediation (2026-10-01)
@@ -683,3 +683,15 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - Cleanup: creditor ASK branch duplicate removed; CLARIFY reuses `_reveal_field`; schedule-reject branches merged into `_min_reject`; CONFIRM/SPEAK_SCHEDULE share one branch; runner per-utterance bookkeeping in one `_record`; threshold operator parsing table-driven; smoke script OpenRouter slug updated to the routed `cohere/north-mini-code:free`.
 - Observed, not fixed: policy READ_BACK for tiers speaks `str([])` ("So I have [] for the payment tiers"); after the tiers read-back the agent re-sends an identical CONFIRM_SCHEDULE before wrapping (policy, Phase 14 territory).
 - Tests: 406 passed offline (+1 skipped live); `ruff check .` clean.
+### Phase 14 (2026-10-06) — `decide()` bugs, bounded extract, invariants
+
+- Files: `app/agent/policy.py`, `app/agent/orchestrator.py`, `app/domain/actions.py`, `pyproject.toml` (`slow` marker), `README.md` (`MAX_COUNTERS` row), `tests/unit/test_policy.py`, `tests/e2e/test_policy_invariants.py` (new).
+- Bug: ceiling path re-offered the ceiling counter until `rejects` hit `max_counters`, and the ladder steps before it did not count, so `s0007_009_no_fix_flexible` (seed 7, n=12; the id comes from the 12-scenario set, not n=100) spoke 10 COUNTERs, the last four identical at 62%. Fix in `_ladder_unreachable`: at most `max_counters` COUNTERs; the last allowed one jumps to the ceiling; once the ceiling is on the table, any non-accept → `NO_DEAL(max_counters)`. Regression: `test_regression_s0007_009_no_fix_flexible_counter_loop` + 3 unit tests.
+- Helpers (all private, in `app.agent.policy`): `decide` is a 57-line dispatcher over `_decide_interruptions` → `_decide_clarify` → `_decide_confirm` → `_decide_discovery` → `_decide_negotiate`. `_decide_interruptions` calls `_decide_wrap` for WRAP/END/ESCALATE phases (same order as before). `_decide_negotiate` uses `_term_alt_action`, `_confirm_accepted_counter`, `_reconfirm_on_table`, `_negotiate_affordable(t, ask_bp, afford)`, `_ladder_unreachable(t, ask_bp, afford)`. Per-call inputs are carried in the frozen `_Turn` dataclass. Small builders: `_ask_field`, `_escalate`, `_propose_wrap`, `_confirm_required`, `_spoken_value`.
+- Behaviour check for the extraction: per-turn (intent, reason, spoken text) traces over 500 invariant seeds + the n=100 seed-7 eval set were byte-identical before and after (`tmp/trace.py`, not committed). Every reason code is unchanged except `no_counter_below_ask`, which was removed because it could not be reached.
+- Invariants: `tests/e2e/test_policy_invariants.py::test_policy_invariants_over_seeds` (`@pytest.mark.slow`) runs one scenario per seed (stratum × persona cycling, sub-seed from `Random(seed)`). It checks: COUNTER < ask, COUNTER ≤ `last_max_bp`, ≤ `max_counters` COUNTERs, no identical consecutive COUNTER, terminates within `max_turns`, and every WRAP agreement validates. `DSA_INVARIANT_SEEDS` sets the seed count (default 100, so CI and plain `pytest -q` run 100). **500 seeds: pass** (~7 min).
+- Eval `eval_20261005_233242_s7` (`--nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7`): **thresholds PASS**. `counters_spoken_max` 4 (was 10), `identical_consecutive_agent_moves` 0 (was 54), `turns_to_outcome` mean 5.25 (was 6.11). agreement_valid / deal_rate_given_zopa / no_deal_correct / escalation_correct = 1 with the same n; rule_extraction_accuracy 0.670 (n=700); leaks / unverified / guard_blocks = 0.
+- Deviations: "validates under true rules" uses `CreditorPolicy.agreed_rules` (true rules + accepted COUNTER_TERMS), the same choice the Phase 12 eval made. The invariant sweep uses per-seed `generate_one`, not `generate(500, seed)`.
+- Cleanup: removed `NegotiationState.rejects`, the `inc_reject_at_max` effect and its orchestrator handler (dead after the fix; dropped the `rejects=` kwarg from 3 policy tests, whose assertions are unchanged). Removed the unreachable `no_counter_below_ask` branch (test: `test_next_counter_always_below_ask_and_within_max`). Merged the duplicate `afford is None` ASK_SETTLEMENT branch into the ask-unknown branch (test: `test_ask_known_but_rules_unbuildable_asks_settlement`). Merged the duplicated term-alt gate for the empty-curve and above-ceiling cases into `_term_alt_action` (test: `test_ask_above_ceiling_fpd_already_countered_ladders`). Dropped the unreachable enum/int fallbacks in `_fact_for_value`, since enums always go through text slots (test: `test_clarify_enum_field_uses_text_slots`). Removed the unused `max_counters` param of `_stall_after_confirm`. Collapsed 8 copies of the confirm `required` set, 2 PROPOSE_WRAP builders, 5 ESCALATE builders and 2 ASK builders into one helper each.
+- Observed, not fixed: tiers READ_BACK still speaks `str([])`, so a template reads "[] for the payment tiers" (NLG/registry copy, outside the policy). `next_counter` can return an off-grid `c_prev` when the curve changes; `decide` never re-emits it (stall → jump / no-deal), but the helper contract is loose.
+- Tests: 415 passed offline (+1 skipped live), invariants at 100 seeds included; `ruff check .` clean.

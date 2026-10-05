@@ -1,9 +1,18 @@
 """Pure synchronous negotiation policy (PLAN §6.2).
 
-``decide`` maps belief + TurnAnalysis + Affordability → an ``Action``. No I/O
-and no LLM: unit tests cover every numbered rule. Spoken figures for an action
-live in ``Action.facts`` (PUBLIC only); side effects apply on speech ack via
-``Action.effects``.
+``decide`` maps belief + TurnAnalysis + Affordability to one ``Action``. No I/O,
+no LLM; spoken figures ride in PUBLIC ``Action.facts`` and side effects in
+``Action.effects`` (the orchestrator applies them on speech ack). The cascade
+is first-match and its order is load-bearing:
+
+1. ``_decide_interruptions``: turn cap, hostility, private ask, commitment
+   demand, post-proposal phases (``_decide_wrap``), schedule request, end.
+2. ``_decide_clarify``: CONTRADICTED → CLARIFY (escalate after two); TENTATIVE → READ_BACK.
+3. ``_decide_confirm``: accept of the unchanged CONFIRM on the table → PROPOSE_WRAP.
+4. ``_decide_discovery``: ASK a missing required field, then ASK_SETTLEMENT.
+5. ``_decide_negotiate``: empty curve (term alt / rescue / no-deal), term alt over
+   an unreachable ask, accepted counter, affordable ladder, ceiling ladder
+   (≤ ``max_counters`` COUNTERs, never the same bp twice in a row).
 """
 
 from __future__ import annotations
@@ -52,7 +61,6 @@ class NegotiationState:
     ask_bp: int | None = None
     ask_history: list[int] = field(default_factory=list)
     counters_offered: list[int] = field(default_factory=list)
-    rejects: int = 0  # rejections while our last counter was at max_bp
     private_ask_count: int = 0
     commit_demand_count: int = 0
     pending_readback: str | None = None
@@ -283,31 +291,36 @@ def draft_agreement(
     return agreement
 
 
+_NUMERIC_KINDS = ("cents", "int", "date")
+_FACT_KIND = {"cents": "money", "int": "count", "date": "date"}
+
+
 def _fact_for_value(fact_id: str, field: str, value: Any) -> Fact:
-    """Build a PUBLIC fact for clarify/read-back spoken values."""
-    spec = FIELDS_BY_NAME[field]
-    if spec.kind == "cents":
-        return Fact(
-            id=fact_id, kind="money", value=int(value), visibility="PUBLIC", source="creditor"
-        )
-    if spec.kind == "date":
-        assert isinstance(value, date)
-        return Fact(
-            id=fact_id, kind="date", value=value, visibility="PUBLIC", source="creditor"
-        )
-    if spec.kind == "int":
-        return Fact(
-            id=fact_id, kind="count", value=int(value), visibility="PUBLIC", source="creditor"
-        )
-    # enum / tiers — speak as count only when int-like; else text_slots
-    if isinstance(value, int):
-        return Fact(
-            id=fact_id, kind="count", value=value, visibility="PUBLIC", source="creditor"
-        )
-    # Fallback count 0 unused; caller should use text_slots for enums.
+    """PUBLIC creditor-sourced fact for a cents / int / date field value."""
+    kind = _FACT_KIND[FIELDS_BY_NAME[field].kind]
     return Fact(
-        id=fact_id, kind="count", value=0, visibility="PUBLIC", source="creditor"
+        id=fact_id,
+        kind=kind,  # type: ignore[arg-type]
+        value=value if kind == "date" else int(value),
+        visibility="PUBLIC",
+        source="creditor",
     )
+
+
+def _spoken_value(
+    fact_id: str,
+    field: str,
+    value: Any,
+    facts: dict[str, Fact],
+    text_slots: dict[str, str],
+    required: set[str],
+) -> None:
+    """Numeric values speak via a PUBLIC fact placeholder; enums and tiers via a text slot."""
+    if value is not None and FIELDS_BY_NAME[field].kind in _NUMERIC_KINDS:
+        facts[fact_id] = _fact_for_value(fact_id, field, value)
+        required.add(fact_id)
+    else:
+        text_slots[fact_id] = str(value)
 
 
 def cents_ambiguity_clarify_action(
@@ -487,121 +500,65 @@ def _counter_action(
     )
 
 
-def _negotiate_affordable(
-    *,
-    ask_bp: int,
-    belief: BeliefState,
-    neg: NegotiationState,
-    analysis: TurnAnalysis,
-    afford: Affordability,
-    effects: list[Effect],
-    confirm_facts: dict[str, Fact] | None,
-    counter_offer_total_cents: int | None,
-    cfg: Settings,
-) -> Action:
+def _confirm_required(confirm_facts: dict[str, Fact] | None) -> set[str]:
+    """Schedule facts a CONFIRM must speak when the orchestrator supplied them."""
+    return set(confirm_facts or {}) & {"offer_total", "num_payments", "first_payment_date"}
+
+
+def _negotiate_affordable(t: _Turn, ask_bp: int, afford: Affordability) -> Action:
     """Counter ladder when the ask is affordable; never NO_DEAL from this path.
 
     Order: ask within prior offer → firm → counters exhausted → no lower
     counter → ladder stall jump → close-gap confirm → COUNTER.
     """
-    legal = [
-        bp
-        for bp in afford.feasible_bps
-        if bp <= afford.max_bp and bp < ask_bp
-    ]
+    neg, cfg = t.neg, t.cfg
+    assert afford.max_bp is not None
+
+    def confirm(reason: str) -> Action:
+        return _confirm_action(
+            ask_bp=ask_bp,
+            belief=t.belief,
+            confirm_facts=t.confirm_facts,
+            effects=t.effects,
+            required=_confirm_required(t.confirm_facts),
+            reason=reason,
+        )
+
     prior = list(neg.counters_offered)
     if neg.confirmed_bp is not None:
         prior.append(neg.confirmed_bp)
-    our_best = max(prior) if prior else None
-
-    # 1. Ask at or below something we already offered → confirm ask.
-    if our_best is not None and ask_bp <= our_best:
-        return _confirm_action(
-            ask_bp=ask_bp,
-            belief=belief,
-            confirm_facts=confirm_facts,
-            effects=effects,
-            required=set((confirm_facts or {}).keys())
-            & {"offer_total", "num_payments", "first_payment_date"},
-            reason="ask_within_offer",
-        )
-
-    # 2. Rep firm after we have countered → accept their ask.
-    if analysis.firm and neg.counters_offered:
-        return _confirm_action(
-            ask_bp=ask_bp,
-            belief=belief,
-            confirm_facts=confirm_facts,
-            effects=effects,
-            required=set((confirm_facts or {}).keys())
-            & {"offer_total", "num_payments", "first_payment_date"},
-            reason="rep_firm",
-        )
-
-    # 3. Exhausted counter budget → confirm ask (affordable path never NO_DEAL).
+    if prior and ask_bp <= max(prior):
+        return confirm("ask_within_offer")
+    if t.analysis.firm and neg.counters_offered:
+        return confirm("rep_firm")
     if len(neg.counters_offered) >= cfg.max_counters:
-        return _confirm_action(
-            ask_bp=ask_bp,
-            belief=belief,
-            confirm_facts=confirm_facts,
-            effects=effects,
-            required=set((confirm_facts or {}).keys())
-            & {"offer_total", "num_payments", "first_payment_date"},
-            reason="counters_exhausted",
-        )
+        return confirm("counters_exhausted")
 
     c_prev = neg.counters_offered[-1] if neg.counters_offered else None
     c_next = next_counter(
         ask_bp=ask_bp,
-        max_bp=afford.max_bp,  # type: ignore[arg-type]
+        max_bp=afford.max_bp,
         feasible_bps=afford.feasible_bps,
         c_prev=c_prev,
         anchor_ratio=cfg.anchor_ratio,
         concession_factor=cfg.concession_factor,
     )
-
-    # 4. No legal counter below ask → confirm ask.
     if c_next is None:
-        return _confirm_action(
-            ask_bp=ask_bp,
-            belief=belief,
-            confirm_facts=confirm_facts,
-            effects=effects,
-            required=set((confirm_facts or {}).keys())
-            & {"offer_total", "num_payments", "first_payment_date"},
-            reason="no_lower_counter",
-        )
-
-    # 5. Ladder stalled: jump toward ask once, else confirm.
+        return confirm("no_lower_counter")
+    # Ladder stalled on a feasibility gap: jump to the best legal bp, else confirm.
     if c_prev is not None and c_next <= c_prev:
-        jump = [bp for bp in legal if bp > c_prev]
+        jump = [
+            bp
+            for bp in afford.feasible_bps
+            if c_prev < bp <= afford.max_bp and bp < ask_bp
+        ]
         if not jump:
-            return _confirm_action(
-                ask_bp=ask_bp,
-                belief=belief,
-                confirm_facts=confirm_facts,
-                effects=effects,
-                required=set((confirm_facts or {}).keys())
-                & {"offer_total", "num_payments", "first_payment_date"},
-                reason="ladder_stalled",
-            )
+            return confirm("ladder_stalled")
         c_next = max(jump)
-
-    # 6. Close enough to ask → confirm ask.
     if ask_bp - c_next <= cfg.close_gap_bp:
-        return _confirm_action(
-            ask_bp=ask_bp,
-            belief=belief,
-            confirm_facts=confirm_facts,
-            effects=effects,
-            required=set((confirm_facts or {}).keys())
-            & {"offer_total", "num_payments", "first_payment_date"},
-            reason="gap_small",
-        )
-
-    # 7. Counter.
+        return confirm("gap_small")
     return _counter_action(
-        c_next, effects, counter_offer_total_cents=counter_offer_total_cents
+        c_next, t.effects, counter_offer_total_cents=t.counter_offer_total_cents
     )
 
 
@@ -657,38 +614,16 @@ def speak_schedule_action(
     )
 
 
-def _stall_after_confirm(
-    *,
-    belief: BeliefState,
-    neg: NegotiationState,
-    effects: list[Effect],
-    max_counters: int,
-) -> Action:
-    """Rejected/identical CONFIRM: verify each ASSUMED field once, else no-deal."""
-    del max_counters  # reserved; once ASSUMED fields exhausted we always end
-    effects = list(effects) + [Effect(kind="inc_confirm_reject")]
-    fname = _first_assumed_field(belief, already_asked=neg.assumed_asked)
-    if fname is not None:
-        spec = FIELDS_BY_NAME[fname]
-        return Action(
-            intent=Intent.ASK,
-            text_slots={"ask_text": spec.ask_text, "field_label": spec.label},
-            required=set(),
-            effects=effects
-            + [Effect(kind="note_assumed_asked", data={"field": fname})],
-            next_phase=Phase.DISCOVERY,
-            reason=fname,
-        )
+def _ask_field(fname: str, effects: list[Effect]) -> Action:
+    """ASK for one registry field using its rep-facing copy."""
+    spec = FIELDS_BY_NAME[fname]
     return Action(
-        intent=Intent.NO_DEAL_WRAP,
-        text_slots={
-            "no_deal_reason": (
-                "We could not confirm a schedule both sides can accept."
-            )
-        },
-        effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
-        next_phase=Phase.END,
-        reason="confirm_rejected",
+        intent=Intent.ASK,
+        text_slots={"ask_text": spec.ask_text, "field_label": spec.label},
+        required=set(),
+        effects=effects,
+        next_phase=Phase.DISCOVERY,
+        reason=fname,
     )
 
 
@@ -704,6 +639,17 @@ def _no_deal(
         text_slots={"no_deal_reason": spoken_reason},
         effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
         next_phase=Phase.END,
+        reason=reason,
+    )
+
+
+def _escalate(effects: list[Effect], *, reason: str, spoken_reason: str) -> Action:
+    """Hand off to a human and move to ESCALATE (no digits in the reason)."""
+    return Action(
+        intent=Intent.ESCALATE,
+        text_slots={"escalate_reason": spoken_reason},
+        effects=effects + [Effect(kind="set_phase", data={"phase": Phase.ESCALATE.value})],
+        next_phase=Phase.ESCALATE,
         reason=reason,
     )
 
@@ -729,6 +675,24 @@ def _wrap_should_renegotiate(analysis: TurnAnalysis) -> bool:
     return False
 
 
+@dataclass(frozen=True)
+class _Turn:
+    """Inputs of one ``decide`` call after the prelude (ask recorded, rejected alt cleared)."""
+
+    belief: BeliefState
+    neg: NegotiationState
+    analysis: TurnAnalysis
+    afford: Affordability | None
+    cfg: Settings
+    ask_bp: int | None
+    effects: list[Effect]
+    rescue_within_guardrail: bool
+    confirm_facts: dict[str, Fact] | None
+    counter_offer_total_cents: int | None
+    term_alt: tuple[str, Any] | None
+    accepted_term_alt: bool
+
+
 def decide(
     belief: BeliefState,
     neg: NegotiationState,
@@ -742,7 +706,7 @@ def decide(
     term_alt: tuple[str, Any] | None = None,
     accepted_term_alt: bool = False,
 ) -> Action:
-    """Apply §6.2 rules in order; return the next agent ``Action``.
+    """Return the next agent ``Action``: first match of the module-docstring cascade.
 
     ``term_alt`` is ``(field, value)`` for the next non-price recovery stage
     when the curve is empty or the ask sits above the ceiling
@@ -751,16 +715,12 @@ def decide(
     ``accepted_term_alt`` is true when this turn's accept applied a pending
     non-price alternative. That yes is not acceptance of the last price.
     """
-    cfg = settings or get_settings()
-
-    # Track ask from this turn's analysis (orchestrator also persists via effects).
     ask_bp = neg.ask_bp
     effects: list[Effect] = []
     if analysis.settlement_ask_pct is not None:
         ask_bp = ask_pct_to_bp(analysis.settlement_ask_pct)
         effects.append(Effect(kind="record_ask", data={"bp": ask_bp}))
-
-    # Rejected a pending non-price alternative → clear pending and try next stage.
+    # A rejected pending non-price alt is cleared so the cascade offers the next stage.
     if (
         neg.pending_terms_alt is not None
         and analysis.stance == "reject"
@@ -769,492 +729,399 @@ def decide(
         effects.append(Effect(kind="clear_pending_terms_alt", data={}))
         neg = replace(neg, pending_terms_alt=None)
 
-    # 1. Turn cap
+    t = _Turn(
+        belief=belief,
+        neg=neg,
+        analysis=analysis,
+        afford=afford,
+        cfg=settings or get_settings(),
+        ask_bp=ask_bp,
+        effects=effects,
+        rescue_within_guardrail=rescue_within_guardrail,
+        confirm_facts=confirm_facts,
+        counter_offer_total_cents=counter_offer_total_cents,
+        term_alt=term_alt,
+        accepted_term_alt=accepted_term_alt,
+    )
+    for step in (_decide_interruptions, _decide_clarify, _decide_confirm, _decide_discovery):
+        action = step(t)
+        if action is not None:
+            return action
+    return _decide_negotiate(t)
+
+
+def _decide_interruptions(t: _Turn) -> Action | None:
+    """Moves that preempt the phase flow, in priority order."""
+    a, neg, cfg = t.analysis, t.neg, t.cfg
     if neg.turn_idx > cfg.max_turns:
         return _no_deal(
-            effects,
+            t.effects,
             reason="max_turns",
             spoken_reason="We have reached the limit for this call.",
         )
-
-    # 2. Hostility
-    if analysis.hostility >= cfg.hostility_threshold:
-        return Action(
-            intent=Intent.ESCALATE,
-            text_slots={"escalate_reason": "The tone on this call needs a specialist."},
-            effects=effects + [Effect(kind="set_phase", data={"phase": Phase.ESCALATE.value})],
-            next_phase=Phase.ESCALATE,
+    if a.hostility >= cfg.hostility_threshold:
+        return _escalate(
+            t.effects,
             reason="hostile",
+            spoken_reason="The tone on this call needs a specialist.",
         )
-
-    # 3. Private-info ask
-    if analysis.asks_client_private_info:
+    # Private-info and commitment demands: refuse once, escalate on repeat.
+    stay = neg.phase if neg.phase != Phase.OPENING else Phase.DISCOVERY
+    if a.asks_client_private_info:
+        bumped = t.effects + [Effect(kind="inc_private_ask")]
         if neg.private_ask_count >= 1:
-            return Action(
-                intent=Intent.ESCALATE,
-                text_slots={
-                    "escalate_reason": "I need to hand this off after a sensitive request."
-                },
-                effects=effects
-                + [
-                    Effect(kind="inc_private_ask"),
-                    Effect(kind="set_phase", data={"phase": Phase.ESCALATE.value}),
-                ],
-                next_phase=Phase.ESCALATE,
+            return _escalate(
+                bumped,
                 reason="sensitive_request",
+                spoken_reason="I need to hand this off after a sensitive request.",
             )
         return Action(
             intent=Intent.REFUSE_PRIVATE,
-            effects=effects + [Effect(kind="inc_private_ask")],
-            next_phase=neg.phase if neg.phase != Phase.OPENING else Phase.DISCOVERY,
+            effects=bumped,
+            next_phase=stay,
             reason="private_info",
         )
-
-    # 4. Commitment demand
-    if analysis.demands_commitment:
+    if a.demands_commitment:
+        bumped = t.effects + [Effect(kind="inc_commit_demand")]
         if neg.commit_demand_count >= 1:
-            return Action(
-                intent=Intent.ESCALATE,
-                text_slots={
-                    "escalate_reason": "I need to involve someone about a commitment demand."
-                },
-                effects=effects
-                + [
-                    Effect(kind="inc_commit_demand"),
-                    Effect(kind="set_phase", data={"phase": Phase.ESCALATE.value}),
-                ],
-                next_phase=Phase.ESCALATE,
+            return _escalate(
+                bumped,
                 reason="commitment_demand",
+                spoken_reason="I need to involve someone about a commitment demand.",
             )
         return Action(
             intent=Intent.REFUSE_COMMIT,
-            effects=effects + [Effect(kind="inc_commit_demand")],
-            next_phase=neg.phase if neg.phase != Phase.OPENING else Phase.DISCOVERY,
+            effects=bumped,
+            next_phase=stay,
             reason="commitment",
         )
-
-    # Already wrapped: conclude unless the rep reopens price/terms.
-    if neg.phase == Phase.WRAP:
-        # Schedule detail stays in WRAP — do not end or renegotiate yet.
-        if analysis.asks_for_schedule and analysis.stance != "accept":
-            return Action(
-                intent=Intent.SPEAK_SCHEDULE,
-                effects=effects,
-                next_phase=Phase.WRAP,
-                reason="schedule_detail_post_wrap",
-            )
-        if _wrap_should_renegotiate(analysis):
-            # Re-enter policy as CONFIRM/NEGOTIATE; clear drafted agreement on ack.
-            reopen_phase = (
-                Phase.CONFIRM if neg.confirmed_bp is not None else Phase.NEGOTIATE
-            )
-            action = decide(
-                belief,
-                replace(neg, phase=reopen_phase),
-                analysis,
-                afford,
-                settings=cfg,
-                rescue_within_guardrail=rescue_within_guardrail,
-                confirm_facts=confirm_facts,
-                counter_offer_total_cents=counter_offer_total_cents,
-                term_alt=term_alt,
-                accepted_term_alt=accepted_term_alt,
-            )
-            return action.model_copy(
-                update={
-                    "effects": [
-                        Effect(kind="clear_wrap", data={}),
-                        *action.effects,
-                    ],
-                    "reason": action.reason or "wrap_renegotiate",
-                }
-            )
-        return _close_after_wrap(effects, reason="post_wrap")
-
-    # Already ended / escalated: stay terminal (idle thanks if they keep typing).
-    if neg.phase in (Phase.END, Phase.ESCALATE):
-        if neg.phase == Phase.ESCALATE:
-            return Action(
-                intent=Intent.ESCALATE,
-                text_slots={
-                    "escalate_reason": "A specialist still needs to join this call."
-                },
-                effects=effects,
-                next_phase=Phase.ESCALATE,
-                reason="already_escalated",
-            )
-        return _close_after_wrap(effects, reason="already_ended")
-
-    # Rep wants the payment-by-payment schedule (after we already proposed one).
-    # Skip when they are accepting — "payment schedule" often appears in accept lines.
-    if (
-        analysis.asks_for_schedule
-        and neg.last_confirm_key is not None
-        and analysis.stance != "accept"
-    ):
+    if neg.phase in (Phase.WRAP, Phase.END, Phase.ESCALATE):
+        return _decide_wrap(t)
+    # Schedule detail after a proposal; "payment schedule" often appears in accept lines.
+    if a.asks_for_schedule and neg.last_confirm_key is not None and a.stance != "accept":
         return Action(
             intent=Intent.SPEAK_SCHEDULE,
-            effects=effects,
+            effects=t.effects,
             next_phase=Phase.CONFIRM,
             reason="schedule_detail",
         )
-
-    # Rep wants to end.
-    if analysis.wants_to_end and analysis.stance != "accept":
+    if a.wants_to_end and a.stance != "accept":
         # Soft-accept a schedule already on the table, then close with thanks.
         if neg.phase == Phase.CONFIRM and neg.last_confirm_key is not None:
-            facts = dict(confirm_facts or {})
             return Action(
                 intent=Intent.CLOSE,
-                facts=facts,
-                effects=effects
+                facts=dict(t.confirm_facts or {}),
+                effects=t.effects
                 + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
                 next_phase=Phase.END,
                 reason="thanks_accept",
             )
         return _no_deal(
-            effects,
+            t.effects,
             reason="wants_to_end",
             spoken_reason="Understood — we will end the call here.",
         )
+    return None
 
-    # Rejected pending non-price alt cleared above — cascade to next stage below.
 
-    # 5. Contradictions before read-backs / wrap / asks
+def _decide_wrap(t: _Turn) -> Action:
+    """Post-proposal phases: stay terminal, or reopen price/terms from WRAP."""
+    a, neg = t.analysis, t.neg
+    if neg.phase == Phase.ESCALATE:
+        return Action(
+            intent=Intent.ESCALATE,
+            text_slots={"escalate_reason": "A specialist still needs to join this call."},
+            effects=t.effects,
+            next_phase=Phase.ESCALATE,
+            reason="already_escalated",
+        )
+    if neg.phase == Phase.END:
+        return _close_after_wrap(t.effects, reason="already_ended")
+    if a.asks_for_schedule and a.stance != "accept":
+        return Action(
+            intent=Intent.SPEAK_SCHEDULE,
+            effects=t.effects,
+            next_phase=Phase.WRAP,
+            reason="schedule_detail_post_wrap",
+        )
+    if not _wrap_should_renegotiate(a):
+        return _close_after_wrap(t.effects, reason="post_wrap")
+    # Re-enter as CONFIRM/NEGOTIATE; the drafted agreement clears on ack.
+    reopen = Phase.CONFIRM if neg.confirmed_bp is not None else Phase.NEGOTIATE
+    action = decide(
+        t.belief,
+        replace(neg, phase=reopen),
+        a,
+        t.afford,
+        settings=t.cfg,
+        rescue_within_guardrail=t.rescue_within_guardrail,
+        confirm_facts=t.confirm_facts,
+        counter_offer_total_cents=t.counter_offer_total_cents,
+        term_alt=t.term_alt,
+        accepted_term_alt=t.accepted_term_alt,
+    )
+    return action.model_copy(
+        update={
+            "effects": [Effect(kind="clear_wrap", data={}), *action.effects],
+            "reason": action.reason or "wrap_renegotiate",
+        }
+    )
+
+
+def _decide_clarify(t: _Turn) -> Action | None:
+    """Resolve CONTRADICTED (CLARIFY, escalate after two) then TENTATIVE (READ_BACK)."""
+    belief = t.belief
     contradicted = belief.contradicted_fields()
     if contradicted:
         fname = contradicted[0]
-        if neg.clarify_counts.get(fname, 0) >= 2:
-            return Action(
-                intent=Intent.ESCALATE,
-                text_slots={
-                    "escalate_reason": (
-                        "I need a specialist to resolve conflicting terms."
-                    )
-                },
-                effects=effects
-                + [Effect(kind="set_phase", data={"phase": Phase.ESCALATE.value})],
-                next_phase=Phase.ESCALATE,
+        if t.neg.clarify_counts.get(fname, 0) >= 2:
+            return _escalate(
+                t.effects,
                 reason="contradiction_unresolved",
+                spoken_reason="I need a specialist to resolve conflicting terms.",
             )
         term = belief.get(fname)
-        old_val = term.history[-1] if term.history else None
-        new_val = term.value
         facts: dict[str, Fact] = {}
-        text_slots: dict[str, str] = {"field_label": FIELDS_BY_NAME[fname].label}
+        slots = {"field_label": FIELDS_BY_NAME[fname].label}
         required: set[str] = set()
-        if old_val is not None and FIELDS_BY_NAME[fname].kind in ("cents", "int", "date"):
-            facts["clarify_old"] = _fact_for_value("clarify_old", fname, old_val)
-            required.add("clarify_old")
-        else:
-            text_slots["clarify_old"] = str(old_val)
-        if new_val is not None and FIELDS_BY_NAME[fname].kind in ("cents", "int", "date"):
-            facts["clarify_new"] = _fact_for_value("clarify_new", fname, new_val)
-            required.add("clarify_new")
-        else:
-            text_slots["clarify_new"] = str(new_val)
+        old = term.history[-1] if term.history else None
+        _spoken_value("clarify_old", fname, old, facts, slots, required)
+        _spoken_value("clarify_new", fname, term.value, facts, slots, required)
         return Action(
             intent=Intent.CLARIFY,
             facts=facts,
-            text_slots=text_slots,
+            text_slots=slots,
             required=required,
-            effects=effects
-            + [Effect(kind="note_clarify", data={"field": fname})],
+            effects=t.effects + [Effect(kind="note_clarify", data={"field": fname})],
             next_phase=Phase.DISCOVERY,
             reason=fname,
         )
-
-    # 6. Tentative → read-back (before schedule wrap)
     tentative = belief.tentative_fields()
     if tentative:
         fname = tentative[0]
-        term = belief.get(fname)
         facts = {}
-        text_slots = {"field_label": FIELDS_BY_NAME[fname].label}
+        slots = {"field_label": FIELDS_BY_NAME[fname].label}
         required = set()
-        if term.value is not None and FIELDS_BY_NAME[fname].kind in ("cents", "int", "date"):
-            facts["readback_value"] = _fact_for_value("readback_value", fname, term.value)
-            required.add("readback_value")
-        else:
-            text_slots["readback_value"] = str(term.value)
+        _spoken_value("readback_value", fname, belief.get(fname).value, facts, slots, required)
         return Action(
             intent=Intent.READ_BACK,
             facts=facts,
-            text_slots=text_slots,
+            text_slots=slots,
             required=required,
-            effects=effects
-            + [Effect(kind="set_pending_readback", data={"field": fname})],
+            effects=t.effects + [Effect(kind="set_pending_readback", data={"field": fname})],
             next_phase=Phase.DISCOVERY,
             reason=fname,
         )
+    return None
 
-    # 10: In CONFIRM, accept stance only → wrap (not readback_response).
-    # Key must still match confirmed_bp; otherwise fall through for re-confirm.
-    # A restated different settlement % is a correction, not a wrap.
-    # A yes to a pending term alt is not a yes to the schedule on the table.
+
+def _propose_wrap(t: _Turn) -> Action:
+    """Send the confirmed schedule for client approval."""
+    return Action(
+        intent=Intent.PROPOSE_WRAP,
+        facts=dict(t.confirm_facts or {}),
+        effects=t.effects + [Effect(kind="set_phase", data={"phase": Phase.WRAP.value})],
+        next_phase=Phase.WRAP,
+        reason="confirmed",
+    )
+
+
+def _decide_confirm(t: _Turn) -> Action | None:
+    """CONFIRM-phase accept of the unchanged schedule on the table → PROPOSE_WRAP.
+
+    Not a wrap: ``readback_response``, a restated different % (a correction),
+    a yes to a pending term alt, or a fingerprint that changed since CONFIRM.
+    """
+    a, neg = t.analysis, t.neg
+    if neg.phase != Phase.CONFIRM or a.stance != "accept" or t.accepted_term_alt:
+        return None
+    if neg.confirmed_bp is None or neg.last_confirm_key is None:
+        return None
     if (
-        neg.phase == Phase.CONFIRM
-        and analysis.stance == "accept"
-        and not accepted_term_alt
+        a.settlement_ask_pct is not None
+        and ask_pct_to_bp(a.settlement_ask_pct) != neg.confirmed_bp
     ):
-        stated_bp = (
-            ask_pct_to_bp(analysis.settlement_ask_pct)
-            if analysis.settlement_ask_pct is not None
-            else None
-        )
-        correcting = (
-            stated_bp is not None
-            and neg.confirmed_bp is not None
-            and stated_bp != neg.confirmed_bp
-        )
-        if (
-            not correcting
-            and neg.confirmed_bp is not None
-            and neg.last_confirm_key is not None
-            and _confirm_key(belief, neg.confirmed_bp) == neg.last_confirm_key
-        ):
-            facts = dict(confirm_facts or {})
-            return Action(
-                intent=Intent.PROPOSE_WRAP,
-                facts=facts,
-                effects=effects
-                + [Effect(kind="set_phase", data={"phase": Phase.WRAP.value})],
-                next_phase=Phase.WRAP,
-                reason="confirmed",
-            )
+        return None
+    if _confirm_key(t.belief, neg.confirmed_bp) != neg.last_confirm_key:
+        return None
+    return _propose_wrap(t)
 
-    # 7. Missing required field
-    missing = belief.missing_required()
+
+def _decide_discovery(t: _Turn) -> Action | None:
+    """ASK the next missing required field, then the settlement ask."""
+    missing = t.belief.missing_required()
     if missing:
-        fname = missing[0]
-        spec = FIELDS_BY_NAME[fname]
-        return Action(
-            intent=Intent.ASK,
-            text_slots={
-                "ask_text": spec.ask_text,
-                "field_label": spec.label,
-            },
-            required=set(),
-            effects=effects,
-            next_phase=Phase.DISCOVERY,
-            reason=fname,
-        )
-
-    # 8. Settlement ask unknown
-    if ask_bp is None:
+        return _ask_field(missing[0], t.effects)
+    # afford is None only when rules are not buildable (missing fields caught above).
+    if t.ask_bp is None or t.afford is None:
         return Action(
             intent=Intent.ASK_SETTLEMENT,
-            effects=effects,
+            effects=t.effects,
             next_phase=Phase.DISCOVERY,
         )
+    return None
 
-    # 9. Affordability / counter / confirm
-    if afford is None:
-        # Rules not buildable yet — should have been caught by missing fields.
-        return Action(
-            intent=Intent.ASK_SETTLEMENT,
-            effects=effects,
-            next_phase=Phase.DISCOVERY,
-        )
 
+def _decide_negotiate(t: _Turn) -> Action:
+    """Price and non-price moves once rules and the ask are known."""
+    ask_bp, afford = t.ask_bp, t.afford
+    assert ask_bp is not None and afford is not None
     if afford.max_bp is None:
-        # Nothing feasible at the current first_payment_date.
-        # Stagger non-price recovery before rescue escalate: FPD → min → max_pay.
-        if term_alt is not None:
-            alt_field, alt_value = term_alt
-            key = terms_counter_key(alt_field, alt_value)
-            # FPD: one try per field. Min/max may progress to a better value.
-            fpd_blocked = (
-                alt_field == "first_payment_date"
-                and field_already_countered(neg.terms_countered, alt_field)
-            )
-            if key not in neg.terms_countered and not fpd_blocked:
-                return _counter_terms_action(
-                    field=alt_field,
-                    value=alt_value,
-                    effects=effects,
-                )
-        if rescue_within_guardrail:
-            return Action(
-                intent=Intent.ESCALATE,
-                text_slots={
-                    "escalate_reason": (
-                        "This needs client approval for extra funds before we continue."
-                    )
-                },
-                effects=effects
-                + [Effect(kind="set_phase", data={"phase": Phase.ESCALATE.value})],
-                next_phase=Phase.ESCALATE,
+        # Nothing feasible at this start date: FPD → min → max_pay alts, then rescue.
+        alt = _term_alt_action(t)
+        if alt is not None:
+            return alt
+        if t.rescue_within_guardrail:
+            return _escalate(
+                t.effects,
                 reason="out_of_guardrail",
+                spoken_reason="This needs client approval for extra funds before we continue.",
             )
         return _no_deal(
-            effects,
+            t.effects,
             reason="infeasible",
             spoken_reason=(
-                "No payment schedule fits within the client's program "
-                "under these terms."
+                "No payment schedule fits within the client's program under these terms."
             ),
         )
-
-    # Ask above ceiling but a further non-price alt can raise it — prefer that
-    # over re-offering the same max counter in a loop.
-    if ask_bp > afford.max_bp and term_alt is not None:
-        alt_field, alt_value = term_alt
-        key = terms_counter_key(alt_field, alt_value)
-        fpd_blocked = (
-            alt_field == "first_payment_date"
-            and field_already_countered(neg.terms_countered, alt_field)
-        )
-        if key not in neg.terms_countered and not fpd_blocked:
-            return _counter_terms_action(
-                field=alt_field,
-                value=alt_value,
-                effects=effects,
-            )
-
-    # Rep accepted our last counter → confirm that bp (if still legal under rules).
-    # Prefer an explicit restated % when the rep corrects the figure.
-    # A yes to a start-date / min / payment-count alt is not a yes to the
-    # previous price — that counter can be a token percent the new terms
-    # just made obsolete.
-    if analysis.stance == "accept":
-        bp: int | None = None
-        if analysis.settlement_ask_pct is not None:
-            stated = ask_pct_to_bp(analysis.settlement_ask_pct)
-            if stated <= afford.max_bp and stated in afford.feasible_bps:
-                bp = stated
-        if bp is None and neg.counters_offered and not accepted_term_alt:
-            cand = neg.counters_offered[-1]
-            if cand <= afford.max_bp and cand in afford.feasible_bps:
-                bp = cand
-        if bp is not None and not (
-            accepted_term_alt and ask_bp is not None and bp < ask_bp
-        ):
-            return _confirm_action(
-                ask_bp=bp,
-                belief=belief,
-                confirm_facts=confirm_facts,
-                effects=effects,
-                required=set((confirm_facts or {}).keys())
-                & {"offer_total", "num_payments", "first_payment_date"},
-            )
-
-    # Ask is affordable and on the feasible grid.
+    # A further non-price alt that can raise the ceiling beats a price counter.
+    if ask_bp > afford.max_bp:
+        alt = _term_alt_action(t)
+        if alt is not None:
+            return alt
+    accepted = _confirm_accepted_counter(t, ask_bp, afford)
+    if accepted is not None:
+        return accepted
     if ask_bp <= afford.max_bp and ask_bp in afford.feasible_bps:
-        confirmed = neg.confirmed_bp
-        key_at_confirmed = (
-            _confirm_key(belief, confirmed) if confirmed is not None else None
-        )
-        new_ask_this_turn = analysis.settlement_ask_pct is not None
-        lower_ask = (
-            confirmed is not None
-            and ask_bp < confirmed
-            and new_ask_this_turn
-        )
+        on_table = _reconfirm_on_table(t, ask_bp, afford)
+        if on_table is not None:
+            return on_table
+        return _negotiate_affordable(t, ask_bp, afford)
+    return _ladder_unreachable(t, ask_bp, afford)
 
-        # Terms revised after a proposal: re-confirm at confirmed_bp.
-        if (
-            confirmed is not None
-            and not new_ask_this_turn
-            and neg.last_confirm_key is not None
-            and key_at_confirmed != neg.last_confirm_key
-            and confirmed <= afford.max_bp
-            and confirmed in afford.feasible_bps
-            and ask_bp <= confirmed
-        ):
-            return _confirm_action(
-                ask_bp=confirmed,
-                belief=belief,
-                confirm_facts=confirm_facts,
-                effects=effects,
-                required=set((confirm_facts or {}).keys())
-                & {"offer_total", "num_payments", "first_payment_date"},
-                reason="terms_revised",
-            )
 
-        # Same schedule already on the table, and that price meets the ask.
-        # A confirm still below the ask (8% on the table, rep wants 60% and
-        # the ceiling can cover it) must reopen the ladder, not stall.
-        if (
-            confirmed is not None
-            and ask_bp <= confirmed
-            and neg.last_confirm_key is not None
-            and key_at_confirmed == neg.last_confirm_key
-            and not lower_ask
-        ):
-            if analysis.stance == "reject":
-                return _stall_after_confirm(
-                    belief=belief,
-                    neg=neg,
-                    effects=effects,
-                    max_counters=cfg.max_counters,
-                )
-            # Accept on an identical schedule already on the table → wrap.
-            # (Safety net when CONFIRM-phase rule 10 did not fire, e.g. phase lag.)
-            if analysis.stance == "accept":
-                facts = dict(confirm_facts or {})
-                return Action(
-                    intent=Intent.PROPOSE_WRAP,
-                    facts=facts,
-                    effects=effects
-                    + [Effect(kind="set_phase", data={"phase": Phase.WRAP.value})],
-                    next_phase=Phase.WRAP,
-                    reason="confirmed",
-                )
-            # Same schedule already offered; NLU may have missed accept — soft retry.
-            soft = list(effects) + [Effect(kind="inc_confirm_reject")]
-            if neg.confirm_rejects + 1 >= cfg.max_counters:
-                return _no_deal(
-                    soft,
-                    reason="confirm_unacked",
-                    spoken_reason="We still have not confirmed a schedule.",
-                )
-            return _confirm_action(
-                ask_bp=confirmed,
-                belief=belief,
-                confirm_facts=confirm_facts,
-                effects=soft,
-                required=set(),
-            )
+def _term_alt_action(t: _Turn) -> Action | None:
+    """COUNTER_TERMS for ``t.term_alt`` unless already offered (FPD gets one try)."""
+    if t.term_alt is None:
+        return None
+    alt_field, alt_value = t.term_alt
+    if terms_counter_key(alt_field, alt_value) in t.neg.terms_countered:
+        return None
+    if alt_field == "first_payment_date" and field_already_countered(
+        t.neg.terms_countered, alt_field
+    ):
+        return None
+    return _counter_terms_action(field=alt_field, value=alt_value, effects=t.effects)
 
-        # Negotiate: counter toward ask, or confirm under firm / gap / exhausted.
-        return _negotiate_affordable(
-            ask_bp=ask_bp,
-            belief=belief,
-            neg=neg,
-            analysis=analysis,
-            afford=afford,
-            effects=effects,
-            confirm_facts=confirm_facts,
-            counter_offer_total_cents=counter_offer_total_cents,
-            cfg=cfg,
-        )
 
-    # Counter ladder. Stop after MAX_COUNTERS rejections at the highest
-    # legal counter (feasible, <= max_bp, and strictly below the ask).
-    legal_counters = [
-        bp
-        for bp in afford.feasible_bps
-        if bp <= afford.max_bp and bp < ask_bp
-    ]
-    ceiling = max(legal_counters) if legal_counters else None
-    at_ceiling = (
-        bool(neg.counters_offered)
-        and ceiling is not None
-        and neg.counters_offered[-1] >= ceiling
+def _confirm_accepted_counter(t: _Turn, ask_bp: int, afford: Affordability) -> Action | None:
+    """Rep accepted: confirm a restated % or our last counter, if still feasible.
+
+    A yes to a term alt is not a yes to the previous price — that counter can
+    be a token percent the new terms just made obsolete.
+    """
+    a, neg = t.analysis, t.neg
+    if a.stance != "accept":
+        return None
+    assert afford.max_bp is not None
+    legal = {bp for bp in afford.feasible_bps if bp <= afford.max_bp}
+    bp: int | None = None
+    if a.settlement_ask_pct is not None:
+        stated = ask_pct_to_bp(a.settlement_ask_pct)
+        if stated in legal:
+            bp = stated
+    if bp is None and neg.counters_offered and not t.accepted_term_alt:
+        if neg.counters_offered[-1] in legal:
+            bp = neg.counters_offered[-1]
+    if bp is None or (t.accepted_term_alt and bp < ask_bp):
+        return None
+    return _confirm_action(
+        ask_bp=bp,
+        belief=t.belief,
+        confirm_facts=t.confirm_facts,
+        effects=t.effects,
+        required=_confirm_required(t.confirm_facts),
     )
-    if at_ceiling and neg.rejects >= cfg.max_counters:
-        return _no_deal(
-            effects,
-            reason="max_counters",
-            spoken_reason="We have exhausted the settlement options we can propose.",
+
+
+def _reconfirm_on_table(t: _Turn, ask_bp: int, afford: Affordability) -> Action | None:
+    """Affordable ask with a CONFIRM already spoken: re-confirm, stall, or wrap.
+
+    Terms revised since CONFIRM → re-confirm at ``confirmed_bp``. Same schedule
+    and it meets the ask → reject probes ASSUMED fields, accept wraps (phase-lag
+    safety net), anything else soft-retries up to ``max_counters``. A confirm
+    still below the ask, or a new lower ask, falls through to the ladder.
+    """
+    neg, a = t.neg, t.analysis
+    confirmed = neg.confirmed_bp
+    if confirmed is None or neg.last_confirm_key is None:
+        return None
+    assert afford.max_bp is not None
+    new_ask = a.settlement_ask_pct is not None
+    key_matches = _confirm_key(t.belief, confirmed) == neg.last_confirm_key
+    if (
+        not new_ask
+        and not key_matches
+        and confirmed <= afford.max_bp
+        and confirmed in afford.feasible_bps
+        and ask_bp <= confirmed
+    ):
+        return _confirm_action(
+            ask_bp=confirmed,
+            belief=t.belief,
+            confirm_facts=t.confirm_facts,
+            effects=t.effects,
+            required=_confirm_required(t.confirm_facts),
+            reason="terms_revised",
         )
+    if ask_bp > confirmed or not key_matches or (new_ask and ask_bp < confirmed):
+        return None
+    if a.stance == "reject":
+        return _stall_after_confirm(t)
+    if a.stance == "accept":
+        return _propose_wrap(t)
+    soft = t.effects + [Effect(kind="inc_confirm_reject")]
+    if neg.confirm_rejects + 1 >= t.cfg.max_counters:
+        return _no_deal(
+            soft,
+            reason="confirm_unacked",
+            spoken_reason="We still have not confirmed a schedule.",
+        )
+    return _confirm_action(
+        ask_bp=confirmed,
+        belief=t.belief,
+        confirm_facts=t.confirm_facts,
+        effects=soft,
+        required=set(),
+    )
 
+
+def _stall_after_confirm(t: _Turn) -> Action:
+    """Rejected identical CONFIRM: verify each ASSUMED field once, else no-deal."""
+    effects = t.effects + [Effect(kind="inc_confirm_reject")]
+    fname = _first_assumed_field(t.belief, already_asked=t.neg.assumed_asked)
+    if fname is not None:
+        return _ask_field(
+            fname, effects + [Effect(kind="note_assumed_asked", data={"field": fname})]
+        )
+    return _no_deal(
+        effects,
+        reason="confirm_rejected",
+        spoken_reason="We could not confirm a schedule both sides can accept.",
+    )
+
+
+def _ladder_unreachable(t: _Turn, ask_bp: int, afford: Affordability) -> Action:
+    """Counter ladder when the ask is above the ceiling (or off the grid).
+
+    Ceiling = highest feasible bp <= max_bp and strictly below the ask. At most
+    ``max_counters`` COUNTERs; the last one is the ceiling. Once the ceiling is
+    on the table there is nothing better to say, so any non-accept turn ends
+    (re-offering the same bp was the Phase 12 ten-counter loop).
+    """
+    neg, cfg = t.neg, t.cfg
+    assert afford.max_bp is not None
     c_prev = neg.counters_offered[-1] if neg.counters_offered else None
-    # If rep rejected and we were at the ceiling, count toward max_counters (on ack).
-    if analysis.stance == "reject" and at_ceiling:
-        effects.append(Effect(kind="inc_reject_at_max"))
-
     c_next = next_counter(
         ask_bp=ask_bp,
         max_bp=afford.max_bp,
@@ -1265,36 +1132,27 @@ def decide(
     )
     if c_next is None:
         return _no_deal(
-            effects,
+            t.effects,
             reason="no_legal_counter",
             spoken_reason="We cannot propose a settlement under these terms.",
         )
-
-    # If the ladder stalls below the ceiling, jump to the ceiling once.
-    if c_prev is not None and c_next <= c_prev and ceiling is not None and ceiling > c_prev:
-        c_next = ceiling
-
-    # Identical / illegal stall: count toward cap then NO_DEAL or COUNTER.
-    if c_prev is not None and c_next <= c_prev:
-        if not any(e.kind == "inc_reject_at_max" for e in effects):
-            effects.append(Effect(kind="inc_reject_at_max"))
-        reject_n = neg.rejects + 1
-        if reject_n >= cfg.max_counters:
-            return _no_deal(
-                effects,
-                reason="max_counters",
-                spoken_reason="We have exhausted the settlement options we can propose.",
-            )
-
-    if c_next >= ask_bp or c_next > afford.max_bp:
+    ceiling = max(
+        bp for bp in afford.feasible_bps if bp <= afford.max_bp and bp < ask_bp
+    )
+    if len(neg.counters_offered) >= cfg.max_counters or (
+        c_prev is not None and c_prev >= ceiling
+    ):
         return _no_deal(
-            effects,
-            reason="no_counter_below_ask",
-            spoken_reason="We cannot propose a settlement under these terms.",
+            t.effects,
+            reason="max_counters",
+            spoken_reason="We have exhausted the settlement options we can propose.",
         )
-
+    if len(neg.counters_offered) + 1 >= cfg.max_counters or (
+        c_prev is not None and c_next <= c_prev
+    ):
+        c_next = ceiling
     return _counter_action(
-        c_next, effects, counter_offer_total_cents=counter_offer_total_cents
+        c_next, t.effects, counter_offer_total_cents=t.counter_offer_total_cents
     )
 
 

@@ -30,6 +30,7 @@ packages = ["app", "feasibility", "sim", "eval"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = ["slow: offline oracle sweeps (DSA_INVARIANT_SEEDS seeds)"]
 
 [tool.ruff]
 target-version = "py312"

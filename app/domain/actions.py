@@ -53,7 +53,6 @@ class Effect(BaseModel):
         "inc_private_ask",
         "inc_commit_demand",
         "record_ask",
-        "inc_reject_at_max",
         "record_confirm",
         "inc_confirm_reject",
         "note_assumed_asked",

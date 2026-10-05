@@ -319,7 +319,6 @@ def test_ask_above_ceiling_prefers_further_term_alt() -> None:
             turn_idx=8,
             ask_bp=5000,
             counters_offered=[800],
-            rejects=1,
             phase=Phase.NEGOTIATE,
             terms_countered=[
                 "first_payment_date:2027-01-31",
@@ -842,7 +841,6 @@ def test_no_deal_after_max_counters_at_max_bp() -> None:
             turn_idx=10,
             ask_bp=8000,
             counters_offered=[5000],
-            rejects=4,
             phase=Phase.NEGOTIATE,
         ),
         TurnAnalysis(stance="reject"),
@@ -1256,7 +1254,6 @@ def test_identical_counter_without_reject_stance_counts_toward_cap() -> None:
             turn_idx=10,
             ask_bp=8000,
             counters_offered=[5000],
-            rejects=3,
             phase=Phase.NEGOTIATE,
         ),
         TurnAnalysis(stance="other"),
@@ -1266,6 +1263,124 @@ def test_identical_counter_without_reject_stance_counts_toward_cap() -> None:
     )
     assert action.intent == Intent.NO_DEAL_WRAP
     assert action.reason == "max_counters"
+
+
+def test_ceiling_reached_never_reoffers_identical_counter() -> None:
+    """At the ceiling with budget left, any non-accept ends — no same-bp COUNTER."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    for stance in ("reject", "other", "question"):
+        action = decide(
+            b,
+            _neg(turn_idx=6, ask_bp=8000, counters_offered=[4300, 5000], phase=Phase.NEGOTIATE),
+            TurnAnalysis(stance=stance),  # type: ignore[arg-type]
+            _afford(5000, list(range(100, 5100, 100))),
+            settings=_SETTINGS,
+        )
+        assert action.intent == Intent.NO_DEAL_WRAP, stance
+        assert action.reason == "max_counters"
+
+
+def test_unreachable_ask_last_counter_jumps_to_ceiling() -> None:
+    """With one counter left, offer the best legal bp instead of a ladder step."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(
+            turn_idx=6,
+            ask_bp=8000,
+            counters_offered=[3500, 4300, 4700],
+            phase=Phase.NEGOTIATE,
+        ),
+        TurnAnalysis(stance="reject"),
+        _afford(6200, list(range(100, 6300, 100))),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.COUNTER
+    assert action.facts["counter_pct"].value == 6200
+
+
+def test_unreachable_ask_budget_spent_below_ceiling_no_deal() -> None:
+    """``max_counters`` distinct counters already spoken → stop, even below ceiling."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(
+            turn_idx=8,
+            ask_bp=8000,
+            counters_offered=[3500, 4300, 4700, 5000],
+            phase=Phase.NEGOTIATE,
+        ),
+        TurnAnalysis(stance="reject"),
+        _afford(6200, list(range(100, 6300, 100))),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.NO_DEAL_WRAP
+    assert action.reason == "max_counters"
+
+
+def test_ask_known_but_rules_unbuildable_asks_settlement() -> None:
+    """Merged branch: afford=None with a known ask behaves like an unknown ask."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(turn_idx=3, ask_bp=4500, phase=Phase.DISCOVERY),
+        TurnAnalysis(stance="info"),
+        None,
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.ASK_SETTLEMENT
+    assert action.next_phase == Phase.DISCOVERY
+    assert action.reason is None
+
+
+def test_ask_above_ceiling_fpd_already_countered_ladders() -> None:
+    """Shared term-alt gate: FPD gets one try on the ceiling path too."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(
+            turn_idx=5,
+            ask_bp=8000,
+            phase=Phase.NEGOTIATE,
+            terms_countered=["first_payment_date:2026-11-30"],
+        ),
+        TurnAnalysis(stance="reject"),
+        _afford(5000, list(range(100, 5100, 100))),
+        settings=_SETTINGS,
+        term_alt=("first_payment_date", date(2026, 12, 31)),
+    )
+    assert action.intent == Intent.COUNTER
+
+
+def test_clarify_enum_field_uses_text_slots() -> None:
+    """Enum contradictions speak via text slots, not a numeric Fact."""
+    b = _belief()
+    b.observe("payment_structure", "even", "even", 1, verified=True, hedged=False)
+    b.observe("payment_structure", "balloon", "balloon", 2, verified=True, hedged=False)
+    action = decide(b, _neg(turn_idx=3), TurnAnalysis(stance="info"), None, settings=_SETTINGS)
+    assert action.intent == Intent.CLARIFY
+    assert action.facts == {}
+    assert action.text_slots["clarify_old"] == "even"
+    assert action.text_slots["clarify_new"] == "balloon"
+
+
+def test_next_counter_always_below_ask_and_within_max() -> None:
+    """Why the ceiling ladder needs no ``no_counter_below_ask`` guard."""
+    grids = [list(range(100, 10001, 100)), [1000, 2500, 4000, 4100, 6000], [3000, 7000]]
+    for feasible in grids:
+        for ask in range(500, 10001, 700):
+            for max_bp in range(500, 10001, 900):
+                for c_prev in (None, 1000, 4000, 6500, 9900):
+                    c = next_counter(
+                        ask_bp=ask,
+                        max_bp=max_bp,
+                        feasible_bps=feasible,
+                        c_prev=c_prev,
+                        anchor_ratio=0.7,
+                        concession_factor=0.5,
+                    )
+                    if c is not None:
+                        assert c < ask and c <= max_bp
 
 
 def test_draft_agreement_pending_and_audited(tmp_path) -> None:

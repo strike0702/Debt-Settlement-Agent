@@ -65,7 +65,7 @@ Defaults (env / `.env`):
 |---|---|---|
 | `ANCHOR_RATIO` | `0.7` | First counter anchors near 70% of `min(ask, max)` |
 | `CONCESSION_FACTOR` | `0.5` | Each later step closes half the remaining gap |
-| `MAX_COUNTERS` | `4` | Cap on stalls / ceiling rejects |
+| `MAX_COUNTERS` | `4` | Cap on price COUNTERs per call (the last one is the ceiling) and on CONFIRM soft retries |
 | `CLOSE_GAP_BP` | `200` | If the next counter is within 2 points of the ask, just confirm |
 | `MAX_TURNS` | `24` | Hard call length |
 

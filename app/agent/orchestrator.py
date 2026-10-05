@@ -338,8 +338,6 @@ def apply_effects(session: CallSession, effects: list[Effect]) -> None:
             bp = int(data["bp"])
             session.neg.ask_bp = bp
             session.neg.ask_history.append(bp)
-        elif kind == "inc_reject_at_max":
-            session.neg.rejects += 1
         elif kind == "record_confirm":
             raw_key = data.get("key")
             if isinstance(raw_key, list):

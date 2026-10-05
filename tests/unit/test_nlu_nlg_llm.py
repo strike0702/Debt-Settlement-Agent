@@ -244,11 +244,17 @@ def test_post_verify_keeps_hostility_with_cues() -> None:
     assert out.hostility == 0.95
 
 
-def test_post_verify_clears_private_flag_without_cues() -> None:
-    """F03: false asks_client_private_info must not refuse/escalate."""
-    analysis = TurnAnalysis(stance="other", asks_client_private_info=True)
-    out = post_verify(analysis, "even payments only", ref=_REF)
-    assert out.asks_client_private_info is False
+def test_post_verify_keeps_llm_private_flag_without_regex_cue() -> None:
+    """Phase 15: LLM flag OR regex — paraphrases the regex misses still count."""
+    analysis = TurnAnalysis(stance="question", asks_client_private_info=True)
+    out = post_verify(analysis, "What does your client take home each month?", ref=_REF)
+    assert out.asks_client_private_info is True
+
+
+def test_post_verify_private_regex_without_llm_flag() -> None:
+    analysis = TurnAnalysis(stance="question", asks_client_private_info=False)
+    out = post_verify(analysis, "What is the client's bank balance?", ref=_REF)
+    assert out.asks_client_private_info is True
 
 
 def test_post_verify_keeps_private_flag_with_cues() -> None:
@@ -259,10 +265,10 @@ def test_post_verify_keeps_private_flag_with_cues() -> None:
     assert out.asks_client_private_info is True
 
 
-def test_post_verify_clears_commitment_flag_without_cues() -> None:
+def test_post_verify_keeps_llm_commitment_flag_without_regex_cue() -> None:
     analysis = TurnAnalysis(stance="other", demands_commitment=True)
-    out = post_verify(analysis, "can you send the schedule?", ref=_REF)
-    assert out.demands_commitment is False
+    out = post_verify(analysis, "Promise me this is a done deal.", ref=_REF)
+    assert out.demands_commitment is True
 
 
 def test_post_verify_keeps_commitment_flag_with_cues() -> None:

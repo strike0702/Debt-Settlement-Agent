@@ -2,7 +2,9 @@
 
 ``analyze`` asks the LLM for a ``TurnAnalysis``, retries once on validation
 failure, then drops bad quotes / out-of-range values and sets ``verified`` from
-``numbers.extract_tokens`` matches. ``NLU_MODE=oracle`` skips the LLM and uses
+``numbers.extract_tokens`` matches. ``repair_*`` helpers then fix stance
+(accept phrase, dominant short ack, never accept on injection) and OR each LLM
+side-channel flag with a regex cue. ``NLU_MODE=oracle`` skips the LLM and uses
 a caller-supplied ``TurnAnalysis`` (sim/tests). Does not update belief — that
 is the orchestrator's job via ``BeliefState.observe``.
 """
@@ -539,6 +541,8 @@ def _value_matches_utterance_span(
 
 
 # Deterministic stance repair when the LLM mislabels clear accept/reject lines.
+# Explicit accept phrases force accept anywhere in the line; bare acknowledgements
+# (``_ACK_WORDS``) only when they dominate the line (see ``_ack_dominant``).
 _ACCEPT_STANCE_RE = re.compile(
     r"\b(?:"
     r"agreed"
@@ -549,17 +553,29 @@ _ACCEPT_STANCE_RE = re.compile(
     r"|we accept"
     r"|schedule works"
     r"|payment schedule works"
-    r"|\bfine\b"
-    r"|\bok\b"
-    r"|\bokay\b"
-    r"|\bsure\b"
-    r"|\balright\b"
-    r"|\ball right\b"
-    r"|\bcool\b"
-    r"|\byes\b"
-    r"|\byeah\b"
-    r"|\byep\b"
     r")\b",
+    re.IGNORECASE,
+)
+_ACK_WORDS = frozenset(
+    {"ok", "okay", "yes", "yeah", "yep", "fine", "sure", "cool", "alright", "right"}
+)
+# Words that neither acknowledge nor add content ("yeah that's fine", "sure thing").
+_ACK_NEUTRAL = frozenset(
+    {"uh", "um", "oh", "well", "so", "thing", "that", "thats", "its", "is", "then",
+     "great", "good", "perfect", "with", "me"}
+)
+# Instruction-shaped text aimed at the model; such a line is never an accept.
+_INJECTION_RE = re.compile(
+    r"(?:"
+    r"\bignore (?:all |your |the |any )?(?:previous |prior |above )?(?:instructions|rules)\b"
+    r"|\bdisregard (?:all |your |the |any )?(?:previous |prior )?(?:instructions|rules)\b"
+    r"|\brepeat after me\b"
+    r"|^\s*(?:system|developer|assistant)\s*[:,]"
+    r"|\bdeveloper mode\b"
+    r"|\bset stance\b"
+    r"|\boutput stance\b"
+    r"|\blabel every\b"
+    r")",
     re.IGNORECASE,
 )
 _REJECT_STANCE_RE = re.compile(
@@ -653,10 +669,13 @@ _HOSTILITY_RE = re.compile(
     r")",
     re.IGNORECASE,
 )
+# "client's account" alone is usually the creditor's own account, so only
+# account balance / number count.
 _PRIVATE_INFO_RE = re.compile(
     r"(?:"
     r"\b(?:client'?s?|their|his|her)\s+"
-    r"(?:bank\s+)?(?:balance|income|draft|ssn|salary|paycheck|routing|account)\b"
+    r"(?:bank\s+)?(?:balance|income|draft|ssn|salary|paycheck|routing"
+    r"|account\s+(?:balance|number))\b"
     r"|\b(?:bank balance|monthly income|social security|ssn|routing number)\b"
     r"|\bdraft amount\b"
     r"|\bwhat (?:is|are) (?:the )?client\b"
@@ -676,34 +695,70 @@ _DEMANDS_COMMITMENT_RE = re.compile(
 )
 
 
-def repair_stance(stance: str, utterance: str) -> str:
-    """Override LLM stance when the utterance clearly accepts or rejects."""
+def _ack_dominant(utterance: str) -> bool:
+    """True when acknowledgement words outnumber content words and no number appears."""
+    if extract_tokens(utterance):
+        return False
+    words = normalize_for_quote(utterance.replace("all right", "alright")).split()
+    acks = sum(w in _ACK_WORDS for w in words)
+    content = sum(w not in _ACK_WORDS and w not in _ACK_NEUTRAL for w in words)
+    return acks > 0 and acks > content
+
+
+def repair_stance(stance: str, utterance: str, *, has_terms: bool = False) -> str:
+    """Override LLM stance when the utterance clearly accepts or rejects.
+
+    Order: injection (never accept) → reject phrase → accept phrase → short
+    acknowledgement that dominates the line and carries no number or term.
+    """
+    if _INJECTION_RE.search(utterance):
+        return "other" if stance == "accept" else stance
     if _REJECT_STANCE_RE.search(utterance):
         return "reject"
     if _ACCEPT_STANCE_RE.search(utterance):
         return "accept"
+    if not has_terms and _ack_dominant(utterance):
+        return "accept"
     return stance
+
+
+def _flag_or_regex(claimed: bool, pattern: re.Pattern[str], utterance: str) -> bool:
+    return bool(claimed) or pattern.search(utterance) is not None
+
+
+# Regex cues the rep disclaims ("no need for the client's balance") or says of
+# themselves ("we commit to holding this") are not asks. Checked on the clause
+# text just before the cue; the LLM flag is not vetoed (it can read negation).
+_CUE_NEGATED_RE = re.compile(
+    r"(?:\b(?:no|not|don'?t|do not|never|won'?t|without|regardless of)\b"
+    r"|\b(?:we|i|i'll|we'll|i will|we will)\s+$)",
+    re.IGNORECASE,
+)
+
+
+def _flag_or_unnegated_cue(claimed: bool, pattern: re.Pattern[str], utterance: str) -> bool:
+    if claimed:
+        return True
+    for m in pattern.finditer(utterance):
+        clause = re.split(r"[.,;?!]", utterance[max(0, m.start() - 40) : m.start()])[-1]
+        if not _CUE_NEGATED_RE.search(clause):
+            return True
+    return False
 
 
 def repair_wants_to_end(wants_to_end: bool, utterance: str) -> bool:
     """Set wants_to_end when the rep clearly closes (thanks / bye / done)."""
-    if wants_to_end:
-        return True
-    return _WANTS_TO_END_RE.search(utterance) is not None
+    return _flag_or_regex(wants_to_end, _WANTS_TO_END_RE, utterance)
 
 
 def repair_asks_for_schedule(asks: bool, utterance: str) -> bool:
     """True when the rep asks for payment dates / schedule detail."""
-    if asks:
-        return True
-    return _ASKS_FOR_SCHEDULE_RE.search(utterance) is not None
+    return _flag_or_regex(asks, _ASKS_FOR_SCHEDULE_RE, utterance)
 
 
 def repair_firm(firm: bool, utterance: str) -> bool:
     """True when the rep says the number is final / floor / cannot go lower."""
-    if firm:
-        return True
-    return _FIRM_RE.search(utterance) is not None
+    return _flag_or_regex(firm, _FIRM_RE, utterance)
 
 
 def repair_revises_terms(utterance: str) -> bool:
@@ -722,15 +777,31 @@ def repair_hostility(hostility: float, utterance: str) -> float:
 
 
 def repair_asks_client_private_info(claimed: bool, utterance: str) -> bool:
-    """True only when the utterance asks for client financials / private data."""
-    del claimed  # LLM claim alone is not trusted.
-    return _PRIVATE_INFO_RE.search(utterance) is not None
+    """LLM flag OR un-negated regex cue: the rep asks for client financials."""
+    return _flag_or_unnegated_cue(claimed, _PRIVATE_INFO_RE, utterance)
 
 
 def repair_demands_commitment(claimed: bool, utterance: str) -> bool:
-    """True only when the utterance demands a firm lock-in / commitment."""
-    del claimed
-    return _DEMANDS_COMMITMENT_RE.search(utterance) is not None
+    """LLM flag OR un-negated regex cue: the rep demands a lock-in / commitment."""
+    return _flag_or_unnegated_cue(claimed, _DEMANDS_COMMITMENT_RE, utterance)
+
+
+def _repair_dispositions(
+    src: TurnAnalysis, utterance: str, *, has_terms: bool
+) -> dict[str, Any]:
+    """Repaired stance + side-channel flags from an LLM or oracle analysis."""
+    return {
+        "stance": repair_stance(src.stance, utterance, has_terms=has_terms),
+        "readback_response": _verify_readback_response(src.readback_response, utterance),
+        "asks_client_private_info": repair_asks_client_private_info(
+            src.asks_client_private_info, utterance
+        ),
+        "demands_commitment": repair_demands_commitment(src.demands_commitment, utterance),
+        "hostility": repair_hostility(src.hostility, utterance),
+        "wants_to_end": repair_wants_to_end(src.wants_to_end, utterance),
+        "asks_for_schedule": repair_asks_for_schedule(src.asks_for_schedule, utterance),
+        "firm": repair_firm(src.firm, utterance),
+    }
 
 
 def post_verify(
@@ -865,9 +936,9 @@ def post_verify(
         else:
             ask_verified = True
 
-    stance = repair_stance(analysis.stance, utterance)
-    readback = _verify_readback_response(analysis.readback_response, utterance)
-    if analysis.readback_response and readback is None:
+    has_terms = bool(verified_terms) or ask_pct is not None or cents_ambiguity_bare is not None
+    dispositions = _repair_dispositions(analysis, utterance, has_terms=has_terms)
+    if analysis.readback_response and dispositions["readback_response"] is None:
         _log(
             "nlu_rejected_readback",
             {"claimed": analysis.readback_response, "utterance": utterance[:120]},
@@ -878,20 +949,7 @@ def post_verify(
         settlement_ask_pct=ask_pct,
         ask_quote=ask_quote,
         ask_verified=ask_verified,
-        stance=stance,  # type: ignore[arg-type]
-        readback_response=readback,
-        asks_client_private_info=repair_asks_client_private_info(
-            analysis.asks_client_private_info, utterance
-        ),
-        demands_commitment=repair_demands_commitment(
-            analysis.demands_commitment, utterance
-        ),
-        hostility=repair_hostility(analysis.hostility, utterance),
-        wants_to_end=repair_wants_to_end(analysis.wants_to_end, utterance),
-        asks_for_schedule=repair_asks_for_schedule(
-            analysis.asks_for_schedule, utterance
-        ),
-        firm=repair_firm(analysis.firm, utterance),
+        **dispositions,
         revises_terms=repair_revises_terms(utterance),
         cents_ambiguity_bare=cents_ambiguity_bare,
         cents_ambiguity_field=cents_ambiguity_field,
@@ -994,24 +1052,8 @@ async def analyze(
     # terms/ask from the LLM but overlay stance flags from ground truth so
     # phrasing artifacts cannot false-escalate.
     if oracle is not None:
+        has_terms = bool(verified.terms) or verified.settlement_ask_pct is not None
         verified = verified.model_copy(
-            update={
-                "stance": repair_stance(oracle.stance, utterance),
-                "readback_response": _verify_readback_response(
-                    oracle.readback_response, utterance
-                ),
-                "asks_client_private_info": repair_asks_client_private_info(
-                    oracle.asks_client_private_info, utterance
-                ),
-                "demands_commitment": repair_demands_commitment(
-                    oracle.demands_commitment, utterance
-                ),
-                "hostility": repair_hostility(oracle.hostility, utterance),
-                "wants_to_end": repair_wants_to_end(oracle.wants_to_end, utterance),
-                "asks_for_schedule": repair_asks_for_schedule(
-                    oracle.asks_for_schedule, utterance
-                ),
-                "firm": repair_firm(oracle.firm, utterance),
-            }
+            update=_repair_dispositions(oracle, utterance, has_terms=has_terms)
         )
     return verified

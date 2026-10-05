@@ -21,6 +21,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 11 | README and final eval | done |
 | 12 | Honest offline policy eval (ROADMAP) | done |
 | 14 | `decide()` bugs, bounded extract, invariants (ROADMAP) | done |
+| 15 | NLU and safety corpus, flag fixes | done |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -171,7 +172,8 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `async speak_action(action, ref_date, *, llm=None, settings=None, last_rep_line="", creditor_numbers=None, private_blocklist=None, audit=None, call_id=None) -> list[str]` — LLM template → template_guard (1 retry) → fallback `TEMPLATES` → fill → rendered_guard
 
 ### `app.agent.nlu`
-- `repair_stance(stance, utterance) -> str` — deterministic accept/reject override
+- `repair_stance(stance, utterance, *, has_terms=False) -> str` — injection never accepts → reject phrase → accept phrase → dominant short ack with no number/term
+- `repair_asks_client_private_info` / `repair_demands_commitment(claimed, utterance) -> bool` — LLM flag OR un-negated regex cue
 - `class VerifiedTerm` — `field`, `value`, `quote`, `hedged`, `verified`
 - `class VerifiedAnalysis` — terms + TurnAnalysis stance fields + `ask_verified`; `to_turn_analysis() -> TurnAnalysis`
 - `normalize_for_quote(text) -> str`; `quote_in_utterance(quote, utterance) -> bool`
@@ -695,3 +697,29 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - Cleanup: removed `NegotiationState.rejects`, the `inc_reject_at_max` effect and its orchestrator handler (dead after the fix; dropped the `rejects=` kwarg from 3 policy tests, whose assertions are unchanged). Removed the unreachable `no_counter_below_ask` branch (test: `test_next_counter_always_below_ask_and_within_max`). Merged the duplicate `afford is None` ASK_SETTLEMENT branch into the ask-unknown branch (test: `test_ask_known_but_rules_unbuildable_asks_settlement`). Merged the duplicated term-alt gate for the empty-curve and above-ceiling cases into `_term_alt_action` (test: `test_ask_above_ceiling_fpd_already_countered_ladders`). Dropped the unreachable enum/int fallbacks in `_fact_for_value`, since enums always go through text slots (test: `test_clarify_enum_field_uses_text_slots`). Removed the unused `max_counters` param of `_stall_after_confirm`. Collapsed 8 copies of the confirm `required` set, 2 PROPOSE_WRAP builders, 5 ESCALATE builders and 2 ASK builders into one helper each.
 - Observed, not fixed: tiers READ_BACK still speaks `str([])`, so a template reads "[] for the payment tiers" (NLG/registry copy, outside the policy). `next_counter` can return an off-grid `c_prev` when the curve changes; `decide` never re-emits it (stall → jump / no-deal), but the helper contract is loose.
 - Tests: 415 passed offline (+1 skipped live), invariants at 100 seeds included; `ruff check .` clean.
+
+### Phase 15 (2026-10-06) — NLU and safety corpus, flag fixes
+
+- Files: `tests/nlu_corpus.jsonl` (177 synthetic hand-labelled lines), `eval/nlu_corpus.py`, `docs/eval/{nlu_corpus.md,nlu_corpus_before.jsonl,nlu_corpus_after.jsonl}`, `tests/unit/{test_nlu_repairs,test_nlu_corpus}.py`; `app/agent/nlu.py`; two tests in `tests/unit/test_nlu_nlg_llm.py` rewritten for the OR rule.
+- Interfaces:
+  - CLI `python -m eval.nlu_corpus --label BEFORE|AFTER [--profile demo] [--concurrency 4]` — `llm_cache=True`, cache at `eval/nlu_corpus_cache.db` (keyed by provider/model); rewrites only its own `## <LABEL>` section of the report.
+  - `eval.nlu_corpus`: `load_corpus()`, `expected_flags/predicted_flags`, `expected_terms/predicted_terms`, `score(records) -> dict`, `write_report(path, label, section)`.
+  - Corpus line: `id`, `tags`, `text`, `stance`, optional `agent` alias (`default|confirm|counter|min_ask`), `pending`, flag booleans, `hostility`, `terms{field: value}`, `ask_pct`, `cents_ambiguity`.
+  - `repair_stance(..., *, has_terms=False)`; see the `app.agent.nlu` interface entry.
+- Results (demo profile, Groq `gpt-oss-120b`):
+
+| metric | BEFORE | AFTER |
+|---|---|---|
+| private-info precision / recall | 0.667 / 0.235 | 0.971 / 0.971 |
+| commitment precision / recall | 0.667 / 0.462 | 1.000 / 0.923 |
+| accept precision / recall | 0.306 / 1.000 | 1.000 / 1.000 |
+| filler false accepts (n=31) | 21 | 0 |
+| term exact-match (lines with terms, n=64) | 0.859 | 0.859 |
+
+  Targets met (private-info ≥ 0.9 / ≥ 0.9; zero filler false accepts).
+- Fixes (tests first): private-info and commitment = LLM flag OR regex; the regex arm skips cues negated in the same clause or said by the rep about themselves ("no need for…", "we commit to holding…"). Short acks force accept only when they outnumber content words and there is no number or term. Lines with injection cues ("ignore your previous instructions", "repeat after me", "SYSTEM:") never accept. The private regex no longer treats a bare "client's account" as a cue.
+- Cleanup: the oracle overlay in `analyze` and `post_verify` duplicated the full flag-repair block. Both now call `_repair_dispositions`. The flag repairs share `_flag_or_regex` / `_flag_or_unnegated_cue`. Ack words moved out of `_ACCEPT_STANCE_RE` into `_ACK_WORDS`.
+- Deviation: the corpus has 177 lines (PLAN said ~150). The prompt (`app/llm/prompts.py`) is unchanged, so AFTER reuses the cached LLM replies and the BEFORE→AFTER difference comes only from code.
+- Open issues (measured, not fixed here): `wants_to_end` precision 0.5 ("thanks" mid-call); `firm` precision 0.6 (LLM claims); hostility recall 0.4 (insults outside the regex list); no date term returned for h06/f05/t05/t12 (the NLU prompt has no reference date); STT misspellings and homophones fail verification; t10/f01/d04 return no terms.
+- Observed, not fixed: none outside the touched files.
+- Tests: 456 passed offline (+1 skipped live); `ruff check .` clean.

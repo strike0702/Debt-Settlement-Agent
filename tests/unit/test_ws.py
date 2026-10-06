@@ -296,3 +296,54 @@ def test_ws_stt_call_is_audited(tmp_path: Path) -> None:
     rows = [e for e in audit.for_call("stt-audit") if e["type"] == "llm_call"]
     assert [r["payload"]["role"] for r in rows] == ["stt"]
     audit.close()
+
+
+def test_healthz(tmp_path: Path) -> None:
+    with _client(tmp_path) as client:
+        res = client.get("/healthz")
+    assert res.status_code == 200 and res.json()["status"] == "ok"
+
+
+def test_nlu_llm_unavailable_keeps_socket_open(tmp_path: Path) -> None:
+    """[21.2] NLU with no provider → ``error`` + ``turn_done``; the call continues."""
+    settings = _settings().model_copy(update={"nlu_mode": "llm"})
+    llm = FakeLLM()  # empty nlu queue → LLMUnavailable
+    audit = AuditLog(tmp_path / "ws_audit.db")
+    app = create_app(settings=settings, llm=llm, audit=audit)
+    with TestClient(app) as client, client.websocket_connect("/ws/call/unavail-1") as ws:
+        ws.send_json({"type": "start", "scenario": "fixtures/demo"})
+        _ack_all_says(ws, _recv_until(ws, lambda m: m.get("type") == "turn_done"))
+
+        ws.send_json({"type": "text", "text": "We can take eight payments of some amount."})
+        failed = _recv_until(ws, lambda m: m.get("type") == "turn_done")
+        assert any(m["type"] == "error" and "unavailable" in m["message"] for m in failed)
+        assert not any(m["type"] == "say" for m in failed)
+
+        # Socket still open: the next turn runs once a provider answers.
+        llm.enqueue(
+            "nlu",
+            '{"terms": [{"field": "max_payments", "value": 8, "quote": "eight",'
+            ' "hedged": false}], "stance": "info"}',
+        )
+        ws.send_json({"type": "text", "text": "Up to eight payments."})
+        ok = _recv_until(ws, lambda m: m.get("type") == "turn_done")
+        assert any(m["type"] == "say" for m in ok)
+    events = audit.for_call("unavail-1")
+    assert any(e["type"] == "llm_unavailable" and e["actor"] == "nlu" for e in events)
+
+
+def test_stt_then_nlu_llm_unavailable_keeps_socket_open(tmp_path: Path) -> None:
+    settings = _settings().model_copy(update={"nlu_mode": "llm"})
+    llm = FakeLLM()
+    audit = AuditLog(tmp_path / "ws_audit.db")
+    app = create_app(settings=settings, llm=llm, audit=audit)
+    with TestClient(app) as client, client.websocket_connect("/ws/call/unavail-2") as ws:
+        ws.send_json({"type": "start", "scenario": "fixtures/demo"})
+        _ack_all_says(ws, _recv_until(ws, lambda m: m.get("type") == "turn_done"))
+        llm.enqueue("stt", "We can take eight payments of some amount.")
+        ws.send_bytes(b"RIFF....WAVE")
+        failed = _recv_until(ws, lambda m: m.get("type") == "turn_done")
+        assert any(m["type"] == "error" for m in failed)
+        ws.send_json({"type": "end"})
+        ended = _recv_until(ws, lambda m: m.get("type") == "turn_done")
+        assert any(m["type"] == "say" for m in ended)

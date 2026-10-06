@@ -1,11 +1,20 @@
-"""WebSocket ``/ws/call/{call_id}`` protocol for the voice UI.
+"""WebSocket ``/ws/call/{call_id}?view=rep|operator`` protocol for the voice UI.
 
 Client events: ``start``, ``end``, binary WAV, ``text``, ``sentence_done``,
 ``barge_in``, ``timing``. Server events (every ``type`` this module sends):
 ``transcript``, ``say``, ``belief``, ``eval``, ``blocked``, ``escalate``,
 ``latency``, ``audit``, ``phase``, ``agreement``, ``stt_error``, ``error``,
-``turn_done``. Speaks through ``Orchestrator``; STT via ``app.voice.stt``, run
-inside ``llm_call_scope(call_id)`` so the STT call is audited.
+``turn_done``, ``turn_trace`` (one per agent turn), ``autoplay_done``. Their
+Pydantic models live in ``app.schemas.events``. Speaks through
+``Orchestrator``; STT via ``app.voice.stt``, run inside
+``llm_call_scope(call_id)`` so the STT call is audited.
+
+Every frame passes ``app.voice.views.redact_for_view``: ``view=operator`` (the
+default) sees everything, ``view=rep`` never sees affordability, fees,
+balances, rescue data or private audit rows. ``start`` with
+``"autoplay": true`` runs ``app.autoplay`` (sim creditor, no LLM) over the same
+events; client text / audio is refused while it runs. An NLU or STT
+``LLMUnavailable`` answers ``error`` + ``turn_done`` and keeps the socket open.
 
 A reader task feeds an ``asyncio.Queue`` and each event (except ``start``)
 runs as its own task, so ``text`` / ``barge_in`` / ``sentence_done`` are
@@ -30,8 +39,9 @@ from pydantic import ValidationError
 from app.adapter.engine_adapter import EvalSummary
 from app.agent.nlu_types import TurnAnalysis
 from app.agent.orchestrator import Orchestrator, Utterance
-from app.agent.policy import Intent
+from app.agent.policy import Agreement, Intent
 from app.agent.session import CallSession
+from app.autoplay import clamp_pause_ms, new_autoplay_call, run_autoplay
 from app.config import Settings, get_settings
 from app.domain.scenario import (
     CallScenario,
@@ -41,9 +51,11 @@ from app.domain.scenario import (
 )
 from app.llm.call_audit import llm_call_scope
 from app.llm.client import LLMUnavailable, queue_wait_scope
+from app.schemas.events import VIEWS, View
 from app.store.audit import AuditLog
 from app.voice.metrics_buf import LATENCY_BUFFER
 from app.voice.stt import transcribe
+from app.voice.views import redact_for_view
 
 router = APIRouter()
 
@@ -159,12 +171,40 @@ def _phase_payload(session: CallSession, intent: str | None = None) -> dict[str,
     }
 
 
-async def _send(ws: WebSocket, payload: dict[str, Any]) -> None:
+class _ViewSocket:
+    """The accepted socket, with every outgoing frame filtered for ``view``."""
+
+    def __init__(self, ws: WebSocket, view: View) -> None:
+        self.ws = ws
+        self.view = view
+
+    async def send_json(self, payload: dict[str, Any]) -> None:
+        out = redact_for_view(payload, self.view)
+        if out is not None:
+            await self.ws.send_json(out)
+
+    async def receive(self) -> Any:
+        return await self.ws.receive()
+
+
+async def _send(ws: _ViewSocket | WebSocket, payload: dict[str, Any]) -> None:
     await ws.send_json(payload)
 
 
+def _agreement_payload(agreement: Agreement) -> dict[str, Any]:
+    return {
+        "type": "agreement",
+        "creditor": agreement.creditor,
+        "bp": agreement.bp,
+        "offer_total": agreement.offer_total,
+        "status": agreement.status,
+        "assumed_fields": list(agreement.assumed_fields),
+        "rows": agreement.rows,
+    }
+
+
 async def _send_audit_tail(
-    ws: WebSocket,
+    ws: _ViewSocket,
     audit: AuditLog,
     call_id: str,
     *,
@@ -191,7 +231,7 @@ async def _send_audit_tail(
     return latest
 
 
-async def _send_creditor_transcript(ws: WebSocket, text: str) -> None:
+async def _send_creditor_transcript(ws: _ViewSocket, text: str) -> None:
     """Push the rep line as soon as STT/text is known (before NLU/NLG)."""
     await _send(
         ws,
@@ -218,7 +258,7 @@ _LATENCY_KEYS = (
 
 
 async def _emit_utterance(
-    ws: WebSocket,
+    ws: _ViewSocket,
     orch: Orchestrator,
     utt: Utterance,
     *,
@@ -288,6 +328,15 @@ async def _emit_utterance(
         {k: float(v) for k, v in timings.items() if isinstance(v, (int, float))}
     )
 
+    if utt.trace is not None:
+        trace = utt.trace.model_dump(mode="json")
+        # The trace was closed before STT was known; same view as ``latency``.
+        trace["timings"] = {k: v for k, v in timings.items() if isinstance(v, (int, float))}
+        await _send(ws, {"type": "turn_trace", **trace})
+    # Auto-ack calls (autoplay) commit on emit, so the agreement belongs to this turn.
+    if orch.auto_ack and utt.agreement is not None:
+        await _send(ws, _agreement_payload(utt.agreement))
+
     if orch.audit is not None:
         audit_after = await _send_audit_tail(
             ws, orch.audit, session.call_id, after_id=audit_after
@@ -347,6 +396,7 @@ class _StartError(Exception):
 
 
 _DISCONNECT = object()
+_AUTOPLAY_BUSY = {"type": "error", "message": "autoplay is driving this call"}
 
 
 class _CallConnection:
@@ -361,7 +411,7 @@ class _CallConnection:
     """
 
     def __init__(
-        self, ws: WebSocket, call_id: str, *, audit: AuditLog, llm: Any, settings: Settings
+        self, ws: _ViewSocket, call_id: str, *, audit: AuditLog, llm: Any, settings: Settings
     ) -> None:
         self.ws = ws
         self.call_id = call_id
@@ -376,6 +426,8 @@ class _CallConnection:
         # Merged / queued text callers get the in-flight turn's Utterance back;
         # remember recent ones so each is emitted once.
         self._emitted: deque[Utterance] = deque(maxlen=16)
+        # Set while a sim creditor drives the call (``start`` with ``autoplay``).
+        self._autoplay: asyncio.Task[None] | None = None
 
     async def run(self) -> None:
         reader = asyncio.create_task(self._read())
@@ -401,10 +453,21 @@ class _CallConnection:
                 return
             await self._inbox.put(message)
 
-    def _spawn(self, coro: Any) -> None:
+    def _spawn(self, coro: Any) -> asyncio.Task[None]:
         task = asyncio.create_task(coro)
         self._tasks.add(task)
         task.add_done_callback(self._task_done)
+        return task
+
+    @property
+    def autoplaying(self) -> bool:
+        return self._autoplay is not None and not self._autoplay.done()
+
+    async def _stop_autoplay(self) -> None:
+        task, self._autoplay = self._autoplay, None
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
     def _task_done(self, task: asyncio.Task[None]) -> None:
         self._tasks.discard(task)
@@ -419,6 +482,9 @@ class _CallConnection:
         if message.get("bytes") is not None:
             if self.orch is None:
                 await self._send_one({"type": "error", "message": "call not started"})
+                return
+            if self.autoplaying:
+                await self._send_one(_AUTOPLAY_BUSY)
                 return
             self._spawn(self._on_wav(message["bytes"]))
             return
@@ -439,6 +505,14 @@ class _CallConnection:
         if self.orch is None:
             await self._send_one({"type": "error", "message": "call not started"})
             return
+        if self.autoplaying:
+            if event == "text":
+                await self._send_one(_AUTOPLAY_BUSY)
+                return
+            if event in ("sentence_done", "barge_in"):
+                return  # autoplay auto-acks; client TTS acks are moot
+            if event == "end":
+                await self._stop_autoplay()
         handler = {
             "end": self._on_end,
             "text": self._on_text,
@@ -487,11 +561,28 @@ class _CallConnection:
         for utt in self.orch.pop_drained():
             await self._emit(utt)
 
+    async def _nlu_unavailable(self, e: LLMUnavailable) -> None:
+        """No NLU provider answered: tell the client, unblock it, keep the call alive."""
+        self.audit.append(self.call_id, "nlu", "llm_unavailable", {"message": str(e)})
+        async with self._send_lock:
+            await _send(self.ws, {"type": "error", "message": f"NLU unavailable: {e}"})
+            await self._audit_tail_and_done()
+
     async def _on_start(self, data: dict[str, Any]) -> None:
+        await self._stop_autoplay()
+        autoplay = bool(data.get("autoplay"))
+        if autoplay and not (data.get("scenario_id") and data.get("scenario_payload") is None):
+            await self._send_one(
+                {"type": "error", "message": "autoplay needs a curated scenario_id"}
+            )
+            return
         try:
             scenario, scenario_id, rebased_as_of = _load_start_scenario(data)
         except _StartError as e:
             await self._send_one({"type": "error", "message": str(e)})
+            return
+        if autoplay:
+            await self._start_autoplay(data, scenario, str(scenario_id), rebased_as_of)
             return
         session = CallSession(scenario=scenario, call_id=self.call_id)
         self.orch = Orchestrator(
@@ -511,6 +602,72 @@ class _CallConnection:
         self.audit_after = 0
         await self._emit(utt)
 
+    async def _start_autoplay(
+        self,
+        data: dict[str, Any],
+        scenario: CallScenario,
+        scenario_id: str,
+        rebased_as_of: str | None,
+    ) -> None:
+        try:
+            orch, creditor = new_autoplay_call(
+                scenario, scenario_id, settings=self.settings, audit=self.audit,
+                call_id=self.call_id,
+            )  # fmt: skip
+        except (ValueError, FileNotFoundError, KeyError) as e:
+            await self._send_one({"type": "error", "message": str(e)})
+            return
+        self.orch = orch
+        self.audit_after = 0
+        pause_ms = clamp_pause_ms(data.get("autoplay_pause_ms"))
+        self.audit.append(
+            self.call_id,
+            "orchestrator",
+            "call_started",
+            {
+                "scenario_id": scenario_id,
+                "rebased_as_of": rebased_as_of,
+                "autoplay": True,
+                "autoplay_pause_ms": pause_ms,
+            },
+        )
+
+        async def on_agent(utt: Utterance) -> None:
+            await self._emit(utt)
+
+        async def on_creditor(text: str) -> None:
+            async with self._send_lock:
+                await _send_creditor_transcript(self.ws, text)
+
+        async def drive() -> None:
+            result = await run_autoplay(
+                orch,
+                creditor,
+                on_agent=on_agent,
+                on_creditor=on_creditor,
+                pause_s=pause_ms / 1000.0,
+            )
+            self.audit.append(
+                self.call_id,
+                "orchestrator",
+                "autoplay_done",
+                {"outcome": result.outcome, "phase": result.phase.value},
+            )
+            async with self._send_lock:
+                await self._audit_tail_and_done()
+                await _send(
+                    self.ws,
+                    {
+                        "type": "autoplay_done",
+                        "outcome": result.outcome,
+                        "phase": result.phase.value,
+                        "final_intent": result.final_intent.value,
+                        "turns": result.turns,
+                    },
+                )
+
+        self._autoplay = self._spawn(drive())
+
     async def _on_wav(self, wav: bytes) -> None:
         assert self.orch is not None
         try:
@@ -529,7 +686,11 @@ class _CallConnection:
         # Show the rep line immediately; agent reply follows after NLU/NLG.
         async with self._send_lock:
             await _send_creditor_transcript(self.ws, text)
-        utt = await self.orch.on_creditor_text(text)
+        try:
+            utt = await self.orch.on_creditor_text(text)
+        except LLMUnavailable as e:
+            await self._nlu_unavailable(e)
+            return
         await self._emit(utt, stt_ms=stt_ms, stt_queue_ms=stt_queue.ms)
 
     async def _on_end(self, data: dict[str, Any]) -> None:
@@ -555,7 +716,11 @@ class _CallConnection:
         # Echo before NLU so the chat shows the line while the agent thinks.
         async with self._send_lock:
             await _send_creditor_transcript(self.ws, text)
-        utt = await self.orch.on_creditor_text(text, oracle=oracle)
+        try:
+            utt = await self.orch.on_creditor_text(text, oracle=oracle)
+        except LLMUnavailable as e:
+            await self._nlu_unavailable(e)
+            return
         await self._emit(utt)
 
     async def _on_sentence_done(self, data: dict[str, Any]) -> None:
@@ -565,7 +730,13 @@ class _CallConnection:
             await self._send_one({"type": "error", "message": "sentence_done requires id"})
             return
         orch = self.orch
-        agreement = await orch.on_sentence_done([str(sid)])
+        unavailable: LLMUnavailable | None = None
+        try:
+            agreement = await orch.on_sentence_done([str(sid)])
+        except LLMUnavailable as e:
+            # The ack committed; only the post-NLU drain of queued text failed.
+            agreement, unavailable = None, e
+            self.audit.append(self.call_id, "nlu", "llm_unavailable", {"message": str(e)})
         async with self._send_lock:
             await _send(self.ws, _phase_payload(orch.session))
             if orch.session.last_eval is not None:
@@ -573,17 +744,10 @@ class _CallConnection:
                 if ev is not None:
                     await _send(self.ws, ev)
             if agreement is not None:
+                await _send(self.ws, _agreement_payload(agreement))
+            if unavailable is not None:
                 await _send(
-                    self.ws,
-                    {
-                        "type": "agreement",
-                        "creditor": agreement.creditor,
-                        "bp": agreement.bp,
-                        "offer_total": agreement.offer_total,
-                        "status": agreement.status,
-                        "assumed_fields": list(agreement.assumed_fields),
-                        "rows": agreement.rows,
-                    },
+                    self.ws, {"type": "error", "message": f"NLU unavailable: {unavailable}"}
                 )
             await self._audit_tail_and_done()
         await self._emit_drained()
@@ -607,9 +771,13 @@ class _CallConnection:
 
 
 @router.websocket("/ws/call/{call_id}")
-async def call_socket(websocket: WebSocket, call_id: str) -> None:
-    """Drive one settlement call over the PLAN §8 event protocol."""
+async def call_socket(websocket: WebSocket, call_id: str, view: str = "operator") -> None:
+    """Drive one settlement call; ``view`` (``rep`` | ``operator``) scopes what is sent."""
     await websocket.accept()
+    if view not in VIEWS:
+        await _send(websocket, {"type": "error", "message": f"unknown view: {view!r}"})
+        await websocket.close()
+        return
     if _audit is None or _llm is None:
         await _send(
             websocket,
@@ -619,7 +787,11 @@ async def call_socket(websocket: WebSocket, call_id: str) -> None:
         return
 
     conn = _CallConnection(
-        websocket, call_id, audit=_audit, llm=_llm, settings=_settings or get_settings()
+        _ViewSocket(websocket, view),
+        call_id,
+        audit=_audit,
+        llm=_llm,
+        settings=_settings or get_settings(),
     )
     try:
         await conn.run()

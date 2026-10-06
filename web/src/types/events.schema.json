@@ -1,0 +1,1816 @@
+{
+  "$defs": {
+    "AdditionalFunds": {
+      "additionalProperties": false,
+      "properties": {
+        "lump_sum": {
+          "$ref": "#/$defs/FundsOption"
+        },
+        "monthly_increment": {
+          "$ref": "#/$defs/FundsOption"
+        }
+      },
+      "required": [
+        "lump_sum",
+        "monthly_increment"
+      ],
+      "title": "AdditionalFunds",
+      "type": "object"
+    },
+    "Affordability": {
+      "additionalProperties": false,
+      "description": "PRIVATE engine view: highest feasible bp and the 1–100% curve. Operator only.",
+      "properties": {
+        "curve": {
+          "items": {
+            "$ref": "#/$defs/CurvePoint"
+          },
+          "title": "Curve",
+          "type": "array"
+        },
+        "max_bp": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Bp"
+        }
+      },
+      "required": [
+        "max_bp",
+        "curve"
+      ],
+      "title": "Affordability",
+      "type": "object"
+    },
+    "AgreementEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "assumed_fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assumed Fields",
+          "type": "array"
+        },
+        "bp": {
+          "title": "Bp",
+          "type": "integer"
+        },
+        "creditor": {
+          "title": "Creditor",
+          "type": "string"
+        },
+        "offer_total": {
+          "title": "Offer Total",
+          "type": "integer"
+        },
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/ScheduleRow"
+          },
+          "title": "Rows",
+          "type": "array"
+        },
+        "status": {
+          "const": "pending_client_approval",
+          "title": "Status",
+          "type": "string"
+        },
+        "type": {
+          "const": "agreement",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "creditor",
+        "bp",
+        "offer_total",
+        "status",
+        "assumed_fields",
+        "rows"
+      ],
+      "title": "AgreementEvent",
+      "type": "object"
+    },
+    "AuditEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "title": "Actor",
+          "type": "string"
+        },
+        "event": {
+          "title": "Event",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "payload": {
+          "title": "Payload"
+        },
+        "private": {
+          "default": false,
+          "title": "Private",
+          "type": "boolean"
+        },
+        "ts": {
+          "title": "Ts",
+          "type": "string"
+        },
+        "type": {
+          "const": "audit",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "ts",
+        "actor",
+        "event",
+        "payload"
+      ],
+      "title": "AuditEvent",
+      "type": "object"
+    },
+    "AutoplayDoneEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "final_intent": {
+          "$ref": "#/$defs/Intent"
+        },
+        "outcome": {
+          "enum": [
+            "deal",
+            "no_deal",
+            "escalate",
+            "incomplete"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "phase": {
+          "$ref": "#/$defs/Phase"
+        },
+        "turns": {
+          "title": "Turns",
+          "type": "integer"
+        },
+        "type": {
+          "const": "autoplay_done",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "outcome",
+        "phase",
+        "final_intent",
+        "turns"
+      ],
+      "title": "AutoplayDoneEvent",
+      "type": "object"
+    },
+    "BargeInEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "spoken_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Spoken Ids",
+          "type": "array"
+        },
+        "type": {
+          "const": "barge_in",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "spoken_ids"
+      ],
+      "title": "BargeInEvent",
+      "type": "object"
+    },
+    "BeliefEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "terms": {
+          "items": {
+            "$ref": "#/$defs/BeliefTerm"
+          },
+          "title": "Terms",
+          "type": "array"
+        },
+        "type": {
+          "const": "belief",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "terms"
+      ],
+      "title": "BeliefEvent",
+      "type": "object"
+    },
+    "BeliefTerm": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "history": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "History",
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "UNKNOWN",
+            "TENTATIVE",
+            "KNOWN",
+            "CONTRADICTED",
+            "ASSUMED"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "field",
+        "value",
+        "status",
+        "evidence",
+        "history"
+      ],
+      "title": "BeliefTerm",
+      "type": "object"
+    },
+    "BlockedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "offending": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Offending"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "stage": {
+          "enum": [
+            "template",
+            "unfilled",
+            "rendered"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "type": {
+          "const": "blocked",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "stage",
+        "reason"
+      ],
+      "title": "BlockedEvent",
+      "type": "object"
+    },
+    "CurvePoint": {
+      "additionalProperties": false,
+      "properties": {
+        "bp": {
+          "title": "Bp",
+          "type": "integer"
+        },
+        "feasible": {
+          "title": "Feasible",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "bp",
+        "feasible"
+      ],
+      "title": "CurvePoint",
+      "type": "object"
+    },
+    "Decide": {
+      "additionalProperties": false,
+      "description": "Policy move: raw ``reason`` code, its ``REASON_TEXT`` key and sentence.",
+      "properties": {
+        "intent": {
+          "$ref": "#/$defs/Intent"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        },
+        "reason_key": {
+          "title": "Reason Key",
+          "type": "string"
+        },
+        "reason_text": {
+          "title": "Reason Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "intent",
+        "reason",
+        "reason_key",
+        "reason_text"
+      ],
+      "title": "Decide",
+      "type": "object"
+    },
+    "DroppedTerm": {
+      "additionalProperties": false,
+      "description": "A term ``post_verify`` dropped; ``reason`` is the audit event minus ``nlu_``.",
+      "properties": {
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quote"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "value": {
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "field",
+        "reason"
+      ],
+      "title": "DroppedTerm",
+      "type": "object"
+    },
+    "EndEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "end",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "EndEvent",
+      "type": "object"
+    },
+    "ErrorEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "type": {
+          "const": "error",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "message"
+      ],
+      "title": "ErrorEvent",
+      "type": "object"
+    },
+    "EscalateEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "escalate_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Escalate Reason"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        },
+        "type": {
+          "const": "escalate",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "reason",
+        "escalate_reason"
+      ],
+      "title": "EscalateEvent",
+      "type": "object"
+    },
+    "EvalEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "additional_funds": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdditionalFunds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "agreed_bp": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Agreed Bp"
+        },
+        "assumed_fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assumed Fields",
+          "type": "array"
+        },
+        "feasible": {
+          "title": "Feasible",
+          "type": "boolean"
+        },
+        "max_bp": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Bp"
+        },
+        "offer_total_cents": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Offer Total Cents"
+        },
+        "program_fee_cents": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Program Fee Cents"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ScheduleRow"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rows"
+        },
+        "shape": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Shape"
+        },
+        "type": {
+          "const": "eval",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "feasible",
+        "shape",
+        "offer_total_cents",
+        "assumed_fields",
+        "agreed_bp",
+        "rows"
+      ],
+      "title": "EvalEvent",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "quote": {
+          "title": "Quote",
+          "type": "string"
+        },
+        "turn": {
+          "title": "Turn",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "turn",
+        "quote"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "FundsOption": {
+      "additionalProperties": false,
+      "properties": {
+        "amount_cents": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Amount Cents"
+        },
+        "date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Date"
+        },
+        "num_drafts": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Num Drafts"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        },
+        "within_guardrail": {
+          "title": "Within Guardrail",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "amount_cents",
+        "within_guardrail",
+        "reason",
+        "date",
+        "num_drafts"
+      ],
+      "title": "FundsOption",
+      "type": "object"
+    },
+    "GuardResult": {
+      "additionalProperties": false,
+      "properties": {
+        "offending": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Offending"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "stage": {
+          "enum": [
+            "template",
+            "unfilled",
+            "rendered"
+          ],
+          "title": "Stage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stage",
+        "ok"
+      ],
+      "title": "GuardResult",
+      "type": "object"
+    },
+    "Intent": {
+      "enum": [
+        "OPENING",
+        "ASK",
+        "ASK_SETTLEMENT",
+        "READ_BACK",
+        "CLARIFY",
+        "REFUSE_PRIVATE",
+        "REFUSE_COMMIT",
+        "COUNTER",
+        "COUNTER_TERMS",
+        "CONFIRM_SCHEDULE",
+        "SPEAK_SCHEDULE",
+        "PROPOSE_WRAP",
+        "CLOSE",
+        "NO_DEAL_WRAP",
+        "ESCALATE"
+      ],
+      "title": "Intent",
+      "type": "string"
+    },
+    "LatencyEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "engine_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Engine Ms"
+        },
+        "nlg_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Nlg Ms"
+        },
+        "nlu_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Nlu Ms"
+        },
+        "policy_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Policy Ms"
+        },
+        "queue_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Queue Ms"
+        },
+        "server_total_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Server Total Ms"
+        },
+        "stt_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stt Ms"
+        },
+        "turn": {
+          "title": "Turn",
+          "type": "integer"
+        },
+        "type": {
+          "const": "latency",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "turn",
+        "stt_ms",
+        "nlu_ms",
+        "engine_ms",
+        "policy_ms",
+        "nlg_ms",
+        "queue_ms",
+        "server_total_ms"
+      ],
+      "title": "LatencyEvent",
+      "type": "object"
+    },
+    "NlgTrace": {
+      "additionalProperties": false,
+      "description": "How the line was phrased: mode, chosen template, guard verdicts, fallback.",
+      "properties": {
+        "fallback_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fallback Reason"
+        },
+        "fallback_used": {
+          "title": "Fallback Used",
+          "type": "boolean"
+        },
+        "guards": {
+          "items": {
+            "$ref": "#/$defs/GuardResult"
+          },
+          "title": "Guards",
+          "type": "array"
+        },
+        "mode": {
+          "enum": [
+            "template",
+            "bank",
+            "llm"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "default",
+            "override",
+            "bank",
+            "llm"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "template": {
+          "title": "Template",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "source",
+        "template",
+        "guards",
+        "fallback_used"
+      ],
+      "title": "NlgTrace",
+      "type": "object"
+    },
+    "Phase": {
+      "enum": [
+        "OPENING",
+        "DISCOVERY",
+        "NEGOTIATE",
+        "CONFIRM",
+        "WRAP",
+        "ESCALATE",
+        "END"
+      ],
+      "title": "Phase",
+      "type": "string"
+    },
+    "PhaseEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "intent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Intent"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase": {
+          "$ref": "#/$defs/Phase"
+        },
+        "turn": {
+          "title": "Turn",
+          "type": "integer"
+        },
+        "type": {
+          "const": "phase",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "phase",
+        "intent",
+        "turn"
+      ],
+      "title": "PhaseEvent",
+      "type": "object"
+    },
+    "SayEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "say",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "text"
+      ],
+      "title": "SayEvent",
+      "type": "object"
+    },
+    "ScheduleRow": {
+      "additionalProperties": false,
+      "properties": {
+        "balance_cents": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Balance Cents"
+        },
+        "bank_fee_cents": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bank Fee Cents"
+        },
+        "creditor_payment_cents": {
+          "title": "Creditor Payment Cents",
+          "type": "integer"
+        },
+        "date": {
+          "title": "Date",
+          "type": "string"
+        },
+        "program_fee_cents": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Program Fee Cents"
+        }
+      },
+      "required": [
+        "date",
+        "creditor_payment_cents"
+      ],
+      "title": "ScheduleRow",
+      "type": "object"
+    },
+    "SentenceDoneEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "sentence_done",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "title": "SentenceDoneEvent",
+      "type": "object"
+    },
+    "SpokenSentence": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "text"
+      ],
+      "title": "SpokenSentence",
+      "type": "object"
+    },
+    "StartEvent": {
+      "additionalProperties": false,
+      "description": "Start a call. ``autoplay`` lets the sim creditor drive it (curated ids only).",
+      "properties": {
+        "autoplay": {
+          "default": false,
+          "title": "Autoplay",
+          "type": "boolean"
+        },
+        "autoplay_pause_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Autoplay Pause Ms"
+        },
+        "scenario": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scenario"
+        },
+        "scenario_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scenario Id"
+        },
+        "scenario_payload": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scenario Payload"
+        },
+        "type": {
+          "const": "start",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "StartEvent",
+      "type": "object"
+    },
+    "SttErrorEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "type": {
+          "const": "stt_error",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "message"
+      ],
+      "title": "SttErrorEvent",
+      "type": "object"
+    },
+    "TextEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "oracle": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Oracle"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "text",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "title": "TextEvent",
+      "type": "object"
+    },
+    "TimingEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "turn": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Turn"
+        },
+        "type": {
+          "const": "timing",
+          "title": "Type",
+          "type": "string"
+        },
+        "vad_end_to_first_audio_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vad End To First Audio Ms"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "TimingEvent",
+      "type": "object"
+    },
+    "TraceBeliefChange": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "new_status": {
+          "enum": [
+            "UNKNOWN",
+            "TENTATIVE",
+            "KNOWN",
+            "CONTRADICTED",
+            "ASSUMED"
+          ],
+          "title": "New Status",
+          "type": "string"
+        },
+        "new_value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "New Value"
+        },
+        "old_status": {
+          "enum": [
+            "UNKNOWN",
+            "TENTATIVE",
+            "KNOWN",
+            "CONTRADICTED",
+            "ASSUMED"
+          ],
+          "title": "Old Status",
+          "type": "string"
+        },
+        "old_value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Old Value"
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quote"
+        },
+        "turn": {
+          "title": "Turn",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "field",
+        "old_value",
+        "new_value",
+        "old_status",
+        "new_status",
+        "turn"
+      ],
+      "title": "TraceBeliefChange",
+      "type": "object"
+    },
+    "TraceTerm": {
+      "additionalProperties": false,
+      "description": "A term NLU extracted and ``post_verify`` kept; ``quote`` is a span of the rep line.",
+      "properties": {
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "hedged": {
+          "title": "Hedged",
+          "type": "boolean"
+        },
+        "quote": {
+          "title": "Quote",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "verified": {
+          "title": "Verified",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "field",
+        "value",
+        "quote",
+        "verified",
+        "hedged"
+      ],
+      "title": "TraceTerm",
+      "type": "object"
+    },
+    "TranscriptEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "blocked": {
+          "title": "Blocked",
+          "type": "boolean"
+        },
+        "role": {
+          "enum": [
+            "creditor",
+            "agent"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "sentence_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sentence Id"
+        },
+        "spoken": {
+          "title": "Spoken",
+          "type": "boolean"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "transcript",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "role",
+        "text",
+        "spoken",
+        "sentence_id",
+        "blocked"
+      ],
+      "title": "TranscriptEvent",
+      "type": "object"
+    },
+    "TurnDoneEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "turn_done",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "TurnDoneEvent",
+      "type": "object"
+    },
+    "TurnTraceEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "affordability": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affordability"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ask_bp": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ask Bp"
+        },
+        "ask_quote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ask Quote"
+        },
+        "belief_changes": {
+          "items": {
+            "$ref": "#/$defs/TraceBeliefChange"
+          },
+          "title": "Belief Changes",
+          "type": "array"
+        },
+        "counter_bp": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Counter Bp"
+        },
+        "creditor_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Creditor Text"
+        },
+        "decide": {
+          "$ref": "#/$defs/Decide"
+        },
+        "dropped": {
+          "items": {
+            "$ref": "#/$defs/DroppedTerm"
+          },
+          "title": "Dropped",
+          "type": "array"
+        },
+        "nlg": {
+          "$ref": "#/$defs/NlgTrace"
+        },
+        "spoken": {
+          "items": {
+            "$ref": "#/$defs/SpokenSentence"
+          },
+          "title": "Spoken",
+          "type": "array"
+        },
+        "stance": {
+          "anyOf": [
+            {
+              "enum": [
+                "offer",
+                "counter",
+                "accept",
+                "reject",
+                "stall",
+                "info",
+                "question",
+                "other"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stance"
+        },
+        "terms": {
+          "items": {
+            "$ref": "#/$defs/TraceTerm"
+          },
+          "title": "Terms",
+          "type": "array"
+        },
+        "timings": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Timings",
+          "type": "object"
+        },
+        "turn": {
+          "title": "Turn",
+          "type": "integer"
+        },
+        "type": {
+          "const": "turn_trace",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn",
+        "creditor_text",
+        "stance",
+        "ask_bp",
+        "ask_quote",
+        "terms",
+        "dropped",
+        "belief_changes",
+        "decide",
+        "counter_bp",
+        "nlg",
+        "spoken",
+        "timings",
+        "type"
+      ],
+      "title": "TurnTraceEvent",
+      "type": "object"
+    }
+  },
+  "description": "Export root: both directions of ``/ws/call/{call_id}?view=rep|operator``.",
+  "properties": {
+    "ClientEvent": {
+      "discriminator": {
+        "mapping": {
+          "barge_in": "#/$defs/BargeInEvent",
+          "end": "#/$defs/EndEvent",
+          "sentence_done": "#/$defs/SentenceDoneEvent",
+          "start": "#/$defs/StartEvent",
+          "text": "#/$defs/TextEvent",
+          "timing": "#/$defs/TimingEvent"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/StartEvent"
+        },
+        {
+          "$ref": "#/$defs/EndEvent"
+        },
+        {
+          "$ref": "#/$defs/TextEvent"
+        },
+        {
+          "$ref": "#/$defs/SentenceDoneEvent"
+        },
+        {
+          "$ref": "#/$defs/BargeInEvent"
+        },
+        {
+          "$ref": "#/$defs/TimingEvent"
+        }
+      ],
+      "title": "Clientevent"
+    },
+    "ServerEvent": {
+      "discriminator": {
+        "mapping": {
+          "agreement": "#/$defs/AgreementEvent",
+          "audit": "#/$defs/AuditEvent",
+          "autoplay_done": "#/$defs/AutoplayDoneEvent",
+          "belief": "#/$defs/BeliefEvent",
+          "blocked": "#/$defs/BlockedEvent",
+          "error": "#/$defs/ErrorEvent",
+          "escalate": "#/$defs/EscalateEvent",
+          "eval": "#/$defs/EvalEvent",
+          "latency": "#/$defs/LatencyEvent",
+          "phase": "#/$defs/PhaseEvent",
+          "say": "#/$defs/SayEvent",
+          "stt_error": "#/$defs/SttErrorEvent",
+          "transcript": "#/$defs/TranscriptEvent",
+          "turn_done": "#/$defs/TurnDoneEvent",
+          "turn_trace": "#/$defs/TurnTraceEvent"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/TranscriptEvent"
+        },
+        {
+          "$ref": "#/$defs/SayEvent"
+        },
+        {
+          "$ref": "#/$defs/BeliefEvent"
+        },
+        {
+          "$ref": "#/$defs/EvalEvent"
+        },
+        {
+          "$ref": "#/$defs/BlockedEvent"
+        },
+        {
+          "$ref": "#/$defs/EscalateEvent"
+        },
+        {
+          "$ref": "#/$defs/LatencyEvent"
+        },
+        {
+          "$ref": "#/$defs/AuditEvent"
+        },
+        {
+          "$ref": "#/$defs/PhaseEvent"
+        },
+        {
+          "$ref": "#/$defs/AgreementEvent"
+        },
+        {
+          "$ref": "#/$defs/SttErrorEvent"
+        },
+        {
+          "$ref": "#/$defs/ErrorEvent"
+        },
+        {
+          "$ref": "#/$defs/TurnDoneEvent"
+        },
+        {
+          "$ref": "#/$defs/TurnTraceEvent"
+        },
+        {
+          "$ref": "#/$defs/AutoplayDoneEvent"
+        }
+      ],
+      "title": "Serverevent"
+    },
+    "View": {
+      "enum": [
+        "rep",
+        "operator"
+      ],
+      "title": "View",
+      "type": "string"
+    }
+  },
+  "required": [
+    "ServerEvent",
+    "ClientEvent",
+    "View"
+  ],
+  "title": "WsProtocol",
+  "type": "object"
+}

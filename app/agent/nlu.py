@@ -5,8 +5,9 @@ failure, then drops bad quotes / out-of-range values and sets ``verified`` from
 ``numbers.extract_tokens`` matches. ``repair_*`` helpers then fix stance
 (accept phrase, dominant short ack, never accept on injection) and OR each LLM
 side-channel flag with a regex cue. ``NLU_MODE=oracle`` skips the LLM and uses
-a caller-supplied ``TurnAnalysis`` (sim/tests). Does not update belief — that
-is the orchestrator's job via ``BeliefState.observe``.
+a caller-supplied ``TurnAnalysis`` (sim/tests). Rejected terms are audited and
+also kept on ``VerifiedAnalysis.dropped`` for the decision trace. Does not
+update belief — that is the orchestrator's job via ``BeliefState.observe``.
 """
 
 from __future__ import annotations
@@ -53,10 +54,21 @@ class VerifiedTerm(BaseModel):
     verified: bool
 
 
+class DroppedTerm(BaseModel):
+    """A term (or the ask) ``post_verify`` rejected; ``reason`` = audit event minus ``nlu_``."""
+
+    field: str
+    value: Any = None
+    reason: str
+    quote: str | None = None
+
+
 class VerifiedAnalysis(BaseModel):
     """Post-verified turn analysis for policy / belief updates."""
 
     terms: list[VerifiedTerm] = Field(default_factory=list)
+    # Decision-trace only (never read by policy): what post_verify threw away.
+    dropped: list[DroppedTerm] = Field(default_factory=list)
     settlement_ask_pct: float | None = None
     ask_quote: str | None = None
     ask_verified: bool = False
@@ -859,24 +871,53 @@ def post_verify(
     cents_ambiguity_field: str | None = None
     tiers_ambiguous = False
 
+    dropped: list[DroppedTerm] = []
+
     def _log(event: str, payload: dict[str, Any]) -> None:
         if audit is not None and call_id is not None:
             audit.append(call_id, "nlu", event, payload)
 
+    def _drop(
+        event: str, field: str, value: Any, quote: str | None, payload: dict[str, Any]
+    ) -> None:
+        """Audit a rejected term and keep it for the turn trace."""
+        _log(event, payload)
+        dropped.append(
+            DroppedTerm(field=field, value=value, reason=event.removeprefix("nlu_"), quote=quote)
+        )
+
     for term in analysis.terms:
         if not quote_in_utterance(term.quote, utterance):
-            _log("nlu_rejected_quote", {"field": term.field, "quote": term.quote})
+            _drop(
+                "nlu_rejected_quote",
+                term.field,
+                term.value,
+                term.quote,
+                {"field": term.field, "quote": term.quote},
+            )
             continue
         value: Any = term.value
         spec = FIELDS_BY_NAME.get(term.field)
         if spec is not None and spec.kind == "tiers":
             tiers = coerce_tiers(value)
             if tiers is None:
-                _log("nlu_rejected_tiers", {"value": value, "quote": term.quote})
+                _drop(
+                    "nlu_rejected_tiers",
+                    term.field,
+                    value,
+                    term.quote,
+                    {"value": value, "quote": term.quote},
+                )
                 continue
             if tiers and _TIERS_FIRST_N_RE.search(utterance):
                 tiers_ambiguous = True
-                _log("nlu_tiers_ambiguous", {"value": tiers, "quote": term.quote})
+                _drop(
+                    "nlu_tiers_ambiguous",
+                    term.field,
+                    [list(t) for t in tiers],
+                    term.quote,
+                    {"value": tiers, "quote": term.quote},
+                )
                 continue
             value = tiers
         # Pure digit amount for a cents field → clarify dollars vs cents.
@@ -896,8 +937,11 @@ def post_verify(
                 ):
                     cents_ambiguity_bare = bare
                     cents_ambiguity_field = term.field
-                    _log(
+                    _drop(
                         "nlu_cents_ambiguity",
+                        term.field,
+                        bare,
+                        term.quote,
                         {"field": term.field, "bare": bare, "quote": term.quote},
                     )
                     continue
@@ -921,8 +965,11 @@ def post_verify(
                     },
                 )
             else:
-                _log(
+                _drop(
                     "nlu_rejected_range",
+                    term.field,
+                    value,
+                    term.quote,
                     {"field": term.field, "value": value, "quote": term.quote},
                 )
                 continue
@@ -930,15 +977,24 @@ def post_verify(
             try:
                 value = date.fromisoformat(value)
             except ValueError:
-                _log("nlu_rejected_date", {"field": term.field, "value": term.value})
+                _drop(
+                    "nlu_rejected_date",
+                    term.field,
+                    term.value,
+                    term.quote,
+                    {"field": term.field, "value": term.value},
+                )
                 continue
         if (
             spec is not None
             and spec.kind == "date"
             and _quote_is_bare_year(term.quote)
         ):
-            _log(
+            _drop(
                 "nlu_rejected_bare_year",
+                term.field,
+                str(value),
+                term.quote,
                 {"field": term.field, "value": str(value), "quote": term.quote},
             )
             continue
@@ -967,15 +1023,21 @@ def post_verify(
     if ask_pct is not None:
         # Missing quote ≡ rejected; only keep ask when quote matches AND value matches.
         if not ask_quote or not quote_in_utterance(ask_quote, utterance):
-            _log(
+            _drop(
                 "nlu_rejected_quote",
+                "settlement_ask_pct",
+                ask_pct,
+                ask_quote,
                 {"field": "settlement_ask_pct", "quote": ask_quote},
             )
             ask_pct = None
             ask_quote = None
         elif not _ask_matches(ask_pct, ask_quote, ref=ref_d):
-            _log(
+            _drop(
                 "nlu_rejected_ask_value",
+                "settlement_ask_pct",
+                ask_pct,
+                ask_quote,
                 {
                     "field": "settlement_ask_pct",
                     "pct": ask_pct,
@@ -1002,6 +1064,7 @@ def post_verify(
 
     return VerifiedAnalysis(
         terms=verified_terms,
+        dropped=dropped,
         settlement_ask_pct=ask_pct,
         ask_quote=ask_quote,
         ask_verified=ask_verified,

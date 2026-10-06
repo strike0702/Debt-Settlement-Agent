@@ -6,7 +6,9 @@ Deterministic ``TEMPLATES`` / sync ``render_action`` are the fallback and the
 ``app.agent.nlg_bank`` (no LLM call); ``llm`` asks the LLM, runs
 ``template_guard``, and retries once. Both fall back to ``TEMPLATES``, then fill
 facts and run ``rendered_guard``. LLM never receives PRIVATE values or digits —
-only placeholder meanings from ``app.llm.prompts``.
+only placeholder meanings from ``app.llm.prompts``. An optional ``trace_out``
+dict receives how the line was made (mode, template, guard verdicts, fallback)
+for the orchestrator's decision trace; it never changes what is spoken.
 """
 
 from __future__ import annotations
@@ -137,6 +139,24 @@ def _note_blocked(
         audit.append(call_id, "nlg", "blocked", entry)
 
 
+def _trace_guard(
+    trace_out: dict[str, Any] | None, stage: str, ok: bool, reason: str = "", offending: Any = None
+) -> None:
+    if trace_out is None:
+        return
+    trace_out.setdefault("guards", []).append(
+        {
+            "stage": stage,
+            "ok": ok,
+            "reason": reason or None,
+            "offending": [str(o) for o in offending] if offending else None,
+        }
+    )
+    if not ok:
+        trace_out["fallback_used"] = True
+        trace_out["fallback_reason"] = "safe_fallback"
+
+
 def _render_filled(
     template: str,
     action: Action,
@@ -147,9 +167,13 @@ def _render_filled(
     audit: AuditLog | None,
     call_id: str | None,
     blocked_out: list[dict[str, Any]] | None = None,
+    trace_out: dict[str, Any] | None = None,
 ) -> list[str]:
+    if trace_out is not None:
+        trace_out["template"] = template
     allowed = _allowed_ids(action)
     tg = template_guard(template, allowed, action.required)
+    _trace_guard(trace_out, "template", tg.ok, tg.reason, tg.offending)
     if not tg.ok:
         _note_blocked(
             {"stage": "template", "reason": tg.reason, "offending": tg.offending},
@@ -161,6 +185,7 @@ def _render_filled(
 
     spoken = _fill_template(template, action, ref_date)
     if "{" in spoken and "}" in spoken:
+        _trace_guard(trace_out, "unfilled", False, "unfilled_placeholder")
         _note_blocked(
             {"stage": "unfilled", "reason": "unfilled_placeholder"},
             audit=audit,
@@ -182,6 +207,7 @@ def _render_filled(
             private,
             ref=ref_date,
         )
+        _trace_guard(trace_out, "rendered", rg.ok, rg.reason, rg.offending)
         if not rg.ok:
             _note_blocked(
                 {
@@ -207,9 +233,13 @@ def render_action(
     audit: AuditLog | None = None,
     call_id: str | None = None,
     blocked_out: list[dict[str, Any]] | None = None,
+    trace_out: dict[str, Any] | None = None,
 ) -> list[str]:
     """Render the deterministic template, or ``SAFE_FALLBACK`` on guard fail."""
     template = action.template_override or TEMPLATES[action.intent]
+    if trace_out is not None:
+        trace_out.setdefault("mode", "template")
+        trace_out["source"] = "override" if action.template_override else "default"
     return _render_filled(
         template,
         action,
@@ -219,6 +249,7 @@ def render_action(
         audit=audit,
         call_id=call_id,
         blocked_out=blocked_out,
+        trace_out=trace_out,
     )
 
 
@@ -235,6 +266,7 @@ async def speak_action(
     call_id: str | None = None,
     blocked_out: list[dict[str, Any]] | None = None,
     turn: int = 0,
+    trace_out: dict[str, Any] | None = None,
 ) -> list[str]:
     """Bank or LLM template → template_guard → fill → rendered_guard.
 
@@ -252,12 +284,17 @@ async def speak_action(
     use_llm = (
         action.intent not in TEMPLATE_ONLY_INTENTS and action.template_override is None
     )
+    source = "override" if action.template_override else "default"
+    fallback_reason: str | None = None
     if use_llm and cfg.nlg_mode == "bank":
         picked = pick_template(
             action, call_id=call_id, turn=turn, bank=load_bank(cfg.nlg_bank_path)
         )
         if picked is not None:
             template = picked
+            source = "bank"
+        else:
+            fallback_reason = "bank_miss"
     elif use_llm and cfg.nlg_mode == "llm" and llm is not None:
         placeholder_ids = sorted(allowed)
         messages = nlg_messages(action.intent, placeholder_ids, last_rep_line)
@@ -309,7 +346,16 @@ async def speak_action(
             tg = template_guard(candidate, allowed, required)
             if tg.ok:
                 template = candidate
+                source = "llm"
+        if source != "llm":
+            fallback_reason = "llm_template_rejected"
 
+    if trace_out is not None:
+        trace_out["mode"] = cfg.nlg_mode
+        trace_out["source"] = source
+        if fallback_reason is not None:
+            trace_out["fallback_used"] = True
+            trace_out["fallback_reason"] = fallback_reason
     return _render_filled(
         template,
         action,
@@ -319,4 +365,5 @@ async def speak_action(
         audit=audit,
         call_id=call_id,
         blocked_out=blocked_out,
+        trace_out=trace_out,
     )

@@ -1,0 +1,15 @@
+{
+  "_comment": "Hidden creditor truth for autoplay (app/autoplay.py). Mirrors rep_card.md; never sent to the agent.",
+  "persona": "flexible",
+  "opening_ask_bp": 4000,
+  "floor_bp": 4000,
+  "rules": {
+    "max_payments": 4,
+    "min_payment_cents": 35000,
+    "payment_structure": "flexible",
+    "first_payment_date": "default",
+    "max_segments": 3,
+    "max_token_pays": 4,
+    "min_payment_tiers": []
+  }
+}

@@ -29,6 +29,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 19 | Results-first README (ROADMAP) | done |
 | 20 | Correctness and honesty fixes (REVIEW_PLAN) | done |
 | 21 | Latency: measure then cut (REVIEW_PLAN) | done |
+| 22 | Decision trace, role-scoped streams, autoplay (REVIEW_PLAN) | done |
 | 24a | A/B harness, ReAct and LLM-only arms (REVIEW_PLAN) | done |
 
 ## Environment facts
@@ -147,6 +148,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `to_creditor_rules(rules, *, program_fee_pct, bank_fee_cents) -> CreditorRules`
 - `generate(n, seed) -> list[Scenario]` — deterministic, strata balanced
 - `generate_one(persona, stratum, seed) -> Scenario`
+- `scenario_from_truth(call, true_rules, *, opening_ask_bp, floor_bp, persona) -> Scenario` (Phase 22) — labels via the same `_classify` as generated cases
 - `stratum_counts(scenarios)`, `balanced_quota(n)`
 
 ### `sim.creditor`
@@ -196,6 +198,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 ### `app.agent.nlg`
 - `SAFE_FALLBACK: str`; `TEMPLATES: dict[Intent, str]`
 - `render_action(action, ref_date, *, creditor_numbers=None, private_blocklist=None, audit=None, call_id=None) -> list[str]` — deterministic template path
+- Phase 22: `render_action(..., trace_out=None)` / `speak_action(..., trace_out=None)` — optional dict filled with `mode`, `source` (`default`|`override`|`bank`|`llm`), `template`, `guards` (`[{stage, ok, reason, offending}]`), `fallback_used`, `fallback_reason` (`safe_fallback`|`bank_miss`|`llm_template_rejected`|`llm_unavailable`); never changes the spoken text
 - `async speak_action(action, ref_date, *, llm=None, settings=None, last_rep_line="", creditor_numbers=None, private_blocklist=None, audit=None, call_id=None, blocked_out=None, turn=0) -> list[str]` — `nlg_mode=bank`: bank template (no LLM); `llm`: LLM template → template_guard (1 retry); both fall back to `TEMPLATES` → fill → rendered_guard; raises `LLMUnavailable` (Phase 20; orchestrator `_speak` falls back and audits `llm_unavailable`)
 
 ### `app.agent.nlg_bank` (Phase 21)
@@ -214,6 +217,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `coerce_tiers(raw) -> list[tuple[int, int]] | None` — `{"from_payment","min_cents"}` dicts or 2-int pairs → sorted engine tuples; None (term dropped, `nlu_rejected_tiers` audited) on any bad item, extra/other keys, `from_payment < 1`, `min_cents <= 0`, or duplicate `from_payment`
 - `VerifiedAnalysis.tiers_ambiguous` — non-empty tiers in an utterance with "first/initial … payments" are dropped (`nlu_tiers_ambiguous`) instead of converted
 - `post_verify(analysis, utterance, *, ref=None, audit=None, call_id=None) -> VerifiedAnalysis`
+- Phase 22: `class DroppedTerm` — `field`, `value`, `reason` (audit event minus `nlu_`: `rejected_quote`, `rejected_tiers`, `tiers_ambiguous`, `cents_ambiguity`, `rejected_range`, `rejected_date`, `rejected_bare_year`, `rejected_ask_value`), `quote`; `VerifiedAnalysis.dropped: list[DroppedTerm]` (trace only; policy never reads it)
 - `async analyze(utterance, last_agent_line, pending_readback, *, llm=None, settings=None, oracle=None, audit=None, call_id=None, ref=None) -> VerifiedAnalysis`
 - `NLU_MODE=oracle` requires `oracle=TurnAnalysis` (skips LLM); re-raises `LLMUnavailable` for eval `skipped_quota`
 
@@ -223,7 +227,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `class CallSession` — `call_id`, `scenario`, `belief`, `neg: NegotiationState`, `history`, `pending`, `last_eval`, `agreed_bp`, `agreement`, `last_max_bp`, `creditor_numbers`, `private_blocklist`, `last_belief_changes`, `last_blocked`; props `phase`, `turn_idx`; `last_agent_line()`
 
 ### `app.agent.orchestrator`
-- `class Utterance` — `sentences: list[tuple[id, text]]`, `action`, `timings`, `belief_changes`, `agreement`
+- `class Utterance` — `sentences: list[tuple[id, text]]`, `action`, `timings`, `belief_changes`, `agreement`, `trace: TurnTrace | None` (Phase 22; set on every emitted utterance, full operator data)
 - `apply_effects(session, effects) -> None`
 - `class Orchestrator(session, *, llm=None, settings=None, audit=None, auto_ack=False)`
   - `async start() -> Utterance`
@@ -231,6 +235,28 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
   - `pop_drained() -> list[Utterance]` — turns run by the post-NLU drain inside `on_sentence_done` (Phase 21; the WS emits them)
   - `async on_sentence_done(ids) -> Agreement | None` — commits effects when all pending sentences acked; drafts agreement on `PROPOSE_WRAP` after validator pass
   - `async on_barge_in(spoken_ids) -> None` — drops pending effects; keeps belief
+
+### `app.agent.reasons` (Phase 22)
+- `REASON_TEXT: dict[str, str]` — one sentence per reason key; `{placeholders}` only from `PUBLIC_PLACEHOLDERS` (`counter_pct`, `settlement_pct`, `offer_total`, `num_payments`, `first_payment_date`, `alt_first_payment_date`, `alt_min_payment_cents`, `alt_max_payments`, `field_label`)
+- `reason_key(intent, reason) -> str` — `bp=N` → `counter` / `confirm`; field-name reasons → `ask_field` / `read_back` / `clarify_field`; `None` → `opening` / `ask_settlement` / `confirm` / `counter`; literals unchanged
+- `reason_text(action, ref) -> str` — fills from PUBLIC facts + field label; a missing value reads "that value"; an unknown key gives "The policy chose <intent>."
+
+### `app.schemas.events` (Phase 22)
+- Pydantic models (`extra="forbid"`) for every server event: `TranscriptEvent`, `SayEvent`, `BeliefEvent`, `EvalEvent`, `BlockedEvent`, `EscalateEvent`, `LatencyEvent`, `AuditEvent` (`private: bool`), `PhaseEvent`, `AgreementEvent`, `SttErrorEvent`, `ErrorEvent`, `TurnDoneEvent`, `TurnTraceEvent`, `AutoplayDoneEvent`; client: `StartEvent`, `EndEvent`, `TextEvent`, `SentenceDoneEvent`, `BargeInEvent`, `TimingEvent`
+- `ServerEvent` / `ClientEvent` (discriminated on `type`); `SERVER_EVENT_ADAPTER`; `SERVER_EVENT_TYPES`; `View = Literal["rep","operator"]`, `VIEWS`
+- `TurnTrace` — `turn`, `creditor_text`, `stance`, `ask_bp`, `ask_quote`, `terms: [TraceTerm{field,value,quote,verified,hedged}]`, `dropped: [DroppedTerm{field,value,reason,quote}]`, `belief_changes: [TraceBeliefChange]`, `affordability: {max_bp, curve: [{bp, feasible}] x100} | None` (operator only), `decide: {intent, reason, reason_key, reason_text}`, `counter_bp`, `nlg: {mode, source, template, guards: [{stage, ok, reason, offending}], fallback_used, fallback_reason}`, `spoken: [{id, text}]`, `timings`
+- `export_schema() -> dict`, `schema_text() -> str`, `main(argv) -> int`; CLI `python -m app.schemas.events --out web/src/types/events.schema.json` (root properties `ServerEvent`, `ClientEvent`, `View`)
+
+### `app.voice.views` (Phase 22)
+- `redact_for_view(payload, view) -> dict | None` — every WS frame passes through it; operator: audit rows gain `private`; rep: drops `eval.max_bp/program_fee_cents/additional_funds`, schedule rows keep only `date` + `creditor_payment_cents` (eval and agreement), `blocked.offending`, `turn_trace.affordability`, guard `offending`, and private audit rows
+- `is_private_audit(actor, event) -> bool` — actors `engine`, `agent`, `llm`; events `blocked`, `effects_committed`, `barge_in`, `nlg_template_rejected`, `llm_unavailable`
+
+### `app.autoplay` (Phase 22)
+- `DEFAULT_PAUSE_MS = 1200`, `MAX_PAUSE_MS = 10000`, `clamp_pause_ms(raw) -> int`
+- `autoplay_settings(base) -> Settings` — `nlu_mode=oracle`, `nlg_mode=bank` if base is bank else `template`
+- `load_autoplay_scenario(scenario_id, call) -> sim.scenarios.Scenario` — reads `fixtures/scenarios/<id>/sim.json` (`persona`, `opening_ask_bp`, `floor_bp`, `rules{…, first_payment_date: "default"|"after_last_draft"|ISO}`); `ValueError` if absent
+- `new_autoplay_call(call, scenario_id, *, settings, audit, call_id=None) -> (Orchestrator, CreditorPolicy)` — orchestrator `llm=None`, `auto_ack=True`
+- `async run_autoplay(orch, creditor, *, on_agent, on_creditor, pause_s=0.0, max_turns=None) -> AutoplayResult(outcome, phase, final_intent, turns)`; `outcome_of(phase, intent, *, has_agreement)` → `deal`|`no_deal`|`escalate`|`incomplete`
 
 ### `app.cli`
 - `python -m app.cli [fixtures/demo]` — type as rep; auto-acks; prints lines, belief, timings, verdict
@@ -243,9 +269,11 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - WS `/ws/call/{call_id}` — client: `start{scenario}`, binary wav, `text`, `sentence_done{id}`, `barge_in{spoken_ids}`, `timing{turn,vad_end_to_first_audio_ms}`; optional `oracle` on `text` when `nlu_mode=oracle`
 - Phase 21: `_CallConnection` — reader task → `asyncio.Queue`; every event except `start` runs as its own task (concurrent with NLU); `_send_lock` keeps one handler's frames together; an `Utterance` returned to several merged callers is emitted once (the others get a bare `turn_done`). `latency` keys: `stt_ms`, `nlu_ms`, `engine_ms`, `policy_ms`, `nlg_ms`, `queue_ms` (incl. STT wait), `server_total_ms`
 - server: `transcript`, `say`, `belief`, `eval` (incl. `max_bp`), `blocked`, `escalate`, `latency`, `audit`, `phase`, `agreement`, `stt_error`, `error`, `turn_done`
+- Phase 22: `/ws/call/{call_id}?view=rep|operator` (default `operator`; other values → `error` + close). New server events `turn_trace` (one per emitted utterance, after `latency`, before the audit tail; `timings` include `stt_ms` for voice) and `autoplay_done{outcome, phase, final_intent, turns}`. Autoplay start: `{"type":"start","scenario_id":"easy_deal","autoplay":true,"autoplay_pause_ms":1200}` (curated id only); while it runs `text` / WAV get `error` "autoplay is driving this call", `sentence_done` / `barge_in` are ignored, `end` cancels it and closes normally. Auto-ack calls emit `agreement` inside the wrap turn. NLU `LLMUnavailable` (text, WAV, post-ack drain) → audit `nlu/llm_unavailable` + `error` "NLU unavailable: …" + `turn_done`; socket stays open
 
 ### `app.main`
 - `create_app(*, settings=None, llm=None, audit=None) -> FastAPI`
+- `GET /healthz` → `{"status": "ok"}` (Phase 22, keep-warm)
 - `GET /`, `GET /static/*`, `GET /metrics/summary` → `{stage: {p50,p95,n}}`; stages `stt_ms`, `nlu_ms`, `engine_ms`, `policy_ms`, `nlg_ms`, `queue_ms`, `server_total_ms`, `vad_end_to_first_audio_ms`
 - `app = create_app()` for `uvicorn app.main:app`
 
@@ -879,3 +907,26 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - Open issues: see the DEFERRED list in the phase-21 report. Main ones: Groq TPM (8K/min, about 7 NLU calls a minute) now sets p95; an NLU `LLMUnavailable` still closes the socket; short-429 sleeps are not bounded by the role timeout; the app reads only `GROQ_API_KEY` (no multi-key pool).
 - Tests: `pytest -q` 541 passed / 1 skipped (incl. slow); `ruff check .` clean. Oracle eval `eval_20261006_212101_s7` (100 scenarios, seed 7): thresholds PASS, rates identical to the frozen pack.
 
+### Phase 22 (2026-10-07) — decision trace, role-scoped streams, autoplay (REVIEW_PLAN §2(a), F7)
+
+- Files (new): `app/schemas/{__init__,events}.py`, `app/agent/reasons.py`, `app/voice/views.py`, `app/autoplay.py`, `web/src/types/events.schema.json` (generated), `fixtures/scenarios/<all 6>/sim.json`, `tests/wsutil.py`, `tests/unit/{test_events_schema,test_turn_trace,test_reasons,test_ws_views,test_autoplay}.py`. Changed: `app/agent/{orchestrator,nlu,nlg}.py`, `app/voice/ws.py`, `app/main.py`, `sim/scenarios.py` (`scenario_from_truth`), `.github/workflows/ci.yml`, `fixtures/scenarios/{no_space,rescue_escalate}/rep_card.md`, `tests/unit/test_ws.py`.
+- Interfaces: see `app.schemas.events`, `app.agent.reasons`, `app.voice.views`, `app.autoplay`, and the Phase 22 notes under `app.voice.ws`, `app.agent.orchestrator`, `app.agent.nlu`, `app.agent.nlg`, `app.main`, `sim.scenarios` above.
+- WS events for 23b (all in `events.schema.json`; generate TS from root `ServerEvent` / `ClientEvent` / `View`):
+  - `turn_trace` — once per agent turn (opening and rep-end close included), after `latency`: `turn`, `creditor_text`, `stance`, `ask_bp`, `ask_quote`, `terms[]`, `dropped[]`, `belief_changes[]`, `affordability{max_bp, curve[100]}` (operator only, key absent on rep), `decide{intent, reason, reason_key, reason_text}`, `counter_bp`, `nlg{mode, source, template, guards[], fallback_used, fallback_reason}`, `spoken[{id,text}]`, `timings`.
+  - `autoplay_done{outcome: deal|no_deal|escalate|incomplete, phase, final_intent, turns}` — last frame of an autoplayed call.
+  - `audit.private` (operator stream) marks rows the rep never receives.
+  - View param: `/ws/call/{id}?view=rep|operator`, default `operator`.
+  - Autoplay start payload: `{"type":"start","scenario_id":"<curated id>","autoplay":true,"autoplay_pause_ms":1200}` (0–10000, default 1200).
+- CI: new step regenerates the schema and fails on `git diff`; `test_committed_schema_matches_models` catches it locally.
+- Tests: rep-view privacy over the scripted easy_deal call and autoplay of easy_deal / no_space / rescue_escalate — every frame is scanned for every `session.private_blocklist` value plus `max_bp`, bank fee, program fee % and amount (the same scan finds hits on the operator stream). Every frame of a scripted and an autoplayed call validates against `SERVER_EVENT_ADAPTER`. Autoplay: easy_deal → WRAP + agreement valid under the sim's agreed rules; no_space → NO_DEAL (`infeasible`); rescue_escalate → ESCALATE (`out_of_guardrail`); no LLM call even with `nlu_mode=llm` / `nlg_mode=llm`; pause applied; text refused while running; `sim/` import closure has no `app.agent`. Reason coverage: every literal reason in `policy.py` / `orchestrator.py` has text (fast), and every (intent, reason) seen in the 100-seed oracle eval has text (`@slow`, 47 s).
+- Carry-over:
+  - [21.2] NLU `LLMUnavailable` no longer closes the socket: `_on_text`, `_on_wav` and the post-ack drain in `_on_sentence_done` catch it, audit `nlu/llm_unavailable`, send `error` + `turn_done`. Tests: `test_nlu_llm_unavailable_keeps_socket_open` (FakeLLM with an empty `nlu` queue; next turn succeeds after enqueue), `test_stt_then_nlu_llm_unavailable_keeps_socket_open`.
+- Deviations:
+  - The demo fixtures had no machine-readable creditor truth, so each curated scenario gets a `sim.json` (hidden rules, ask, floor, persona; dates relative to the rebased client). With the rep-card rules as written, no_space and rescue_escalate are dealable at the ask (no_space max_bp 71%, rescue_escalate ladders to NO_DEAL), so their minimum payment is raised in both `sim.json` and the rep card: no_space $80 → $350, rescue_escalate $30 → $110. A human playing the card now sees the outcome the card's title promises.
+  - `turn_trace` adds fields the 23a hand-written TS did not have: `decide.reason_key`, `nlg.source`, `nlg.fallback_reason`, guard `offending` (operator only). `decide.reason` is nullable (OPENING / ASK_SETTLEMENT have no code).
+  - `turn_trace` is emitted for every utterance, including the opening and the rep-end close (no creditor side: `creditor_text`/`stance` null, empty terms).
+  - Rep stream audit filter is a deny-list by actor/event (`is_private_audit`), backed by the frame-scan test, rather than an allow-list.
+  - New `autoplay_done` server event (not in the plan) so the UI knows when the sim is finished.
+- Oracle eval `eval_20261006_220857_s7` (`--nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7`): thresholds PASS; metrics table byte-identical to `docs/eval/policy_eval_20261006/summary.md` (no policy change).
+- Tests: `pytest -q` 593 passed / 1 skipped (177 s, incl. slow); fast suite 591 passed / 1 skipped; `ruff check .` clean.
+- Open issues: see the DEFERRED lines in the phase-22 report.

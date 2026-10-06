@@ -21,6 +21,11 @@ jobs:
       - name: Ruff
         run: uv run ruff check .
 
+      - name: WS event schema is current
+        run: |
+          uv run python -m app.schemas.events --out web/src/types/events.schema.json
+          git diff --exit-code web/src/types/events.schema.json
+
       - name: Pytest (skip slow)
         run: uv run pytest -q -m "not slow"
 

@@ -373,6 +373,39 @@ def _try_one(
     return None
 
 
+def scenario_from_truth(
+    call: CallScenario,
+    true_rules: TrueRules,
+    *,
+    opening_ask_bp: int,
+    floor_bp: int,
+    persona: PersonaName,
+) -> Scenario:
+    """Wrap a fixed ``CallScenario`` + hidden rules as a sim ``Scenario``.
+
+    Labels (``zopa``, ``stratum``, ``should_escalate``) come from the engine
+    exactly as for generated cases. Used by ``app.autoplay`` for the curated
+    demo fixtures, whose hidden rules live in ``sim.json``.
+    """
+    true_max, feasible, zopa, rescue_ok, should_esc, stratum = _classify(
+        call, true_rules, opening_ask_bp, floor_bp, persona
+    )
+    return Scenario(
+        id=call.id,
+        call=call,
+        true_rules=true_rules,
+        opening_ask_bp=opening_ask_bp,
+        floor_bp=floor_bp,
+        persona=persona,
+        true_max_bp=true_max,
+        feasible_bps=feasible,
+        zopa=zopa,
+        rescue_within_guardrail=rescue_ok,
+        should_escalate=should_esc,
+        stratum=stratum,
+    )
+
+
 def generate_one(persona: PersonaName, stratum: Stratum, seed: int) -> Scenario:
     """Sample a single scenario for a persona/stratum pair (deterministic)."""
     rng = Random(seed)

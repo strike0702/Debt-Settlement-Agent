@@ -1,8 +1,8 @@
 """FastAPI entrypoint: static UI, call WebSocket, metrics, call/scenario APIs.
 
 Serves ``app/static`` at ``/``, mounts ``/ws/call/{call_id}``, and exposes
-``GET /metrics/summary``, ``/scenarios`` (+ ``/{id}`` operator brief and
-``/{id}/rep_card``), and ``/calls*``. LLM + audit are
+``GET /healthz`` (keep-warm), ``GET /metrics/summary``, ``/scenarios``
+(+ ``/{id}`` operator brief and ``/{id}/rep_card``), and ``/calls*``. LLM + audit are
 created once in lifespan and shared across sockets; the LLM's ``on_call`` hook
 appends every LLM / STT call to the audit log (``app.llm.call_audit``).
 """
@@ -73,6 +73,11 @@ def create_app(
 
     application = FastAPI(title="Debt Settlement Agent", lifespan=lifespan)
     application.include_router(voice_ws.router)
+
+    @application.get("/healthz")
+    async def healthz() -> dict[str, str]:
+        """Liveness for keep-warm pings; no LLM, engine or audit access."""
+        return {"status": "ok"}
 
     @application.get("/metrics/summary")
     async def get_metrics_summary() -> dict[str, Any]:

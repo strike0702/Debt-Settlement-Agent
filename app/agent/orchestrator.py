@@ -8,6 +8,10 @@ emit so a fast typed or voice accept wraps instead of re-confirming mid-TTS.
 Barge-in still keeps those kinds when any sentence was heard; other pending
 effects are dropped. Each public turn method runs inside
 ``llm_call_scope(call_id)`` so every NLU / NLG call is audited under this call.
+Every ``Utterance`` carries a ``TurnTrace`` (``app.schemas.events``) assembled
+from what the turn already computed — NLU terms and drops, belief changes,
+affordability, the decision with its ``reasons`` sentence, NLG template and
+guard verdicts, timings — never by re-reading the audit log.
 Does not own policy rules or LLM prompts — those live in ``policy`` / ``nlu`` /
 ``nlg``.
 """
@@ -54,6 +58,7 @@ from app.agent.policy import (
     speak_schedule_action,
     terms_counter_key,
 )
+from app.agent.reasons import reason_key, reason_text
 from app.agent.session import CallSession, PendingSpeech, Turn
 from app.config import Settings, get_settings
 from app.domain.belief import BeliefChange, TermStatus
@@ -61,6 +66,20 @@ from app.domain.facts import Fact
 from app.domain.scenario import CallScenario
 from app.llm.call_audit import llm_call_scope
 from app.llm.client import LLMUnavailable, QueueWait, queue_wait_scope
+from app.schemas.events import (
+    Affordability as TraceAffordability,
+)
+from app.schemas.events import (
+    CurvePoint,
+    Decide,
+    DroppedTerm,
+    GuardResult,
+    NlgTrace,
+    SpokenSentence,
+    TraceBeliefChange,
+    TraceTerm,
+    TurnTrace,
+)
 from app.store.audit import AuditLog
 from feasibility.models import CreditorRules, add_months, end_of_month
 
@@ -74,6 +93,12 @@ class Utterance:
     timings: dict[str, float] = field(default_factory=dict)
     belief_changes: list[BeliefChange] = field(default_factory=list)
     agreement: Agreement | None = None
+    # Decision trace for the WS ``turn_trace`` event (full; views filter it).
+    trace: TurnTrace | None = None
+
+
+# Affordability.curve is sampled at range(100, 10001, 100).
+_CURVE_BPS = tuple(range(100, 10001, 100))
 
 
 def _ms_since(t0: float) -> float:
@@ -446,6 +471,11 @@ class Orchestrator:
         self._turn_queue = QueueWait()
         # Turns run by the post-NLU drain in ``on_sentence_done``; the WS emits them.
         self._drained: list[Utterance] = []
+        # What the turn in flight computed, for ``Utterance.trace`` (see ``_build_trace``).
+        self._trace_ctx: dict[str, Any] = {}
+
+    def _begin_trace(self, creditor_text: str | None) -> None:
+        self._trace_ctx = {"creditor_text": creditor_text}
 
     def _audit(self, actor: str, event_type: str, payload: dict[str, Any] | None = None) -> None:
         if self.audit is not None:
@@ -456,6 +486,7 @@ class Orchestrator:
         """Produce the OPENING line; effects apply on ack (or auto-ack)."""
         async with self._lock:
             t0 = time.perf_counter()
+            self._begin_trace(None)
             action = opening_action(settings=self.settings)
             action = action.model_copy(
                 update={
@@ -571,6 +602,7 @@ class Orchestrator:
             working = text
 
             session.history.append(Turn(role="creditor", text=working, spoken=True))
+            self._begin_trace(working)
             self._ingest_creditor_numbers(working)
             self._audit("creditor", "utterance", {"text": working, "turn": turn})
 
@@ -619,6 +651,7 @@ class Orchestrator:
 
             async with self._meta:
                 self._stage = "post"
+            self._trace_ctx["verified"] = verified
             self._audit(
                 "nlu",
                 "analysis",
@@ -639,6 +672,7 @@ class Orchestrator:
                 )
                 if resolved is not None and resolved.terms:
                     verified = resolved
+                    self._trace_ctx["verified"] = verified
                     session.neg.pending_cents_clarify = None
                     self._audit(
                         "nlu",
@@ -723,6 +757,7 @@ class Orchestrator:
             t_eng = time.perf_counter()
             afford, rescue_ok, term_alt = await self._engine_context(verified)
             timings["engine_ms"] = _ms_since(t_eng)
+            self._trace_ctx["afford"] = afford
 
             t_pol = time.perf_counter()
             action = decide(
@@ -921,6 +956,7 @@ class Orchestrator:
         """Rep ended the chat; speak a short close and move to END."""
         async with self._lock:
             t0 = time.perf_counter()
+            self._begin_trace(None)
             if self.session.neg.phase == Phase.WRAP:
                 action = Action(
                     intent=Intent.CLOSE,
@@ -1003,6 +1039,7 @@ class Orchestrator:
             timings=dict(timings),
             belief_changes=belief_changes,
             agreement=self.session.agreement,
+            trace=self._build_trace(action, pairs, timings, belief_changes),
         )
         if self.auto_ack:
             # Nested ack while holding turn lock — call body directly.
@@ -1022,6 +1059,8 @@ class Orchestrator:
         session = self.session
         session.last_blocked = []
         blocked_out = session.last_blocked
+        trace_out: dict[str, Any] = {}
+        self._trace_ctx["nlg"] = trace_out
         try:
             # bank mode needs no LLM; llm mode without a client degrades to TEMPLATES.
             mode = self.settings.nlg_mode
@@ -1034,6 +1073,7 @@ class Orchestrator:
                     audit=self.audit,
                     call_id=session.call_id,
                     blocked_out=blocked_out,
+                    trace_out=trace_out,
                 )
             return await speak_action(
                 action,
@@ -1047,10 +1087,13 @@ class Orchestrator:
                 call_id=session.call_id,
                 blocked_out=blocked_out,
                 turn=session.neg.turn_idx,
+                trace_out=trace_out,
             )
         except LLMUnavailable:
             self._audit("nlg", "llm_unavailable", {"fallback": SAFE_FALLBACK})
-            return render_action(
+            trace_out = {}
+            self._trace_ctx["nlg"] = trace_out
+            spoken = render_action(
                 action,
                 self._ref,
                 creditor_numbers=session.creditor_numbers,
@@ -1058,7 +1101,84 @@ class Orchestrator:
                 audit=self.audit,
                 call_id=session.call_id,
                 blocked_out=blocked_out,
+                trace_out=trace_out,
             )
+            trace_out["mode"] = self.settings.nlg_mode
+            trace_out["fallback_used"] = True
+            trace_out.setdefault("fallback_reason", "llm_unavailable")
+            return spoken
+
+    def _build_trace(
+        self,
+        action: Action,
+        pairs: list[tuple[str, str]],
+        timings: dict[str, float],
+        belief_changes: list[BeliefChange],
+    ) -> TurnTrace:
+        """Assemble the decision trace from ``_trace_ctx`` and the emitted move.
+
+        Contains PRIVATE data (``affordability``, guard ``offending``); the WS
+        view filter strips it for the rep stream.
+        """
+        ctx = self._trace_ctx
+        verified: VerifiedAnalysis | None = ctx.get("verified")
+        afford: Affordability | None = ctx.get("afford")
+        nlg: dict[str, Any] = ctx.get("nlg") or {}
+        ask_bp: int | None = None
+        if verified is not None and verified.ask_verified and verified.settlement_ask_pct:
+            ask_bp = ask_pct_to_bp(verified.settlement_ask_pct)
+        spoken_bp = action.facts.get("counter_pct") or action.facts.get("settlement_pct")
+        return TurnTrace(
+            turn=self.session.neg.turn_idx,
+            creditor_text=ctx.get("creditor_text"),
+            stance=verified.stance if verified is not None else None,  # type: ignore[arg-type]
+            ask_bp=ask_bp,
+            ask_quote=verified.ask_quote if ask_bp is not None and verified else None,
+            terms=[
+                TraceTerm.model_validate(t.model_dump(mode="json"))
+                for t in (verified.terms if verified is not None else [])
+            ],
+            dropped=[
+                DroppedTerm.model_validate(d.model_dump(mode="json"))
+                for d in (verified.dropped if verified is not None else [])
+            ],
+            belief_changes=[
+                TraceBeliefChange.model_validate(c.model_dump(mode="json"))
+                for c in belief_changes
+            ],
+            affordability=(
+                TraceAffordability(
+                    max_bp=afford.max_bp,
+                    curve=[
+                        CurvePoint(bp=bp, feasible=ok)
+                        for bp, ok in zip(_CURVE_BPS, afford.curve, strict=False)
+                    ],
+                )
+                if afford is not None
+                else None
+            ),
+            decide=Decide(
+                intent=action.intent,
+                reason=action.reason,
+                reason_key=reason_key(action.intent, action.reason),
+                reason_text=reason_text(action, self._ref),
+            ),
+            counter_bp=(
+                spoken_bp.value
+                if spoken_bp is not None and isinstance(spoken_bp.value, int)
+                else None
+            ),
+            nlg=NlgTrace(
+                mode=nlg.get("mode", "template"),
+                source=nlg.get("source", "default"),
+                template=nlg.get("template", ""),
+                guards=[GuardResult.model_validate(g) for g in nlg.get("guards", [])],
+                fallback_used=bool(nlg.get("fallback_used", False)),
+                fallback_reason=nlg.get("fallback_reason"),
+            ),
+            spoken=[SpokenSentence(id=sid, text=text) for sid, text in pairs],
+            timings={k: float(v) for k, v in timings.items() if isinstance(v, (int, float))},
+        )
 
     def _apply_belief(self, verified: VerifiedAnalysis, turn: int) -> list[BeliefChange]:
         session = self.session

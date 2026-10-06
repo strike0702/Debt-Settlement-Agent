@@ -409,3 +409,110 @@ async def test_fake_llm_queue() -> None:
 def test_strip_json_fences() -> None:
     assert strip_json_fences('```json\n{"a": 1}\n```') == '{"a": 1}'
     assert strip_json_fences('{"a": 1}') == '{"a": 1}'
+
+
+@pytest.mark.asyncio
+async def test_hung_provider_times_out_and_fails_over(tmp_path: Path) -> None:
+    """F2: a provider that never answers fails over within the role timeout."""
+    import asyncio
+
+    path = _write_yaml(tmp_path, _PROVIDERS_YAML)
+
+    async def primary(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(30)
+        return httpx.Response(200, json=_ok_body())
+
+    def backup(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_ok_body())
+
+    events: list[dict[str, Any]] = []
+    client = LLMClient(
+        _settings(llm_timeout_nlu_s=0.2),
+        providers_path=path,
+        http_clients={
+            "primary": httpx.AsyncClient(transport=httpx.MockTransport(primary)),
+            "backup": httpx.AsyncClient(transport=httpx.MockTransport(backup)),
+        },
+        on_call=events.append,
+        skip_health_check=True,
+    )
+    t0 = time.perf_counter()
+    out = await client.chat_json("nlu", [{"role": "user", "content": "x"}], _Tiny)
+    elapsed = time.perf_counter() - t0
+    await client.aclose()
+    assert out.ok is True
+    assert elapsed < 2.0
+    failed, ok = events
+    assert failed["provider"] == "primary"
+    assert "timed out" in failed["error"]
+    assert failed["latency_ms"] >= 200
+    assert ok["provider"] == "backup"
+    assert ok["failover_from"] == "primary/test-model"
+    assert ok["error"] is None
+
+
+def test_timeouts_are_per_role() -> None:
+    s = Settings()
+    assert (s.llm_timeout_nlu_s, s.llm_timeout_nlg_s, s.llm_timeout_stt_s) == (6.0, 4.0, 8.0)
+
+
+@pytest.mark.asyncio
+async def test_programming_error_does_not_fail_over(tmp_path: Path) -> None:
+    """F17: only provider/HTTP/timeout errors fail over; a bug propagates."""
+    path = _write_yaml(tmp_path, _PROVIDERS_YAML)
+
+    def backup(request: httpx.Request) -> httpx.Response:
+        pytest.fail("backup must not be tried after a programming error")
+
+    client, _ = _client(path, {"primary": backup, "backup": backup}, _settings())
+
+    async def boom(*args: Any, **kwargs: Any) -> Any:
+        raise TypeError("bug in request building")
+
+    client._call_chat = boom  # type: ignore[method-assign]
+    with pytest.raises(TypeError):
+        await client.chat_json("nlu", [{"role": "user", "content": "x"}], _Tiny)
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_connection_error_fails_over(tmp_path: Path) -> None:
+    path = _write_yaml(tmp_path, _PROVIDERS_YAML)
+
+    def primary(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused", request=request)
+
+    def backup(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_ok_body())
+
+    client, seen = _client(path, {"primary": primary, "backup": backup}, _settings())
+    out = await client.chat_json("nlu", [{"role": "user", "content": "x"}], _Tiny)
+    await client.aclose()
+    assert out.ok is True
+    assert len(seen["backup"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_hung_stt_times_out(tmp_path: Path) -> None:
+    import asyncio
+
+    path = _write_yaml(tmp_path, _PROVIDERS_YAML)
+
+    async def primary(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(30)
+        return httpx.Response(200, json={"text": "late"})
+
+    events: list[dict[str, Any]] = []
+    client = LLMClient(
+        _settings(llm_timeout_stt_s=0.2),
+        providers_path=path,
+        http_clients={"primary": httpx.AsyncClient(transport=httpx.MockTransport(primary))},
+        on_call=events.append,
+        skip_health_check=True,
+    )
+    t0 = time.perf_counter()
+    with pytest.raises(LLMUnavailable):
+        await client.transcribe(b"RIFF")
+    await client.aclose()
+    assert time.perf_counter() - t0 < 2.0
+    assert events[0]["role"] == "stt" and events[0]["error"]

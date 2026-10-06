@@ -11,13 +11,14 @@ from pathlib import Path
 
 from app.llm.client import make_client
 from eval.run_eval import _build_settings, run_one_scenario
-from sim.scenarios import generate
+from tests.seed7 import tiered as seed7_tiered
 
 _SETTINGS = _build_settings(profile="offline", nlg="template", nlu="oracle")
 
 
 async def test_tiered_scenarios_end_to_end(tmp_path: Path) -> None:
-    tiered = [s for s in generate(100, 7) if s.true_rules.min_payment_tiers]
+    # Exactly the tiered scenarios of generate(100, 7), rebuilt per slot (fast).
+    tiered = list(seed7_tiered())
     assert tiered
     deals_all_fields = 0
     for sc in tiered:

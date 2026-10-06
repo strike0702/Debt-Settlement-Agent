@@ -15,6 +15,7 @@ from typing import Any, Protocol
 from app.agent.guards import rendered_guard, template_guard
 from app.config import Settings, get_settings
 from app.domain.actions import Action, Intent
+from app.llm.client import LLMUnavailable
 from app.llm.prompts import nlg_messages
 from app.store.audit import AuditLog
 
@@ -39,8 +40,9 @@ TEMPLATE_ONLY_INTENTS: frozenset[Intent] = frozenset(
 # One spoken template per intent. No digits, $, %, or number-words.
 TEMPLATES: dict[Intent, str] = {
     Intent.OPENING: (
-        "Good morning, thank you for calling {firm_name}. {opening_disclosure} "
-        "How may I assist you today?"
+        "Hello, this is an automated agent calling on behalf of {firm_name} "
+        "about a client's account with you. {opening_disclosure} "
+        "What payment terms can you work with for a settlement?"
     ),
     Intent.ASK: "{ask_text}",
     Intent.ASK_SETTLEMENT: (
@@ -232,7 +234,8 @@ async def speak_action(
 ) -> list[str]:
     """LLM template (optional) → template_guard → fill → rendered_guard.
 
-    On LLM/template failure after one retry, falls back to ``TEMPLATES``.
+    On a guard-rejected template after one retry, falls back to ``TEMPLATES``.
+    ``LLMUnavailable`` propagates (the orchestrator falls back and audits it).
     ``TEMPLATE_ONLY_INTENTS`` always use ``TEMPLATES`` (no LLM call).
     """
     cfg = settings or get_settings()
@@ -286,15 +289,10 @@ async def speak_action(
                             "offending": tg.offending,
                         },
                     )
-            except Exception as e:
-                if audit is not None and call_id is not None:
-                    audit.append(
-                        call_id,
-                        "nlg",
-                        "nlg_llm_failed",
-                        {"attempt": attempt, "error": str(e)},
-                    )
-                candidate = None
+            except LLMUnavailable:
+                # Not swallowed: the orchestrator falls back to TEMPLATES and audits
+                # ``llm_unavailable``. Any other exception is a bug and propagates.
+                raise
         if candidate is not None:
             tg = template_guard(candidate, allowed, required)
             if tg.ok:

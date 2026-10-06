@@ -10,6 +10,8 @@ Priority: **P0** must ship today. **P1** should. **P2** deferred if time runs ou
 
 ## 0. What the review verified
 
+> Dated snapshot (2026-10-05, HEAD `ab6159b`). Counts and gaps below are as of that review, not current; see `docs/PROGRESS.md` for the live state (CI exists since Phase 13).
+
 - `pytest`: 389 passed, 1 skipped, 14 s. `ruff check`: clean. No CI. `eval/results/` gitignored, so no committed evidence.
 - Re-ran the eval at HEAD (seed 7, n=12, `eval` profile, template NLG and sim, live Gemini NLU): **thresholds FAIL**. `rule_extraction_accuracy=0.43` because the metric scores 7 fields while the simulator reveals only 3. The gate has been red since commit `3912b9d` and no one re-ran.
 - Removing the oracle disposition overlay (`oracle=None`) changed **nothing** across all 12 scenarios. The template simulator cannot tell configurations apart.

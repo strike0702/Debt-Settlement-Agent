@@ -95,14 +95,14 @@ flowchart LR
 
 - **Browser / text.** Vanilla JS at `/`. Compose box, mic, barge-in.
 - **STT.** Server Whisper, or the browser fallback. VAD is `@ricky0123/vad-web` in the page.
-- **Orchestrator.** One turn: NLU, belief, affordability, policy, NLG, speech ack. Cancel-and-merge if you talk while NLU is still running.
+- **Orchestrator.** One turn: NLU, belief, affordability, policy, NLG, speech ack. Cancel-and-merge (new text while NLU is still running joins that turn) is implemented in the orchestrator and covered by tests, but the live WebSocket handles one event at a time, so it is not wired to live calls yet (planned for Phase 21).
 - **NLU + verification.** LLM JSON, then quote / number / range checks and a few regex repairs.
 - **Belief.** The working picture of the creditor's rules. Tentative values get read back before they count as known.
 - **Policy.** Pure functions. Belief + verified analysis + affordability curve → an `Action`.
 - **Feasibility engine.** `feasibility/` — settlement math I built for an earlier project and brought into this one. For a client, rules, and a percentage: can we fund it, and what is the schedule? When nothing fits it also computes private rescue options (a lump or a draft bump). Policy gets a yes/no on whether rescue stays inside a guardrail. The amount is never spoken.
 - **NLG + guards.** Template, fill, check, speak or fall back.
 - **TTS.** `speechSynthesis` in the browser. Not a telephony stack.
-- **Audit log.** Belief changes, guard blocks, escalations, NLU analyses, each `decide()` intent. Append-only SQLite (WAL; triggers reject UPDATE/DELETE). Successful LLM HTTP calls are not written today.
+- **Audit log.** Belief changes, guard blocks, escalations, NLU analyses, each `decide()` intent, and every LLM / STT call (role, provider, model, latency, tokens, cache hit, failover, and failed attempts with their error). Append-only SQLite (WAL; triggers reject UPDATE/DELETE).
 
 LLM calls go through `app/llm/client.py` by role (`nlu`, `nlg`, `sim`, `stt`), never by model name. Routing is `config/providers.yaml` (`demo`, `eval`, `local`, `offline`). Missing keys are skipped. 429s fail over.
 
@@ -146,7 +146,7 @@ I treated the model as untrusted input, the same way you treat a form field.
 
 **After speaking.** Wrap drafts only after the independent validator (`app/adapter/validator.py`) accepts the schedule. That validator does not import the engine's internals. Most effects commit on the speech ack, so a barge-in does not lock in a sentence nobody heard.
 
-The audit log is there so you can see why a turn went the way it did. Belief, blocks, escalations, NLU, `decide()`. It does not yet record the raw LLM HTTP call.
+The audit log is there so you can see why a turn went the way it did. Belief, blocks, escalations, NLU, `decide()`, and one row per LLM call attempt (metadata, not the prompt or reply text).
 
 ## Evaluation
 
@@ -278,4 +278,4 @@ Evaluate the failure modes you actually worry about. Invalid schedules. Spoken p
 
 And write the decision down. If you cannot say why the agent offered 58% after the fact, you do not have a negotiation system. You have a chat window with extra steps.
 
-Still open: a true LLM-only baseline on the same seeds, voice timing, LLM calls in the audit log, labels I did not write myself.
+Still open: a true LLM-only baseline on the same seeds, voice timing, labels I did not write myself.

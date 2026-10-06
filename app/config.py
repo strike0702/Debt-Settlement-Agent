@@ -1,8 +1,8 @@
 """Application settings from environment / ``.env`` (pydantic-settings).
 
-API keys, LLM profile, NLG/NLU mode, DB path, negotiation knobs (max turns,
-anchor ratio, firm disclosure). Call ``get_settings()``; do not construct
-``Settings`` ad hoc in hot paths.
+API keys, LLM profile and per-role request timeouts, NLG/NLU mode, DB path,
+negotiation knobs (max turns, anchor ratio, firm disclosure). Call
+``get_settings()``; do not construct ``Settings`` ad hoc in hot paths.
 """
 
 from __future__ import annotations
@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     llm_cache_path: str = "llm_cache.db"
     nlg_mode: str = "llm"
     nlu_mode: str = "llm"
+    # Per-request LLM timeouts (s). A timeout fails over to the next route target.
+    llm_timeout_nlu_s: float = 6.0
+    llm_timeout_nlg_s: float = 4.0
+    llm_timeout_stt_s: float = 8.0
+    # Sim phrasing is eval-only and not on the voice path; looser bound.
+    llm_timeout_sim_s: float = 15.0
 
     db_path: str = "debt_settlement_agent.db"
 
@@ -40,7 +46,7 @@ class Settings(BaseSettings):
 
     firm_name: str = "Synthetic Debt Relief"
     opening_disclosure: str = (
-        "You are speaking with an automated agent authorized to discuss settlement options."
+        "I am authorized to discuss settlement options for this account."
     )
 
 

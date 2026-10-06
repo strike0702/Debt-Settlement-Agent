@@ -751,3 +751,14 @@ async def test_fast_readback_skips_llm() -> None:
         settings=settings,
     )
     assert out.readback_response == "confirm"
+
+
+@pytest.mark.asyncio
+async def test_speak_action_propagates_llm_unavailable() -> None:
+    """F17: no swallowing; the orchestrator owns the LLMUnavailable fallback."""
+    from app.llm.client import LLMUnavailable
+
+    fake = FakeLLM()  # empty nlg queue → LLMUnavailable
+    action = Action(intent=Intent.REFUSE_PRIVATE, next_phase=Phase.NEGOTIATE)
+    with pytest.raises(LLMUnavailable):
+        await speak_action(action, _REF, llm=fake, settings=_settings(nlg_mode="llm"))

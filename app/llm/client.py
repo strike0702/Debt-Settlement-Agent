@@ -5,6 +5,13 @@ name. Routing comes from ``config/providers.yaml`` profiles. Per-provider token
 bucket + optional ``min_interval_s``; short 429 waits retry the same target,
 long waits / daily quota mark it exhausted and fail over. Gemini free-tier
 quota often arrives as HTTP 400 — remapped to 429 when ``quota_as_400``.
+Each request has a per-role timeout (``Settings.llm_timeout_<role>_s``); a
+timeout, connection error, or HTTP error fails over to the next target. Any
+other exception is a bug and propagates.
+
+``on_call`` receives one meta dict per attempt that finished: successes and
+cache hits (``error=None``) and failed targets (``error=<message>``).
+``app.llm.call_audit`` turns that hook into audit-log rows.
 
 Does not own NLU/NLG prompts or policy. SQLite response cache (temp 0 only).
 ``FakeLLM`` is the offline/test stand-in with a per-role response queue.
@@ -14,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import io
 import json
 import random
 import re
@@ -28,7 +36,7 @@ from typing import Any, Literal, TypeVar
 
 import httpx
 import yaml
-from openai import APIStatusError, AsyncOpenAI, RateLimitError
+from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitError
 from pydantic import BaseModel
 
 from app.config import Settings, get_settings
@@ -244,25 +252,35 @@ class FakeLLM:
             if asyncio.iscoroutine(result):
                 await result
 
+    async def _take(self, role: Role) -> Any:
+        """Pop the next scripted reply and emit its call meta (failure if empty)."""
+        tokens = None if role == "stt" else 0
+        meta: dict[str, Any] = {
+            "role": role,
+            "provider": "fake",
+            "model": "fake",
+            "latency_ms": 0,
+            "prompt_tokens": tokens,
+            "completion_tokens": tokens,
+            "cache_hit": False,
+            "failover_from": None,
+            "error": None,
+        }
+        try:
+            raw = self._pop(role)
+        except LLMUnavailable as e:
+            await self._emit({**meta, "error": str(e)})
+            raise
+        await self._emit(meta)
+        return raw
+
     async def chat_json(
         self,
         role: Role,
         messages: Sequence[Mapping[str, Any]],
         schema: type[T],
     ) -> T:
-        raw = self._pop(role)
-        await self._emit(
-            {
-                "role": role,
-                "provider": "fake",
-                "model": "fake",
-                "latency_ms": 0,
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "cache_hit": False,
-                "failover_from": None,
-            }
-        )
+        raw = await self._take(role)
         if isinstance(raw, schema):
             return raw
         if isinstance(raw, BaseModel):
@@ -277,19 +295,7 @@ class FakeLLM:
         messages: Sequence[Mapping[str, Any]],
         max_tokens: int,
     ) -> str:
-        raw = self._pop(role)
-        await self._emit(
-            {
-                "role": role,
-                "provider": "fake",
-                "model": "fake",
-                "latency_ms": 0,
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "cache_hit": False,
-                "failover_from": None,
-            }
-        )
+        raw = await self._take(role)
         if isinstance(raw, str):
             return raw
         if isinstance(raw, BaseModel):
@@ -297,19 +303,7 @@ class FakeLLM:
         return json.dumps(raw)
 
     async def transcribe(self, wav_bytes: bytes, prompt: str | None = None) -> str:
-        raw = self._pop("stt")
-        await self._emit(
-            {
-                "role": "stt",
-                "provider": "fake",
-                "model": "fake",
-                "latency_ms": 0,
-                "prompt_tokens": None,
-                "completion_tokens": None,
-                "cache_hit": False,
-                "failover_from": None,
-            }
-        )
+        raw = await self._take("stt")
         return str(raw)
 
     async def aclose(self) -> None:
@@ -331,10 +325,10 @@ class LLMClient:
         skip_health_check: bool = False,
     ) -> None:
         self.settings = settings or get_settings()
-        self.on_call = on_call
         self._fake = fake
+        self._owns_fake = False
+        self.on_call = on_call
         self._http_clients = dict(http_clients or {})
-        self._owned_http: list[httpx.AsyncClient] = []
         self._providers: dict[str, _ProviderCfg] = {}
         self._profiles: dict[str, dict[str, list[str]]] = {}
         self._openai: dict[str, AsyncOpenAI] = {}
@@ -349,9 +343,23 @@ class LLMClient:
             self._cache = _ResponseCache(self.settings.llm_cache_path)
         if self._fake is None and self.settings.llm_profile == "offline":
             self._fake = FakeLLM()
+            self._owns_fake = True
             self._fake.on_call = on_call
         if self._fake is None:
             self._init_providers(skip_health_check=skip_health_check)
+
+    @property
+    def on_call(self) -> OnCallHook | None:
+        """Per-attempt meta hook (see module docstring)."""
+        return self._on_call
+
+    @on_call.setter
+    def on_call(self, hook: OnCallHook | None) -> None:
+        # The offline FakeLLM this client built emits on its own hook; keep them in sync
+        # so audit wiring done after construction (main lifespan, eval) still applies.
+        self._on_call = hook
+        if self._owns_fake and self._fake is not None:
+            self._fake.on_call = hook
 
     def _load_yaml(self, path: Path) -> None:
         data = yaml.safe_load(path.read_text())
@@ -439,6 +447,10 @@ class LLMClient:
         self._ollama_tags = models
         return True
 
+    def _timeout_for(self, role: Role) -> float:
+        """Per-request timeout in seconds for ``role`` (from Settings)."""
+        return float(getattr(self.settings, f"llm_timeout_{role}_s"))
+
     def _temperature_for(self, role: Role) -> float:
         if role == "nlu" or role == "stt":
             return 0.0
@@ -472,6 +484,33 @@ class LLMClient:
             result = self.on_call(meta)
             if asyncio.iscoroutine(result):
                 await result
+
+    async def _emit_call(
+        self,
+        role: Role,
+        provider: str,
+        model: str,
+        *,
+        latency_ms: float,
+        failover_from: str | None,
+        prompt_tokens: int | None = None,
+        completion_tokens: int | None = None,
+        cache_hit: bool = False,
+        error: str | None = None,
+    ) -> None:
+        await self._emit(
+            {
+                "role": role,
+                "provider": provider,
+                "model": model,
+                "latency_ms": latency_ms,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "cache_hit": cache_hit,
+                "failover_from": failover_from,
+                "error": error,
+            }
+        )
 
     def _mark_exhausted(self, provider: str, model: str, retry_after_s: float | None) -> None:
         if retry_after_s is not None and retry_after_s > 0:
@@ -570,17 +609,15 @@ class LLMClient:
                 hit = self._cache.get(key)
                 if hit is not None:
                     body, pt, ct = hit
-                    await self._emit(
-                        {
-                            "role": role,
-                            "provider": provider,
-                            "model": model,
-                            "latency_ms": 0,
-                            "prompt_tokens": pt,
-                            "completion_tokens": ct,
-                            "cache_hit": True,
-                            "failover_from": failover_from,
-                        }
+                    await self._emit_call(
+                        role,
+                        provider,
+                        model,
+                        latency_ms=0,
+                        failover_from=failover_from,
+                        prompt_tokens=pt,
+                        completion_tokens=ct,
+                        cache_hit=True,
                     )
                     return body
 
@@ -591,6 +628,7 @@ class LLMClient:
                     {"role": "system", "content": "Reply with JSON only. No markdown fences."},
                 ]
 
+            t0 = time.perf_counter()
             try:
                 body, pt, ct, latency_ms = await self._call_chat(
                     provider,
@@ -599,17 +637,20 @@ class LLMClient:
                     temperature=temperature,
                     max_tokens=max_tokens,
                     json_mode=want_json and cfg.json_mode,
+                    timeout_s=self._timeout_for(role),
                 )
-            except _TargetExhausted as e:
+            except (_TargetExhausted, _TargetFailed) as e:
+                # Only provider / HTTP / timeout failures fail over; anything else
+                # raised by _call_chat is a bug and must surface.
                 last_err = e
-                failover_from = f"{provider}/{model}"
-                continue
-            except _TargetFailed as e:
-                last_err = e
-                failover_from = f"{provider}/{model}"
-                continue
-            except Exception as e:
-                last_err = e
+                await self._emit_call(
+                    role,
+                    provider,
+                    model,
+                    latency_ms=(time.perf_counter() - t0) * 1000.0,
+                    failover_from=failover_from,
+                    error=str(e),
+                )
                 failover_from = f"{provider}/{model}"
                 continue
 
@@ -621,17 +662,14 @@ class LLMClient:
                     ct,
                 )
 
-            await self._emit(
-                {
-                    "role": role,
-                    "provider": provider,
-                    "model": model,
-                    "latency_ms": latency_ms,
-                    "prompt_tokens": pt,
-                    "completion_tokens": ct,
-                    "cache_hit": False,
-                    "failover_from": failover_from,
-                }
+            await self._emit_call(
+                role,
+                provider,
+                model,
+                latency_ms=latency_ms,
+                failover_from=failover_from,
+                prompt_tokens=pt,
+                completion_tokens=ct,
             )
             return body
 
@@ -646,7 +684,9 @@ class LLMClient:
         temperature: float,
         max_tokens: int | None,
         json_mode: bool,
+        timeout_s: float,
     ) -> tuple[str, int | None, int | None, float]:
+        """One target, with 429 / 5xx retries; raises ``_TargetExhausted`` / ``_TargetFailed``."""
         client = self._openai[provider]
         limiter = self._limiters[provider]
         backoff_s = [1.0, 2.0, 4.0]
@@ -666,7 +706,12 @@ class LLMClient:
                     kwargs["max_tokens"] = max_tokens
                 if json_mode:
                     kwargs["response_format"] = {"type": "json_object"}
-                resp = await client.chat.completions.create(**kwargs)
+                # SDK timeout covers real sockets; asyncio.timeout also bounds
+                # transports that ignore httpx timeouts (and any SDK slack).
+                async with asyncio.timeout(timeout_s):
+                    resp = await client.chat.completions.create(**kwargs, timeout=timeout_s)
+            except TimeoutError as e:
+                raise _TargetFailed(f"{provider}/{model} timed out after {timeout_s}s") from e
             except RateLimitError as e:
                 ra = self._retry_after_seconds(e)
                 if (
@@ -714,8 +759,13 @@ class LLMClient:
                         continue
                     raise _TargetFailed(f"{provider}/{model} 5xx exhausted retries: {e}") from e
                 raise _TargetFailed(f"{provider}/{model} HTTP {e.status_code}: {e}") from e
+            except APIConnectionError as e:
+                # Includes APITimeoutError (SDK-side timeout).
+                raise _TargetFailed(f"{provider}/{model} connection: {e}") from e
 
             latency_ms = (time.perf_counter() - t0) * 1000.0
+            if not resp.choices:
+                raise _TargetFailed(f"{provider}/{model} returned no choices")
             choice = resp.choices[0].message.content or ""
             usage = resp.usage
             pt = usage.prompt_tokens if usage else None
@@ -735,93 +785,72 @@ class LLMClient:
             provider, model = _parse_target(spec)
             if not self._provider_usable(provider, model):
                 continue
-            client = self._openai[provider]
-            limiter = self._limiters[provider]
+            t0 = time.perf_counter()
             try:
-                await limiter.acquire()
-                t0 = time.perf_counter()
-                # openai SDK expects a file-like tuple for upload
-                import io
-
-                bio = io.BytesIO(wav_bytes)
-                bio.name = "audio.wav"
-                resp = await client.audio.transcriptions.create(
-                    model=model,
-                    file=bio,
-                    language="en",
-                    temperature=0,
-                    prompt=use_prompt,
-                )
-                latency_ms = (time.perf_counter() - t0) * 1000.0
-                text = resp.text if hasattr(resp, "text") else str(resp)
-                await self._emit(
-                    {
-                        "role": "stt",
-                        "provider": provider,
-                        "model": model,
-                        "latency_ms": latency_ms,
-                        "prompt_tokens": None,
-                        "completion_tokens": None,
-                        "cache_hit": False,
-                        "failover_from": failover_from,
-                    }
-                )
-                return text
-            except RateLimitError as e:
-                ra = self._retry_after_seconds(e)
-                if ra is not None and ra <= _SHORT_RETRY_S:
-                    await asyncio.sleep(ra)
-                    # retry same target once by looping without advancing
-                    try:
-                        await limiter.acquire()
-                        t0 = time.perf_counter()
-                        import io
-
-                        bio = io.BytesIO(wav_bytes)
-                        bio.name = "audio.wav"
-                        resp = await client.audio.transcriptions.create(
-                            model=model,
-                            file=bio,
-                            language="en",
-                            temperature=0,
-                            prompt=use_prompt,
-                        )
-                        latency_ms = (time.perf_counter() - t0) * 1000.0
-                        text = resp.text if hasattr(resp, "text") else str(resp)
-                        await self._emit(
-                            {
-                                "role": "stt",
-                                "provider": provider,
-                                "model": model,
-                                "latency_ms": latency_ms,
-                                "prompt_tokens": None,
-                                "completion_tokens": None,
-                                "cache_hit": False,
-                                "failover_from": failover_from,
-                            }
-                        )
-                        return text
-                    except Exception as e2:
-                        last_err = e2
+                try:
+                    text, latency_ms = await self._transcribe_once(
+                        provider, model, wav_bytes, use_prompt
+                    )
+                except RateLimitError as e:
+                    ra = self._retry_after_seconds(e)
+                    if ra is None or ra > _SHORT_RETRY_S:
                         self._mark_exhausted(provider, model, ra)
-                        failover_from = f"{provider}/{model}"
-                        continue
-                self._mark_exhausted(provider, model, ra)
+                        raise
+                    # Short Retry-After: one retry on the same target, then give up on it.
+                    await asyncio.sleep(ra)
+                    try:
+                        text, latency_ms = await self._transcribe_once(
+                            provider, model, wav_bytes, use_prompt
+                        )
+                    except _STT_TARGET_ERRORS:
+                        self._mark_exhausted(provider, model, ra)
+                        raise
+            except _STT_TARGET_ERRORS as e:
                 last_err = e
+                await self._emit_call(
+                    "stt",
+                    provider,
+                    model,
+                    latency_ms=(time.perf_counter() - t0) * 1000.0,
+                    failover_from=failover_from,
+                    error=str(e) or type(e).__name__,
+                )
                 failover_from = f"{provider}/{model}"
                 continue
-            except Exception as e:
-                last_err = e
-                failover_from = f"{provider}/{model}"
-                continue
+            await self._emit_call(
+                "stt", provider, model, latency_ms=latency_ms, failover_from=failover_from
+            )
+            return text
 
         raise LLMUnavailable(str(last_err) if last_err else "no usable STT targets")
+
+    async def _transcribe_once(
+        self, provider: str, model: str, wav_bytes: bytes, prompt: str
+    ) -> tuple[str, float]:
+        """One STT request on one target, bounded by ``llm_timeout_stt_s``."""
+        client = self._openai[provider]
+        await self._limiters[provider].acquire()
+        timeout_s = self._timeout_for("stt")
+        t0 = time.perf_counter()
+        # The SDK wants a named file-like object for the multipart upload.
+        bio = io.BytesIO(wav_bytes)
+        bio.name = "audio.wav"
+        async with asyncio.timeout(timeout_s):
+            resp = await client.audio.transcriptions.create(
+                model=model,
+                file=bio,
+                language="en",
+                temperature=0,
+                prompt=prompt,
+                timeout=timeout_s,
+            )
+        latency_ms = (time.perf_counter() - t0) * 1000.0
+        text = resp.text if hasattr(resp, "text") else str(resp)
+        return text, latency_ms
 
     async def aclose(self) -> None:
         for c in self._openai.values():
             await c.close()
-        for h in self._owned_http:
-            await h.aclose()
         if self._cache is not None:
             self._cache.close()
 
@@ -832,6 +861,11 @@ class _TargetExhausted(Exception):
 
 class _TargetFailed(Exception):
     """Hard failure on target after retries; caller should fail over."""
+
+
+# Provider-side STT failures that fail over (HTTP status incl. 429, connection,
+# SDK timeout via APIConnectionError, and our asyncio timeout).
+_STT_TARGET_ERRORS = (APIStatusError, APIConnectionError, TimeoutError)
 
 
 def make_client(

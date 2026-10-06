@@ -6,7 +6,6 @@ Engine shape is ``[(from_payment_1based, min_cents), ...]``.
 from __future__ import annotations
 
 from datetime import date
-from functools import lru_cache
 
 import pytest
 
@@ -250,11 +249,11 @@ def test_tiers_ambiguous_clarifies_then_escalates() -> None:
 # --- sim ---------------------------------------------------------------------
 
 
-@lru_cache(maxsize=1)
 def _tiered() -> tuple:
-    from sim.scenarios import generate
+    # Same scenarios as filtering generate(100, 7), without the ~20 s full sample.
+    from tests.seed7 import tiered
 
-    return tuple(s for s in generate(100, 7) if s.true_rules.min_payment_tiers)
+    return tiered()
 
 
 def test_sim_generates_valid_nonempty_tiers() -> None:

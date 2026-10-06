@@ -2,7 +2,8 @@
 
 Usage: ``python -m app.cli fixtures/demo``. Auto-acks every agent sentence (text
 mode). Prints spoken lines, belief changes, guard blocks, engine verdict, and
-timings. Does not open a WebSocket or use STT — that is phase 10.
+timings. Every LLM call is appended to the audit log under the call id. Does
+not open a WebSocket or use STT — that is phase 10.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from app.agent.session import CallSession
 from app.config import get_settings
 from app.domain.scenario import load_scenario
 from app.domain.units import render_money, render_pct
+from app.llm.call_audit import audit_llm_calls
 from app.llm.client import make_client
 from app.store.audit import AuditLog
 
@@ -71,7 +73,7 @@ async def _run(scenario_path: Path) -> int:
     scenario = load_scenario(scenario_path)
     audit = AuditLog(settings.db_path)
     session = CallSession(scenario=scenario)
-    llm = make_client(settings)
+    llm = make_client(settings, on_call=audit_llm_calls(audit))
 
     orch = Orchestrator(
         session,

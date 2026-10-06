@@ -23,6 +23,10 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 13 | CI + frozen evidence (ROADMAP) | done |
 | 14 | `decide()` bugs, bounded extract, invariants (ROADMAP) | done |
 | 15 | NLU and safety corpus, flag fixes | done |
+| 16 | LLM-only baseline (ROADMAP) | not done |
+| 17 | Latency timeouts + measurement (ROADMAP) | not done |
+| 18 | LLM audit log + replay CLI (ROADMAP) | not done |
+| 19 | Results-first README (ROADMAP) | done |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -761,3 +765,14 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - Deviations: none. `render.yaml` installs `uv` in `buildCommand` (Render image has no uv by default).
 - Observed, not fixed: none in touched files.
 - Tests: same suite; CI path skips `@pytest.mark.slow` invariants (run locally with `DSA_INVARIANT_SEEDS` as needed).
+
+### Phase 19 (2026-10-06) — Results-first README
+
+- Files: `README.md`, `docs/PROGRESS.md` (status 12–19).
+- Results sit under the demo GIF: policy-eval rates with n and 95% CI from `docs/eval/policy_eval_20261006/summary.md` (`python -m eval.run_eval --nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7`); NLU AFTER precision/recall from `docs/eval/nlu_corpus.md` (`python -m eval.nlu_corpus --label AFTER`). No baseline table (Phase 16 not done). No live server-latency table (Phase 17 not done). No `app.replay` in Verify (Phase 18 not done).
+- Claim corrections: audit log records belief / blocks / escalations / NLU / `decide()`, not LLM HTTP calls; `MAX_COUNTERS` described as enforced (ceiling ladder, last offer at ceiling); private-info = LLM flag OR un-negated regex, `rendered_guard` `boundary` as backstop; leak scan token-matches a fixed blocklist and exempts PUBLIC collisions, does not catch paraphrase / voice / every PRIVATE engine fact.
+- Verify: `pytest -q`; the oracle eval command above.
+- Limitations added: same-author simulator, synthetic corpus labels, open demo endpoints (synthetic data), voice e2e not yet measured. Architecture mermaid and GIF kept.
+- Deviations: Phases 16–18 never merged, so the README says so instead of inventing tables. No new code.
+- Open: voice 20-turn browser timing still unmeasured; 16–18 still on the roadmap.
+- Tests: same suite; no new tests.

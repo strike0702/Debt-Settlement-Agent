@@ -3,7 +3,8 @@
 Serves ``app/static`` at ``/``, mounts ``/ws/call/{call_id}``, and exposes
 ``GET /metrics/summary``, ``/scenarios`` (+ ``/{id}`` operator brief and
 ``/{id}/rep_card``), and ``/calls*``. LLM + audit are
-created once in lifespan and shared across sockets.
+created once in lifespan and shared across sockets; the LLM's ``on_call`` hook
+appends every LLM / STT call to the audit log (``app.llm.call_audit``).
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from app.domain.scenario import (
     scenario_details,
     scenario_from_payload,
 )
+from app.llm.call_audit import audit_llm_calls
 from app.llm.client import make_client
 from app.store.audit import AuditLog
 from app.voice import ws as voice_ws
@@ -47,9 +49,14 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         cfg = settings or get_settings()
         log = audit or AuditLog(cfg.db_path)
-        client = llm if llm is not None else make_client(cfg)
         owns_audit = audit is None
         owns_llm = llm is None
+        if owns_llm:
+            client = make_client(cfg, on_call=audit_llm_calls(log))
+        else:
+            client = llm
+            prior_hook = getattr(client, "on_call", None)
+            client.on_call = audit_llm_calls(log, then=prior_hook)
         voice_ws.configure(audit=log, llm=client, settings=cfg)
         app.state.audit = log
         app.state.llm = client
@@ -59,6 +66,8 @@ def create_app(
         finally:
             if owns_llm and hasattr(client, "aclose"):
                 await client.aclose()
+            elif not owns_llm:
+                client.on_call = prior_hook
             if owns_audit:
                 log.close()
 

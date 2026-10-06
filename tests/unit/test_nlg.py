@@ -213,3 +213,15 @@ def test_counter_terms_max_payments_override_passes_guards() -> None:
     assert sentences != [SAFE_FALLBACK]
     joined = " ".join(sentences).lower()
     assert "eight" in joined or "8" in joined
+
+
+def test_opening_is_time_neutral_and_agent_is_caller() -> None:
+    """F13: no "Good morning" at any hour; the agent places the call."""
+    lines = render_action(_sample_action(Intent.OPENING), _REF)
+    text = " ".join(lines)
+    assert text.startswith(
+        "Hello, this is an automated agent calling on behalf of Synthetic Debt Relief"
+    )
+    assert "morning" not in text.lower()
+    assert "thank you for calling" not in text.lower()
+    assert "Let me check" not in text  # not the SAFE_FALLBACK

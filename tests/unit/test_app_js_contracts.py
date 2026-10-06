@@ -73,3 +73,15 @@ def test_browser_stt_pauses_during_tts() -> None:
     assert "function speakableText" in src
     assert "percent" in src
     assert "browserPausedForTts" in src
+
+
+def test_rep_view_shows_human_terms_not_internals() -> None:
+    """F10–F12: tiers as spoken text, en-US money, no intent/status chips for the rep."""
+    src = APP_JS.read_text(encoding="utf-8")
+    assert 'toLocaleString("en-US"' in src
+    assert "toLocaleString(undefined" not in src
+    assert "No special tiers" in src
+    assert "from the ${ordinal(from)} payment" in src
+    assert 'JSON.stringify(value) : "[]"' not in src
+    assert "Last agent intent" not in src
+    assert "termsTableHtml(terms, { showStatus: false })" in src

@@ -13,8 +13,9 @@ Two layers:
 
 Writes ``eval/results/<run_id>/<scenario_id>.json`` as each finishes; resume
 skips completed ``status=ok`` files and retries ``skipped_quota``. ``run.json``
-records models, call share, seed, git sha, settings. Exits non-zero when
-``eval/thresholds.yaml`` fails. Does not import voice/UI code.
+records models, call share, seed, git sha, settings. Each scenario's LLM calls
+(agent and sim) land in that scenario's audit db via ``llm_call_scope``. Exits
+non-zero when ``eval/thresholds.yaml`` fails. Does not import voice/UI code.
 """
 
 from __future__ import annotations
@@ -39,6 +40,7 @@ from app.config import Settings, get_settings
 from app.domain.actions import Intent, Phase
 from app.domain.belief import TermStatus
 from app.domain.facts import Fact
+from app.llm.call_audit import audit_llm_calls, llm_call_scope
 from app.llm.client import LLMUnavailable, make_client
 from app.store.audit import AuditLog
 from eval.metrics import (
@@ -301,6 +303,10 @@ async def run_one_scenario(
         auto_ack=True,
     )
     creditor = CreditorPolicy(scenario, phrasing=sim_phrasing, llm=llm)
+    # Audit this scenario's LLM calls (sim included) into its own db; restore after.
+    prior_hook = getattr(llm, "on_call", None)
+    if llm is not None:
+        llm.on_call = audit_llm_calls(audit, then=prior_hook)
     agent_lines: list[str] = []
     public_pairs: set[tuple[str, int | date]] = set()
     timings: list[dict[str, float]] = []
@@ -322,11 +328,12 @@ async def run_one_scenario(
         if utt.timings:
             timings.append(dict(utt.timings))
 
-    try:
+    async def _drive_call() -> Any:
+        """Opening, then creditor/agent turns until a terminal move; returns last action."""
+        nonlocal readback_count, turns_to_proposal, creditor_turns
         utt = await orch.start()
         _record(utt)
         action = utt.action
-
         for _ in range(turns):
             if action.intent in _TERMINAL_INTENTS:
                 break
@@ -350,6 +357,11 @@ async def run_one_scenario(
             action = utt.action
             if creditor.done:
                 break
+        return action
+
+    try:
+        with llm_call_scope(session.call_id):
+            action = await _drive_call()
     except LLMUnavailable as e:
         audit.close()
         return {
@@ -372,6 +384,9 @@ async def run_one_scenario(
             "zopa": scenario.zopa,
             "should_escalate": scenario.should_escalate,
         }
+    finally:
+        if llm is not None:
+            llm.on_call = prior_hook
 
     events = audit.for_call(session.call_id)
     guard_blocks = sum(1 for ev in events if ev.get("type") == "blocked")

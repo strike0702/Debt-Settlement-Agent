@@ -33,7 +33,7 @@ PLACEHOLDER_MEANINGS: dict[str, str] = {
 }
 
 _INTENT_INSTRUCTION: dict[Intent, str] = {
-    Intent.OPENING: "Greet and invite the rep to state their request.",
+    Intent.OPENING: "Introduce yourself as the caller and ask the rep for settlement terms.",
     Intent.ASK: (
         "Output exactly {ask_text} and nothing else. "
         "Never mention internal field names."

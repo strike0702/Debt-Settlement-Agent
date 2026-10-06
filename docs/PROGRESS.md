@@ -27,6 +27,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 17 | Latency timeouts + measurement (ROADMAP) | not done |
 | 18 | LLM audit log + replay CLI (ROADMAP) | not done |
 | 19 | Results-first README (ROADMAP) | done |
+| 20 | Correctness and honesty fixes (REVIEW_PLAN) | done |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -38,7 +39,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 ## Interfaces
 
 ### `app.config`
-- `class Settings(BaseSettings)` — fields: `groq_api_key`, `mistral_api_key`, `gemini_api_key`, `openrouter_api_key`, `cerebras_api_key` (`str | None`); `llm_profile` (`str`, default `"demo"`); `llm_cache` (`bool`); `llm_cache_path` (`str`); `nlg_mode` / `nlu_mode` (`str`); `db_path` (`str`); `hostility_threshold` (`float`); `max_turns` / `max_counters` (`int`); `anchor_ratio` / `concession_factor` (`float`); `firm_name` / `opening_disclosure` (`str`).
+- `class Settings(BaseSettings)` — fields: `groq_api_key`, `mistral_api_key`, `gemini_api_key`, `openrouter_api_key`, `cerebras_api_key` (`str | None`); `llm_profile` (`str`, default `"demo"`); `llm_timeout_nlu_s` / `llm_timeout_nlg_s` / `llm_timeout_stt_s` / `llm_timeout_sim_s` (`float`, 6 / 4 / 8 / 15); `llm_cache` (`bool`); `llm_cache_path` (`str`); `nlg_mode` / `nlu_mode` (`str`); `db_path` (`str`); `hostility_threshold` (`float`); `max_turns` / `max_counters` (`int`); `anchor_ratio` / `concession_factor` (`float`); `firm_name` / `opening_disclosure` (`str`).
 - `get_settings() -> Settings`
 
 ### `app.domain.units`
@@ -177,7 +178,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 ### `app.agent.nlg`
 - `SAFE_FALLBACK: str`; `TEMPLATES: dict[Intent, str]`
 - `render_action(action, ref_date, *, creditor_numbers=None, private_blocklist=None, audit=None, call_id=None) -> list[str]` — deterministic template path
-- `async speak_action(action, ref_date, *, llm=None, settings=None, last_rep_line="", creditor_numbers=None, private_blocklist=None, audit=None, call_id=None) -> list[str]` — LLM template → template_guard (1 retry) → fallback `TEMPLATES` → fill → rendered_guard
+- `async speak_action(action, ref_date, *, llm=None, settings=None, last_rep_line="", creditor_numbers=None, private_blocklist=None, audit=None, call_id=None) -> list[str]` — LLM template → template_guard (1 retry) → fallback `TEMPLATES` → fill → rendered_guard; raises `LLMUnavailable` (Phase 20; orchestrator `_speak` falls back and audits `llm_unavailable`)
 
 ### `app.agent.nlu`
 - `repair_stance(stance, utterance, *, has_terms=False) -> str` — injection never accepts → reject phrase → accept phrase → dominant short ack with no number/term
@@ -215,7 +216,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 ### `app.voice.ws`
 - `configure(audit, llm, settings=None) -> None`
 - WS `/ws/call/{call_id}` — client: `start{scenario}`, binary wav, `text`, `sentence_done{id}`, `barge_in{spoken_ids}`, `timing{turn,vad_end_to_first_audio_ms}`; optional `oracle` on `text` when `nlu_mode=oracle`
-- server: `transcript`, `say`, `belief`, `eval` (incl. `max_bp`), `blocked`, `escalate`, `latency`, `audit`, `phase`, `agreement`, `turn_done`
+- server: `transcript`, `say`, `belief`, `eval` (incl. `max_bp`), `blocked`, `escalate`, `latency`, `audit`, `phase`, `agreement`, `stt_error`, `error`, `turn_done`
 
 ### `app.main`
 - `create_app(*, settings=None, llm=None, audit=None) -> FastAPI`
@@ -242,7 +243,13 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
   - `async aclose()`
 - `make_client(settings=None, **kwargs) -> LLMClient | FakeLLM` — offline profile returns `FakeLLM`
 - Roles: `nlu` | `nlg` | `sim` | `stt`. Routing from `config/providers.yaml` profiles (`demo`/`eval`/`local`/`offline`).
-- `on_call` meta: `{role, provider, model, latency_ms, prompt_tokens, completion_tokens, cache_hit, failover_from}`
+- `on_call` meta (one per finished attempt, success or failure): `{role, provider, model, latency_ms, prompt_tokens, completion_tokens, cache_hit, failover_from, error}`; `error` is `None` on success. `LLMClient.on_call` is a settable property (propagates to the offline FakeLLM it built).
+- Per-request timeout `Settings.llm_timeout_<role>_s`; timeout / `APIConnectionError` / HTTP errors fail over; any other exception propagates (no failover).
+
+### `app.llm.call_audit`
+- `LLM_CALL_ID: ContextVar[str | None]` (name `"llm_call_id"`) — call id of the turn in progress
+- `llm_call_scope(call_id) -> ContextManager[None]` — set by `Orchestrator` public turn methods (`start`, `on_creditor_text`, `on_sentence_done`, `on_barge_in`, `on_rep_end`), by `ws.py` around STT, and by `eval.run_eval.run_one_scenario` around the whole call (sim included)
+- `audit_llm_calls(audit, *, then=None) -> OnCallHook` — appends `actor="llm"`, type `llm_call` / `llm_call_failed`, payload = meta; no row when `LLM_CALL_ID` is unset; chains `then`
 
 ## Deviations from PLAN.md
 
@@ -261,7 +268,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - OpenRouter free slug: PLAN’s `openai/gpt-oss-120b:free` is gone; eval uses `cohere/north-mini-code:free`.
 - Mistral never first in any profile (last-resort fallback only); Experiment keys often 429 with `limit-req-minute=0` until workspace/phone setup.
 - NLU uses `chat_text` + local JSON parse/coerce (not `chat_json`) so field-keyed LLM shapes still validate; `coerce_analysis_payload` accepts `{max_payments: {value, quote, hedged}}`.
-- NLU `max_tokens=800` and NLG `max_tokens=400` (PLAN said 80 for NLG) because gpt-oss reasoning tokens consume the completion budget.
+- NLU `max_tokens=800` (1200 since Phase 20) and NLG `max_tokens=400` (PLAN said 80 for NLG) because gpt-oss reasoning tokens consume the completion budget.
 - `Action`/`Intent`/`Phase`/`Effect` and `TurnAnalysis`/`ExtractedTerm` live in `app.domain` so `sim/` never imports `app.agent` (agent modules re-export).
 - Pressuring private-info turns are (2, 3) not PLAN's (3, 5) so short rescue/no_fix calls still escalate offline.
 - Counter ladder treats "at max" as the highest feasible counter strictly below the ask (ceiling), not raw `max_bp`, so unreachable asks NO_DEAL instead of looping.
@@ -701,7 +708,7 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - Bug: ceiling path re-offered the ceiling counter until `rejects` hit `max_counters`, and the ladder steps before it did not count, so `s0007_009_no_fix_flexible` (seed 7, n=12; the id comes from the 12-scenario set, not n=100) spoke 10 COUNTERs, the last four identical at 62%. Fix in `_ladder_unreachable`: at most `max_counters` COUNTERs; the last allowed one jumps to the ceiling; once the ceiling is on the table, any non-accept → `NO_DEAL(max_counters)`. Regression: `test_regression_s0007_009_no_fix_flexible_counter_loop` + 3 unit tests.
 - Helpers (all private, in `app.agent.policy`): `decide` is a 57-line dispatcher over `_decide_interruptions` → `_decide_clarify` → `_decide_confirm` → `_decide_discovery` → `_decide_negotiate`. `_decide_interruptions` calls `_decide_wrap` for WRAP/END/ESCALATE phases (same order as before). `_decide_negotiate` uses `_term_alt_action`, `_confirm_accepted_counter`, `_reconfirm_on_table`, `_negotiate_affordable(t, ask_bp, afford)`, `_ladder_unreachable(t, ask_bp, afford)`. Per-call inputs are carried in the frozen `_Turn` dataclass. Small builders: `_ask_field`, `_escalate`, `_propose_wrap`, `_confirm_required`, `_spoken_value`.
 - Behaviour check for the extraction: per-turn (intent, reason, spoken text) traces over 500 invariant seeds + the n=100 seed-7 eval set were byte-identical before and after (`tmp/trace.py`, not committed). Every reason code is unchanged except `no_counter_below_ask`, which was removed because it could not be reached.
-- Invariants: `tests/e2e/test_policy_invariants.py::test_policy_invariants_over_seeds` (`@pytest.mark.slow`) runs one scenario per seed (stratum × persona cycling, sub-seed from `Random(seed)`). It checks: COUNTER < ask, COUNTER ≤ `last_max_bp`, ≤ `max_counters` COUNTERs, no identical consecutive COUNTER, terminates within `max_turns`, and every WRAP agreement validates. `DSA_INVARIANT_SEEDS` sets the seed count (default 100, so CI and plain `pytest -q` run 100). **500 seeds: pass** (~7 min).
+- Invariants: `tests/e2e/test_policy_invariants.py::test_policy_invariants_over_seeds` (`@pytest.mark.slow`) runs one scenario per seed (stratum × persona cycling, sub-seed from `Random(seed)`). It checks: COUNTER < ask, COUNTER ≤ `last_max_bp`, ≤ `max_counters` COUNTERs, no identical consecutive COUNTER, terminates within `max_turns`, and every WRAP agreement validates. `DSA_INVARIANT_SEEDS` sets the seed count (default 100, so plain `pytest -q` runs 100; CI runs `pytest -q -m "not slow"` and skips this sweep). **500 seeds: pass** (~7 min).
 - Eval `eval_20261005_233242_s7` (`--nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7`): **thresholds PASS**. `counters_spoken_max` 4 (was 10), `identical_consecutive_agent_moves` 0 (was 54), `turns_to_outcome` mean 5.25 (was 6.11). agreement_valid / deal_rate_given_zopa / no_deal_correct / escalation_correct = 1 with the same n; rule_extraction_accuracy 0.670 (n=700); leaks / unverified / guard_blocks = 0.
 - Deviations: "validates under true rules" uses `CreditorPolicy.agreed_rules` (true rules + accepted COUNTER_TERMS), the same choice the Phase 12 eval made. The invariant sweep uses per-seed `generate_one`, not `generate(500, seed)`.
 - Cleanup: removed `NegotiationState.rejects`, the `inc_reject_at_max` effect and its orchestrator handler (dead after the fix; dropped the `rejects=` kwarg from 3 policy tests, whose assertions are unchanged). Removed the unreachable `no_counter_below_ask` branch (test: `test_next_counter_always_below_ask_and_within_max`). Merged the duplicate `afford is None` ASK_SETTLEMENT branch into the ask-unknown branch (test: `test_ask_known_but_rules_unbuildable_asks_settlement`). Merged the duplicated term-alt gate for the empty-curve and above-ceiling cases into `_term_alt_action` (test: `test_ask_above_ceiling_fpd_already_countered_ladders`). Dropped the unreachable enum/int fallbacks in `_fact_for_value`, since enums always go through text slots (test: `test_clarify_enum_field_uses_text_slots`). Removed the unused `max_counters` param of `_stall_after_confirm`. Collapsed 8 copies of the confirm `required` set, 2 PROPOSE_WRAP builders, 5 ESCALATE builders and 2 ASK builders into one helper each.
@@ -776,3 +783,23 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - Deviations: Phases 16–18 never merged, so the README says so instead of inventing tables. No new code.
 - Open: voice 20-turn browser timing still unmeasured; 16–18 still on the roadmap.
 - Tests: same suite; no new tests.
+
+### Phase 20 (2026-10-07) — correctness and honesty fixes (REVIEW_PLAN F2, F4 wording, F5, F6, F10–F13, F16–F19)
+
+- Files: `app/llm/{client,call_audit (new),prompts}.py`, `app/config.py`, `app/agent/{nlu,nlg,orchestrator}.py`, `app/{main,cli}.py`, `app/voice/ws.py`, `app/static/app.js`, `eval/run_eval.py`, `README.md`, `docs/{ROADMAP,PROGRESS}.md`; tests `tests/seed7.py` (new helper), `tests/unit/test_llm_audit.py` (new), `tests/unit/{test_llm_client,test_nlg,test_nlu_nlg_llm,test_ws,test_app_js_contracts,test_tiers}.py`, `tests/e2e/{test_tiers_e2e,test_policy_invariants}.py`.
+- New Settings: `llm_timeout_nlu_s=6`, `llm_timeout_nlg_s=4`, `llm_timeout_stt_s=8`, `llm_timeout_sim_s=15`.
+- ContextVar: `app.llm.call_audit.LLM_CALL_ID` (`ContextVar("llm_call_id")`), set via `llm_call_scope`.
+- F2: each chat / STT request runs under `asyncio.timeout(t)` and the SDK `timeout=t`; timeout → `_TargetFailed` → next route. Test: hung MockTransport fails over in < 2 s with a 0.2 s timeout (chat and STT). Limiter wait is not inside the timeout (Phase 21).
+- F5: `on_call` → `audit_llm_calls(AuditLog)` in `app.main` lifespan (injected clients get the hook chained and restored on shutdown), `app.cli`, `eval.run_eval.run_one_scenario` (per-scenario audit db, previous hook chained/restored). Failed attempts are rows too (`llm_call_failed`, with `error`). FakeLLM emits a failure meta when its queue is empty.
+- F6: `_NLU_MAX_TOKENS = 1200`.
+- F17: `speak_action` re-raises `LLMUnavailable` (orchestrator fallback is now reachable and audited); `_chat` / `transcribe` fail over only on `_TargetExhausted` / `_TargetFailed` (429, 5xx, other HTTP, `APIConnectionError` incl. SDK timeout, our timeout, empty `choices`). A `TypeError` from request building propagates (test).
+- F16: barge-in reuses `_BOOKKEEPING_EFFECT_KINDS`; `_maybe_draft_agreement` single predicate; `_owned_http` removed; STT retry deduped into `_transcribe_once`; repeated meta dicts into `_emit_call` / `FakeLLM._take`. Behaviour unchanged (existing tests).
+- F13: OPENING = "Hello, this is an automated agent calling on behalf of {firm_name} about a client's account with you. {opening_disclosure} What payment terms can you work with for a settlement?"; default `opening_disclosure` = "I am authorized to discuss settlement options for this account." (old one repeated "automated agent"). No sim code matched the old copy.
+- F10–F12 (`app.js` only): tiers render as "No special tiers" / "$75 from the 4th payment" (joined by "and"); `money()` uses `"en-US"`; rep hero drops the intent metric and "Last agent intent"; rep terms table has no Status column (operator keeps chips and intents).
+- F18: the three ~20 s tests were all spent in `generate(100, 7)` (~19.5 s), not in the calls. `tests/seed7.py` rebuilds exactly the needed slots (`slot(i)`, `tiered()`) via `generate_one` with the same sub-seeds and ids, so the tests run the **same scenarios** (not a smaller n; nothing marked slow). `test_seed7_slots_match_generate` (`@pytest.mark.slow`) asserts equality with the real `generate(100, 7)`. Fast suite: 78 s → **19.8 s** (`pytest -q -m "not slow"`, 513 passed).
+- F4/F19: README says cancel-and-merge is orchestrator-only, wired live in Phase 21; README audit text now includes LLM calls; Phase 14 CI sentence fixed; `ws.py` docstring lists every server `type`; ROADMAP §0 marked as a dated snapshot.
+- Oracle eval `eval_20261006_201909_s7` (`--nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7`): thresholds PASS; the metrics table is byte-identical to `docs/eval/policy_eval_20261006/summary.md`.
+- Deviations: added `llm_timeout_sim_s` (sim role needed a bound; eval-only). `ws.py` changed beyond its docstring by one `with llm_call_scope(call_id)` around STT (needed for "every LLM call audited"; loop structure untouched). F18 solved by exact slot rebuild instead of smaller n / slow mark. Frozen transcripts in `docs/eval/policy_eval_20261006/` keep the old opening line (evidence, not regenerated). Calls with no call id in context (`eval.nlu_corpus`) are not audited.
+- Open issues: 6 s NLU timeout is below the observed Gemini NLU p95 (~7 s, eval profile), so live eval runs may fail over more often; production NLU still uses `chat_text`, so JSON mode is never sent for NLU (F16 last bullet, not in this phase's task list); PROGRESS "Open issues" list and leftover `.gitkeep` files not refreshed (P25).
+- Tests: 513 passed / 1 skipped under `-m "not slow"` (19.8 s); full `pytest -q` 516 passed / 1 skipped (88.7 s, 100 invariant seeds); `ruff check .` clean.
+

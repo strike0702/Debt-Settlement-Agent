@@ -21,6 +21,8 @@ from eval.run_eval import _agreement_valid, _build_settings, run_one_scenario
 from sim.creditor import CreditorPolicy
 from sim.personas import PERSONAS
 from sim.scenarios import STRATA, Scenario, generate, generate_one
+from tests.seed7 import slot as seed7_slot
+from tests.seed7 import tiered as seed7_tiered
 
 _SETTINGS = _build_settings(profile="offline", nlg="template", nlu="oracle")
 _TERMINAL = (Intent.PROPOSE_WRAP, Intent.NO_DEAL_WRAP, Intent.ESCALATE)
@@ -45,7 +47,8 @@ async def test_regression_s0007_009_no_fix_flexible_counter_loop(tmp_path: Path)
 
 async def test_regression_s0007_000_tiers_readback_after_accept(tmp_path: Path) -> None:
     """Seed-7 n=100: 'Agreed' at 48%, tiers READ_BACK, then a 58% COUNTER + re-CONFIRM."""
-    sc = next(s for s in generate(100, 7) if s.id == "s0007_000_deal_flexible")
+    sc = seed7_slot(0)  # == generate(100, 7)[0], rebuilt without the full sample
+    assert sc.id == "s0007_000_deal_flexible"
     r = await run_one_scenario(
         sc,
         settings=_SETTINGS,
@@ -129,3 +132,12 @@ async def test_policy_invariants_over_seeds(tmp_path: Path) -> None:
         if bad:
             failures[sc.id] = bad
     assert not failures, failures
+
+
+@pytest.mark.slow
+def test_seed7_slots_match_generate() -> None:
+    """``tests.seed7`` (used by fast tests) must equal the real ``generate(100, 7)``."""
+    full = generate(100, 7)
+    for i in (0, 2, 50, 99):
+        assert seed7_slot(i) == full[i]
+    assert seed7_tiered() == tuple(s for s in full if s.true_rules.min_payment_tiers)

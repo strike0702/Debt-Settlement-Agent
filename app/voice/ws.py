@@ -1,10 +1,12 @@
 """WebSocket ``/ws/call/{call_id}`` protocol for the voice UI.
 
 Client events: ``start``, ``end``, binary WAV, ``text``, ``sentence_done``,
-``barge_in``, ``timing``. Server events: ``transcript``, ``say``, ``belief``,
-``eval``, ``blocked``, ``escalate``, ``latency``, ``audit``, ``phase``,
-``stt_error``, ``turn_done``. Speaks through ``Orchestrator``; STT via
-``app.voice.stt``. Does not own policy or NLG.
+``barge_in``, ``timing``. Server events (every ``type`` this module sends):
+``transcript``, ``say``, ``belief``, ``eval``, ``blocked``, ``escalate``,
+``latency``, ``audit``, ``phase``, ``agreement``, ``stt_error``, ``error``,
+``turn_done``. Speaks through ``Orchestrator``; STT via ``app.voice.stt``, run
+inside ``llm_call_scope(call_id)`` so the STT call is audited. Handles one
+event at a time (no live cancel-and-merge). Does not own policy or NLG.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ from app.domain.scenario import (
     resolve_scenario_dir,
     scenario_from_payload,
 )
+from app.llm.call_audit import llm_call_scope
 from app.llm.client import LLMUnavailable
 from app.store.audit import AuditLog
 from app.voice.metrics_buf import LATENCY_BUFFER
@@ -317,7 +320,8 @@ async def call_socket(websocket: WebSocket, call_id: str) -> None:
                     continue
                 wav = message["bytes"]
                 try:
-                    text, stt_ms = await transcribe(_llm, wav)
+                    with llm_call_scope(call_id):
+                        text, stt_ms = await transcribe(_llm, wav)
                 except LLMUnavailable as e:
                     _audit.append(
                         call_id,

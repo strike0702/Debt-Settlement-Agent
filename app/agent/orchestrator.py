@@ -6,19 +6,23 @@ new creditor text arrives during NLU, and defers most ``Action.effects`` until
 (``offer_counter``, ``record_confirm``, ``set_phase``, …) applies eagerly on
 emit so a fast typed or voice accept wraps instead of re-confirming mid-TTS.
 Barge-in still keeps those kinds when any sentence was heard; other pending
-effects are dropped. Does not own policy rules or LLM prompts — those live in
-``policy`` / ``nlu`` / ``nlg``.
+effects are dropped. Each public turn method runs inside
+``llm_call_scope(call_id)`` so every NLU / NLG call is audited under this call.
+Does not own policy rules or LLM prompts — those live in ``policy`` / ``nlu`` /
+``nlg``.
 """
 
 from __future__ import annotations
 
 import asyncio
+import functools
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from dataclasses import replace as dc_replace
 from datetime import date
-from typing import Any
+from typing import Any, Concatenate
 
 from app.adapter.engine_adapter import (
     Affordability,
@@ -55,6 +59,7 @@ from app.config import Settings, get_settings
 from app.domain.belief import BeliefChange, TermStatus
 from app.domain.facts import Fact
 from app.domain.scenario import CallScenario
+from app.llm.call_audit import llm_call_scope
 from app.llm.client import LLMUnavailable
 from app.store.audit import AuditLog
 from feasibility.models import CreditorRules, add_months, end_of_month
@@ -378,6 +383,22 @@ def apply_effects(session: CallSession, effects: list[Effect]) -> None:
             session.neg.phase = Phase(str(data["phase"]))
 
 
+def _call_scoped[**P, R](
+    fn: Callable[Concatenate[Orchestrator, P], Awaitable[R]],
+) -> Callable[Concatenate[Orchestrator, P], Awaitable[R]]:
+    """Run a public turn method inside ``llm_call_scope(session.call_id)``.
+
+    Every LLM call it makes (NLU, NLG) is then audited under this call id.
+    """
+
+    @functools.wraps(fn)
+    async def wrapper(self: Orchestrator, *args: P.args, **kwargs: P.kwargs) -> R:
+        with llm_call_scope(self.session.call_id):
+            return await fn(self, *args, **kwargs)
+
+    return wrapper
+
+
 class Orchestrator:
     """Drive one ``CallSession`` through start / text / ack / barge-in."""
 
@@ -413,6 +434,7 @@ class Orchestrator:
         if self.audit is not None:
             self.audit.append(self.session.call_id, actor, event_type, payload)
 
+    @_call_scoped
     async def start(self) -> Utterance:
         """Produce the OPENING line; effects apply on ack (or auto-ack)."""
         async with self._lock:
@@ -438,6 +460,7 @@ class Orchestrator:
             )
             return await self._emit(action, sentences, timings, belief_changes=[])
 
+    @_call_scoped
     async def on_creditor_text(
         self,
         text: str,
@@ -770,6 +793,7 @@ class Orchestrator:
         )
         return agreement
 
+    @_call_scoped
     async def on_sentence_done(self, ids: list[str] | set[str]) -> Agreement | None:
         """Ack spoken sentence ids; commit effects when all pending are done."""
         queued: str | None = None
@@ -806,6 +830,7 @@ class Orchestrator:
             await self.on_creditor_text(queued, timings=None, oracle=drain_oracle)
         return agreement
 
+    @_call_scoped
     async def on_barge_in(self, spoken_ids: list[str] | set[str]) -> None:
         """Keep spoken ids; drop unspoken sentences.
 
@@ -831,14 +856,9 @@ class Orchestrator:
                 Intent.CONFIRM_SCHEDULE,
                 Intent.COUNTER_TERMS,
             ):
-                keep_kinds = {
-                    "offer_counter",
-                    "record_confirm",
-                    "record_ask",
-                    "set_phase",
-                    "note_terms_countered",
-                }
-                kept = [e for e in pending.action.effects if e.kind in keep_kinds]
+                kept = [
+                    e for e in pending.action.effects if e.kind in _BOOKKEEPING_EFFECT_KINDS
+                ]
                 if kept:
                     apply_effects(self.session, kept)
                     if (
@@ -870,6 +890,7 @@ class Orchestrator:
                 },
             )
 
+    @_call_scoped
     async def on_rep_end(self) -> Utterance:
         """Rep ended the chat; speak a short close and move to END."""
         async with self._lock:
@@ -1271,11 +1292,10 @@ class Orchestrator:
         return action
 
     def _maybe_draft_agreement(self, action: Action) -> Agreement | None:
-        if action.intent == Intent.PROPOSE_WRAP:
-            pass
-        elif action.intent == Intent.CLOSE and action.reason == "thanks_accept":
-            pass
-        else:
+        drafts = action.intent == Intent.PROPOSE_WRAP or (
+            action.intent == Intent.CLOSE and action.reason == "thanks_accept"
+        )
+        if not drafts:
             return None
         session = self.session
         if session.last_eval is None or session.agreed_bp is None:

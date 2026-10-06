@@ -279,3 +279,20 @@ async def test_stt_wrapper_timing() -> None:
     text, ms = await transcribe(fake, b"RIFF....")
     assert text == "hello from whisper"
     assert ms >= 0
+
+
+def test_ws_stt_call_is_audited(tmp_path: Path) -> None:
+    """F5: the binary-WAV STT call lands in the audit log under the socket's call id."""
+    audit = AuditLog(tmp_path / "ws_audit.db")
+    fake = FakeLLM()
+    fake.enqueue("stt", "   ")  # blank transcript → turn_done, no agent turn
+    app = create_app(settings=_settings(), llm=fake, audit=audit)
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws/call/stt-audit") as ws:
+            ws.send_json({"type": "start", "scenario": "fixtures/demo"})
+            _recv_until(ws, lambda m: m.get("type") == "turn_done")
+            ws.send_bytes(b"RIFF....")
+            _recv_until(ws, lambda m: m.get("type") == "turn_done")
+    rows = [e for e in audit.for_call("stt-audit") if e["type"] == "llm_call"]
+    assert [r["payload"]["role"] for r in rows] == ["stt"]
+    audit.close()

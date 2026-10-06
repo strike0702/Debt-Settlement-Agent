@@ -186,7 +186,8 @@ let browserIgnoreResults = false;
 
 function money(cents) {
   if (cents == null) return "—";
-  return (Number(cents) / 100).toLocaleString(undefined, {
+  // en-US so panels match the spoken "$612.50" (not a locale's "US$612.50").
+  return (Number(cents) / 100).toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
   });
@@ -442,10 +443,10 @@ function renderHero() {
         : s.phase === "DISCOVERY" || s.phase === "OPENING"
           ? "needs_info"
           : "pending";
-  el.heroSub.textContent = `Last agent intent: ${intent}`;
+  // Rep view shows plain-language state only; the intent enum stays operator-side.
+  el.heroSub.textContent = pay ? `${pay.count} payments proposed` : s.phase ? "" : "Awaiting start";
   el.heroMetrics.innerHTML = `
     <div class="metric"><div class="k">Phase</div><div class="v">${escapeHtml(plain)}</div></div>
-    <div class="metric"><div class="k">Intent</div><div class="v">${escapeHtml(intent)}</div></div>
     <div class="metric"><div class="k">Offer</div><div class="v">${money(s.eval?.offer_total_cents)}</div></div>
     <div class="metric"><div class="k">Settlement</div><div class="v">${pct(s.eval?.agreed_bp)}</div></div>
   `;
@@ -527,18 +528,37 @@ function renderTranscript() {
   renderChat();
 }
 
+function ordinal(n) {
+  const v = Number(n);
+  const mod100 = v % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${v}th`;
+  return `${v}${{ 1: "st", 2: "nd", 3: "rd" }[v % 10] || "th"}`;
+}
+
+/** Same wording the agent speaks: "No special tiers" / "$75 from the 4th payment". */
+function tiersText(value) {
+  if (!Array.isArray(value) || !value.length) return "No special tiers";
+  return value
+    .map((tier) => {
+      const from = Array.isArray(tier) ? tier[0] : tier?.from_payment;
+      const min = Array.isArray(tier) ? tier[1] : tier?.min_cents;
+      return `${money(min)} from the ${ordinal(from)} payment`;
+    })
+    .join(" and ");
+}
+
 function formatTermValue(field, value) {
   if (value == null || value === "") return "—";
   if (field === "min_payment_cents") return money(value);
   if (field === "first_payment_date") return formatDate(value);
-  if (Array.isArray(value)) return value.length ? JSON.stringify(value) : "[]";
+  if (field === "min_payment_tiers") return tiersText(value);
   if (field === "payment_structure") {
     return String(value).charAt(0).toUpperCase() + String(value).slice(1);
   }
   return String(value);
 }
 
-function termsTableHtml(terms) {
+function termsTableHtml(terms, { showStatus = true } = {}) {
   const rows = TERM_FIELDS.map((field) => {
     const t = terms[field] || {
       field,
@@ -551,20 +571,21 @@ function termsTableHtml(terms) {
       <tr title="${escapeAttr(quote ? `Evidence: ${quote}` : "No evidence yet")}">
         <td>${escapeHtml(TERM_LABELS[field] || field)}</td>
         <td class="mono">${escapeHtml(formatTermValue(field, t.value))}</td>
-        <td><span class="chip ${escapeAttr(t.status)}">${escapeHtml(t.status)}</span></td>
+        ${showStatus ? `<td><span class="chip ${escapeAttr(t.status)}">${escapeHtml(t.status)}</span></td>` : ""}
       </tr>`;
   }).join("");
   return `
     <table class="terms">
-      <thead><tr><th>Field</th><th>Value</th><th>Status</th></tr></thead>
+      <thead><tr><th>Field</th><th>Value</th>${showStatus ? "<th>Status</th>" : ""}</tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
 
 function renderTerms() {
-  const html = termsTableHtml(store.get().terms);
-  el.terms.innerHTML = html;
-  el.opTerms.innerHTML = html;
+  const terms = store.get().terms;
+  // Rep view hides belief status chips (KNOWN/ASSUMED are agent internals).
+  el.terms.innerHTML = termsTableHtml(terms, { showStatus: false });
+  el.opTerms.innerHTML = termsTableHtml(terms);
 }
 
 function scheduleHtml(ev, isRep) {

@@ -27,8 +27,11 @@ from app.llm.client import LLMUnavailable, strip_json_fences
 from app.llm.prompts import nlu_messages
 from app.store.audit import AuditLog
 
-# Reasoning models (gpt-oss) spend completion budget on hidden reasoning.
-_NLU_MAX_TOKENS = 800
+# Reasoning models (gpt-oss) spend completion budget on hidden reasoning. A
+# default-effort NLU call was observed at 763 completion tokens against the old
+# 800 cap, so one more reasoning step truncated the JSON (retry = 2x latency, or
+# an empty analysis).
+_NLU_MAX_TOKENS = 1200
 
 
 class _LLM(Protocol):

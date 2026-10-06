@@ -3,17 +3,28 @@
 # openai/gpt-oss-120b) or a mapping:
 #   {target: provider/model, params: {reasoning_effort: low}, timeout_s: 20}
 # `params` go into the request body (and the response-cache key); `timeout_s`
-# overrides Settings.llm_timeout_<role>_s for that target. Token buckets are per
-# (provider, model): burst min(rpm, 5), refill rpm/60 per second.
+# overrides Settings.llm_timeout_<role>_s for that target.
+#
+# Keys: a provider's pool is key_env (if set) plus key_env_1, key_env_2, ...
+# (contiguous from 1), deduplicated. Requests round-robin over the pool; a 429
+# cools that key and the call moves to the next key before failing over.
+# Buckets are per (provider, key, model): rpm burst min(rpm, 5), refill rpm/60
+# per second, and, when `tpm` is set, a tokens-per-minute budget per key.
 #
 # Mistral stays in the pool as a *last* fallback only (Experiment plan often needs
 # phone/workspace setup; keys may 429 with limit-req-minute=0 until then).
 
 profiles:
-  demo: # latency first; Groq, then Gemini; Mistral last
+  demo: # latency first; Groq, then Cerebras / Gemini; Mistral last
     # reasoning_effort: low was gated on the NLU corpus (2026-10-07) and failed:
     # private-info recall drops > 2 points (docs/eval/nlu_corpus.md, LOW_EFFORT).
-    nlu: [groq/openai/gpt-oss-120b, gemini/gemini-3.1-flash-lite, mistral/mistral-small-latest]
+    # Fallback is Cerebras with the same model: Gemini NLU (p50 11.4 s) cannot
+    # finish inside the 6 s NLU timeout (carry-over 21.4).
+    nlu:
+      - groq/openai/gpt-oss-120b
+      - cerebras/gpt-oss-120b
+      - gemini/gemini-3.1-flash-lite
+      - mistral/mistral-small-latest
     nlg: [groq/openai/gpt-oss-20b, gemini/gemini-3.1-flash-lite]
     stt: [groq/whisper-large-v3-turbo]
   eval: # quota first; never put Mistral first
@@ -43,6 +54,7 @@ providers:
     base_url: "https://api.groq.com/openai/v1"
     key_env: GROQ_API_KEY
     rpm: 25
+    tpm: 8000 # free tier, per org (= per key when keys are in separate orgs)
     json_mode: true
   mistral:
     base_url: "https://api.mistral.ai/v1"

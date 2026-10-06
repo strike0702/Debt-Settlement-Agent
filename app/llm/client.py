@@ -4,20 +4,30 @@ Callers ask for a role (``nlu`` / ``nlg`` / ``sim`` / ``stt``), never a model
 name. Routing comes from ``config/providers.yaml`` profiles; a route entry is
 either ``provider/model`` or ``{target: provider/model, params: {...},
 timeout_s: N}`` (params go into the request body and the response-cache key;
-``timeout_s`` overrides the role timeout for that target only). Token buckets are keyed
-by ``(provider, model)`` with burst ``min(rpm, 5)`` and refill ``rpm/60`` per
-second, plus optional ``min_interval_s``; short 429 waits retry the same
-target, long waits / daily quota mark it exhausted and fail over. Gemini
-free-tier quota often arrives as HTTP 400 — remapped to 429 when
-``quota_as_400``. Each attempt (limiter wait + request) is bounded by a
-per-role timeout (``Settings.llm_timeout_<role>_s``); a timeout, connection
+``timeout_s`` overrides the role timeout for that target only).
+
+Key pools: a provider's keys come from ``Settings.api_keys(key_env)``
+(``NAME`` plus ``NAME_1``, ``NAME_2``, ...). Successive requests round-robin over
+the pool. Buckets are keyed ``(provider, key suffix, model)``: an rpm bucket
+(burst ``min(rpm, 5)``, refill ``rpm/60``/s, optional ``min_interval_s``) and,
+when the provider sets ``tpm``, a tokens-per-minute budget (charged with a
+prompt estimate, reconciled from ``usage``). A 429 / quota error cools that key
+for that model (Retry-After, else ``Settings.llm_key_cooldown_s``) and the same
+target is retried at once on the next key; only when every key is cooling does
+the target wait out a short cooldown or fail over. 401/403 disables the key for
+the process (logged once). Gemini free-tier quota often arrives as HTTP 400 —
+treated as 429 when ``quota_as_400``. One deadline per target (route
+``timeout_s`` or ``Settings.llm_timeout_<role>_s``) covers limiter waits,
+requests, 5xx backoff, cooldown waits and key switches; a timeout, connection
 error, or HTTP error fails over to the next target. Any other exception is a
-bug and propagates.
+bug and propagates. Key values never appear in logs, metas, errors or cache
+keys; they are named by label (``groq#2`` = ``GROQ_API_KEY_2``, ``#0`` = unsuffixed).
 
 ``on_call`` receives one meta dict per attempt that finished: successes and
-cache hits (``error=None``) and failed targets (``error=<message>``). Each meta
-carries ``queue_ms`` (limiter wait plus short-429 Retry-After sleeps);
-``queue_wait_scope`` sums it for a turn.
+cache hits (``error=None``), failed targets (``error=<message>``), and a key
+that failed before the call moved to another key. Each meta carries ``key_id``
+(key label, ``None`` for cache hits / fake) and ``queue_ms`` (limiter wait plus
+cooldown waits); ``queue_wait_scope`` sums it for a turn.
 ``app.llm.call_audit`` turns that hook into audit-log rows.
 
 Does not own NLU/NLG prompts or policy. SQLite response cache (temp 0 only).
@@ -30,6 +40,7 @@ import asyncio
 import hashlib
 import io
 import json
+import logging
 import random
 import re
 import sqlite3
@@ -39,19 +50,20 @@ from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, TypeVar
 
 import httpx
 import yaml
-from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitError
+from openai import APIConnectionError, APIStatusError, AsyncOpenAI
 from pydantic import BaseModel
 
 from app.config import Settings, get_settings
 
 Role = Literal["nlu", "nlg", "sim", "stt"]
 T = TypeVar("T", bound=BaseModel)
+_log = logging.getLogger(__name__)
 
 OnCallHook = Callable[[dict[str, Any]], Awaitable[None] | None]
 
@@ -64,13 +76,12 @@ _MAX_SHORT_RETRIES = 3
 # Burst capacity cap: a turn makes at most ~3 calls (STT, NLU, NLG) back to back.
 _BURST_CAP = 5.0
 
-_KEY_ATTR = {
-    "GROQ_API_KEY": "groq_api_key",
-    "MISTRAL_API_KEY": "mistral_api_key",
-    "GEMINI_API_KEY": "gemini_api_key",
-    "OPENROUTER_API_KEY": "openrouter_api_key",
-    "CEREBRAS_API_KEY": "cerebras_api_key",
-}
+
+
+def _estimate_tokens(messages: Sequence[Mapping[str, Any]]) -> int:
+    """Rough prompt size for the TPM budget (~4 chars/token plus per-message overhead)."""
+    chars = sum(len(str(m.get("content") or "")) for m in messages)
+    return chars // 4 + 4 * len(messages)
 
 
 class LLMUnavailable(Exception):
@@ -195,6 +206,22 @@ class _ProviderCfg:
     quota_as_400: bool = False
     local: bool = False
     health: str | None = None
+    tpm: float = 0  # tokens per minute per key; 0 = no TPM budget
+
+
+@dataclass(eq=False)
+class _ApiKey:
+    """One key of a provider pool; ``secret`` never leaves this object."""
+
+    provider: str
+    suffix: int
+    secret: str = field(repr=False)
+    client: AsyncOpenAI = field(repr=False)
+    disabled: bool = False
+
+    @property
+    def label(self) -> str:
+        return f"{self.provider}#{self.suffix}"
 
 
 class _TokenBucket:
@@ -223,6 +250,16 @@ class _TokenBucket:
         self._last = now
         self._tokens = min(self._capacity, self._tokens + elapsed * self._refill_per_s)
 
+    def eta(self) -> float:
+        """Seconds until ``acquire`` would return without waiting (0 when ready)."""
+        self._refill()
+        wait = 0.0
+        if self.min_interval_s > 0 and self._last_acquire > 0:
+            wait = max(0.0, self.min_interval_s - (time.monotonic() - self._last_acquire))
+        if self.rpm > 0 and self._tokens < 1.0 and self._refill_per_s > 0:
+            wait = max(wait, (1.0 - self._tokens) / self._refill_per_s)
+        return wait
+
     async def acquire(self) -> None:
         """Wait for a token (and ``min_interval_s``); cancellation consumes none."""
         async with self._lock:
@@ -246,6 +283,41 @@ class _TokenBucket:
                 if self._tokens < 1.0 and self._refill_per_s > 0:
                     wait_token = (1.0 - self._tokens) / self._refill_per_s
                 await asyncio.sleep(max(wait_interval, wait_token, 0.001))
+
+
+class _TpmBudget:
+    """Tokens-per-minute budget for one key and model (capacity ``tpm``, refill ``tpm/60``/s).
+
+    ``acquire(cost)`` waits until ``cost`` tokens (capped at capacity) are free and
+    charges them; ``reconcile`` charges the difference to actual ``usage``, so the
+    balance may go negative after an under-estimate and the next caller waits.
+    """
+
+    def __init__(self, tpm: float) -> None:
+        self._capacity = float(tpm)
+        self._tokens = self._capacity
+        self._refill_per_s = tpm / 60.0
+        self._last = time.monotonic()
+
+    def _refill(self) -> None:
+        now = time.monotonic()
+        self._tokens = min(self._capacity, self._tokens + (now - self._last) * self._refill_per_s)
+        self._last = now
+
+    def eta(self, cost: int) -> float:
+        """Seconds until ``cost`` tokens are available (0 when ready)."""
+        self._refill()
+        need = min(float(cost), self._capacity)
+        return max(0.0, (need - self._tokens) / self._refill_per_s)
+
+    async def acquire(self, cost: int) -> None:
+        while (wait := self.eta(cost)) > 0:
+            await asyncio.sleep(max(wait, 0.001))
+        self._tokens -= cost
+
+    def reconcile(self, charged: int, actual: int) -> None:
+        self._refill()
+        self._tokens = min(self._capacity, self._tokens - (actual - charged))
 
 
 class _ResponseCache:
@@ -303,11 +375,6 @@ class _ResponseCache:
         self._conn.close()
 
 
-@dataclass
-class _TargetState:
-    exhausted_until: float | None = None  # monotonic deadline
-
-
 class FakeLLM:
     """Scripted LLM for offline tests and the ``offline`` profile."""
 
@@ -347,6 +414,7 @@ class FakeLLM:
             "failover_from": None,
             "error": None,
             "queue_ms": 0.0,
+            "key_id": None,
         }
         try:
             raw = self._pop(role)
@@ -413,9 +481,14 @@ class LLMClient:
         self._http_clients = dict(http_clients or {})
         self._providers: dict[str, _ProviderCfg] = {}
         self._profiles: dict[str, dict[str, list[RouteTarget]]] = {}
+        # First key's client per provider (membership = provider has a usable key).
         self._openai: dict[str, AsyncOpenAI] = {}
-        self._limiters: dict[tuple[str, str], _TokenBucket] = {}
-        self._target_state: dict[tuple[str, str], _TargetState] = defaultdict(_TargetState)
+        self._keys: dict[str, list[_ApiKey]] = {}
+        self._rr: dict[str, int] = defaultdict(int)
+        # Keyed (provider, key suffix, model); see module docstring.
+        self._limiters: dict[tuple[str, int, str], _TokenBucket] = {}
+        self._tpm: dict[tuple[str, int, str], _TpmBudget] = {}
+        self._cooldown: dict[tuple[str, int, str], float] = {}  # monotonic until
         self._ollama_tags: set[str] | None = None
         self._ollama_ok = False
         self._cache: _ResponseCache | None = None
@@ -457,6 +530,7 @@ class LLMClient:
                 quota_as_400=bool(raw.get("quota_as_400", False)),
                 local=bool(raw.get("local", False)),
                 health=raw.get("health"),
+                tpm=float(raw.get("tpm") or 0),
             )
         for pname, proute in (data.get("profiles") or {}).items():
             if "all" in proute:
@@ -472,47 +546,110 @@ class LLMClient:
                     k: [parse_route_entry(e) for e in v] for k, v in proute.items()
                 }
 
-    def _resolve_key(self, cfg: _ProviderCfg) -> str | None:
+    def _resolve_keys(self, cfg: _ProviderCfg) -> list[tuple[int, str]]:
+        """``(suffix, value)`` pool: inline ``api_key`` (local) or ``Settings.api_keys``."""
         if cfg.api_key:
-            return cfg.api_key
+            return [(0, cfg.api_key)]
         if not cfg.key_env:
-            return None
-        attr = _KEY_ATTR.get(cfg.key_env)
-        if not attr:
-            return None
-        val = getattr(self.settings, attr, None)
-        if val is None or str(val).strip() == "":
-            return None
-        return str(val)
+            return []
+        return self.settings.api_keys(cfg.key_env)
 
     def _init_providers(self, *, skip_health_check: bool) -> None:
         for name, cfg in self._providers.items():
-            key = self._resolve_key(cfg)
-            if key is None:
+            pool = self._resolve_keys(cfg)
+            if not pool:
                 continue
             if cfg.local and cfg.health and not skip_health_check:
                 if not self._check_ollama(cfg):
                     continue
                 self._ollama_ok = True
             http = self._http_clients.get(name)
-            kwargs: dict[str, Any] = {
-                "base_url": cfg.base_url,
-                "api_key": key,
-                "max_retries": 0,
-            }
-            if http is not None:
-                kwargs["http_client"] = http
-            self._openai[name] = AsyncOpenAI(**kwargs)
+            keys: list[_ApiKey] = []
+            for suffix, secret in pool:
+                kwargs: dict[str, Any] = {
+                    "base_url": cfg.base_url,
+                    "api_key": secret,
+                    "max_retries": 0,
+                }
+                if http is not None:
+                    kwargs["http_client"] = http
+                keys.append(_ApiKey(name, suffix, secret, AsyncOpenAI(**kwargs)))
+            self._keys[name] = keys
+            self._openai[name] = keys[0].client
 
-    def _limiter(self, provider: str, model: str) -> _TokenBucket:
-        """Token bucket for one ``(provider, model)``; free-tier limits are per model."""
-        key = (provider, model)
-        bucket = self._limiters.get(key)
+    def _redact(self, text: str) -> str:
+        """Replace any key value in ``text`` with its label (provider error bodies may echo it)."""
+        for keys in self._keys.values():
+            for k in keys:
+                if k.secret and k.secret in text:
+                    text = text.replace(k.secret, k.label)
+        return text
+
+    def _limiter(self, provider: str, suffix: int, model: str) -> _TokenBucket:
+        """rpm bucket for one ``(provider, key suffix, model)``; free-tier limits are per model."""
+        bk = (provider, suffix, model)
+        bucket = self._limiters.get(bk)
         if bucket is None:
             cfg = self._providers[provider]
             bucket = _TokenBucket(cfg.rpm, cfg.min_interval_s)
-            self._limiters[key] = bucket
+            self._limiters[bk] = bucket
         return bucket
+
+    def _tpm_budget(self, provider: str, suffix: int, model: str) -> _TpmBudget | None:
+        """TPM budget for one ``(provider, key suffix, model)``, or None when ``tpm`` is unset."""
+        cfg = self._providers[provider]
+        if cfg.tpm <= 0:
+            return None
+        bk = (provider, suffix, model)
+        budget = self._tpm.get(bk)
+        if budget is None:
+            budget = _TpmBudget(cfg.tpm)
+            self._tpm[bk] = budget
+        return budget
+
+    def _cooling_s(self, key: _ApiKey, model: str) -> float:
+        until = self._cooldown.get((key.provider, key.suffix, model))
+        return 0.0 if until is None else max(0.0, until - time.monotonic())
+
+    def _cool(self, key: _ApiKey, model: str, retry_after_s: float | None) -> None:
+        secs = retry_after_s if retry_after_s and retry_after_s > 0 else None
+        if secs is None:
+            secs = float(self.settings.llm_key_cooldown_s)
+        self._cooldown[(key.provider, key.suffix, model)] = time.monotonic() + secs
+
+    def _pick_key(self, provider: str, model: str, cost: int) -> _ApiKey | None:
+        """Next live key in round-robin order, preferring one whose buckets are ready.
+
+        Skips disabled and cooling keys. Among the rest, the first (from the
+        cursor) with no limiter wait wins, else the one with the shortest wait.
+        The cursor moves past the chosen key. None when no key is live.
+        """
+        keys = self._keys[provider]
+        n = len(keys)
+        start = self._rr[provider] % n
+        best: tuple[float, int] | None = None
+        for off in range(n):
+            i = (start + off) % n
+            k = keys[i]
+            if k.disabled or self._cooling_s(k, model) > 0:
+                continue
+            eta = self._limiter(provider, k.suffix, model).eta()
+            budget = self._tpm_budget(provider, k.suffix, model)
+            if budget is not None and cost > 0:
+                eta = max(eta, budget.eta(cost))
+            if best is None or eta < best[0]:
+                best = (eta, i)
+            if eta <= 0:
+                break
+        if best is None:
+            return None
+        self._rr[provider] = best[1] + 1
+        return keys[best[1]]
+
+    def _soonest_cooldown_s(self, provider: str, model: str) -> float | None:
+        """Shortest remaining cooldown among non-disabled keys; None if all are disabled."""
+        waits = [self._cooling_s(k, model) for k in self._keys[provider] if not k.disabled]
+        return min(waits) if waits else None
 
     def _check_ollama(self, cfg: _ProviderCfg) -> bool:
         base = cfg.base_url.rstrip("/")
@@ -558,19 +695,18 @@ class LLMClient:
         specs = profile.get(role) or profile.get("nlu") or []
         return list(specs)
 
-    def _provider_usable(self, provider: str, model: str) -> bool:
+    def _provider_usable(self, provider: str, model: str, horizon_s: float) -> bool:
+        """Has a live key, or one whose cooldown ends within ``horizon_s`` (short-wait cap)."""
         if provider == "fake":
             return self._fake is not None
-        if provider not in self._openai:
+        if provider not in self._keys:
             return False
         cfg = self._providers[provider]
         if cfg.local and self._ollama_tags is not None:
             if model not in self._ollama_tags and model.split(":")[0] not in self._ollama_tags:
                 return False
-        state = self._target_state[(provider, model)]
-        if state.exhausted_until is not None and time.monotonic() < state.exhausted_until:
-            return False
-        return True
+        soonest = self._soonest_cooldown_s(provider, model)
+        return soonest is not None and soonest <= min(horizon_s, _SHORT_RETRY_S)
 
     async def _emit(self, meta: dict[str, Any]) -> None:
         if self.on_call is not None:
@@ -591,6 +727,7 @@ class LLMClient:
         cache_hit: bool = False,
         error: str | None = None,
         queue_ms: float = 0.0,
+        key_id: str | None = None,
     ) -> None:
         acc = _QUEUE_WAIT.get()
         if acc is not None:
@@ -607,18 +744,9 @@ class LLMClient:
                 "failover_from": failover_from,
                 "error": error,
                 "queue_ms": queue_ms,
+                "key_id": key_id,
             }
         )
-
-    def _mark_exhausted(self, provider: str, model: str, retry_after_s: float | None) -> None:
-        if retry_after_s is not None and retry_after_s > 0:
-            until = time.monotonic() + retry_after_s
-        else:
-            # next UTC midnight as a conservative daily-quota reset
-            now = datetime.now(UTC)
-            tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-            until = time.monotonic() + max(60.0, (tomorrow - now).total_seconds())
-        self._target_state[(provider, model)].exhausted_until = until
 
     def _retry_after_seconds(self, err: APIStatusError) -> float | None:
         headers = getattr(err, "headers", None)
@@ -701,7 +829,8 @@ class LLMClient:
                     return obj.model_dump_json()
                 return await self._fake.chat_text(role, messages, max_tokens or 256)
 
-            if not self._provider_usable(provider, model):
+            timeout_s = target.timeout_s or self._timeout_for(role)
+            if not self._provider_usable(provider, model, timeout_s):
                 continue
 
             cfg = self._providers[provider]
@@ -737,16 +866,18 @@ class LLMClient:
             t0 = time.perf_counter()
             queue = QueueWait()
             try:
-                body, pt, ct, latency_ms = await self._call_chat(
+                body, pt, ct, latency_ms, key_id = await self._call_chat(
+                    role,
                     provider,
                     model,
                     msgs,
                     temperature=temperature,
                     max_tokens=max_tokens,
                     json_mode=want_json and cfg.json_mode,
-                    timeout_s=target.timeout_s or self._timeout_for(role),
+                    timeout_s=timeout_s,
                     params=params,
                     queue=queue,
+                    failover_from=failover_from,
                 )
             except (_TargetExhausted, _TargetFailed) as e:
                 # Only provider / HTTP / timeout failures fail over; anything else
@@ -760,6 +891,7 @@ class LLMClient:
                     failover_from=failover_from,
                     error=str(e),
                     queue_ms=queue.ms,
+                    key_id=e.key_id,
                 )
                 failover_from = target.spec
                 continue
@@ -781,13 +913,141 @@ class LLMClient:
                 prompt_tokens=pt,
                 completion_tokens=ct,
                 queue_ms=queue.ms,
+                key_id=key_id,
             )
             return body
 
         raise LLMUnavailable(str(last_err) if last_err else "no usable LLM targets")
 
+    def _disable(self, key: _ApiKey, status: int) -> None:
+        if not key.disabled:
+            key.disabled = True
+            _log.warning("LLM key %s disabled for this process after HTTP %s", key.label, status)
+
+    async def _on_pool(
+        self,
+        role: Role,
+        provider: str,
+        model: str,
+        send: Callable[[AsyncOpenAI, float], Awaitable[Any]],
+        *,
+        timeout_s: float,
+        cost: int,
+        queue: QueueWait,
+        failover_from: str | None,
+    ) -> tuple[Any, float, _ApiKey]:
+        """Run one target on its key pool under one ``timeout_s`` deadline.
+
+        ``send(client, remaining_s)`` makes the request. Returns ``(response,
+        latency_ms of the last request, key)``. Raises ``_TargetExhausted`` when
+        every live key is cooling longer than a short wait the deadline allows,
+        ``_TargetFailed`` on timeout, every key disabled, 5xx after retries, other
+        HTTP or connection errors. Messages are redacted and not chained, so no
+        provider error body (which may echo a key) travels with them.
+        """
+        backoff_s = [1.0, 2.0, 4.0]
+        attempt_5xx = 0
+        short_waits = 0
+        key: _ApiKey | None = None
+        retry_same = False
+        # A key failure is emitted only once the call moves to a *different* key;
+        # retrying the same key after a cooldown, or failing the target, is
+        # covered by the caller's final row.
+        pending: tuple[_ApiKey, str, float] | None = None
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout_s
+        try:
+            async with asyncio.timeout(timeout_s):
+                while True:
+                    if not retry_same:
+                        key = self._pick_key(provider, model, cost)
+                        if key is None:
+                            wait = self._soonest_cooldown_s(provider, model)
+                            last = f" (last: {pending[1]})" if pending else ""
+                            last_id = pending[0].label if pending else None
+                            if wait is None:
+                                raise _TargetFailed(
+                                    f"{provider}/{model} every key disabled{last}", last_id
+                                )
+                            if (
+                                wait <= _SHORT_RETRY_S
+                                and wait < deadline - loop.time()
+                                and short_waits < _MAX_SHORT_RETRIES
+                            ):
+                                short_waits += 1
+                                await self._rate_wait(wait + 0.001, queue)
+                                continue
+                            raise _TargetExhausted(
+                                f"{provider}/{model} rate limited on every key{last}", last_id
+                            )
+                        if pending is not None and pending[0] is not key:
+                            await self._emit_call(
+                                role,
+                                provider,
+                                model,
+                                latency_ms=pending[2],
+                                failover_from=failover_from,
+                                error=pending[1],
+                                key_id=pending[0].label,
+                            )
+                            pending = None
+                    retry_same = False
+                    assert key is not None
+                    limiter = self._limiter(provider, key.suffix, model)
+                    budget = self._tpm_budget(provider, key.suffix, model) if cost > 0 else None
+                    t_q = time.perf_counter()
+                    try:
+                        await limiter.acquire()
+                        if budget is not None:
+                            await budget.acquire(cost)
+                    finally:
+                        queue.ms += (time.perf_counter() - t_q) * 1000.0
+                    t0 = time.perf_counter()
+                    try:
+                        resp = await send(key.client, max(0.001, deadline - loop.time()))
+                    except APIStatusError as e:
+                        latency_ms = (time.perf_counter() - t0) * 1000.0
+                        status = e.status_code
+                        where = f"{provider}/{model} {key.label}"
+                        quota400 = self._is_gemini_quota_400(provider, e)
+                        if status == 429 or quota400:
+                            self._cool(key, model, self._retry_after_seconds(e))
+                            if budget is not None:
+                                budget.reconcile(cost, 0)  # rejected: not billed
+                            what = "gemini quota (400→429)" if quota400 else "429 rate limited"
+                            pending = (key, self._redact(f"{where} {what}: {e}"), latency_ms)
+                            continue
+                        if status in (401, 403):
+                            self._disable(key, status)
+                            pending = (key, self._redact(f"{where} HTTP {status}: {e}"), latency_ms)
+                            continue
+                        if 500 <= status < 600 and attempt_5xx < len(backoff_s):
+                            delay = backoff_s[attempt_5xx] * (0.5 + random.random())
+                            attempt_5xx += 1
+                            await asyncio.sleep(delay)
+                            retry_same = True
+                            continue
+                        if 500 <= status < 600:
+                            msg = f"{where} 5xx exhausted retries: {e}"
+                        else:
+                            msg = f"{where} HTTP {status}: {e}"
+                        raise _TargetFailed(self._redact(msg), key.label) from None
+                    except APIConnectionError as e:
+                        # Includes APITimeoutError (SDK-side timeout).
+                        raise _TargetFailed(
+                            self._redact(f"{provider}/{model} {key.label} connection: {e}"),
+                            key.label,
+                        ) from None
+                    return resp, (time.perf_counter() - t0) * 1000.0, key
+        except TimeoutError:
+            raise _TargetFailed(
+                f"{provider}/{model} timed out after {timeout_s}s",
+                key.label if key is not None else None,
+            ) from None
+
     async def _call_chat(
         self,
+        role: Role,
         provider: str,
         model: str,
         messages: list[Mapping[str, Any]],
@@ -798,108 +1058,53 @@ class LLMClient:
         timeout_s: float,
         params: Mapping[str, Any] | None = None,
         queue: QueueWait | None = None,
-    ) -> tuple[str, int | None, int | None, float]:
-        """One target, with 429 / 5xx retries; raises ``_TargetExhausted`` / ``_TargetFailed``.
+        failover_from: str | None = None,
+    ) -> tuple[str, int | None, int | None, float, str]:
+        """One chat target on its key pool; raises ``_TargetExhausted`` / ``_TargetFailed``.
 
-        Each attempt's limiter wait and request share one ``timeout_s`` budget.
-        Limiter waits and short-429 Retry-After sleeps are added to ``queue.ms``;
-        ``latency_ms`` is the last request's time only.
+        Returns ``(text, prompt_tokens, completion_tokens, latency_ms, key label)``.
+        The TPM budget is charged with a prompt estimate and reconciled from usage.
         """
-        client = self._openai[provider]
-        limiter = self._limiter(provider, model)
-        backoff_s = [1.0, 2.0, 4.0]
-        attempt_5xx = 0
-        short_retries = 0
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+        }
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+        if params:
+            # extra_body: provider-specific knobs (reasoning_effort, …)
+            # the SDK signature may not know.
+            kwargs["extra_body"] = dict(params)
 
-        while True:
-            t_q = time.perf_counter()
-            t0 = t_q
-            try:
-                kwargs: dict[str, Any] = {
-                    "model": model,
-                    "messages": messages,
-                    "temperature": temperature,
-                }
-                if max_tokens is not None:
-                    kwargs["max_tokens"] = max_tokens
-                if json_mode:
-                    kwargs["response_format"] = {"type": "json_object"}
-                if params:
-                    # extra_body: provider-specific knobs (reasoning_effort, …)
-                    # the SDK signature may not know.
-                    kwargs["extra_body"] = dict(params)
-                # SDK timeout covers real sockets; asyncio.timeout also bounds
-                # the limiter wait and transports that ignore httpx timeouts.
-                async with asyncio.timeout(timeout_s):
-                    try:
-                        await limiter.acquire()
-                    finally:
-                        if queue is not None:
-                            queue.ms += (time.perf_counter() - t_q) * 1000.0
-                    t0 = time.perf_counter()
-                    remaining = max(0.001, timeout_s - (t0 - t_q))
-                    resp = await client.chat.completions.create(**kwargs, timeout=remaining)
-            except TimeoutError as e:
-                raise _TargetFailed(f"{provider}/{model} timed out after {timeout_s}s") from e
-            except RateLimitError as e:
-                ra = self._retry_after_seconds(e)
-                if (
-                    ra is not None
-                    and ra <= _SHORT_RETRY_S
-                    and short_retries < _MAX_SHORT_RETRIES
-                ):
-                    short_retries += 1
-                    await self._rate_wait(ra, queue)
-                    continue
-                self._mark_exhausted(provider, model, ra)
-                raise _TargetExhausted(f"{provider}/{model} rate limited: {e}") from e
-            except APIStatusError as e:
-                if self._is_gemini_quota_400(provider, e):
-                    ra = self._retry_after_seconds(e)
-                    if (
-                        ra is not None
-                        and ra <= _SHORT_RETRY_S
-                        and short_retries < _MAX_SHORT_RETRIES
-                    ):
-                        short_retries += 1
-                        await self._rate_wait(ra, queue)
-                        continue
-                    self._mark_exhausted(provider, model, ra)
-                    raise _TargetExhausted(
-                        f"{provider}/{model} gemini quota (400→429): {e}"
-                    ) from e
-                if e.status_code == 429:
-                    ra = self._retry_after_seconds(e)
-                    if (
-                        ra is not None
-                        and ra <= _SHORT_RETRY_S
-                        and short_retries < _MAX_SHORT_RETRIES
-                    ):
-                        short_retries += 1
-                        await self._rate_wait(ra, queue)
-                        continue
-                    self._mark_exhausted(provider, model, ra)
-                    raise _TargetExhausted(f"{provider}/{model} 429: {e}") from e
-                if 500 <= e.status_code < 600:
-                    if attempt_5xx < len(backoff_s):
-                        delay = backoff_s[attempt_5xx] * (0.5 + random.random())
-                        attempt_5xx += 1
-                        await asyncio.sleep(delay)
-                        continue
-                    raise _TargetFailed(f"{provider}/{model} 5xx exhausted retries: {e}") from e
-                raise _TargetFailed(f"{provider}/{model} HTTP {e.status_code}: {e}") from e
-            except APIConnectionError as e:
-                # Includes APITimeoutError (SDK-side timeout).
-                raise _TargetFailed(f"{provider}/{model} connection: {e}") from e
+        async def send(client: AsyncOpenAI, remaining_s: float) -> Any:
+            # SDK timeout covers real sockets; the pool deadline also bounds
+            # limiter waits and transports that ignore httpx timeouts.
+            return await client.chat.completions.create(**kwargs, timeout=remaining_s)
 
-            latency_ms = (time.perf_counter() - t0) * 1000.0
-            if not resp.choices:
-                raise _TargetFailed(f"{provider}/{model} returned no choices")
-            choice = resp.choices[0].message.content or ""
-            usage = resp.usage
-            pt = usage.prompt_tokens if usage else None
-            ct = usage.completion_tokens if usage else None
-            return choice, pt, ct, latency_ms
+        cost = _estimate_tokens(messages)
+        resp, latency_ms, key = await self._on_pool(
+            role,
+            provider,
+            model,
+            send,
+            timeout_s=timeout_s,
+            cost=cost,
+            queue=queue if queue is not None else QueueWait(),
+            failover_from=failover_from,
+        )
+        usage = resp.usage
+        pt = usage.prompt_tokens if usage else None
+        ct = usage.completion_tokens if usage else None
+        budget = self._tpm_budget(provider, key.suffix, model)
+        if budget is not None and pt is not None:
+            budget.reconcile(cost, pt + (ct or 0))
+        if not resp.choices:
+            raise _TargetFailed(f"{provider}/{model} {key.label} returned no choices", key.label)
+        choice = resp.choices[0].message.content or ""
+        return choice, pt, ct, latency_ms, key.label
 
     async def transcribe(self, wav_bytes: bytes, prompt: str | None = None) -> str:
         if self._fake is not None and self.settings.llm_profile == "offline":
@@ -912,32 +1117,18 @@ class LLMClient:
 
         for target in route:
             provider, model = target.provider, target.model
-            if not self._provider_usable(provider, model):
+            timeout_s = target.timeout_s or self._timeout_for("stt")
+            if not self._provider_usable(provider, model, timeout_s):
                 continue
             t0 = time.perf_counter()
             queue = QueueWait()
             try:
-                try:
-                    text, latency_ms = await self._transcribe_once(
-                        provider, model, wav_bytes, use_prompt,
-                        params=target.params, queue=queue, timeout_s=target.timeout_s,
-                    )
-                except RateLimitError as e:
-                    ra = self._retry_after_seconds(e)
-                    if ra is None or ra > _SHORT_RETRY_S:
-                        self._mark_exhausted(provider, model, ra)
-                        raise
-                    # Short Retry-After: one retry on the same target, then give up on it.
-                    await self._rate_wait(ra, queue)
-                    try:
-                        text, latency_ms = await self._transcribe_once(
-                            provider, model, wav_bytes, use_prompt,
-                            params=target.params, queue=queue, timeout_s=target.timeout_s,
-                        )
-                    except _STT_TARGET_ERRORS:
-                        self._mark_exhausted(provider, model, ra)
-                        raise
-            except _STT_TARGET_ERRORS as e:
+                text, latency_ms, key_id = await self._transcribe_once(
+                    provider, model, wav_bytes, use_prompt,
+                    params=target.params, queue=queue, timeout_s=timeout_s,
+                    failover_from=failover_from,
+                )
+            except (_TargetExhausted, _TargetFailed) as e:
                 last_err = e
                 await self._emit_call(
                     "stt",
@@ -947,6 +1138,7 @@ class LLMClient:
                     failover_from=failover_from,
                     error=str(e) or type(e).__name__,
                     queue_ms=queue.ms,
+                    key_id=e.key_id,
                 )
                 failover_from = target.spec
                 continue
@@ -957,6 +1149,7 @@ class LLMClient:
                 latency_ms=latency_ms,
                 failover_from=failover_from,
                 queue_ms=queue.ms,
+                key_id=key_id,
             )
             return text
 
@@ -972,52 +1165,60 @@ class LLMClient:
         params: Mapping[str, Any] | None = None,
         queue: QueueWait | None = None,
         timeout_s: float | None = None,
-    ) -> tuple[str, float]:
-        """One STT request on one target; limiter wait + request bounded by the STT timeout."""
-        client = self._openai[provider]
+        failover_from: str | None = None,
+    ) -> tuple[str, float, str]:
+        """One STT target on its key pool, under one STT deadline; returns ``(text, ms, key)``."""
         timeout_s = timeout_s or self._timeout_for("stt")
-        # The SDK wants a named file-like object for the multipart upload.
-        bio = io.BytesIO(wav_bytes)
-        bio.name = "audio.wav"
-        t_q = time.perf_counter()
-        async with asyncio.timeout(timeout_s):
-            try:
-                await self._limiter(provider, model).acquire()
-            finally:
-                if queue is not None:
-                    queue.ms += (time.perf_counter() - t_q) * 1000.0
-            t0 = time.perf_counter()
-            resp = await client.audio.transcriptions.create(
+
+        async def send(client: AsyncOpenAI, remaining_s: float) -> Any:
+            # The SDK wants a named file-like object; a fresh one per attempt.
+            bio = io.BytesIO(wav_bytes)
+            bio.name = "audio.wav"
+            return await client.audio.transcriptions.create(
                 model=model,
                 file=bio,
                 language="en",
                 temperature=0,
                 prompt=prompt,
-                timeout=max(0.001, timeout_s - (t0 - t_q)),
+                timeout=remaining_s,
                 **({"extra_body": dict(params)} if params else {}),
             )
-        latency_ms = (time.perf_counter() - t0) * 1000.0
+
+        resp, latency_ms, key = await self._on_pool(
+            "stt",
+            provider,
+            model,
+            send,
+            timeout_s=timeout_s,
+            cost=0,
+            queue=queue if queue is not None else QueueWait(),
+            failover_from=failover_from,
+        )
         text = resp.text if hasattr(resp, "text") else str(resp)
-        return text, latency_ms
+        return text, latency_ms, key.label
 
     async def aclose(self) -> None:
-        for c in self._openai.values():
-            await c.close()
+        for keys in self._keys.values():
+            for k in keys:
+                await k.client.close()
         if self._cache is not None:
             self._cache.close()
 
 
-class _TargetExhausted(Exception):
-    """Target marked exhausted; caller should fail over."""
+class _TargetError(Exception):
+    """Target-level failure; ``key_id`` is the label of the last key tried (or None)."""
+
+    def __init__(self, message: str, key_id: str | None = None) -> None:
+        super().__init__(message)
+        self.key_id = key_id
 
 
-class _TargetFailed(Exception):
+class _TargetExhausted(_TargetError):
+    """Every key of the target is rate limited; caller should fail over."""
+
+
+class _TargetFailed(_TargetError):
     """Hard failure on target after retries; caller should fail over."""
-
-
-# Provider-side STT failures that fail over (HTTP status incl. 429, connection,
-# SDK timeout via APIConnectionError, and our asyncio timeout).
-_STT_TARGET_ERRORS = (APIStatusError, APIConnectionError, TimeoutError)
 
 
 def make_client(

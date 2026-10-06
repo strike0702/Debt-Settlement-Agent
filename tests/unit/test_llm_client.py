@@ -128,6 +128,8 @@ def _settings(**kwargs: Any) -> Settings:
         "llm_profile": "demo",
         "llm_cache": False,
         "llm_cache_path": "unused.db",
+        # Hermetic: ignore GROQ_API_KEY_1.. etc. from the developer's env / .env.
+        "api_key_pool": {},
     }
     base.update(kwargs)
     return Settings(**base)
@@ -583,7 +585,7 @@ async def test_buckets_are_per_model(tmp_path: Path) -> None:
     elapsed = time.perf_counter() - t0
     await client.aclose()
     assert elapsed < 0.5
-    assert set(client._limiters) == {("primary", "big"), ("primary", "small")}
+    assert set(client._limiters) == {("primary", 0, "big"), ("primary", 0, "small")}
 
 
 _PARAMS_YAML = """

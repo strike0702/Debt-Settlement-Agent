@@ -1,0 +1,286 @@
+{
+  "samples": [
+    {
+      "stt_ms": null,
+      "nlu_ms": 2197.2670829854906,
+      "engine_ms": 22.28733303491026,
+      "policy_ms": 0.12083398178219795,
+      "nlg_ms": 0.2574169775471091,
+      "queue_ms": 0.019249971956014633,
+      "server_total_ms": 2222.050082986243,
+      "client_first_say_ms": 2224.6955420123413,
+      "intent": "ASK_SETTLEMENT",
+      "call_id": "probe-19eff3ed"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1341.3268749136478,
+      "engine_ms": 0.1705000177025795,
+      "policy_ms": 0.24449999909847975,
+      "nlg_ms": 0.48395898193120956,
+      "queue_ms": 0.013874960131943226,
+      "server_total_ms": 1342.79433300253,
+      "client_first_say_ms": 1343.9247499918565,
+      "intent": "COUNTER",
+      "call_id": "probe-19eff3ed"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1275.8703329600394,
+      "engine_ms": 0.3667089622467756,
+      "policy_ms": 0.6170000415295362,
+      "nlg_ms": 0.35491702146828175,
+      "queue_ms": 0.004292000085115433,
+      "server_total_ms": 1278.005167027004,
+      "client_first_say_ms": 1279.7530830139294,
+      "intent": "COUNTER",
+      "call_id": "probe-19eff3ed"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 2118.63841698505,
+      "engine_ms": 0.27958303689956665,
+      "policy_ms": 0.5456670187413692,
+      "nlg_ms": 0.30625006183981895,
+      "queue_ms": 0.012208009138703346,
+      "server_total_ms": 2120.751874987036,
+      "client_first_say_ms": 2123.170958016999,
+      "intent": "CONFIRM_SCHEDULE",
+      "call_id": "probe-19eff3ed"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1380.0967080751434,
+      "engine_ms": 0.37949997931718826,
+      "policy_ms": 0.7552499882876873,
+      "nlg_ms": 0.28566597029566765,
+      "queue_ms": 0.0072499969974160194,
+      "server_total_ms": 1382.4928330723196,
+      "client_first_say_ms": 1384.296458098106,
+      "intent": "PROPOSE_WRAP",
+      "call_id": "probe-19eff3ed"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1671.1168750189245,
+      "engine_ms": 0.2703749341890216,
+      "policy_ms": 0.051165930926799774,
+      "nlg_ms": 0.09683298412710428,
+      "queue_ms": 0.013750046491622925,
+      "server_total_ms": 1672.8495409479365,
+      "client_first_say_ms": 1674.9270000727847,
+      "intent": "ASK_SETTLEMENT",
+      "call_id": "probe-8375fbb1"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1387.9133330192417,
+      "engine_ms": 0.5324159283190966,
+      "policy_ms": 0.7789999945089221,
+      "nlg_ms": 0.5428330041468143,
+      "queue_ms": 0.0033329706639051437,
+      "server_total_ms": 1390.6036670086905,
+      "client_first_say_ms": 1392.767957993783,
+      "intent": "COUNTER",
+      "call_id": "probe-8375fbb1"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1610.5787919368595,
+      "engine_ms": 0.67679095081985,
+      "policy_ms": 1.0839999886229634,
+      "nlg_ms": 0.6962919142097235,
+      "queue_ms": 0.004624947905540466,
+      "server_total_ms": 1613.8057080097497,
+      "client_first_say_ms": 1615.914374939166,
+      "intent": "COUNTER",
+      "call_id": "probe-8375fbb1"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1226.2745830230415,
+      "engine_ms": 0.7860000478103757,
+      "policy_ms": 1.1700830655172467,
+      "nlg_ms": 0.7248750189319253,
+      "queue_ms": 0.01191697083413601,
+      "server_total_ms": 1229.9362079938874,
+      "client_first_say_ms": 1233.1056670518592,
+      "intent": "CONFIRM_SCHEDULE",
+      "call_id": "probe-8375fbb1"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1006.1246670084074,
+      "engine_ms": 0.6987079977989197,
+      "policy_ms": 0.8423340041190386,
+      "nlg_ms": 0.3667910350486636,
+      "queue_ms": 0.008167000487446785,
+      "server_total_ms": 1008.898500003852,
+      "client_first_say_ms": 1012.4515841016546,
+      "intent": "PROPOSE_WRAP",
+      "call_id": "probe-8375fbb1"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 2559.8294170340523,
+      "engine_ms": 0.6321249529719353,
+      "policy_ms": 0.1526669366285205,
+      "nlg_ms": 0.23024994879961014,
+      "queue_ms": 0.0027921050786972046,
+      "server_total_ms": 2562.5441250158474,
+      "client_first_say_ms": 2565.596375032328,
+      "intent": "ASK_SETTLEMENT",
+      "call_id": "probe-9f55d383"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1527.8604170307517,
+      "engine_ms": 0.8854169864207506,
+      "policy_ms": 1.38412497472018,
+      "nlg_ms": 0.6922080647200346,
+      "queue_ms": 0.011417083442211151,
+      "server_total_ms": 1531.926208990626,
+      "client_first_say_ms": 1534.6813750220463,
+      "intent": "COUNTER",
+      "call_id": "probe-9f55d383"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1442.709416965954,
+      "engine_ms": 0.4527920391410589,
+      "policy_ms": 0.6712910253554583,
+      "nlg_ms": 0.3232089802622795,
+      "queue_ms": 0.036499928683042526,
+      "server_total_ms": 1445.53458399605,
+      "client_first_say_ms": 1447.9981670156121,
+      "intent": "COUNTER",
+      "call_id": "probe-9f55d383"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1375.2510000485927,
+      "engine_ms": 0.31587493140250444,
+      "policy_ms": 0.4978750366717577,
+      "nlg_ms": 0.29858399648219347,
+      "queue_ms": 0.010582967661321163,
+      "server_total_ms": 1377.1382090635598,
+      "client_first_say_ms": 1379.48270898778,
+      "intent": "CONFIRM_SCHEDULE",
+      "call_id": "probe-9f55d383"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 985.2829170413315,
+      "engine_ms": 0.3546660300344229,
+      "policy_ms": 0.6110840477049351,
+      "nlg_ms": 0.21850003395229578,
+      "queue_ms": 0.011791940778493881,
+      "server_total_ms": 987.6386659452692,
+      "client_first_say_ms": 990.2443749597296,
+      "intent": "PROPOSE_WRAP",
+      "call_id": "probe-9f55d383"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1932.6107499655336,
+      "engine_ms": 0.9423750452697277,
+      "policy_ms": 0.19504199735820293,
+      "nlg_ms": 0.2882909029722214,
+      "queue_ms": 0.011416967026889324,
+      "server_total_ms": 1935.6882920255885,
+      "client_first_say_ms": 1945.239916909486,
+      "intent": "ASK_SETTLEMENT",
+      "call_id": "probe-753e76ae"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1519.5760419592261,
+      "engine_ms": 0.2672499977052212,
+      "policy_ms": 0.8709999965503812,
+      "nlg_ms": 0.46708399895578623,
+      "queue_ms": 0.005208072252571583,
+      "server_total_ms": 1522.3531669471413,
+      "client_first_say_ms": 1524.6168749872595,
+      "intent": "COUNTER",
+      "call_id": "probe-753e76ae"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1368.3113750303164,
+      "engine_ms": 0.348250032402575,
+      "policy_ms": 0.8378330385312438,
+      "nlg_ms": 0.6301250541582704,
+      "queue_ms": 0.004750094376504421,
+      "server_total_ms": 1370.7735419739038,
+      "client_first_say_ms": 1373.9384580403566,
+      "intent": "COUNTER",
+      "call_id": "probe-753e76ae"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1308.0882499925792,
+      "engine_ms": 0.35908399149775505,
+      "policy_ms": 0.6327080773189664,
+      "nlg_ms": 0.5425829440355301,
+      "queue_ms": 0.009458046406507492,
+      "server_total_ms": 1310.6775829801336,
+      "client_first_say_ms": 1313.3043750422075,
+      "intent": "CONFIRM_SCHEDULE",
+      "call_id": "probe-753e76ae"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1957.9849999863654,
+      "engine_ms": 0.2917919773608446,
+      "policy_ms": 0.4997500218451023,
+      "nlg_ms": 0.15908305067569017,
+      "queue_ms": 0.004708999767899513,
+      "server_total_ms": 1959.472500020638,
+      "client_first_say_ms": 1961.207874934189,
+      "intent": "PROPOSE_WRAP",
+      "call_id": "probe-753e76ae"
+    }
+  ],
+  "summary": {
+    "stt_ms": {
+      "p50": null,
+      "p95": null,
+      "n": 0
+    },
+    "nlu_ms": {
+      "p50": 1415.3113749925978,
+      "p95": 2215.395199687919,
+      "n": 20
+    },
+    "engine_ms": {
+      "p50": 0.37310447078198195,
+      "p95": 2.0096229447517695,
+      "n": 20
+    },
+    "policy_ms": {
+      "p50": 0.6248540594242513,
+      "p95": 1.1807851609773936,
+      "n": 20
+    },
+    "nlg_ms": {
+      "p50": 0.33906300086528063,
+      "p95": 0.6977210694458336,
+      "n": 20
+    },
+    "queue_ms": {
+      "p50": 0.010020507033914328,
+      "p95": 0.02011246979236604,
+      "n": 20
+    },
+    "server_total_ms": {
+      "p50": 1418.0691255023703,
+      "p95": 2239.0747850877237,
+      "n": 20
+    },
+    "client_first_say_ms": {
+      "p50": 1420.3830625046976,
+      "p95": 2241.740583663341,
+      "n": 20
+    }
+  }
+}

@@ -31,6 +31,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 21 | Latency: measure then cut (REVIEW_PLAN) | done |
 | 22 | Decision trace, role-scoped streams, autoplay (REVIEW_PLAN) | done |
 | 24a | A/B harness, ReAct and LLM-only arms (REVIEW_PLAN) | done |
+| 27 | Provider API key pool (user request) | done |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -930,3 +931,36 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - Oracle eval `eval_20261006_220857_s7` (`--nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7`): thresholds PASS; metrics table byte-identical to `docs/eval/policy_eval_20261006/summary.md` (no policy change).
 - Tests: `pytest -q` 593 passed / 1 skipped (177 s, incl. slow); fast suite 591 passed / 1 skipped; `ruff check .` clean.
 - Open issues: see the DEFERRED lines in the phase-22 report.
+
+### Phase 27 (2026-10-07) — key pool
+
+- Files: `app/llm/client.py`, `app/config.py`, `config/providers.yaml`, `.env.example`, `docs/eval/latency_20261007.md` (+ `latency_20261007/keypool_text.json`). Tests: `tests/unit/test_llm_key_pool.py` (new, 22 tests), `tests/live/test_key_pool_live.py` (new, `@pytest.mark.live`), `tests/conftest.py` (new, registers `live`), `tests/unit/test_llm_client.py` (hermetic `api_key_pool={}`, 3-tuple limiter keys).
+- Env var convention: for a provider with `key_env: NAME`, the pool is `NAME` (if set) then `NAME_1`, `NAME_2`, ... contiguous from 1 (stops at the first missing suffix; a blank value counts as present but is skipped), from env and `.env`, deduplicated by value, in that order. Works for any provider's `key_env`, declared Settings field or not. A single unsuffixed key behaves as before (label `<provider>#0`). Use keys from **separate orgs**: Groq/Gemini free-tier limits are per org.
+- New Settings:
+  - `api_key_pool: dict[str, SecretStr]`: every `*_KEY` / `*_KEY_<n>` var from env + `.env` (custom source `_ApiKeyPoolSource`; it respects `_env_file=None`). Passing `api_key_pool={}` makes tests hermetic. Because dict fields are deep-merged across sources, an explicit init value drops the source.
+  - `llm_key_cooldown_s: float = 60.0`: 429 cooldown when there is no Retry-After.
+  - `Settings.api_keys(key_env) -> list[tuple[int, str]]`: `(suffix, value)` pool.
+  - The declared `*_api_key` fields are now `SecretStr | None` (they were plain `str`, which put keys in `repr(Settings)`).
+- providers.yaml: new optional per-provider `tpm` (Groq `tpm: 8000`). Demo `nlu` = `[groq/openai/gpt-oss-120b, cerebras/gpt-oss-120b, gemini/gemini-3.1-flash-lite, mistral/mistral-small-latest]`.
+- Bucket key: `(provider, key suffix, model)` for the rpm bucket (`LLMClient._limiters`), the TPM budget (`_tpm`, only when `tpm > 0`) and the cooldown (`_cooldown`, monotonic-until). TPM is charged at `_estimate_tokens(messages)` (chars/4 + 4 per message), reconciled to `prompt_tokens + completion_tokens` from usage, and refunded on a 429. Disabled state is per key (all models).
+- Rotation: `_pick_key` uses a round-robin cursor per provider, skips disabled and cooling keys, takes the first key with zero limiter wait, else the key with the shortest wait. `LLMClient._keys: dict[str, list[_ApiKey]]`. `_openai[provider]` is kept and holds the first key's client (membership is still "provider has a key").
+- Failure handling (`_on_pool`, shared by chat and STT):
+  - 429 or Gemini quota-400: cool that key for that model, then retry the same target on the next live key straight away.
+  - Every key cooling: wait out the soonest cooldown only if it is ≤ 20 s, ends before the deadline, and fewer than 3 such waits have happened. Otherwise `_TargetExhausted` → next route.
+  - 401/403: the key is disabled for the process, with one `WARNING` log line naming the label. Every key disabled → `_TargetFailed`.
+  - 5xx: backoff on the same key.
+  - The whole loop runs under one `asyncio.timeout(route timeout_s or role timeout)`.
+- on_call meta: every meta (and FakeLLM's) now has `key_id`: `"groq#2"`, `None` for cache hits and fake. One extra `llm_call_failed` row is written per key that failed before the call moved to a **different** key. Retrying the same key after a cooldown adds no row (the target's final row covers it). `_TargetExhausted` / `_TargetFailed` carry `.key_id`.
+- Safety: error text is passed through `_redact` (key value → label), errors are raised `from None` (no chained provider exception), and the cache key is unchanged (no key input). Tests cover audit rows, metas, log output and the exception text when the provider body echoes the key.
+- Carry-over:
+  - [21.1] Per-key TPM budget plus rotation. Tests: `test_tpm_budget_prefers_key_with_tokens`, `test_tpm_budget_waits_when_empty`, `test_round_robin_across_keys`. Probe: text NLU p95 8773 → 2215 ms, `queue_ms` p95 6051 → 0 (`docs/eval/latency_20261007.md`, "AFTER key pool").
+  - [21.3] One deadline per target covers cooldown waits, 5xx backoff and key switches. Tests: `test_deadline_covers_short_429_waits`, `test_deadline_covers_5xx_backoff_and_key_switches`, `test_hung_key_times_out_within_deadline`.
+  - [21.4] Demo NLU fallback is now `cerebras/gpt-oss-120b` (same model as the Groq primary; Cerebras inference is fast, and the live call passed). Gemini moves to third. I chose Cerebras over "the same Groq model on the pool" because, once every Groq key is cooling, the same model on Groq would also be cooling. Test: `test_shipped_demo_nlu_fallback_fits_role_timeout`.
+- Live sanity (`DSA_LIVE=1 uv run pytest -q -s tests/live/test_key_pool_live.py`, one tiny call per key): groq#1 ok, groq#2 ok, groq#3 ok, gemini#0 ok, gemini#2 ok, gemini#3 ok, cerebras#0 ok. `GEMINI_API_KEY_1` has the same value as the shell's `GEMINI_API_KEY`, so it was deduplicated into gemini#0.
+- Oracle eval `eval_20261006_220646_s7` (`--nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7`): thresholds PASS.
+- Deviations:
+  - With every key cooling, a short cooldown that fits the deadline is still waited out before failing over. This keeps single-key behaviour (`test_429_short_retry_*`) and stays bounded.
+  - A 429 with no Retry-After now cools for `llm_key_cooldown_s` (60 s). Before, the target was marked exhausted until UTC midnight.
+  - STT 5xx now gets the same-key backoff (inside the STT deadline) instead of failing over at once.
+- Open issues: see the DEFERRED lines in the phase-27 report (smoke script and eval settings do not see suffixed pools; Cerebras key on Render; daily-quota 429s without Retry-After are retried every 60 s).
+- Tests: `pytest -q` 580 passed / 2 skipped (incl. slow); `ruff check .` clean.

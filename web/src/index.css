@@ -1,0 +1,99 @@
+/*
+ * Design tokens. 16 px base, light + dark, one accent (blue, also chart series
+ * 1), tabular numerals everywhere numbers sit in columns. Chart series colours
+ * come from the dataviz reference palette (slot 1 blue, slot 2 orange), with
+ * separate dark-mode steps rather than an automatic flip.
+ */
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --breakpoint-mid: 900px;
+  --breakpoint-wide: 1280px;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-ask: var(--series-ask);
+  --color-good: var(--good);
+  --color-bad: var(--bad);
+  --color-warn: var(--warn);
+  --color-hl: var(--hl);
+}
+
+:root {
+  color-scheme: light;
+  --bg: #f6f6f4;
+  --surface: #fcfcfb;
+  --surface-2: #f0efec;
+  --border: #e2e1dc;
+  --fg: #0b0b0b;
+  --muted: #52514e;
+  --faint: #8a8984;
+  --accent: #2a78d6;
+  --accent-fg: #ffffff;
+  --accent-soft: #e6effa;
+  --series-ask: #eb6834;
+  --good: #1a7f37;
+  --bad: #c62828;
+  --warn: #9a6700;
+  --hl: #fff1b8;
+}
+
+:root.dark {
+  color-scheme: dark;
+  --bg: #121211;
+  --surface: #1a1a19;
+  --surface-2: #232321;
+  --border: #33332f;
+  --fg: #ffffff;
+  --muted: #c3c2b7;
+  --faint: #8d8c84;
+  --accent: #3987e5;
+  --accent-fg: #ffffff;
+  --accent-soft: #1b2c42;
+  --series-ask: #d95926;
+  --good: #4ac26b;
+  --bad: #ff7b72;
+  --warn: #d29922;
+  --hl: #4a3f12;
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

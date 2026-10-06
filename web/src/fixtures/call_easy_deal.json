@@ -1,0 +1,6078 @@
+{
+ "_comment": "Synthetic, hand-specified easy_deal call on the operator stream (all fields). Each frame is {t: ms since start, ev: ServerEvent}. PRIVATE values: max_bp 5200, program fees, bank fees, SDA balances, the affordability curve.",
+ "scenario_id": "easy_deal",
+ "view": "operator",
+ "private_values": {
+  "max_bp": 5200,
+  "program_fee_cents_per_row": 4500,
+  "bank_fee_cents": 950,
+  "balance_cents": [
+   68250,
+   74800,
+   81350,
+   87900,
+   94450
+  ]
+ },
+ "frames": [
+  {
+   "t": 400,
+   "ev": {
+    "type": "say",
+    "id": "t0-s0",
+    "text": "Hello, this is an automated agent calling on behalf of Harbor Lane Debt Relief about a client's account with you."
+   }
+  },
+  {
+   "t": 400,
+   "ev": {
+    "type": "transcript",
+    "role": "agent",
+    "text": "Hello, this is an automated agent calling on behalf of Harbor Lane Debt Relief about a client's account with you.",
+    "spoken": false,
+    "sentence_id": "t0-s0",
+    "blocked": false
+   }
+  },
+  {
+   "t": 440,
+   "ev": {
+    "type": "say",
+    "id": "t0-s1",
+    "text": "I am authorized to discuss settlement options for this account."
+   }
+  },
+  {
+   "t": 440,
+   "ev": {
+    "type": "transcript",
+    "role": "agent",
+    "text": "I am authorized to discuss settlement options for this account.",
+    "spoken": false,
+    "sentence_id": "t0-s1",
+    "blocked": false
+   }
+  },
+  {
+   "t": 480,
+   "ev": {
+    "type": "say",
+    "id": "t0-s2",
+    "text": "What payment terms can you work with for a settlement?"
+   }
+  },
+  {
+   "t": 480,
+   "ev": {
+    "type": "transcript",
+    "role": "agent",
+    "text": "What payment terms can you work with for a settlement?",
+    "spoken": false,
+    "sentence_id": "t0-s2",
+    "blocked": false
+   }
+  },
+  {
+   "t": 485,
+   "ev": {
+    "type": "belief",
+    "terms": [
+     {
+      "field": "max_payments",
+      "value": null,
+      "status": "UNKNOWN",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "min_payment_cents",
+      "value": null,
+      "status": "UNKNOWN",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "payment_structure",
+      "value": null,
+      "status": "UNKNOWN",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "first_payment_date",
+      "value": "2026-11-02",
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "max_segments",
+      "value": 2,
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "max_token_pays",
+      "value": null,
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "min_payment_tiers",
+      "value": [],
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     }
+    ]
+   }
+  },
+  {
+   "t": 485,
+   "ev": {
+    "type": "phase",
+    "phase": "OPENING",
+    "intent": "OPENING",
+    "turn": 0
+   }
+  },
+  {
+   "t": 485,
+   "ev": {
+    "type": "latency",
+    "turn": 0,
+    "stt_ms": null,
+    "nlu_ms": null,
+    "policy_ms": 0.1,
+    "nlg_ms": 0.3,
+    "server_total_ms": 8.8
+   }
+  },
+  {
+   "t": 485,
+   "ev": {
+    "type": "audit",
+    "id": 1,
+    "ts": "2026-10-07T15:00:00.485Z",
+    "actor": "engine",
+    "event": "affordability",
+    "payload": {
+     "max_bp": 5200,
+     "feasible_points": 30
+    },
+    "private": true
+   }
+  },
+  {
+   "t": 485,
+   "ev": {
+    "type": "audit",
+    "id": 2,
+    "ts": "2026-10-07T15:00:00.485Z",
+    "actor": "policy",
+    "event": "decide",
+    "payload": {
+     "intent": "OPENING",
+     "reason": "opening"
+    }
+   }
+  },
+  {
+   "t": 485,
+   "ev": {
+    "type": "turn_trace",
+    "turn": 0,
+    "creditor_text": null,
+    "stance": null,
+    "ask_bp": null,
+    "ask_quote": null,
+    "terms": [],
+    "dropped": [],
+    "belief_changes": [],
+    "affordability": {
+     "max_bp": 5200,
+     "curve": [
+      {
+       "bp": 100,
+       "feasible": false
+      },
+      {
+       "bp": 200,
+       "feasible": false
+      },
+      {
+       "bp": 300,
+       "feasible": false
+      },
+      {
+       "bp": 400,
+       "feasible": false
+      },
+      {
+       "bp": 500,
+       "feasible": false
+      },
+      {
+       "bp": 600,
+       "feasible": false
+      },
+      {
+       "bp": 700,
+       "feasible": false
+      },
+      {
+       "bp": 800,
+       "feasible": false
+      },
+      {
+       "bp": 900,
+       "feasible": false
+      },
+      {
+       "bp": 1000,
+       "feasible": false
+      },
+      {
+       "bp": 1100,
+       "feasible": false
+      },
+      {
+       "bp": 1200,
+       "feasible": false
+      },
+      {
+       "bp": 1300,
+       "feasible": false
+      },
+      {
+       "bp": 1400,
+       "feasible": false
+      },
+      {
+       "bp": 1500,
+       "feasible": false
+      },
+      {
+       "bp": 1600,
+       "feasible": false
+      },
+      {
+       "bp": 1700,
+       "feasible": false
+      },
+      {
+       "bp": 1800,
+       "feasible": false
+      },
+      {
+       "bp": 1900,
+       "feasible": false
+      },
+      {
+       "bp": 2000,
+       "feasible": true
+      },
+      {
+       "bp": 2100,
+       "feasible": true
+      },
+      {
+       "bp": 2200,
+       "feasible": true
+      },
+      {
+       "bp": 2300,
+       "feasible": true
+      },
+      {
+       "bp": 2400,
+       "feasible": true
+      },
+      {
+       "bp": 2500,
+       "feasible": true
+      },
+      {
+       "bp": 2600,
+       "feasible": true
+      },
+      {
+       "bp": 2700,
+       "feasible": true
+      },
+      {
+       "bp": 2800,
+       "feasible": true
+      },
+      {
+       "bp": 2900,
+       "feasible": true
+      },
+      {
+       "bp": 3000,
+       "feasible": true
+      },
+      {
+       "bp": 3100,
+       "feasible": true
+      },
+      {
+       "bp": 3200,
+       "feasible": true
+      },
+      {
+       "bp": 3300,
+       "feasible": false
+      },
+      {
+       "bp": 3400,
+       "feasible": false
+      },
+      {
+       "bp": 3500,
+       "feasible": false
+      },
+      {
+       "bp": 3600,
+       "feasible": true
+      },
+      {
+       "bp": 3700,
+       "feasible": true
+      },
+      {
+       "bp": 3800,
+       "feasible": true
+      },
+      {
+       "bp": 3900,
+       "feasible": true
+      },
+      {
+       "bp": 4000,
+       "feasible": true
+      },
+      {
+       "bp": 4100,
+       "feasible": true
+      },
+      {
+       "bp": 4200,
+       "feasible": true
+      },
+      {
+       "bp": 4300,
+       "feasible": true
+      },
+      {
+       "bp": 4400,
+       "feasible": true
+      },
+      {
+       "bp": 4500,
+       "feasible": true
+      },
+      {
+       "bp": 4600,
+       "feasible": true
+      },
+      {
+       "bp": 4700,
+       "feasible": true
+      },
+      {
+       "bp": 4800,
+       "feasible": true
+      },
+      {
+       "bp": 4900,
+       "feasible": true
+      },
+      {
+       "bp": 5000,
+       "feasible": true
+      },
+      {
+       "bp": 5100,
+       "feasible": true
+      },
+      {
+       "bp": 5200,
+       "feasible": true
+      },
+      {
+       "bp": 5300,
+       "feasible": false
+      },
+      {
+       "bp": 5400,
+       "feasible": false
+      },
+      {
+       "bp": 5500,
+       "feasible": false
+      },
+      {
+       "bp": 5600,
+       "feasible": false
+      },
+      {
+       "bp": 5700,
+       "feasible": false
+      },
+      {
+       "bp": 5800,
+       "feasible": false
+      },
+      {
+       "bp": 5900,
+       "feasible": false
+      },
+      {
+       "bp": 6000,
+       "feasible": false
+      },
+      {
+       "bp": 6100,
+       "feasible": false
+      },
+      {
+       "bp": 6200,
+       "feasible": false
+      },
+      {
+       "bp": 6300,
+       "feasible": false
+      },
+      {
+       "bp": 6400,
+       "feasible": false
+      },
+      {
+       "bp": 6500,
+       "feasible": false
+      },
+      {
+       "bp": 6600,
+       "feasible": false
+      },
+      {
+       "bp": 6700,
+       "feasible": false
+      },
+      {
+       "bp": 6800,
+       "feasible": false
+      },
+      {
+       "bp": 6900,
+       "feasible": false
+      },
+      {
+       "bp": 7000,
+       "feasible": false
+      },
+      {
+       "bp": 7100,
+       "feasible": false
+      },
+      {
+       "bp": 7200,
+       "feasible": false
+      },
+      {
+       "bp": 7300,
+       "feasible": false
+      },
+      {
+       "bp": 7400,
+       "feasible": false
+      },
+      {
+       "bp": 7500,
+       "feasible": false
+      },
+      {
+       "bp": 7600,
+       "feasible": false
+      },
+      {
+       "bp": 7700,
+       "feasible": false
+      },
+      {
+       "bp": 7800,
+       "feasible": false
+      },
+      {
+       "bp": 7900,
+       "feasible": false
+      },
+      {
+       "bp": 8000,
+       "feasible": false
+      },
+      {
+       "bp": 8100,
+       "feasible": false
+      },
+      {
+       "bp": 8200,
+       "feasible": false
+      },
+      {
+       "bp": 8300,
+       "feasible": false
+      },
+      {
+       "bp": 8400,
+       "feasible": false
+      },
+      {
+       "bp": 8500,
+       "feasible": false
+      },
+      {
+       "bp": 8600,
+       "feasible": false
+      },
+      {
+       "bp": 8700,
+       "feasible": false
+      },
+      {
+       "bp": 8800,
+       "feasible": false
+      },
+      {
+       "bp": 8900,
+       "feasible": false
+      },
+      {
+       "bp": 9000,
+       "feasible": false
+      },
+      {
+       "bp": 9100,
+       "feasible": false
+      },
+      {
+       "bp": 9200,
+       "feasible": false
+      },
+      {
+       "bp": 9300,
+       "feasible": false
+      },
+      {
+       "bp": 9400,
+       "feasible": false
+      },
+      {
+       "bp": 9500,
+       "feasible": false
+      },
+      {
+       "bp": 9600,
+       "feasible": false
+      },
+      {
+       "bp": 9700,
+       "feasible": false
+      },
+      {
+       "bp": 9800,
+       "feasible": false
+      },
+      {
+       "bp": 9900,
+       "feasible": false
+      },
+      {
+       "bp": 10000,
+       "feasible": false
+      }
+     ]
+    },
+    "decide": {
+     "intent": "OPENING",
+     "reason": "opening",
+     "reason_text": "Open the call: say who we are and that an automated agent is speaking."
+    },
+    "counter_bp": null,
+    "nlg": {
+     "mode": "template",
+     "template": "Hello, this is an automated agent calling on behalf of {firm_name} about a client's account with you. {opening_disclosure} What payment terms can you work with for a settlement?",
+     "guards": [
+      {
+       "stage": "template",
+       "ok": true,
+       "reason": null
+      },
+      {
+       "stage": "rendered",
+       "ok": true,
+       "reason": null
+      }
+     ],
+     "fallback_used": false
+    },
+    "spoken": [
+     {
+      "id": "t0-s0",
+      "text": "Hello, this is an automated agent calling on behalf of Harbor Lane Debt Relief about a client's account with you."
+     },
+     {
+      "id": "t0-s1",
+      "text": "I am authorized to discuss settlement options for this account."
+     },
+     {
+      "id": "t0-s2",
+      "text": "What payment terms can you work with for a settlement?"
+     }
+    ],
+    "timings": {
+     "queue_ms": 0,
+     "engine_ms": 8.4,
+     "policy_ms": 0.1,
+     "nlg_ms": 0.3,
+     "tts_onset_ms": 290
+    }
+   }
+  },
+  {
+   "t": 485,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 6960,
+   "ev": {
+    "type": "phase",
+    "phase": "OPENING",
+    "intent": null,
+    "turn": 0
+   }
+  },
+  {
+   "t": 6960,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 10685,
+   "ev": {
+    "type": "phase",
+    "phase": "OPENING",
+    "intent": null,
+    "turn": 0
+   }
+  },
+  {
+   "t": 10685,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 13915,
+   "ev": {
+    "type": "phase",
+    "phase": "DISCOVERY",
+    "intent": null,
+    "turn": 0
+   }
+  },
+  {
+   "t": 13915,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 16515,
+   "ev": {
+    "type": "transcript",
+    "role": "creditor",
+    "text": "Sure. We can take up to eight monthly payments, at least one hundred dollars each, all the same amount.",
+    "spoken": true,
+    "sentence_id": null,
+    "blocked": false
+   }
+  },
+  {
+   "t": 17747,
+   "ev": {
+    "type": "say",
+    "id": "t1-s0",
+    "text": "What settlement percentage of the balance are you looking for?"
+   }
+  },
+  {
+   "t": 17747,
+   "ev": {
+    "type": "transcript",
+    "role": "agent",
+    "text": "What settlement percentage of the balance are you looking for?",
+    "spoken": false,
+    "sentence_id": "t1-s0",
+    "blocked": false
+   }
+  },
+  {
+   "t": 17752,
+   "ev": {
+    "type": "belief",
+    "terms": [
+     {
+      "field": "max_payments",
+      "value": 8,
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "up to eight monthly payments"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "min_payment_cents",
+      "value": 10000,
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "at least one hundred dollars each"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "payment_structure",
+      "value": "even",
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "all the same amount"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "first_payment_date",
+      "value": "2026-11-02",
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "max_segments",
+      "value": 2,
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "max_token_pays",
+      "value": 8,
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "min_payment_tiers",
+      "value": [],
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     }
+    ]
+   }
+  },
+  {
+   "t": 17752,
+   "ev": {
+    "type": "phase",
+    "phase": "DISCOVERY",
+    "intent": "ASK_SETTLEMENT",
+    "turn": 1
+   }
+  },
+  {
+   "t": 17752,
+   "ev": {
+    "type": "latency",
+    "turn": 1,
+    "stt_ms": 410,
+    "nlu_ms": 812,
+    "policy_ms": 0.2,
+    "nlg_ms": 0.3,
+    "server_total_ms": 821.6
+   }
+  },
+  {
+   "t": 17752,
+   "ev": {
+    "type": "audit",
+    "id": 3,
+    "ts": "2026-10-07T15:00:17.752Z",
+    "actor": "creditor",
+    "event": "utterance",
+    "payload": {
+     "text": "Sure. We can take up to eight monthly payments, at least one hundred dollars each, all the same amount.",
+     "turn": 1
+    }
+   }
+  },
+  {
+   "t": 17752,
+   "ev": {
+    "type": "audit",
+    "id": 4,
+    "ts": "2026-10-07T15:00:17.752Z",
+    "actor": "llm",
+    "event": "llm_call",
+    "payload": {
+     "role": "nlu",
+     "provider": "groq",
+     "model": "synthetic-nlu-model",
+     "latency_ms": 812,
+     "prompt_tokens": 812,
+     "completion_tokens": 96,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null
+    }
+   }
+  },
+  {
+   "t": 17752,
+   "ev": {
+    "type": "audit",
+    "id": 5,
+    "ts": "2026-10-07T15:00:17.752Z",
+    "actor": "nlu",
+    "event": "nlu_result",
+    "payload": {
+     "stance": "info",
+     "ask_bp": null,
+     "terms": [
+      "max_payments",
+      "min_payment_cents",
+      "payment_structure"
+     ]
+    }
+   }
+  },
+  {
+   "t": 17752,
+   "ev": {
+    "type": "audit",
+    "id": 6,
+    "ts": "2026-10-07T15:00:17.752Z",
+    "actor": "nlu",
+    "event": "post_verify_drop",
+    "payload": {
+     "field": "first_payment_date",
+     "reason": "quote_not_in_utterance"
+    }
+   }
+  },
+  {
+   "t": 17752,
+   "ev": {
+    "type": "audit",
+    "id": 7,
+    "ts": "2026-10-07T15:00:17.752Z",
+    "actor": "belief",
+    "event": "belief_change",
+    "payload": {
+     "field": "max_payments",
+     "old_status": "UNKNOWN",
+     "new_status": "KNOWN",
+     "quote": "up to eight monthly payments"
+    }
+   }
+  },
+  {
+   "t": 17752,
+   "ev": {
+    "type": "audit",
+    "id": 8,
+    "ts": "2026-10-07T15:00:17.752Z",
+    "actor": "belief",
+    "event": "belief_change",
+    "payload": {
+     "field": "min_payment_cents",
+     "old_status": "UNKNOWN",
+     "new_status": "KNOWN",
+     "quote": "at least one hundred dollars each"
+    }
+   }
+  },
+  {
+   "t": 17752,
+   "ev": {
+    "type": "audit",
+    "id": 9,
+    "ts": "2026-10-07T15:00:17.752Z",
+    "actor": "belief",
+    "event": "belief_change",
+    "payload": {
+     "field": "payment_structure",
+     "old_status": "UNKNOWN",
+     "new_status": "KNOWN",
+     "quote": "all the same amount"
+    }
+   }
+  },
+  {
+   "t": 17752,
+   "ev": {
+    "type": "audit",
+    "id": 10,
+    "ts": "2026-10-07T15:00:17.752Z",
+    "actor": "engine",
+    "event": "affordability",
+    "payload": {
+     "max_bp": 5200,
+     "feasible_points": 30
+    },
+    "private": true
+   }
+  },
+  {
+   "t": 17752,
+   "ev": {
+    "type": "audit",
+    "id": 11,
+    "ts": "2026-10-07T15:00:17.752Z",
+    "actor": "policy",
+    "event": "decide",
+    "payload": {
+     "intent": "ASK_SETTLEMENT",
+     "reason": "missing_ask"
+    }
+   }
+  },
+  {
+   "t": 17752,
+   "ev": {
+    "type": "turn_trace",
+    "turn": 1,
+    "creditor_text": "Sure. We can take up to eight monthly payments, at least one hundred dollars each, all the same amount.",
+    "stance": "info",
+    "ask_bp": null,
+    "ask_quote": null,
+    "terms": [
+     {
+      "field": "max_payments",
+      "value": 8,
+      "quote": "up to eight monthly payments",
+      "hedged": false,
+      "verified": true
+     },
+     {
+      "field": "min_payment_cents",
+      "value": 10000,
+      "quote": "at least one hundred dollars each",
+      "hedged": false,
+      "verified": true
+     },
+     {
+      "field": "payment_structure",
+      "value": "even",
+      "quote": "all the same amount",
+      "hedged": false,
+      "verified": true
+     }
+    ],
+    "dropped": [
+     {
+      "field": "first_payment_date",
+      "value": "2026-11-01",
+      "reason": "quote_not_in_utterance",
+      "quote": "starting on the first"
+     }
+    ],
+    "belief_changes": [
+     {
+      "field": "max_payments",
+      "old_value": null,
+      "new_value": 8,
+      "old_status": "UNKNOWN",
+      "new_status": "KNOWN",
+      "turn": 1,
+      "quote": "up to eight monthly payments"
+     },
+     {
+      "field": "min_payment_cents",
+      "old_value": null,
+      "new_value": 10000,
+      "old_status": "UNKNOWN",
+      "new_status": "KNOWN",
+      "turn": 1,
+      "quote": "at least one hundred dollars each"
+     },
+     {
+      "field": "payment_structure",
+      "old_value": null,
+      "new_value": "even",
+      "old_status": "UNKNOWN",
+      "new_status": "KNOWN",
+      "turn": 1,
+      "quote": "all the same amount"
+     }
+    ],
+    "affordability": {
+     "max_bp": 5200,
+     "curve": [
+      {
+       "bp": 100,
+       "feasible": false
+      },
+      {
+       "bp": 200,
+       "feasible": false
+      },
+      {
+       "bp": 300,
+       "feasible": false
+      },
+      {
+       "bp": 400,
+       "feasible": false
+      },
+      {
+       "bp": 500,
+       "feasible": false
+      },
+      {
+       "bp": 600,
+       "feasible": false
+      },
+      {
+       "bp": 700,
+       "feasible": false
+      },
+      {
+       "bp": 800,
+       "feasible": false
+      },
+      {
+       "bp": 900,
+       "feasible": false
+      },
+      {
+       "bp": 1000,
+       "feasible": false
+      },
+      {
+       "bp": 1100,
+       "feasible": false
+      },
+      {
+       "bp": 1200,
+       "feasible": false
+      },
+      {
+       "bp": 1300,
+       "feasible": false
+      },
+      {
+       "bp": 1400,
+       "feasible": false
+      },
+      {
+       "bp": 1500,
+       "feasible": false
+      },
+      {
+       "bp": 1600,
+       "feasible": false
+      },
+      {
+       "bp": 1700,
+       "feasible": false
+      },
+      {
+       "bp": 1800,
+       "feasible": false
+      },
+      {
+       "bp": 1900,
+       "feasible": false
+      },
+      {
+       "bp": 2000,
+       "feasible": true
+      },
+      {
+       "bp": 2100,
+       "feasible": true
+      },
+      {
+       "bp": 2200,
+       "feasible": true
+      },
+      {
+       "bp": 2300,
+       "feasible": true
+      },
+      {
+       "bp": 2400,
+       "feasible": true
+      },
+      {
+       "bp": 2500,
+       "feasible": true
+      },
+      {
+       "bp": 2600,
+       "feasible": true
+      },
+      {
+       "bp": 2700,
+       "feasible": true
+      },
+      {
+       "bp": 2800,
+       "feasible": true
+      },
+      {
+       "bp": 2900,
+       "feasible": true
+      },
+      {
+       "bp": 3000,
+       "feasible": true
+      },
+      {
+       "bp": 3100,
+       "feasible": true
+      },
+      {
+       "bp": 3200,
+       "feasible": true
+      },
+      {
+       "bp": 3300,
+       "feasible": false
+      },
+      {
+       "bp": 3400,
+       "feasible": false
+      },
+      {
+       "bp": 3500,
+       "feasible": false
+      },
+      {
+       "bp": 3600,
+       "feasible": true
+      },
+      {
+       "bp": 3700,
+       "feasible": true
+      },
+      {
+       "bp": 3800,
+       "feasible": true
+      },
+      {
+       "bp": 3900,
+       "feasible": true
+      },
+      {
+       "bp": 4000,
+       "feasible": true
+      },
+      {
+       "bp": 4100,
+       "feasible": true
+      },
+      {
+       "bp": 4200,
+       "feasible": true
+      },
+      {
+       "bp": 4300,
+       "feasible": true
+      },
+      {
+       "bp": 4400,
+       "feasible": true
+      },
+      {
+       "bp": 4500,
+       "feasible": true
+      },
+      {
+       "bp": 4600,
+       "feasible": true
+      },
+      {
+       "bp": 4700,
+       "feasible": true
+      },
+      {
+       "bp": 4800,
+       "feasible": true
+      },
+      {
+       "bp": 4900,
+       "feasible": true
+      },
+      {
+       "bp": 5000,
+       "feasible": true
+      },
+      {
+       "bp": 5100,
+       "feasible": true
+      },
+      {
+       "bp": 5200,
+       "feasible": true
+      },
+      {
+       "bp": 5300,
+       "feasible": false
+      },
+      {
+       "bp": 5400,
+       "feasible": false
+      },
+      {
+       "bp": 5500,
+       "feasible": false
+      },
+      {
+       "bp": 5600,
+       "feasible": false
+      },
+      {
+       "bp": 5700,
+       "feasible": false
+      },
+      {
+       "bp": 5800,
+       "feasible": false
+      },
+      {
+       "bp": 5900,
+       "feasible": false
+      },
+      {
+       "bp": 6000,
+       "feasible": false
+      },
+      {
+       "bp": 6100,
+       "feasible": false
+      },
+      {
+       "bp": 6200,
+       "feasible": false
+      },
+      {
+       "bp": 6300,
+       "feasible": false
+      },
+      {
+       "bp": 6400,
+       "feasible": false
+      },
+      {
+       "bp": 6500,
+       "feasible": false
+      },
+      {
+       "bp": 6600,
+       "feasible": false
+      },
+      {
+       "bp": 6700,
+       "feasible": false
+      },
+      {
+       "bp": 6800,
+       "feasible": false
+      },
+      {
+       "bp": 6900,
+       "feasible": false
+      },
+      {
+       "bp": 7000,
+       "feasible": false
+      },
+      {
+       "bp": 7100,
+       "feasible": false
+      },
+      {
+       "bp": 7200,
+       "feasible": false
+      },
+      {
+       "bp": 7300,
+       "feasible": false
+      },
+      {
+       "bp": 7400,
+       "feasible": false
+      },
+      {
+       "bp": 7500,
+       "feasible": false
+      },
+      {
+       "bp": 7600,
+       "feasible": false
+      },
+      {
+       "bp": 7700,
+       "feasible": false
+      },
+      {
+       "bp": 7800,
+       "feasible": false
+      },
+      {
+       "bp": 7900,
+       "feasible": false
+      },
+      {
+       "bp": 8000,
+       "feasible": false
+      },
+      {
+       "bp": 8100,
+       "feasible": false
+      },
+      {
+       "bp": 8200,
+       "feasible": false
+      },
+      {
+       "bp": 8300,
+       "feasible": false
+      },
+      {
+       "bp": 8400,
+       "feasible": false
+      },
+      {
+       "bp": 8500,
+       "feasible": false
+      },
+      {
+       "bp": 8600,
+       "feasible": false
+      },
+      {
+       "bp": 8700,
+       "feasible": false
+      },
+      {
+       "bp": 8800,
+       "feasible": false
+      },
+      {
+       "bp": 8900,
+       "feasible": false
+      },
+      {
+       "bp": 9000,
+       "feasible": false
+      },
+      {
+       "bp": 9100,
+       "feasible": false
+      },
+      {
+       "bp": 9200,
+       "feasible": false
+      },
+      {
+       "bp": 9300,
+       "feasible": false
+      },
+      {
+       "bp": 9400,
+       "feasible": false
+      },
+      {
+       "bp": 9500,
+       "feasible": false
+      },
+      {
+       "bp": 9600,
+       "feasible": false
+      },
+      {
+       "bp": 9700,
+       "feasible": false
+      },
+      {
+       "bp": 9800,
+       "feasible": false
+      },
+      {
+       "bp": 9900,
+       "feasible": false
+      },
+      {
+       "bp": 10000,
+       "feasible": false
+      }
+     ]
+    },
+    "decide": {
+     "intent": "ASK_SETTLEMENT",
+     "reason": "missing_ask",
+     "reason_text": "All required terms are known, so ask what settlement percentage they want."
+    },
+    "counter_bp": null,
+    "nlg": {
+     "mode": "template",
+     "template": "What settlement percentage of the balance are you looking for?",
+     "guards": [
+      {
+       "stage": "template",
+       "ok": true,
+       "reason": null
+      },
+      {
+       "stage": "rendered",
+       "ok": true,
+       "reason": null
+      }
+     ],
+     "fallback_used": false
+    },
+    "spoken": [
+     {
+      "id": "t1-s0",
+      "text": "What settlement percentage of the balance are you looking for?"
+     }
+    ],
+    "timings": {
+     "stt_ms": 410,
+     "queue_ms": 0,
+     "nlu_ms": 812,
+     "engine_ms": 9.1,
+     "policy_ms": 0.2,
+     "nlg_ms": 0.3,
+     "tts_onset_ms": 300
+    }
+   }
+  },
+  {
+   "t": 17752,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 21422,
+   "ev": {
+    "type": "phase",
+    "phase": "NEGOTIATE",
+    "intent": null,
+    "turn": 1
+   }
+  },
+  {
+   "t": 21422,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 24022,
+   "ev": {
+    "type": "transcript",
+    "role": "creditor",
+    "text": "We are looking for forty-five percent of the balance.",
+    "spoken": true,
+    "sentence_id": null,
+    "blocked": false
+   }
+  },
+  {
+   "t": 25670,
+   "ev": {
+    "type": "say",
+    "id": "t2-s0",
+    "text": "We can propose 32% of the balance, which is $400.00."
+   }
+  },
+  {
+   "t": 25670,
+   "ev": {
+    "type": "transcript",
+    "role": "agent",
+    "text": "We can propose 32% of the balance, which is $400.00.",
+    "spoken": false,
+    "sentence_id": "t2-s0",
+    "blocked": false
+   }
+  },
+  {
+   "t": 25710,
+   "ev": {
+    "type": "say",
+    "id": "t2-s1",
+    "text": "Would that work?"
+   }
+  },
+  {
+   "t": 25710,
+   "ev": {
+    "type": "transcript",
+    "role": "agent",
+    "text": "Would that work?",
+    "spoken": false,
+    "sentence_id": "t2-s1",
+    "blocked": false
+   }
+  },
+  {
+   "t": 25715,
+   "ev": {
+    "type": "belief",
+    "terms": [
+     {
+      "field": "max_payments",
+      "value": 8,
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "up to eight monthly payments"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "min_payment_cents",
+      "value": 10000,
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "at least one hundred dollars each"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "payment_structure",
+      "value": "even",
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "all the same amount"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "first_payment_date",
+      "value": "2026-11-02",
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "max_segments",
+      "value": 2,
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "max_token_pays",
+      "value": 8,
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "min_payment_tiers",
+      "value": [],
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     }
+    ]
+   }
+  },
+  {
+   "t": 25715,
+   "ev": {
+    "type": "phase",
+    "phase": "NEGOTIATE",
+    "intent": "COUNTER",
+    "turn": 2
+   }
+  },
+  {
+   "t": 25715,
+   "ev": {
+    "type": "eval",
+    "feasible": true,
+    "shape": "even",
+    "offer_total_cents": 40000,
+    "program_fee_cents": 18000,
+    "assumed_fields": [
+     "first_payment_date",
+     "max_segments",
+     "max_token_pays",
+     "min_payment_tiers"
+    ],
+    "agreed_bp": 3200,
+    "rows": [
+     {
+      "date": "2026-11-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 68250
+     },
+     {
+      "date": "2026-12-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 74800
+     },
+     {
+      "date": "2027-01-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 81350
+     },
+     {
+      "date": "2027-02-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 87900
+     }
+    ],
+    "additional_funds": null,
+    "max_bp": 5200
+   }
+  },
+  {
+   "t": 25715,
+   "ev": {
+    "type": "latency",
+    "turn": 2,
+    "stt_ms": 380,
+    "nlu_ms": 744,
+    "policy_ms": 0.2,
+    "nlg_ms": 512,
+    "server_total_ms": 1267.9
+   }
+  },
+  {
+   "t": 25715,
+   "ev": {
+    "type": "audit",
+    "id": 12,
+    "ts": "2026-10-07T15:00:25.715Z",
+    "actor": "creditor",
+    "event": "utterance",
+    "payload": {
+     "text": "We are looking for forty-five percent of the balance.",
+     "turn": 2
+    }
+   }
+  },
+  {
+   "t": 25715,
+   "ev": {
+    "type": "audit",
+    "id": 13,
+    "ts": "2026-10-07T15:00:25.715Z",
+    "actor": "llm",
+    "event": "llm_call",
+    "payload": {
+     "role": "nlu",
+     "provider": "groq",
+     "model": "synthetic-nlu-model",
+     "latency_ms": 744,
+     "prompt_tokens": 812,
+     "completion_tokens": 96,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null
+    }
+   }
+  },
+  {
+   "t": 25715,
+   "ev": {
+    "type": "audit",
+    "id": 14,
+    "ts": "2026-10-07T15:00:25.715Z",
+    "actor": "nlu",
+    "event": "nlu_result",
+    "payload": {
+     "stance": "offer",
+     "ask_bp": 4500,
+     "terms": []
+    }
+   }
+  },
+  {
+   "t": 25715,
+   "ev": {
+    "type": "audit",
+    "id": 15,
+    "ts": "2026-10-07T15:00:25.715Z",
+    "actor": "engine",
+    "event": "affordability",
+    "payload": {
+     "max_bp": 5200,
+     "feasible_points": 30
+    },
+    "private": true
+   }
+  },
+  {
+   "t": 25715,
+   "ev": {
+    "type": "audit",
+    "id": 16,
+    "ts": "2026-10-07T15:00:25.715Z",
+    "actor": "engine",
+    "event": "evaluate",
+    "payload": {
+     "feasible": true,
+     "offer_total_cents": 40000,
+     "program_fee_cents": 18000
+    },
+    "private": true
+   }
+  },
+  {
+   "t": 25715,
+   "ev": {
+    "type": "audit",
+    "id": 17,
+    "ts": "2026-10-07T15:00:25.715Z",
+    "actor": "policy",
+    "event": "decide",
+    "payload": {
+     "intent": "COUNTER",
+     "reason": "bp=3200"
+    }
+   }
+  },
+  {
+   "t": 25715,
+   "ev": {
+    "type": "audit",
+    "id": 18,
+    "ts": "2026-10-07T15:00:25.715Z",
+    "actor": "llm",
+    "event": "llm_call",
+    "payload": {
+     "role": "nlg",
+     "provider": "cerebras",
+     "model": "synthetic-nlg-model",
+     "latency_ms": 512,
+     "prompt_tokens": 402,
+     "completion_tokens": 38,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null
+    }
+   }
+  },
+  {
+   "t": 25715,
+   "ev": {
+    "type": "turn_trace",
+    "turn": 2,
+    "creditor_text": "We are looking for forty-five percent of the balance.",
+    "stance": "offer",
+    "ask_bp": 4500,
+    "ask_quote": "forty-five percent of the balance",
+    "terms": [],
+    "dropped": [],
+    "belief_changes": [],
+    "affordability": {
+     "max_bp": 5200,
+     "curve": [
+      {
+       "bp": 100,
+       "feasible": false
+      },
+      {
+       "bp": 200,
+       "feasible": false
+      },
+      {
+       "bp": 300,
+       "feasible": false
+      },
+      {
+       "bp": 400,
+       "feasible": false
+      },
+      {
+       "bp": 500,
+       "feasible": false
+      },
+      {
+       "bp": 600,
+       "feasible": false
+      },
+      {
+       "bp": 700,
+       "feasible": false
+      },
+      {
+       "bp": 800,
+       "feasible": false
+      },
+      {
+       "bp": 900,
+       "feasible": false
+      },
+      {
+       "bp": 1000,
+       "feasible": false
+      },
+      {
+       "bp": 1100,
+       "feasible": false
+      },
+      {
+       "bp": 1200,
+       "feasible": false
+      },
+      {
+       "bp": 1300,
+       "feasible": false
+      },
+      {
+       "bp": 1400,
+       "feasible": false
+      },
+      {
+       "bp": 1500,
+       "feasible": false
+      },
+      {
+       "bp": 1600,
+       "feasible": false
+      },
+      {
+       "bp": 1700,
+       "feasible": false
+      },
+      {
+       "bp": 1800,
+       "feasible": false
+      },
+      {
+       "bp": 1900,
+       "feasible": false
+      },
+      {
+       "bp": 2000,
+       "feasible": true
+      },
+      {
+       "bp": 2100,
+       "feasible": true
+      },
+      {
+       "bp": 2200,
+       "feasible": true
+      },
+      {
+       "bp": 2300,
+       "feasible": true
+      },
+      {
+       "bp": 2400,
+       "feasible": true
+      },
+      {
+       "bp": 2500,
+       "feasible": true
+      },
+      {
+       "bp": 2600,
+       "feasible": true
+      },
+      {
+       "bp": 2700,
+       "feasible": true
+      },
+      {
+       "bp": 2800,
+       "feasible": true
+      },
+      {
+       "bp": 2900,
+       "feasible": true
+      },
+      {
+       "bp": 3000,
+       "feasible": true
+      },
+      {
+       "bp": 3100,
+       "feasible": true
+      },
+      {
+       "bp": 3200,
+       "feasible": true
+      },
+      {
+       "bp": 3300,
+       "feasible": false
+      },
+      {
+       "bp": 3400,
+       "feasible": false
+      },
+      {
+       "bp": 3500,
+       "feasible": false
+      },
+      {
+       "bp": 3600,
+       "feasible": true
+      },
+      {
+       "bp": 3700,
+       "feasible": true
+      },
+      {
+       "bp": 3800,
+       "feasible": true
+      },
+      {
+       "bp": 3900,
+       "feasible": true
+      },
+      {
+       "bp": 4000,
+       "feasible": true
+      },
+      {
+       "bp": 4100,
+       "feasible": true
+      },
+      {
+       "bp": 4200,
+       "feasible": true
+      },
+      {
+       "bp": 4300,
+       "feasible": true
+      },
+      {
+       "bp": 4400,
+       "feasible": true
+      },
+      {
+       "bp": 4500,
+       "feasible": true
+      },
+      {
+       "bp": 4600,
+       "feasible": true
+      },
+      {
+       "bp": 4700,
+       "feasible": true
+      },
+      {
+       "bp": 4800,
+       "feasible": true
+      },
+      {
+       "bp": 4900,
+       "feasible": true
+      },
+      {
+       "bp": 5000,
+       "feasible": true
+      },
+      {
+       "bp": 5100,
+       "feasible": true
+      },
+      {
+       "bp": 5200,
+       "feasible": true
+      },
+      {
+       "bp": 5300,
+       "feasible": false
+      },
+      {
+       "bp": 5400,
+       "feasible": false
+      },
+      {
+       "bp": 5500,
+       "feasible": false
+      },
+      {
+       "bp": 5600,
+       "feasible": false
+      },
+      {
+       "bp": 5700,
+       "feasible": false
+      },
+      {
+       "bp": 5800,
+       "feasible": false
+      },
+      {
+       "bp": 5900,
+       "feasible": false
+      },
+      {
+       "bp": 6000,
+       "feasible": false
+      },
+      {
+       "bp": 6100,
+       "feasible": false
+      },
+      {
+       "bp": 6200,
+       "feasible": false
+      },
+      {
+       "bp": 6300,
+       "feasible": false
+      },
+      {
+       "bp": 6400,
+       "feasible": false
+      },
+      {
+       "bp": 6500,
+       "feasible": false
+      },
+      {
+       "bp": 6600,
+       "feasible": false
+      },
+      {
+       "bp": 6700,
+       "feasible": false
+      },
+      {
+       "bp": 6800,
+       "feasible": false
+      },
+      {
+       "bp": 6900,
+       "feasible": false
+      },
+      {
+       "bp": 7000,
+       "feasible": false
+      },
+      {
+       "bp": 7100,
+       "feasible": false
+      },
+      {
+       "bp": 7200,
+       "feasible": false
+      },
+      {
+       "bp": 7300,
+       "feasible": false
+      },
+      {
+       "bp": 7400,
+       "feasible": false
+      },
+      {
+       "bp": 7500,
+       "feasible": false
+      },
+      {
+       "bp": 7600,
+       "feasible": false
+      },
+      {
+       "bp": 7700,
+       "feasible": false
+      },
+      {
+       "bp": 7800,
+       "feasible": false
+      },
+      {
+       "bp": 7900,
+       "feasible": false
+      },
+      {
+       "bp": 8000,
+       "feasible": false
+      },
+      {
+       "bp": 8100,
+       "feasible": false
+      },
+      {
+       "bp": 8200,
+       "feasible": false
+      },
+      {
+       "bp": 8300,
+       "feasible": false
+      },
+      {
+       "bp": 8400,
+       "feasible": false
+      },
+      {
+       "bp": 8500,
+       "feasible": false
+      },
+      {
+       "bp": 8600,
+       "feasible": false
+      },
+      {
+       "bp": 8700,
+       "feasible": false
+      },
+      {
+       "bp": 8800,
+       "feasible": false
+      },
+      {
+       "bp": 8900,
+       "feasible": false
+      },
+      {
+       "bp": 9000,
+       "feasible": false
+      },
+      {
+       "bp": 9100,
+       "feasible": false
+      },
+      {
+       "bp": 9200,
+       "feasible": false
+      },
+      {
+       "bp": 9300,
+       "feasible": false
+      },
+      {
+       "bp": 9400,
+       "feasible": false
+      },
+      {
+       "bp": 9500,
+       "feasible": false
+      },
+      {
+       "bp": 9600,
+       "feasible": false
+      },
+      {
+       "bp": 9700,
+       "feasible": false
+      },
+      {
+       "bp": 9800,
+       "feasible": false
+      },
+      {
+       "bp": 9900,
+       "feasible": false
+      },
+      {
+       "bp": 10000,
+       "feasible": false
+      }
+     ]
+    },
+    "decide": {
+     "intent": "COUNTER",
+     "reason": "bp=3200",
+     "reason_text": "Counter at 32%: the first offer anchors at 70% of their ask."
+    },
+    "counter_bp": 3200,
+    "nlg": {
+     "mode": "llm",
+     "template": "We can propose {counter_pct} of the balance, which is {offer_total}. Would that work?",
+     "guards": [
+      {
+       "stage": "template",
+       "ok": true,
+       "reason": null
+      },
+      {
+       "stage": "rendered",
+       "ok": true,
+       "reason": null
+      }
+     ],
+     "fallback_used": false
+    },
+    "spoken": [
+     {
+      "id": "t2-s0",
+      "text": "We can propose 32% of the balance, which is $400.00."
+     },
+     {
+      "id": "t2-s1",
+      "text": "Would that work?"
+     }
+    ],
+    "timings": {
+     "stt_ms": 380,
+     "queue_ms": 0,
+     "nlu_ms": 744,
+     "engine_ms": 11.7,
+     "policy_ms": 0.2,
+     "nlg_ms": 512,
+     "tts_onset_ms": 310
+    }
+   }
+  },
+  {
+   "t": 25715,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 28835,
+   "ev": {
+    "type": "phase",
+    "phase": "NEGOTIATE",
+    "intent": null,
+    "turn": 2
+   }
+  },
+  {
+   "t": 28835,
+   "ev": {
+    "type": "eval",
+    "feasible": true,
+    "shape": "even",
+    "offer_total_cents": 40000,
+    "program_fee_cents": 18000,
+    "assumed_fields": [
+     "first_payment_date",
+     "max_segments",
+     "max_token_pays",
+     "min_payment_tiers"
+    ],
+    "agreed_bp": 3200,
+    "rows": [
+     {
+      "date": "2026-11-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 68250
+     },
+     {
+      "date": "2026-12-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 74800
+     },
+     {
+      "date": "2027-01-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 81350
+     },
+     {
+      "date": "2027-02-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 87900
+     }
+    ],
+    "additional_funds": null,
+    "max_bp": 5200
+   }
+  },
+  {
+   "t": 28835,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 29975,
+   "ev": {
+    "type": "phase",
+    "phase": "NEGOTIATE",
+    "intent": null,
+    "turn": 2
+   }
+  },
+  {
+   "t": 29975,
+   "ev": {
+    "type": "eval",
+    "feasible": true,
+    "shape": "even",
+    "offer_total_cents": 40000,
+    "program_fee_cents": 18000,
+    "assumed_fields": [
+     "first_payment_date",
+     "max_segments",
+     "max_token_pays",
+     "min_payment_tiers"
+    ],
+    "agreed_bp": 3200,
+    "rows": [
+     {
+      "date": "2026-11-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 68250
+     },
+     {
+      "date": "2026-12-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 74800
+     },
+     {
+      "date": "2027-01-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 81350
+     },
+     {
+      "date": "2027-02-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 87900
+     }
+    ],
+    "additional_funds": null,
+    "max_bp": 5200
+   }
+  },
+  {
+   "t": 29975,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 32575,
+   "ev": {
+    "type": "transcript",
+    "role": "creditor",
+    "text": "Thirty-two is too low. I could do forty-two percent.",
+    "spoken": true,
+    "sentence_id": null,
+    "blocked": false
+   }
+  },
+  {
+   "t": 34374,
+   "ev": {
+    "type": "say",
+    "id": "t3-s0",
+    "text": "We can propose 37% of the balance, which is $462.50."
+   }
+  },
+  {
+   "t": 34374,
+   "ev": {
+    "type": "transcript",
+    "role": "agent",
+    "text": "We can propose 37% of the balance, which is $462.50.",
+    "spoken": false,
+    "sentence_id": "t3-s0",
+    "blocked": true
+   }
+  },
+  {
+   "t": 34414,
+   "ev": {
+    "type": "say",
+    "id": "t3-s1",
+    "text": "Would that work?"
+   }
+  },
+  {
+   "t": 34414,
+   "ev": {
+    "type": "transcript",
+    "role": "agent",
+    "text": "Would that work?",
+    "spoken": false,
+    "sentence_id": "t3-s1",
+    "blocked": true
+   }
+  },
+  {
+   "t": 34419,
+   "ev": {
+    "type": "belief",
+    "terms": [
+     {
+      "field": "max_payments",
+      "value": 8,
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "up to eight monthly payments"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "min_payment_cents",
+      "value": 10000,
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "at least one hundred dollars each"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "payment_structure",
+      "value": "even",
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "all the same amount"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "first_payment_date",
+      "value": "2026-11-02",
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "max_segments",
+      "value": 2,
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "max_token_pays",
+      "value": 8,
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "min_payment_tiers",
+      "value": [],
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     }
+    ]
+   }
+  },
+  {
+   "t": 34419,
+   "ev": {
+    "type": "phase",
+    "phase": "NEGOTIATE",
+    "intent": "COUNTER",
+    "turn": 3
+   }
+  },
+  {
+   "t": 34419,
+   "ev": {
+    "type": "eval",
+    "feasible": true,
+    "shape": "even",
+    "offer_total_cents": 46250,
+    "program_fee_cents": 18000,
+    "assumed_fields": [
+     "first_payment_date",
+     "max_segments",
+     "max_token_pays",
+     "min_payment_tiers"
+    ],
+    "agreed_bp": 3700,
+    "rows": [
+     {
+      "date": "2026-11-02",
+      "creditor_payment_cents": 11562,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 68250
+     },
+     {
+      "date": "2026-12-02",
+      "creditor_payment_cents": 11562,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 74800
+     },
+     {
+      "date": "2027-01-02",
+      "creditor_payment_cents": 11562,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 81350
+     },
+     {
+      "date": "2027-02-02",
+      "creditor_payment_cents": 11564,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 87900
+     }
+    ],
+    "additional_funds": null,
+    "max_bp": 5200
+   }
+  },
+  {
+   "t": 34419,
+   "ev": {
+    "type": "blocked",
+    "stage": "rendered",
+    "reason": "number_not_from_facts",
+    "offending": [
+     "forty"
+    ]
+   }
+  },
+  {
+   "t": 34419,
+   "ev": {
+    "type": "latency",
+    "turn": 3,
+    "stt_ms": 395,
+    "nlu_ms": 790,
+    "policy_ms": 0.2,
+    "nlg_ms": 604,
+    "server_total_ms": 1404.4
+   }
+  },
+  {
+   "t": 34419,
+   "ev": {
+    "type": "audit",
+    "id": 19,
+    "ts": "2026-10-07T15:00:34.419Z",
+    "actor": "creditor",
+    "event": "utterance",
+    "payload": {
+     "text": "Thirty-two is too low. I could do forty-two percent.",
+     "turn": 3
+    }
+   }
+  },
+  {
+   "t": 34419,
+   "ev": {
+    "type": "audit",
+    "id": 20,
+    "ts": "2026-10-07T15:00:34.419Z",
+    "actor": "llm",
+    "event": "llm_call",
+    "payload": {
+     "role": "nlu",
+     "provider": "groq",
+     "model": "synthetic-nlu-model",
+     "latency_ms": 790,
+     "prompt_tokens": 812,
+     "completion_tokens": 96,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null
+    }
+   }
+  },
+  {
+   "t": 34419,
+   "ev": {
+    "type": "audit",
+    "id": 21,
+    "ts": "2026-10-07T15:00:34.419Z",
+    "actor": "nlu",
+    "event": "nlu_result",
+    "payload": {
+     "stance": "counter",
+     "ask_bp": 4200,
+     "terms": []
+    }
+   }
+  },
+  {
+   "t": 34419,
+   "ev": {
+    "type": "audit",
+    "id": 22,
+    "ts": "2026-10-07T15:00:34.419Z",
+    "actor": "engine",
+    "event": "affordability",
+    "payload": {
+     "max_bp": 5200,
+     "feasible_points": 30
+    },
+    "private": true
+   }
+  },
+  {
+   "t": 34419,
+   "ev": {
+    "type": "audit",
+    "id": 23,
+    "ts": "2026-10-07T15:00:34.419Z",
+    "actor": "engine",
+    "event": "evaluate",
+    "payload": {
+     "feasible": true,
+     "offer_total_cents": 46250,
+     "program_fee_cents": 18000
+    },
+    "private": true
+   }
+  },
+  {
+   "t": 34419,
+   "ev": {
+    "type": "audit",
+    "id": 24,
+    "ts": "2026-10-07T15:00:34.419Z",
+    "actor": "policy",
+    "event": "decide",
+    "payload": {
+     "intent": "COUNTER",
+     "reason": "bp=3700"
+    }
+   }
+  },
+  {
+   "t": 34419,
+   "ev": {
+    "type": "audit",
+    "id": 25,
+    "ts": "2026-10-07T15:00:34.419Z",
+    "actor": "llm",
+    "event": "llm_call",
+    "payload": {
+     "role": "nlg",
+     "provider": "cerebras",
+     "model": "synthetic-nlg-model",
+     "latency_ms": 604,
+     "prompt_tokens": 402,
+     "completion_tokens": 38,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null
+    }
+   }
+  },
+  {
+   "t": 34419,
+   "ev": {
+    "type": "audit",
+    "id": 26,
+    "ts": "2026-10-07T15:00:34.419Z",
+    "actor": "guard",
+    "event": "blocked",
+    "payload": {
+     "stage": "rendered",
+     "reason": "number_not_from_facts",
+     "offending": [
+      "forty"
+     ]
+    }
+   }
+  },
+  {
+   "t": 34419,
+   "ev": {
+    "type": "turn_trace",
+    "turn": 3,
+    "creditor_text": "Thirty-two is too low. I could do forty-two percent.",
+    "stance": "counter",
+    "ask_bp": 4200,
+    "ask_quote": "forty-two percent",
+    "terms": [],
+    "dropped": [],
+    "belief_changes": [],
+    "affordability": {
+     "max_bp": 5200,
+     "curve": [
+      {
+       "bp": 100,
+       "feasible": false
+      },
+      {
+       "bp": 200,
+       "feasible": false
+      },
+      {
+       "bp": 300,
+       "feasible": false
+      },
+      {
+       "bp": 400,
+       "feasible": false
+      },
+      {
+       "bp": 500,
+       "feasible": false
+      },
+      {
+       "bp": 600,
+       "feasible": false
+      },
+      {
+       "bp": 700,
+       "feasible": false
+      },
+      {
+       "bp": 800,
+       "feasible": false
+      },
+      {
+       "bp": 900,
+       "feasible": false
+      },
+      {
+       "bp": 1000,
+       "feasible": false
+      },
+      {
+       "bp": 1100,
+       "feasible": false
+      },
+      {
+       "bp": 1200,
+       "feasible": false
+      },
+      {
+       "bp": 1300,
+       "feasible": false
+      },
+      {
+       "bp": 1400,
+       "feasible": false
+      },
+      {
+       "bp": 1500,
+       "feasible": false
+      },
+      {
+       "bp": 1600,
+       "feasible": false
+      },
+      {
+       "bp": 1700,
+       "feasible": false
+      },
+      {
+       "bp": 1800,
+       "feasible": false
+      },
+      {
+       "bp": 1900,
+       "feasible": false
+      },
+      {
+       "bp": 2000,
+       "feasible": true
+      },
+      {
+       "bp": 2100,
+       "feasible": true
+      },
+      {
+       "bp": 2200,
+       "feasible": true
+      },
+      {
+       "bp": 2300,
+       "feasible": true
+      },
+      {
+       "bp": 2400,
+       "feasible": true
+      },
+      {
+       "bp": 2500,
+       "feasible": true
+      },
+      {
+       "bp": 2600,
+       "feasible": true
+      },
+      {
+       "bp": 2700,
+       "feasible": true
+      },
+      {
+       "bp": 2800,
+       "feasible": true
+      },
+      {
+       "bp": 2900,
+       "feasible": true
+      },
+      {
+       "bp": 3000,
+       "feasible": true
+      },
+      {
+       "bp": 3100,
+       "feasible": true
+      },
+      {
+       "bp": 3200,
+       "feasible": true
+      },
+      {
+       "bp": 3300,
+       "feasible": false
+      },
+      {
+       "bp": 3400,
+       "feasible": false
+      },
+      {
+       "bp": 3500,
+       "feasible": false
+      },
+      {
+       "bp": 3600,
+       "feasible": true
+      },
+      {
+       "bp": 3700,
+       "feasible": true
+      },
+      {
+       "bp": 3800,
+       "feasible": true
+      },
+      {
+       "bp": 3900,
+       "feasible": true
+      },
+      {
+       "bp": 4000,
+       "feasible": true
+      },
+      {
+       "bp": 4100,
+       "feasible": true
+      },
+      {
+       "bp": 4200,
+       "feasible": true
+      },
+      {
+       "bp": 4300,
+       "feasible": true
+      },
+      {
+       "bp": 4400,
+       "feasible": true
+      },
+      {
+       "bp": 4500,
+       "feasible": true
+      },
+      {
+       "bp": 4600,
+       "feasible": true
+      },
+      {
+       "bp": 4700,
+       "feasible": true
+      },
+      {
+       "bp": 4800,
+       "feasible": true
+      },
+      {
+       "bp": 4900,
+       "feasible": true
+      },
+      {
+       "bp": 5000,
+       "feasible": true
+      },
+      {
+       "bp": 5100,
+       "feasible": true
+      },
+      {
+       "bp": 5200,
+       "feasible": true
+      },
+      {
+       "bp": 5300,
+       "feasible": false
+      },
+      {
+       "bp": 5400,
+       "feasible": false
+      },
+      {
+       "bp": 5500,
+       "feasible": false
+      },
+      {
+       "bp": 5600,
+       "feasible": false
+      },
+      {
+       "bp": 5700,
+       "feasible": false
+      },
+      {
+       "bp": 5800,
+       "feasible": false
+      },
+      {
+       "bp": 5900,
+       "feasible": false
+      },
+      {
+       "bp": 6000,
+       "feasible": false
+      },
+      {
+       "bp": 6100,
+       "feasible": false
+      },
+      {
+       "bp": 6200,
+       "feasible": false
+      },
+      {
+       "bp": 6300,
+       "feasible": false
+      },
+      {
+       "bp": 6400,
+       "feasible": false
+      },
+      {
+       "bp": 6500,
+       "feasible": false
+      },
+      {
+       "bp": 6600,
+       "feasible": false
+      },
+      {
+       "bp": 6700,
+       "feasible": false
+      },
+      {
+       "bp": 6800,
+       "feasible": false
+      },
+      {
+       "bp": 6900,
+       "feasible": false
+      },
+      {
+       "bp": 7000,
+       "feasible": false
+      },
+      {
+       "bp": 7100,
+       "feasible": false
+      },
+      {
+       "bp": 7200,
+       "feasible": false
+      },
+      {
+       "bp": 7300,
+       "feasible": false
+      },
+      {
+       "bp": 7400,
+       "feasible": false
+      },
+      {
+       "bp": 7500,
+       "feasible": false
+      },
+      {
+       "bp": 7600,
+       "feasible": false
+      },
+      {
+       "bp": 7700,
+       "feasible": false
+      },
+      {
+       "bp": 7800,
+       "feasible": false
+      },
+      {
+       "bp": 7900,
+       "feasible": false
+      },
+      {
+       "bp": 8000,
+       "feasible": false
+      },
+      {
+       "bp": 8100,
+       "feasible": false
+      },
+      {
+       "bp": 8200,
+       "feasible": false
+      },
+      {
+       "bp": 8300,
+       "feasible": false
+      },
+      {
+       "bp": 8400,
+       "feasible": false
+      },
+      {
+       "bp": 8500,
+       "feasible": false
+      },
+      {
+       "bp": 8600,
+       "feasible": false
+      },
+      {
+       "bp": 8700,
+       "feasible": false
+      },
+      {
+       "bp": 8800,
+       "feasible": false
+      },
+      {
+       "bp": 8900,
+       "feasible": false
+      },
+      {
+       "bp": 9000,
+       "feasible": false
+      },
+      {
+       "bp": 9100,
+       "feasible": false
+      },
+      {
+       "bp": 9200,
+       "feasible": false
+      },
+      {
+       "bp": 9300,
+       "feasible": false
+      },
+      {
+       "bp": 9400,
+       "feasible": false
+      },
+      {
+       "bp": 9500,
+       "feasible": false
+      },
+      {
+       "bp": 9600,
+       "feasible": false
+      },
+      {
+       "bp": 9700,
+       "feasible": false
+      },
+      {
+       "bp": 9800,
+       "feasible": false
+      },
+      {
+       "bp": 9900,
+       "feasible": false
+      },
+      {
+       "bp": 10000,
+       "feasible": false
+      }
+     ]
+    },
+    "decide": {
+     "intent": "COUNTER",
+     "reason": "bp=3700",
+     "reason_text": "Counter at 37%: concede half the gap toward their new ask."
+    },
+    "counter_bp": 3700,
+    "nlg": {
+     "mode": "llm",
+     "template": "We can propose {counter_pct} of the balance, which is {offer_total}. Would that work?",
+     "guards": [
+      {
+       "stage": "template",
+       "ok": true,
+       "reason": null
+      },
+      {
+       "stage": "rendered",
+       "ok": false,
+       "reason": "number_not_from_facts"
+      },
+      {
+       "stage": "fallback",
+       "ok": true,
+       "reason": null
+      }
+     ],
+     "fallback_used": true
+    },
+    "spoken": [
+     {
+      "id": "t3-s0",
+      "text": "We can propose 37% of the balance, which is $462.50."
+     },
+     {
+      "id": "t3-s1",
+      "text": "Would that work?"
+     }
+    ],
+    "timings": {
+     "stt_ms": 395,
+     "queue_ms": 0,
+     "nlu_ms": 790,
+     "engine_ms": 10.2,
+     "policy_ms": 0.2,
+     "nlg_ms": 604,
+     "tts_onset_ms": 305
+    }
+   }
+  },
+  {
+   "t": 34419,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 37539,
+   "ev": {
+    "type": "phase",
+    "phase": "NEGOTIATE",
+    "intent": null,
+    "turn": 3
+   }
+  },
+  {
+   "t": 37539,
+   "ev": {
+    "type": "eval",
+    "feasible": true,
+    "shape": "even",
+    "offer_total_cents": 46250,
+    "program_fee_cents": 18000,
+    "assumed_fields": [
+     "first_payment_date",
+     "max_segments",
+     "max_token_pays",
+     "min_payment_tiers"
+    ],
+    "agreed_bp": 3700,
+    "rows": [
+     {
+      "date": "2026-11-02",
+      "creditor_payment_cents": 11562,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 68250
+     },
+     {
+      "date": "2026-12-02",
+      "creditor_payment_cents": 11562,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 74800
+     },
+     {
+      "date": "2027-01-02",
+      "creditor_payment_cents": 11562,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 81350
+     },
+     {
+      "date": "2027-02-02",
+      "creditor_payment_cents": 11564,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 87900
+     }
+    ],
+    "additional_funds": null,
+    "max_bp": 5200
+   }
+  },
+  {
+   "t": 37539,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 38679,
+   "ev": {
+    "type": "phase",
+    "phase": "NEGOTIATE",
+    "intent": null,
+    "turn": 3
+   }
+  },
+  {
+   "t": 38679,
+   "ev": {
+    "type": "eval",
+    "feasible": true,
+    "shape": "even",
+    "offer_total_cents": 46250,
+    "program_fee_cents": 18000,
+    "assumed_fields": [
+     "first_payment_date",
+     "max_segments",
+     "max_token_pays",
+     "min_payment_tiers"
+    ],
+    "agreed_bp": 3700,
+    "rows": [
+     {
+      "date": "2026-11-02",
+      "creditor_payment_cents": 11562,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 68250
+     },
+     {
+      "date": "2026-12-02",
+      "creditor_payment_cents": 11562,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 74800
+     },
+     {
+      "date": "2027-01-02",
+      "creditor_payment_cents": 11562,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 81350
+     },
+     {
+      "date": "2027-02-02",
+      "creditor_payment_cents": 11564,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 87900
+     }
+    ],
+    "additional_funds": null,
+    "max_bp": 5200
+   }
+  },
+  {
+   "t": 38679,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 41279,
+   "ev": {
+    "type": "transcript",
+    "role": "creditor",
+    "text": "Forty percent is my floor. I can't go lower than that.",
+    "spoken": true,
+    "sentence_id": null,
+    "blocked": false
+   }
+  },
+  {
+   "t": 42943,
+   "ev": {
+    "type": "say",
+    "id": "t4-s0",
+    "text": "40% works for us."
+   }
+  },
+  {
+   "t": 42943,
+   "ev": {
+    "type": "transcript",
+    "role": "agent",
+    "text": "40% works for us.",
+    "spoken": false,
+    "sentence_id": "t4-s0",
+    "blocked": false
+   }
+  },
+  {
+   "t": 42983,
+   "ev": {
+    "type": "say",
+    "id": "t4-s1",
+    "text": "We can do 5 payments totaling $500.00, starting November 2."
+   }
+  },
+  {
+   "t": 42983,
+   "ev": {
+    "type": "transcript",
+    "role": "agent",
+    "text": "We can do 5 payments totaling $500.00, starting November 2.",
+    "spoken": false,
+    "sentence_id": "t4-s1",
+    "blocked": false
+   }
+  },
+  {
+   "t": 43023,
+   "ev": {
+    "type": "say",
+    "id": "t4-s2",
+    "text": "Would that work?"
+   }
+  },
+  {
+   "t": 43023,
+   "ev": {
+    "type": "transcript",
+    "role": "agent",
+    "text": "Would that work?",
+    "spoken": false,
+    "sentence_id": "t4-s2",
+    "blocked": false
+   }
+  },
+  {
+   "t": 43028,
+   "ev": {
+    "type": "belief",
+    "terms": [
+     {
+      "field": "max_payments",
+      "value": 8,
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "up to eight monthly payments"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "min_payment_cents",
+      "value": 10000,
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "at least one hundred dollars each"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "payment_structure",
+      "value": "even",
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "all the same amount"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "first_payment_date",
+      "value": "2026-11-02",
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "max_segments",
+      "value": 2,
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "max_token_pays",
+      "value": 8,
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "min_payment_tiers",
+      "value": [],
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     }
+    ]
+   }
+  },
+  {
+   "t": 43028,
+   "ev": {
+    "type": "phase",
+    "phase": "NEGOTIATE",
+    "intent": "CONFIRM_SCHEDULE",
+    "turn": 4
+   }
+  },
+  {
+   "t": 43028,
+   "ev": {
+    "type": "eval",
+    "feasible": true,
+    "shape": "even",
+    "offer_total_cents": 50000,
+    "program_fee_cents": 22500,
+    "assumed_fields": [
+     "first_payment_date",
+     "max_segments",
+     "max_token_pays",
+     "min_payment_tiers"
+    ],
+    "agreed_bp": 4000,
+    "rows": [
+     {
+      "date": "2026-11-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 68250
+     },
+     {
+      "date": "2026-12-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 74800
+     },
+     {
+      "date": "2027-01-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 81350
+     },
+     {
+      "date": "2027-02-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 87900
+     },
+     {
+      "date": "2027-03-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 94450
+     }
+    ],
+    "additional_funds": null,
+    "max_bp": 5200
+   }
+  },
+  {
+   "t": 43028,
+   "ev": {
+    "type": "latency",
+    "turn": 4,
+    "stt_ms": 402,
+    "nlu_ms": 701,
+    "policy_ms": 0.3,
+    "nlg_ms": 548,
+    "server_total_ms": 1261.6
+   }
+  },
+  {
+   "t": 43028,
+   "ev": {
+    "type": "audit",
+    "id": 27,
+    "ts": "2026-10-07T15:00:43.028Z",
+    "actor": "creditor",
+    "event": "utterance",
+    "payload": {
+     "text": "Forty percent is my floor. I can't go lower than that.",
+     "turn": 4
+    }
+   }
+  },
+  {
+   "t": 43028,
+   "ev": {
+    "type": "audit",
+    "id": 28,
+    "ts": "2026-10-07T15:00:43.028Z",
+    "actor": "llm",
+    "event": "llm_call",
+    "payload": {
+     "role": "nlu",
+     "provider": "groq",
+     "model": "synthetic-nlu-model",
+     "latency_ms": 701,
+     "prompt_tokens": 812,
+     "completion_tokens": 96,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null
+    }
+   }
+  },
+  {
+   "t": 43028,
+   "ev": {
+    "type": "audit",
+    "id": 29,
+    "ts": "2026-10-07T15:00:43.028Z",
+    "actor": "nlu",
+    "event": "nlu_result",
+    "payload": {
+     "stance": "offer",
+     "ask_bp": 4000,
+     "terms": []
+    }
+   }
+  },
+  {
+   "t": 43028,
+   "ev": {
+    "type": "audit",
+    "id": 30,
+    "ts": "2026-10-07T15:00:43.028Z",
+    "actor": "engine",
+    "event": "affordability",
+    "payload": {
+     "max_bp": 5200,
+     "feasible_points": 30
+    },
+    "private": true
+   }
+  },
+  {
+   "t": 43028,
+   "ev": {
+    "type": "audit",
+    "id": 31,
+    "ts": "2026-10-07T15:00:43.028Z",
+    "actor": "engine",
+    "event": "evaluate",
+    "payload": {
+     "feasible": true,
+     "offer_total_cents": 50000,
+     "program_fee_cents": 22500
+    },
+    "private": true
+   }
+  },
+  {
+   "t": 43028,
+   "ev": {
+    "type": "audit",
+    "id": 32,
+    "ts": "2026-10-07T15:00:43.028Z",
+    "actor": "policy",
+    "event": "decide",
+    "payload": {
+     "intent": "CONFIRM_SCHEDULE",
+     "reason": "bp=4000"
+    }
+   }
+  },
+  {
+   "t": 43028,
+   "ev": {
+    "type": "audit",
+    "id": 33,
+    "ts": "2026-10-07T15:00:43.028Z",
+    "actor": "llm",
+    "event": "llm_call",
+    "payload": {
+     "role": "nlg",
+     "provider": "cerebras",
+     "model": "synthetic-nlg-model",
+     "latency_ms": 548,
+     "prompt_tokens": 402,
+     "completion_tokens": 38,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null
+    }
+   }
+  },
+  {
+   "t": 43028,
+   "ev": {
+    "type": "turn_trace",
+    "turn": 4,
+    "creditor_text": "Forty percent is my floor. I can't go lower than that.",
+    "stance": "offer",
+    "ask_bp": 4000,
+    "ask_quote": "Forty percent is my floor",
+    "terms": [],
+    "dropped": [],
+    "belief_changes": [],
+    "affordability": {
+     "max_bp": 5200,
+     "curve": [
+      {
+       "bp": 100,
+       "feasible": false
+      },
+      {
+       "bp": 200,
+       "feasible": false
+      },
+      {
+       "bp": 300,
+       "feasible": false
+      },
+      {
+       "bp": 400,
+       "feasible": false
+      },
+      {
+       "bp": 500,
+       "feasible": false
+      },
+      {
+       "bp": 600,
+       "feasible": false
+      },
+      {
+       "bp": 700,
+       "feasible": false
+      },
+      {
+       "bp": 800,
+       "feasible": false
+      },
+      {
+       "bp": 900,
+       "feasible": false
+      },
+      {
+       "bp": 1000,
+       "feasible": false
+      },
+      {
+       "bp": 1100,
+       "feasible": false
+      },
+      {
+       "bp": 1200,
+       "feasible": false
+      },
+      {
+       "bp": 1300,
+       "feasible": false
+      },
+      {
+       "bp": 1400,
+       "feasible": false
+      },
+      {
+       "bp": 1500,
+       "feasible": false
+      },
+      {
+       "bp": 1600,
+       "feasible": false
+      },
+      {
+       "bp": 1700,
+       "feasible": false
+      },
+      {
+       "bp": 1800,
+       "feasible": false
+      },
+      {
+       "bp": 1900,
+       "feasible": false
+      },
+      {
+       "bp": 2000,
+       "feasible": true
+      },
+      {
+       "bp": 2100,
+       "feasible": true
+      },
+      {
+       "bp": 2200,
+       "feasible": true
+      },
+      {
+       "bp": 2300,
+       "feasible": true
+      },
+      {
+       "bp": 2400,
+       "feasible": true
+      },
+      {
+       "bp": 2500,
+       "feasible": true
+      },
+      {
+       "bp": 2600,
+       "feasible": true
+      },
+      {
+       "bp": 2700,
+       "feasible": true
+      },
+      {
+       "bp": 2800,
+       "feasible": true
+      },
+      {
+       "bp": 2900,
+       "feasible": true
+      },
+      {
+       "bp": 3000,
+       "feasible": true
+      },
+      {
+       "bp": 3100,
+       "feasible": true
+      },
+      {
+       "bp": 3200,
+       "feasible": true
+      },
+      {
+       "bp": 3300,
+       "feasible": false
+      },
+      {
+       "bp": 3400,
+       "feasible": false
+      },
+      {
+       "bp": 3500,
+       "feasible": false
+      },
+      {
+       "bp": 3600,
+       "feasible": true
+      },
+      {
+       "bp": 3700,
+       "feasible": true
+      },
+      {
+       "bp": 3800,
+       "feasible": true
+      },
+      {
+       "bp": 3900,
+       "feasible": true
+      },
+      {
+       "bp": 4000,
+       "feasible": true
+      },
+      {
+       "bp": 4100,
+       "feasible": true
+      },
+      {
+       "bp": 4200,
+       "feasible": true
+      },
+      {
+       "bp": 4300,
+       "feasible": true
+      },
+      {
+       "bp": 4400,
+       "feasible": true
+      },
+      {
+       "bp": 4500,
+       "feasible": true
+      },
+      {
+       "bp": 4600,
+       "feasible": true
+      },
+      {
+       "bp": 4700,
+       "feasible": true
+      },
+      {
+       "bp": 4800,
+       "feasible": true
+      },
+      {
+       "bp": 4900,
+       "feasible": true
+      },
+      {
+       "bp": 5000,
+       "feasible": true
+      },
+      {
+       "bp": 5100,
+       "feasible": true
+      },
+      {
+       "bp": 5200,
+       "feasible": true
+      },
+      {
+       "bp": 5300,
+       "feasible": false
+      },
+      {
+       "bp": 5400,
+       "feasible": false
+      },
+      {
+       "bp": 5500,
+       "feasible": false
+      },
+      {
+       "bp": 5600,
+       "feasible": false
+      },
+      {
+       "bp": 5700,
+       "feasible": false
+      },
+      {
+       "bp": 5800,
+       "feasible": false
+      },
+      {
+       "bp": 5900,
+       "feasible": false
+      },
+      {
+       "bp": 6000,
+       "feasible": false
+      },
+      {
+       "bp": 6100,
+       "feasible": false
+      },
+      {
+       "bp": 6200,
+       "feasible": false
+      },
+      {
+       "bp": 6300,
+       "feasible": false
+      },
+      {
+       "bp": 6400,
+       "feasible": false
+      },
+      {
+       "bp": 6500,
+       "feasible": false
+      },
+      {
+       "bp": 6600,
+       "feasible": false
+      },
+      {
+       "bp": 6700,
+       "feasible": false
+      },
+      {
+       "bp": 6800,
+       "feasible": false
+      },
+      {
+       "bp": 6900,
+       "feasible": false
+      },
+      {
+       "bp": 7000,
+       "feasible": false
+      },
+      {
+       "bp": 7100,
+       "feasible": false
+      },
+      {
+       "bp": 7200,
+       "feasible": false
+      },
+      {
+       "bp": 7300,
+       "feasible": false
+      },
+      {
+       "bp": 7400,
+       "feasible": false
+      },
+      {
+       "bp": 7500,
+       "feasible": false
+      },
+      {
+       "bp": 7600,
+       "feasible": false
+      },
+      {
+       "bp": 7700,
+       "feasible": false
+      },
+      {
+       "bp": 7800,
+       "feasible": false
+      },
+      {
+       "bp": 7900,
+       "feasible": false
+      },
+      {
+       "bp": 8000,
+       "feasible": false
+      },
+      {
+       "bp": 8100,
+       "feasible": false
+      },
+      {
+       "bp": 8200,
+       "feasible": false
+      },
+      {
+       "bp": 8300,
+       "feasible": false
+      },
+      {
+       "bp": 8400,
+       "feasible": false
+      },
+      {
+       "bp": 8500,
+       "feasible": false
+      },
+      {
+       "bp": 8600,
+       "feasible": false
+      },
+      {
+       "bp": 8700,
+       "feasible": false
+      },
+      {
+       "bp": 8800,
+       "feasible": false
+      },
+      {
+       "bp": 8900,
+       "feasible": false
+      },
+      {
+       "bp": 9000,
+       "feasible": false
+      },
+      {
+       "bp": 9100,
+       "feasible": false
+      },
+      {
+       "bp": 9200,
+       "feasible": false
+      },
+      {
+       "bp": 9300,
+       "feasible": false
+      },
+      {
+       "bp": 9400,
+       "feasible": false
+      },
+      {
+       "bp": 9500,
+       "feasible": false
+      },
+      {
+       "bp": 9600,
+       "feasible": false
+      },
+      {
+       "bp": 9700,
+       "feasible": false
+      },
+      {
+       "bp": 9800,
+       "feasible": false
+      },
+      {
+       "bp": 9900,
+       "feasible": false
+      },
+      {
+       "bp": 10000,
+       "feasible": false
+      }
+     ]
+    },
+    "decide": {
+     "intent": "CONFIRM_SCHEDULE",
+     "reason": "bp=4000",
+     "reason_text": "Accept 40%: their stated floor is one the client can afford, so read back the schedule."
+    },
+    "counter_bp": 4000,
+    "nlg": {
+     "mode": "llm",
+     "template": "{settlement_pct} works for us. We can do {num_payments} payments totaling {offer_total}, starting {first_payment_date}. Would that work?",
+     "guards": [
+      {
+       "stage": "template",
+       "ok": true,
+       "reason": null
+      },
+      {
+       "stage": "rendered",
+       "ok": true,
+       "reason": null
+      }
+     ],
+     "fallback_used": false
+    },
+    "spoken": [
+     {
+      "id": "t4-s0",
+      "text": "40% works for us."
+     },
+     {
+      "id": "t4-s1",
+      "text": "We can do 5 payments totaling $500.00, starting November 2."
+     },
+     {
+      "id": "t4-s2",
+      "text": "Would that work?"
+     }
+    ],
+    "timings": {
+     "stt_ms": 402,
+     "queue_ms": 0,
+     "nlu_ms": 701,
+     "engine_ms": 12.3,
+     "policy_ms": 0.3,
+     "nlg_ms": 548,
+     "tts_onset_ms": 298
+    }
+   }
+  },
+  {
+   "t": 43028,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 44223,
+   "ev": {
+    "type": "phase",
+    "phase": "NEGOTIATE",
+    "intent": null,
+    "turn": 4
+   }
+  },
+  {
+   "t": 44223,
+   "ev": {
+    "type": "eval",
+    "feasible": true,
+    "shape": "even",
+    "offer_total_cents": 50000,
+    "program_fee_cents": 22500,
+    "assumed_fields": [
+     "first_payment_date",
+     "max_segments",
+     "max_token_pays",
+     "min_payment_tiers"
+    ],
+    "agreed_bp": 4000,
+    "rows": [
+     {
+      "date": "2026-11-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 68250
+     },
+     {
+      "date": "2026-12-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 74800
+     },
+     {
+      "date": "2027-01-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 81350
+     },
+     {
+      "date": "2027-02-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 87900
+     },
+     {
+      "date": "2027-03-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 94450
+     }
+    ],
+    "additional_funds": null,
+    "max_bp": 5200
+   }
+  },
+  {
+   "t": 44223,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 47728,
+   "ev": {
+    "type": "phase",
+    "phase": "NEGOTIATE",
+    "intent": null,
+    "turn": 4
+   }
+  },
+  {
+   "t": 47728,
+   "ev": {
+    "type": "eval",
+    "feasible": true,
+    "shape": "even",
+    "offer_total_cents": 50000,
+    "program_fee_cents": 22500,
+    "assumed_fields": [
+     "first_payment_date",
+     "max_segments",
+     "max_token_pays",
+     "min_payment_tiers"
+    ],
+    "agreed_bp": 4000,
+    "rows": [
+     {
+      "date": "2026-11-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 68250
+     },
+     {
+      "date": "2026-12-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 74800
+     },
+     {
+      "date": "2027-01-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 81350
+     },
+     {
+      "date": "2027-02-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 87900
+     },
+     {
+      "date": "2027-03-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 94450
+     }
+    ],
+    "additional_funds": null,
+    "max_bp": 5200
+   }
+  },
+  {
+   "t": 47728,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 48868,
+   "ev": {
+    "type": "phase",
+    "phase": "CONFIRM",
+    "intent": null,
+    "turn": 4
+   }
+  },
+  {
+   "t": 48868,
+   "ev": {
+    "type": "eval",
+    "feasible": true,
+    "shape": "even",
+    "offer_total_cents": 50000,
+    "program_fee_cents": 22500,
+    "assumed_fields": [
+     "first_payment_date",
+     "max_segments",
+     "max_token_pays",
+     "min_payment_tiers"
+    ],
+    "agreed_bp": 4000,
+    "rows": [
+     {
+      "date": "2026-11-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 68250
+     },
+     {
+      "date": "2026-12-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 74800
+     },
+     {
+      "date": "2027-01-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 81350
+     },
+     {
+      "date": "2027-02-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 87900
+     },
+     {
+      "date": "2027-03-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 94450
+     }
+    ],
+    "additional_funds": null,
+    "max_bp": 5200
+   }
+  },
+  {
+   "t": 48868,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 51468,
+   "ev": {
+    "type": "transcript",
+    "role": "creditor",
+    "text": "Yes, that works for us.",
+    "spoken": true,
+    "sentence_id": null,
+    "blocked": false
+   }
+  },
+  {
+   "t": 52274,
+   "ev": {
+    "type": "say",
+    "id": "t5-s0",
+    "text": "I have sent this proposal to the client for approval."
+   }
+  },
+  {
+   "t": 52274,
+   "ev": {
+    "type": "transcript",
+    "role": "agent",
+    "text": "I have sent this proposal to the client for approval.",
+    "spoken": false,
+    "sentence_id": "t5-s0",
+    "blocked": false
+   }
+  },
+  {
+   "t": 52314,
+   "ev": {
+    "type": "say",
+    "id": "t5-s1",
+    "text": "Do you need anything else before we end the call?"
+   }
+  },
+  {
+   "t": 52314,
+   "ev": {
+    "type": "transcript",
+    "role": "agent",
+    "text": "Do you need anything else before we end the call?",
+    "spoken": false,
+    "sentence_id": "t5-s1",
+    "blocked": false
+   }
+  },
+  {
+   "t": 52319,
+   "ev": {
+    "type": "belief",
+    "terms": [
+     {
+      "field": "max_payments",
+      "value": 8,
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "up to eight monthly payments"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "min_payment_cents",
+      "value": 10000,
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "at least one hundred dollars each"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "payment_structure",
+      "value": "even",
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "all the same amount"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "first_payment_date",
+      "value": "2026-11-02",
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "max_segments",
+      "value": 2,
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "max_token_pays",
+      "value": 8,
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "min_payment_tiers",
+      "value": [],
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     }
+    ]
+   }
+  },
+  {
+   "t": 52319,
+   "ev": {
+    "type": "phase",
+    "phase": "CONFIRM",
+    "intent": "PROPOSE_WRAP",
+    "turn": 5
+   }
+  },
+  {
+   "t": 52319,
+   "ev": {
+    "type": "latency",
+    "turn": 5,
+    "stt_ms": 350,
+    "nlu_ms": 455,
+    "policy_ms": 0.2,
+    "nlg_ms": 0.3,
+    "server_total_ms": 455.9
+   }
+  },
+  {
+   "t": 52319,
+   "ev": {
+    "type": "audit",
+    "id": 34,
+    "ts": "2026-10-07T15:00:52.319Z",
+    "actor": "creditor",
+    "event": "utterance",
+    "payload": {
+     "text": "Yes, that works for us.",
+     "turn": 5
+    }
+   }
+  },
+  {
+   "t": 52319,
+   "ev": {
+    "type": "audit",
+    "id": 35,
+    "ts": "2026-10-07T15:00:52.319Z",
+    "actor": "llm",
+    "event": "llm_call",
+    "payload": {
+     "role": "nlu",
+     "provider": "groq",
+     "model": "synthetic-nlu-model",
+     "latency_ms": 455,
+     "prompt_tokens": 812,
+     "completion_tokens": 96,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null
+    }
+   }
+  },
+  {
+   "t": 52319,
+   "ev": {
+    "type": "audit",
+    "id": 36,
+    "ts": "2026-10-07T15:00:52.319Z",
+    "actor": "nlu",
+    "event": "nlu_result",
+    "payload": {
+     "stance": "accept",
+     "ask_bp": null,
+     "terms": []
+    }
+   }
+  },
+  {
+   "t": 52319,
+   "ev": {
+    "type": "audit",
+    "id": 37,
+    "ts": "2026-10-07T15:00:52.319Z",
+    "actor": "engine",
+    "event": "affordability",
+    "payload": {
+     "max_bp": 5200,
+     "feasible_points": 30
+    },
+    "private": true
+   }
+  },
+  {
+   "t": 52319,
+   "ev": {
+    "type": "audit",
+    "id": 38,
+    "ts": "2026-10-07T15:00:52.319Z",
+    "actor": "policy",
+    "event": "decide",
+    "payload": {
+     "intent": "PROPOSE_WRAP",
+     "reason": "confirmed"
+    }
+   }
+  },
+  {
+   "t": 52319,
+   "ev": {
+    "type": "turn_trace",
+    "turn": 5,
+    "creditor_text": "Yes, that works for us.",
+    "stance": "accept",
+    "ask_bp": null,
+    "ask_quote": null,
+    "terms": [],
+    "dropped": [],
+    "belief_changes": [],
+    "affordability": {
+     "max_bp": 5200,
+     "curve": [
+      {
+       "bp": 100,
+       "feasible": false
+      },
+      {
+       "bp": 200,
+       "feasible": false
+      },
+      {
+       "bp": 300,
+       "feasible": false
+      },
+      {
+       "bp": 400,
+       "feasible": false
+      },
+      {
+       "bp": 500,
+       "feasible": false
+      },
+      {
+       "bp": 600,
+       "feasible": false
+      },
+      {
+       "bp": 700,
+       "feasible": false
+      },
+      {
+       "bp": 800,
+       "feasible": false
+      },
+      {
+       "bp": 900,
+       "feasible": false
+      },
+      {
+       "bp": 1000,
+       "feasible": false
+      },
+      {
+       "bp": 1100,
+       "feasible": false
+      },
+      {
+       "bp": 1200,
+       "feasible": false
+      },
+      {
+       "bp": 1300,
+       "feasible": false
+      },
+      {
+       "bp": 1400,
+       "feasible": false
+      },
+      {
+       "bp": 1500,
+       "feasible": false
+      },
+      {
+       "bp": 1600,
+       "feasible": false
+      },
+      {
+       "bp": 1700,
+       "feasible": false
+      },
+      {
+       "bp": 1800,
+       "feasible": false
+      },
+      {
+       "bp": 1900,
+       "feasible": false
+      },
+      {
+       "bp": 2000,
+       "feasible": true
+      },
+      {
+       "bp": 2100,
+       "feasible": true
+      },
+      {
+       "bp": 2200,
+       "feasible": true
+      },
+      {
+       "bp": 2300,
+       "feasible": true
+      },
+      {
+       "bp": 2400,
+       "feasible": true
+      },
+      {
+       "bp": 2500,
+       "feasible": true
+      },
+      {
+       "bp": 2600,
+       "feasible": true
+      },
+      {
+       "bp": 2700,
+       "feasible": true
+      },
+      {
+       "bp": 2800,
+       "feasible": true
+      },
+      {
+       "bp": 2900,
+       "feasible": true
+      },
+      {
+       "bp": 3000,
+       "feasible": true
+      },
+      {
+       "bp": 3100,
+       "feasible": true
+      },
+      {
+       "bp": 3200,
+       "feasible": true
+      },
+      {
+       "bp": 3300,
+       "feasible": false
+      },
+      {
+       "bp": 3400,
+       "feasible": false
+      },
+      {
+       "bp": 3500,
+       "feasible": false
+      },
+      {
+       "bp": 3600,
+       "feasible": true
+      },
+      {
+       "bp": 3700,
+       "feasible": true
+      },
+      {
+       "bp": 3800,
+       "feasible": true
+      },
+      {
+       "bp": 3900,
+       "feasible": true
+      },
+      {
+       "bp": 4000,
+       "feasible": true
+      },
+      {
+       "bp": 4100,
+       "feasible": true
+      },
+      {
+       "bp": 4200,
+       "feasible": true
+      },
+      {
+       "bp": 4300,
+       "feasible": true
+      },
+      {
+       "bp": 4400,
+       "feasible": true
+      },
+      {
+       "bp": 4500,
+       "feasible": true
+      },
+      {
+       "bp": 4600,
+       "feasible": true
+      },
+      {
+       "bp": 4700,
+       "feasible": true
+      },
+      {
+       "bp": 4800,
+       "feasible": true
+      },
+      {
+       "bp": 4900,
+       "feasible": true
+      },
+      {
+       "bp": 5000,
+       "feasible": true
+      },
+      {
+       "bp": 5100,
+       "feasible": true
+      },
+      {
+       "bp": 5200,
+       "feasible": true
+      },
+      {
+       "bp": 5300,
+       "feasible": false
+      },
+      {
+       "bp": 5400,
+       "feasible": false
+      },
+      {
+       "bp": 5500,
+       "feasible": false
+      },
+      {
+       "bp": 5600,
+       "feasible": false
+      },
+      {
+       "bp": 5700,
+       "feasible": false
+      },
+      {
+       "bp": 5800,
+       "feasible": false
+      },
+      {
+       "bp": 5900,
+       "feasible": false
+      },
+      {
+       "bp": 6000,
+       "feasible": false
+      },
+      {
+       "bp": 6100,
+       "feasible": false
+      },
+      {
+       "bp": 6200,
+       "feasible": false
+      },
+      {
+       "bp": 6300,
+       "feasible": false
+      },
+      {
+       "bp": 6400,
+       "feasible": false
+      },
+      {
+       "bp": 6500,
+       "feasible": false
+      },
+      {
+       "bp": 6600,
+       "feasible": false
+      },
+      {
+       "bp": 6700,
+       "feasible": false
+      },
+      {
+       "bp": 6800,
+       "feasible": false
+      },
+      {
+       "bp": 6900,
+       "feasible": false
+      },
+      {
+       "bp": 7000,
+       "feasible": false
+      },
+      {
+       "bp": 7100,
+       "feasible": false
+      },
+      {
+       "bp": 7200,
+       "feasible": false
+      },
+      {
+       "bp": 7300,
+       "feasible": false
+      },
+      {
+       "bp": 7400,
+       "feasible": false
+      },
+      {
+       "bp": 7500,
+       "feasible": false
+      },
+      {
+       "bp": 7600,
+       "feasible": false
+      },
+      {
+       "bp": 7700,
+       "feasible": false
+      },
+      {
+       "bp": 7800,
+       "feasible": false
+      },
+      {
+       "bp": 7900,
+       "feasible": false
+      },
+      {
+       "bp": 8000,
+       "feasible": false
+      },
+      {
+       "bp": 8100,
+       "feasible": false
+      },
+      {
+       "bp": 8200,
+       "feasible": false
+      },
+      {
+       "bp": 8300,
+       "feasible": false
+      },
+      {
+       "bp": 8400,
+       "feasible": false
+      },
+      {
+       "bp": 8500,
+       "feasible": false
+      },
+      {
+       "bp": 8600,
+       "feasible": false
+      },
+      {
+       "bp": 8700,
+       "feasible": false
+      },
+      {
+       "bp": 8800,
+       "feasible": false
+      },
+      {
+       "bp": 8900,
+       "feasible": false
+      },
+      {
+       "bp": 9000,
+       "feasible": false
+      },
+      {
+       "bp": 9100,
+       "feasible": false
+      },
+      {
+       "bp": 9200,
+       "feasible": false
+      },
+      {
+       "bp": 9300,
+       "feasible": false
+      },
+      {
+       "bp": 9400,
+       "feasible": false
+      },
+      {
+       "bp": 9500,
+       "feasible": false
+      },
+      {
+       "bp": 9600,
+       "feasible": false
+      },
+      {
+       "bp": 9700,
+       "feasible": false
+      },
+      {
+       "bp": 9800,
+       "feasible": false
+      },
+      {
+       "bp": 9900,
+       "feasible": false
+      },
+      {
+       "bp": 10000,
+       "feasible": false
+      }
+     ]
+    },
+    "decide": {
+     "intent": "PROPOSE_WRAP",
+     "reason": "confirmed",
+     "reason_text": "They accepted the read-back schedule, so send it to the client for approval."
+    },
+    "counter_bp": null,
+    "nlg": {
+     "mode": "template",
+     "template": "I have sent this proposal to the client for approval. Do you need anything else before we end the call?",
+     "guards": [
+      {
+       "stage": "template",
+       "ok": true,
+       "reason": null
+      },
+      {
+       "stage": "rendered",
+       "ok": true,
+       "reason": null
+      }
+     ],
+     "fallback_used": false
+    },
+    "spoken": [
+     {
+      "id": "t5-s0",
+      "text": "I have sent this proposal to the client for approval."
+     },
+     {
+      "id": "t5-s1",
+      "text": "Do you need anything else before we end the call?"
+     }
+    ],
+    "timings": {
+     "stt_ms": 350,
+     "queue_ms": 0,
+     "nlu_ms": 455,
+     "engine_ms": 0.4,
+     "policy_ms": 0.2,
+     "nlg_ms": 0.3,
+     "tts_onset_ms": 300
+    }
+   }
+  },
+  {
+   "t": 52319,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 55494,
+   "ev": {
+    "type": "phase",
+    "phase": "CONFIRM",
+    "intent": null,
+    "turn": 5
+   }
+  },
+  {
+   "t": 55494,
+   "ev": {
+    "type": "eval",
+    "feasible": true,
+    "shape": "even",
+    "offer_total_cents": 50000,
+    "program_fee_cents": 22500,
+    "assumed_fields": [
+     "first_payment_date",
+     "max_segments",
+     "max_token_pays",
+     "min_payment_tiers"
+    ],
+    "agreed_bp": 4000,
+    "rows": [
+     {
+      "date": "2026-11-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 68250
+     },
+     {
+      "date": "2026-12-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 74800
+     },
+     {
+      "date": "2027-01-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 81350
+     },
+     {
+      "date": "2027-02-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 87900
+     },
+     {
+      "date": "2027-03-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 94450
+     }
+    ],
+    "additional_funds": null,
+    "max_bp": 5200
+   }
+  },
+  {
+   "t": 55494,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 58449,
+   "ev": {
+    "type": "phase",
+    "phase": "WRAP",
+    "intent": null,
+    "turn": 5
+   }
+  },
+  {
+   "t": 58449,
+   "ev": {
+    "type": "eval",
+    "feasible": true,
+    "shape": "even",
+    "offer_total_cents": 50000,
+    "program_fee_cents": 22500,
+    "assumed_fields": [
+     "first_payment_date",
+     "max_segments",
+     "max_token_pays",
+     "min_payment_tiers"
+    ],
+    "agreed_bp": 4000,
+    "rows": [
+     {
+      "date": "2026-11-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 68250
+     },
+     {
+      "date": "2026-12-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 74800
+     },
+     {
+      "date": "2027-01-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 81350
+     },
+     {
+      "date": "2027-02-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 87900
+     },
+     {
+      "date": "2027-03-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 94450
+     }
+    ],
+    "additional_funds": null,
+    "max_bp": 5200
+   }
+  },
+  {
+   "t": 58449,
+   "ev": {
+    "type": "agreement",
+    "creditor": "NorthPeak Collections",
+    "bp": 4000,
+    "offer_total": 50000,
+    "status": "pending_client_approval",
+    "assumed_fields": [
+     "first_payment_date"
+    ],
+    "rows": [
+     {
+      "date": "2026-11-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 68250
+     },
+     {
+      "date": "2026-12-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 74800
+     },
+     {
+      "date": "2027-01-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 81350
+     },
+     {
+      "date": "2027-02-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 87900
+     },
+     {
+      "date": "2027-03-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 94450
+     }
+    ]
+   }
+  },
+  {
+   "t": 58449,
+   "ev": {
+    "type": "audit",
+    "id": 39,
+    "ts": "2026-10-07T15:00:58.449Z",
+    "actor": "orchestrator",
+    "event": "agreement_drafted",
+    "payload": {
+     "bp": 4000,
+     "offer_total": 50000
+    }
+   }
+  },
+  {
+   "t": 58449,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 61049,
+   "ev": {
+    "type": "transcript",
+    "role": "creditor",
+    "text": "No, that's everything. Thanks.",
+    "spoken": true,
+    "sentence_id": null,
+    "blocked": false
+   }
+  },
+  {
+   "t": 61782,
+   "ev": {
+    "type": "say",
+    "id": "t6-s0",
+    "text": "Thank you for your time."
+   }
+  },
+  {
+   "t": 61782,
+   "ev": {
+    "type": "transcript",
+    "role": "agent",
+    "text": "Thank you for your time.",
+    "spoken": false,
+    "sentence_id": "t6-s0",
+    "blocked": false
+   }
+  },
+  {
+   "t": 61822,
+   "ev": {
+    "type": "say",
+    "id": "t6-s1",
+    "text": "Goodbye."
+   }
+  },
+  {
+   "t": 61822,
+   "ev": {
+    "type": "transcript",
+    "role": "agent",
+    "text": "Goodbye.",
+    "spoken": false,
+    "sentence_id": "t6-s1",
+    "blocked": false
+   }
+  },
+  {
+   "t": 61827,
+   "ev": {
+    "type": "belief",
+    "terms": [
+     {
+      "field": "max_payments",
+      "value": 8,
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "up to eight monthly payments"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "min_payment_cents",
+      "value": 10000,
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "at least one hundred dollars each"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "payment_structure",
+      "value": "even",
+      "status": "KNOWN",
+      "evidence": [
+       {
+        "turn": 1,
+        "quote": "all the same amount"
+       }
+      ],
+      "history": []
+     },
+     {
+      "field": "first_payment_date",
+      "value": "2026-11-02",
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "max_segments",
+      "value": 2,
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "max_token_pays",
+      "value": 8,
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     },
+     {
+      "field": "min_payment_tiers",
+      "value": [],
+      "status": "ASSUMED",
+      "evidence": [],
+      "history": []
+     }
+    ]
+   }
+  },
+  {
+   "t": 61827,
+   "ev": {
+    "type": "phase",
+    "phase": "WRAP",
+    "intent": "CLOSE",
+    "turn": 6
+   }
+  },
+  {
+   "t": 61827,
+   "ev": {
+    "type": "latency",
+    "turn": 6,
+    "stt_ms": 330,
+    "nlu_ms": 402,
+    "policy_ms": 0.1,
+    "nlg_ms": 0.2,
+    "server_total_ms": 402.6
+   }
+  },
+  {
+   "t": 61827,
+   "ev": {
+    "type": "audit",
+    "id": 40,
+    "ts": "2026-10-07T15:01:01.827Z",
+    "actor": "creditor",
+    "event": "utterance",
+    "payload": {
+     "text": "No, that's everything. Thanks.",
+     "turn": 6
+    }
+   }
+  },
+  {
+   "t": 61827,
+   "ev": {
+    "type": "audit",
+    "id": 41,
+    "ts": "2026-10-07T15:01:01.827Z",
+    "actor": "llm",
+    "event": "llm_call",
+    "payload": {
+     "role": "nlu",
+     "provider": "groq",
+     "model": "synthetic-nlu-model",
+     "latency_ms": 402,
+     "prompt_tokens": 812,
+     "completion_tokens": 96,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null
+    }
+   }
+  },
+  {
+   "t": 61827,
+   "ev": {
+    "type": "audit",
+    "id": 42,
+    "ts": "2026-10-07T15:01:01.827Z",
+    "actor": "nlu",
+    "event": "nlu_result",
+    "payload": {
+     "stance": "accept",
+     "ask_bp": null,
+     "terms": []
+    }
+   }
+  },
+  {
+   "t": 61827,
+   "ev": {
+    "type": "audit",
+    "id": 43,
+    "ts": "2026-10-07T15:01:01.827Z",
+    "actor": "engine",
+    "event": "affordability",
+    "payload": {
+     "max_bp": 5200,
+     "feasible_points": 30
+    },
+    "private": true
+   }
+  },
+  {
+   "t": 61827,
+   "ev": {
+    "type": "audit",
+    "id": 44,
+    "ts": "2026-10-07T15:01:01.827Z",
+    "actor": "policy",
+    "event": "decide",
+    "payload": {
+     "intent": "CLOSE",
+     "reason": "thanks_accept"
+    }
+   }
+  },
+  {
+   "t": 61827,
+   "ev": {
+    "type": "turn_trace",
+    "turn": 6,
+    "creditor_text": "No, that's everything. Thanks.",
+    "stance": "accept",
+    "ask_bp": null,
+    "ask_quote": null,
+    "terms": [],
+    "dropped": [],
+    "belief_changes": [],
+    "affordability": {
+     "max_bp": 5200,
+     "curve": [
+      {
+       "bp": 100,
+       "feasible": false
+      },
+      {
+       "bp": 200,
+       "feasible": false
+      },
+      {
+       "bp": 300,
+       "feasible": false
+      },
+      {
+       "bp": 400,
+       "feasible": false
+      },
+      {
+       "bp": 500,
+       "feasible": false
+      },
+      {
+       "bp": 600,
+       "feasible": false
+      },
+      {
+       "bp": 700,
+       "feasible": false
+      },
+      {
+       "bp": 800,
+       "feasible": false
+      },
+      {
+       "bp": 900,
+       "feasible": false
+      },
+      {
+       "bp": 1000,
+       "feasible": false
+      },
+      {
+       "bp": 1100,
+       "feasible": false
+      },
+      {
+       "bp": 1200,
+       "feasible": false
+      },
+      {
+       "bp": 1300,
+       "feasible": false
+      },
+      {
+       "bp": 1400,
+       "feasible": false
+      },
+      {
+       "bp": 1500,
+       "feasible": false
+      },
+      {
+       "bp": 1600,
+       "feasible": false
+      },
+      {
+       "bp": 1700,
+       "feasible": false
+      },
+      {
+       "bp": 1800,
+       "feasible": false
+      },
+      {
+       "bp": 1900,
+       "feasible": false
+      },
+      {
+       "bp": 2000,
+       "feasible": true
+      },
+      {
+       "bp": 2100,
+       "feasible": true
+      },
+      {
+       "bp": 2200,
+       "feasible": true
+      },
+      {
+       "bp": 2300,
+       "feasible": true
+      },
+      {
+       "bp": 2400,
+       "feasible": true
+      },
+      {
+       "bp": 2500,
+       "feasible": true
+      },
+      {
+       "bp": 2600,
+       "feasible": true
+      },
+      {
+       "bp": 2700,
+       "feasible": true
+      },
+      {
+       "bp": 2800,
+       "feasible": true
+      },
+      {
+       "bp": 2900,
+       "feasible": true
+      },
+      {
+       "bp": 3000,
+       "feasible": true
+      },
+      {
+       "bp": 3100,
+       "feasible": true
+      },
+      {
+       "bp": 3200,
+       "feasible": true
+      },
+      {
+       "bp": 3300,
+       "feasible": false
+      },
+      {
+       "bp": 3400,
+       "feasible": false
+      },
+      {
+       "bp": 3500,
+       "feasible": false
+      },
+      {
+       "bp": 3600,
+       "feasible": true
+      },
+      {
+       "bp": 3700,
+       "feasible": true
+      },
+      {
+       "bp": 3800,
+       "feasible": true
+      },
+      {
+       "bp": 3900,
+       "feasible": true
+      },
+      {
+       "bp": 4000,
+       "feasible": true
+      },
+      {
+       "bp": 4100,
+       "feasible": true
+      },
+      {
+       "bp": 4200,
+       "feasible": true
+      },
+      {
+       "bp": 4300,
+       "feasible": true
+      },
+      {
+       "bp": 4400,
+       "feasible": true
+      },
+      {
+       "bp": 4500,
+       "feasible": true
+      },
+      {
+       "bp": 4600,
+       "feasible": true
+      },
+      {
+       "bp": 4700,
+       "feasible": true
+      },
+      {
+       "bp": 4800,
+       "feasible": true
+      },
+      {
+       "bp": 4900,
+       "feasible": true
+      },
+      {
+       "bp": 5000,
+       "feasible": true
+      },
+      {
+       "bp": 5100,
+       "feasible": true
+      },
+      {
+       "bp": 5200,
+       "feasible": true
+      },
+      {
+       "bp": 5300,
+       "feasible": false
+      },
+      {
+       "bp": 5400,
+       "feasible": false
+      },
+      {
+       "bp": 5500,
+       "feasible": false
+      },
+      {
+       "bp": 5600,
+       "feasible": false
+      },
+      {
+       "bp": 5700,
+       "feasible": false
+      },
+      {
+       "bp": 5800,
+       "feasible": false
+      },
+      {
+       "bp": 5900,
+       "feasible": false
+      },
+      {
+       "bp": 6000,
+       "feasible": false
+      },
+      {
+       "bp": 6100,
+       "feasible": false
+      },
+      {
+       "bp": 6200,
+       "feasible": false
+      },
+      {
+       "bp": 6300,
+       "feasible": false
+      },
+      {
+       "bp": 6400,
+       "feasible": false
+      },
+      {
+       "bp": 6500,
+       "feasible": false
+      },
+      {
+       "bp": 6600,
+       "feasible": false
+      },
+      {
+       "bp": 6700,
+       "feasible": false
+      },
+      {
+       "bp": 6800,
+       "feasible": false
+      },
+      {
+       "bp": 6900,
+       "feasible": false
+      },
+      {
+       "bp": 7000,
+       "feasible": false
+      },
+      {
+       "bp": 7100,
+       "feasible": false
+      },
+      {
+       "bp": 7200,
+       "feasible": false
+      },
+      {
+       "bp": 7300,
+       "feasible": false
+      },
+      {
+       "bp": 7400,
+       "feasible": false
+      },
+      {
+       "bp": 7500,
+       "feasible": false
+      },
+      {
+       "bp": 7600,
+       "feasible": false
+      },
+      {
+       "bp": 7700,
+       "feasible": false
+      },
+      {
+       "bp": 7800,
+       "feasible": false
+      },
+      {
+       "bp": 7900,
+       "feasible": false
+      },
+      {
+       "bp": 8000,
+       "feasible": false
+      },
+      {
+       "bp": 8100,
+       "feasible": false
+      },
+      {
+       "bp": 8200,
+       "feasible": false
+      },
+      {
+       "bp": 8300,
+       "feasible": false
+      },
+      {
+       "bp": 8400,
+       "feasible": false
+      },
+      {
+       "bp": 8500,
+       "feasible": false
+      },
+      {
+       "bp": 8600,
+       "feasible": false
+      },
+      {
+       "bp": 8700,
+       "feasible": false
+      },
+      {
+       "bp": 8800,
+       "feasible": false
+      },
+      {
+       "bp": 8900,
+       "feasible": false
+      },
+      {
+       "bp": 9000,
+       "feasible": false
+      },
+      {
+       "bp": 9100,
+       "feasible": false
+      },
+      {
+       "bp": 9200,
+       "feasible": false
+      },
+      {
+       "bp": 9300,
+       "feasible": false
+      },
+      {
+       "bp": 9400,
+       "feasible": false
+      },
+      {
+       "bp": 9500,
+       "feasible": false
+      },
+      {
+       "bp": 9600,
+       "feasible": false
+      },
+      {
+       "bp": 9700,
+       "feasible": false
+      },
+      {
+       "bp": 9800,
+       "feasible": false
+      },
+      {
+       "bp": 9900,
+       "feasible": false
+      },
+      {
+       "bp": 10000,
+       "feasible": false
+      }
+     ]
+    },
+    "decide": {
+     "intent": "CLOSE",
+     "reason": "thanks_accept",
+     "reason_text": "The rep has nothing else, so close the call politely."
+    },
+    "counter_bp": null,
+    "nlg": {
+     "mode": "template",
+     "template": "Thank you for your time. Goodbye.",
+     "guards": [
+      {
+       "stage": "template",
+       "ok": true,
+       "reason": null
+      },
+      {
+       "stage": "rendered",
+       "ok": true,
+       "reason": null
+      }
+     ],
+     "fallback_used": false
+    },
+    "spoken": [
+     {
+      "id": "t6-s0",
+      "text": "Thank you for your time."
+     },
+     {
+      "id": "t6-s1",
+      "text": "Goodbye."
+     }
+    ],
+    "timings": {
+     "stt_ms": 330,
+     "queue_ms": 0,
+     "nlu_ms": 402,
+     "engine_ms": 0.3,
+     "policy_ms": 0.1,
+     "nlg_ms": 0.2,
+     "tts_onset_ms": 295
+    }
+   }
+  },
+  {
+   "t": 61827,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 63407,
+   "ev": {
+    "type": "phase",
+    "phase": "WRAP",
+    "intent": null,
+    "turn": 6
+   }
+  },
+  {
+   "t": 63407,
+   "ev": {
+    "type": "eval",
+    "feasible": true,
+    "shape": "even",
+    "offer_total_cents": 50000,
+    "program_fee_cents": 22500,
+    "assumed_fields": [
+     "first_payment_date",
+     "max_segments",
+     "max_token_pays",
+     "min_payment_tiers"
+    ],
+    "agreed_bp": 4000,
+    "rows": [
+     {
+      "date": "2026-11-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 68250
+     },
+     {
+      "date": "2026-12-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 74800
+     },
+     {
+      "date": "2027-01-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 81350
+     },
+     {
+      "date": "2027-02-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 87900
+     },
+     {
+      "date": "2027-03-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 94450
+     }
+    ],
+    "additional_funds": null,
+    "max_bp": 5200
+   }
+  },
+  {
+   "t": 63407,
+   "ev": {
+    "type": "turn_done"
+   }
+  },
+  {
+   "t": 64107,
+   "ev": {
+    "type": "phase",
+    "phase": "END",
+    "intent": null,
+    "turn": 6
+   }
+  },
+  {
+   "t": 64107,
+   "ev": {
+    "type": "eval",
+    "feasible": true,
+    "shape": "even",
+    "offer_total_cents": 50000,
+    "program_fee_cents": 22500,
+    "assumed_fields": [
+     "first_payment_date",
+     "max_segments",
+     "max_token_pays",
+     "min_payment_tiers"
+    ],
+    "agreed_bp": 4000,
+    "rows": [
+     {
+      "date": "2026-11-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 68250
+     },
+     {
+      "date": "2026-12-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 74800
+     },
+     {
+      "date": "2027-01-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 81350
+     },
+     {
+      "date": "2027-02-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 87900
+     },
+     {
+      "date": "2027-03-02",
+      "creditor_payment_cents": 10000,
+      "program_fee_cents": 4500,
+      "bank_fee_cents": 950,
+      "balance_cents": 94450
+     }
+    ],
+    "additional_funds": null,
+    "max_bp": 5200
+   }
+  },
+  {
+   "t": 64107,
+   "ev": {
+    "type": "turn_done"
+   }
+  }
+ ]
+}

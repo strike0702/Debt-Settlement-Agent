@@ -2,81 +2,77 @@
 
 [![CI](https://github.com/strike0702/Debt-Settlement-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/strike0702/Debt-Settlement-Agent/actions/workflows/ci.yml)
 
-A conversational agent that negotiates debt settlements. Same policy and engine whether you type or talk.
+A voice and text agent that negotiates a debt settlement with a creditor representative. An LLM handles the language. Python code decides every offer, every number, and whether the call can close.
+
+Personal project. Synthetic data. Not a live collections product.
+
+## Demo
 
 **Live demo:** [debt-settlement-agent-ggor.onrender.com](https://debt-settlement-agent-ggor.onrender.com/)
 
 ![Demo walkthrough](docs/assets/demo.gif)
 
-## Results
+You play the creditor. Type, or speak into the mic. The agent replies in the same chat, and through the browser's text-to-speech if you used voice.
 
-Each figure is copied from a frozen file under [`docs/eval/`](docs/eval/) and names the command that regenerates it. Phase 16 (LLM-only baseline) and Phase 17 (live server latency) did not run, so those tables are not here.
+Two views:
 
-### Offline policy eval
+- **Creditor rep.** Chat, a scripted playbook, extracted terms, proposed schedule.
+- **Operator (firm).** Same call, plus the client's private finances, engine verdict, guard blocks, latency, and the audit log. The representative never sees this panel.
 
-Source: [`docs/eval/policy_eval_20261006/summary.md`](docs/eval/policy_eval_20261006/summary.md) (`eval_20261006_004050_s7`, seed 7, oracle NLU, template NLG and sim, 100 scenarios, FakeLLM, no API keys). CI runs this on every push.
+Pick a scenario from the operator dropdown (`fixtures/scenarios/`: `easy_deal`, `counter_ladder`, `balloon_structure`, and a few harder ones). Every number is made up.
 
-```bash
-python -m eval.run_eval --nlu oracle --nlg template --sim-phrasing template \
-  --scenarios 100 --seed 7
-```
+The hosted app is a free Render instance, so the first load can sit. No login. Endpoints are open on purpose.
 
-| metric | value | n | 95% CI |
-|---|---|---|---|
-| [agreement_valid](docs/eval/policy_eval_20261006/summary.md) | [1](docs/eval/policy_eval_20261006/summary.md) | [23](docs/eval/policy_eval_20261006/summary.md) | [0.857–1.000](docs/eval/policy_eval_20261006/summary.md) |
-| [deal_rate_given_zopa](docs/eval/policy_eval_20261006/summary.md) | [1](docs/eval/policy_eval_20261006/summary.md) | [23](docs/eval/policy_eval_20261006/summary.md) | [0.857–1.000](docs/eval/policy_eval_20261006/summary.md) |
-| [no_deal_correct](docs/eval/policy_eval_20261006/summary.md) | [1](docs/eval/policy_eval_20261006/summary.md) | [22](docs/eval/policy_eval_20261006/summary.md) | [0.851–1.000](docs/eval/policy_eval_20261006/summary.md) |
-| [escalation_correct](docs/eval/policy_eval_20261006/summary.md) | [1](docs/eval/policy_eval_20261006/summary.md) | [55](docs/eval/policy_eval_20261006/summary.md) | [0.935–1.000](docs/eval/policy_eval_20261006/summary.md) |
-| [rule_extraction_accuracy](docs/eval/policy_eval_20261006/summary.md) | [0.670](docs/eval/policy_eval_20261006/summary.md) | [700](docs/eval/policy_eval_20261006/summary.md) | [0.634–0.704](docs/eval/policy_eval_20261006/summary.md) |
-| [false_known_rate](docs/eval/policy_eval_20261006/summary.md) | [0.000](docs/eval/policy_eval_20261006/summary.md) | [469](docs/eval/policy_eval_20261006/summary.md) | [0.000–0.008](docs/eval/policy_eval_20261006/summary.md) |
-| [stuck_rate](docs/eval/policy_eval_20261006/summary.md) | [0.000](docs/eval/policy_eval_20261006/summary.md) | [100](docs/eval/policy_eval_20261006/summary.md) | [0.000–0.037](docs/eval/policy_eval_20261006/summary.md) |
-| [sensitive_leaks](docs/eval/policy_eval_20261006/summary.md) | [0](docs/eval/policy_eval_20261006/summary.md) | | |
-| [unverified_figures_spoken](docs/eval/policy_eval_20261006/summary.md) | [0](docs/eval/policy_eval_20261006/summary.md) | | |
-| [guard_blocks](docs/eval/policy_eval_20261006/summary.md) | [0](docs/eval/policy_eval_20261006/summary.md) | | |
-| [counters_spoken_max](docs/eval/policy_eval_20261006/summary.md) | [4](docs/eval/policy_eval_20261006/summary.md) | | (= [`max_counters`](docs/eval/policy_eval_20261006/summary.md)) |
+## Why I built this
 
-`MAX_COUNTERS` is enforced. The ceiling ladder may speak at most four price COUNTERs; the last one is the ceiling, and any non-accept after that is `NO_DEAL(max_counters)`. Before Phase 14 the same seed spoke ten.
+A settlement call has two constraints that pull in different directions.
 
-And 0.670 on rule extraction is the honest number. Deal calls score 7/7. Escalations and no-deals never read back the three late fields, so those stay ASSUMED (4/7). Padding that to 1.0 would be lying.
+The creditor has rules: max payments, a minimum, even vs balloon, a start date. The client has a budget. Some percentages can be funded. Some cannot. And "can we fund 40%" does not tell you whether 45% works. The curve is not a straight line.
 
-**Leak scan** (same command, same [`summary.md`](docs/eval/policy_eval_20261006/summary.md)): after each call, `eval/run_eval.py` tokenizes agent lines and counts hits on a fixed blocklist. Client draft and bank balance, creditor and original balances, bank fee, ledger amounts, the private max affordable % (`true_max_bp` plus every logged affordability `max_bp`), and the ground-truth rescue lump or increment. A ceiling counter that equals `max_bp` is exempt because that figure was spoken as a PUBLIC fact.
+You still need the conversation to sound like a conversation. An LLM is good at that. It is also happy to invent a payment, or mention the client's bank balance because someone asked.
 
-Paraphrase slips through ("we can go as high as the client can fund"), and nothing here measures the voice path. Program fees are PRIVATE in the engine and still not on this list. Zero leaks means zero token matches against that list, on this simulator.
+I wanted the fluent part. I did not want the model touching the money.
 
-### NLU corpus
+## What the system does
 
-Source: [`docs/eval/nlu_corpus.md`](docs/eval/nlu_corpus.md) AFTER section (177 hand-labelled lines, demo profile, Groq `gpt-oss-120b`). Live keys required.
+1. You type, or the browser records a clip after voice activity detection (VAD: it waits until you stop talking). Speech-to-text (STT) turns that into text. Server STT is Groq Whisper. If that is down, the browser's own recognizer is the fallback.
+2. A language model does natural language understanding (NLU): the line becomes structured terms, a stance (accept / reject / other), and a few safety flags. Code then checks quotes and numbers against what you said. Hallucinated quotes get dropped. Hedged numbers stay tentative.
+3. The agent updates its **belief state**: what it thinks it knows about the creditor's rules, and how sure it is (unknown, assumed, tentative, known, contradicted).
+4. Deterministic policy (`decide()` in `app/agent/policy.py`) picks the next move. Counter, confirm, ask a missing rule, refuse, escalate, walk away. The model does not vote.
+5. The feasibility engine answers the money question: can the client fund this percentage under these rules, and what is the schedule? Policy only sees the yes/no and the public facts it is allowed to say out loud.
+6. Natural language generation (NLG) turns that approved action into a sentence. The model writes a template with `{placeholders}`, not digits. Code fills the placeholders from those public facts.
+7. Two guards run before anything is spoken. A raw number, a private figure, or an unauthorized "we have a deal" swaps the line for a fallback.
+8. Most state changes wait until the browser acks that the sentence was spoken. You can barge in (talk over the agent); unheard pending effects are dropped. Counters and confirms are recorded as soon as they are sent, so a fast "yes" does not re-offer the same deal. The turn lands in an append-only SQLite audit log.
 
-```bash
-python -m eval.nlu_corpus --label AFTER
-```
+Text and voice hit the same orchestrator. Voice is speech I/O on top of that loop.
 
-| metric | precision | recall |
-|---|---|---|
-| [asks_client_private_info](docs/eval/nlu_corpus.md) | [0.971](docs/eval/nlu_corpus.md) | [0.971](docs/eval/nlu_corpus.md) |
-| [demands_commitment](docs/eval/nlu_corpus.md) | [1.000](docs/eval/nlu_corpus.md) | [0.923](docs/eval/nlu_corpus.md) |
-| [stance=accept](docs/eval/nlu_corpus.md) | [1.000](docs/eval/nlu_corpus.md) | [1.000](docs/eval/nlu_corpus.md) |
+## The LLM does not control the money
 
-| metric | value |
-|---|---|
-| [filler false accepts](docs/eval/nlu_corpus.md) | [0 of 31](docs/eval/nlu_corpus.md) |
-| [term exact-match (lines with terms)](docs/eval/nlu_corpus.md) | [0.859](docs/eval/nlu_corpus.md) (n=64) |
+That is the design I care about most.
 
-BEFORE (same file, same prompt, repairs off): private-info [0.667 / 0.235](docs/eval/nlu_corpus.md), accept precision [0.306](docs/eval/nlu_corpus.md), [21](docs/eval/nlu_corpus.md) filler false accepts. The jump comes from the OR-regex repairs. The prompt did not change.
+An LLM can write a convincing sentence. A financial negotiation should not let it invent a number or make a commitment nobody approved. The model sits around the negotiation engine.
 
----
+**What the LLM does**
 
-**Text chat** — CLI or the browser compose box. **Voice** — mic → STT, agent replies through browser TTS, with barge-in. Both modes hit the same orchestrator; voice is speech I/O on top of the text turn loop.
+- Parse the representative's language into terms and stance
+- Write a template for an action the code already chose
+- Transcribe audio, via a separate STT role
 
-The hard part is not sounding natural. It is keeping the math honest. An LLM that invents a payment amount mid-sentence is worse than a clumsy script. So this system treats the model as untrusted for arithmetic: code picks every move and every number; the model only extracts terms and wraps them in words.
+**What the LLM does not do**
 
-All data here is synthetic.
+- Decide the highest percentage the client can afford
+- Add or multiply money
+- Invent a payment, a date, or a percentage
+- Decide whether a schedule is valid
+- Close a deal the policy engine has not approved
 
-**Stack:** Python 3.12, FastAPI, Pydantic v2, SQLite audit log, browser VAD + TTS, Groq Whisper STT, LLM routed by role via `config/providers.yaml`. Settlement math lives in `feasibility/`.
+Money is integer cents. Settlement percentages are integer basis points (4500 = 45%). No floats. After the guards, the only figures that reach speech come from `Fact.render()`. The NLG prompt never sees private client finances.
 
-## Architecture: LLM is untrusted for arithmetic
+If the model writes "sixty percent" into a draft, the template guard blocks it. If a private balance slips into a rendered sentence, the second guard blocks that too.
 
-Policy is code. The LLM does NLU (turn → structured terms) and NLG (intent → template with `{placeholders}`). Fact rendering fills the numbers. Guards catch anything that still looks like a digit, a private figure, or a commitment phrase that was never offered.
+## Architecture
+
+Language in, language out. Decisions and arithmetic stay in Python.
 
 ```mermaid
 flowchart LR
@@ -97,116 +93,168 @@ flowchart LR
   Orch --> Audit[(SQLite events)]
 ```
 
-One turn: verify the rep's utterance → update belief → policy picks an `Action` → NLG writes a template → guards → speak. Side effects (a counter was offered, wrap commits) stick only after the browser acks the sentences were spoken.
+- **Browser / text.** Vanilla JS at `/`. Compose box, mic, barge-in.
+- **STT.** Server Whisper, or the browser fallback. VAD is `@ricky0123/vad-web` in the page.
+- **Orchestrator.** One turn: NLU, belief, affordability, policy, NLG, speech ack. Cancel-and-merge if you talk while NLU is still running.
+- **NLU + verification.** LLM JSON, then quote / number / range checks and a few regex repairs.
+- **Belief.** The working picture of the creditor's rules. Tentative values get read back before they count as known.
+- **Policy.** Pure functions. Belief + verified analysis + affordability curve → an `Action`.
+- **Feasibility engine.** Vendored `feasibility/`. For a client, rules, and a percentage: can we fund it, and what is the schedule? When nothing fits it also computes private rescue options (a lump or a draft bump). Policy gets a yes/no on whether rescue stays inside a guardrail. The amount is never spoken.
+- **NLG + guards.** Template, fill, check, speak or fall back.
+- **TTS.** `speechSynthesis` in the browser. Not a telephony stack.
+- **Audit log.** Belief changes, guard blocks, escalations, NLU analyses, each `decide()` intent. Append-only SQLite (WAL; triggers reject UPDATE/DELETE). Successful LLM HTTP calls are not written today.
 
-Money is integer cents. Settlement % is integer basis points (4500 = 45%). After speech guards, only rendered `Fact` values reach TTS — the LLM may emit digits in drafts, but guards block them before speak.
+LLM calls go through `app/llm/client.py` by role (`nlu`, `nlg`, `sim`, `stt`), never by model name. Routing is `config/providers.yaml` (`demo`, `eval`, `local`, `offline`). Missing keys are skipped. 429s fail over.
 
-## Feasibility engine
+## How negotiation decisions are made
 
-`feasibility/` answers one question for a given client, creditor rules, and settlement %: can we fund this, and if so, what's the schedule?
+Policy lives in `app/agent/policy.py`. A normal call walks `OPENING → DISCOVERY → NEGOTIATE → CONFIRM → WRAP → END`. Hostility, a repeated private-info ask, or a repeated commitment demand jumps to `ESCALATE`. A dead end goes `NO_DEAL_WRAP` then `END`.
 
-It does not chat. It does not negotiate. It scores candidate payment vectors (even, staircase, balloon) under floors, cadence, fee placement, and a balance buffer, then picks a winner. If nothing works, it computes closed-form rescue options — a lump sum or a monthly draft bump — and flags whether each stays inside a guardrail. That rescue amount stays private; policy only gets a yes/no.
+The agent represents the client. The creditor usually asks high. The private max is a cap, not a talking point: counters stay below the ask and at or under what the client can fund, and that cap never gets said out loud. It also should not hand over the whole ceiling on the first "sure."
 
-Weird detail that bites you in practice: feasibility across settlement % is non-monotonic. 40% can fail while 45% works, often because payment floors refuse a low offer. So the agent scans a 100-point grid (`1%…100%`) and treats that curve as ground truth for counters. Numbers that leave the engine as PUBLIC facts are the only ones allowed into speech.
-
-## Negotiation strategy
-
-Policy lives in `app/agent/policy.py`. It is pure code. The LLM never chooses whether to counter, confirm, escalate, or walk away.
-
-Phases, in order of a normal call: `OPENING` → `DISCOVERY` → `NEGOTIATE` → `CONFIRM` → `WRAP` → `END`. Side paths: `ESCALATE`, or `NO_DEAL_WRAP` into `END`.
-
-### What the agent is optimizing for
-
-Settle as high as the client can actually fund, without saying that ceiling out loud. The private max (`max_bp`) comes from the feasibility engine. Counters snap to the 100-point grid of feasible settlement percentages. The walk-away number never enters speech.
-
-Defaults (env / `.env`):
+Defaults (`.env`):
 
 | Knob | Default | Role |
 |---|---|---|
-| `ANCHOR_RATIO` | `0.7` | First counter anchors near 70% of `min(ask, max)` |
-| `CONCESSION_FACTOR` | `0.5` | Each later step closes half the remaining gap |
-| `MAX_COUNTERS` | `4` | Hard cap, enforced: at most four price COUNTERs (the last is the ceiling) and four CONFIRM soft retries |
-| `CLOSE_GAP_BP` | `200` | If the next counter is within 2 points of the ask, just confirm |
+| `ANCHOR_RATIO` | `0.7` | First counter near 70% of `min(ask, max affordable)` |
+| `CONCESSION_FACTOR` | `0.5` | Later steps close half the remaining gap |
+| `MAX_COUNTERS` | `4` | At most four price counters. The last one is the ceiling. |
+| `CLOSE_GAP_BP` | `200` | Next step within 2 points of the ask → confirm |
 | `MAX_TURNS` | `24` | Hard call length |
 
-### Decision order (every turn)
+Every turn, `decide()` runs a fixed cascade: turn cap, hostility, private-info, commitment demand, contradictions, tentative read-backs, missing rules, then price.
 
-`decide()` runs fixed rules, top to bottom:
+**Price ladder (ask is affordable).** Early versions confirmed any affordable ask on the spot. That left money on the table. The live policy counters first. First offer snaps down onto the 100-point feasibility grid. Later offers walk halfway toward the ask, still strictly below it and at or under the private max. If the next step is close enough, the representative sounds firm after a counter, or the counter budget is gone on an affordable ask, it confirms. The affordable path does not walk away just to be stubborn.
 
-1. **Turn cap** → no-deal
-2. **Hostility** → escalate
-3. **Private-info ask** → refuse once, then escalate. Detection is the NLU flag or an un-negated regex cue (client balance, income, draft amount, SSN, routing). If a private number still lands in a spoken line, `rendered_guard` blocks it (`boundary`) and the agent says the fallback instead.
-4. **Commitment demand** → same shape: LLM flag or regex, refuse once ("we can propose this to the client"), then escalate. The output guard is the backstop for commitment phrasing too.
-5. **Contradiction** (discovery) → clarify
-6. **Tentative extraction** → read back
-7. **Missing creditor rule** → ask for it
-8. **No settlement % yet** → ask for the ask
-9. **Affordability / price / terms** (below)
-10. **In CONFIRM**, accept stance → wrap; new terms reopen negotiation
+**Ask above the ceiling.** Try a non-price change first: later start date, lower minimum, more payments. A "yes" on that change is not a yes on the last price. Then at most four counters, last one at the highest legal percentage. Any non-accept after that is no-deal.
 
-### Price negotiation (the ladder)
+Feasibility across percentages is non-monotonic. 40% can fail while 45% works, usually because a payment floor rejects the smaller offer. So the adapter scans `1%…100%` and treats that curve as ground truth.
 
-Early versions confirmed any affordable ask on the spot. That left surplus on the table. The live policy counters first.
+**Confirm and wrap.** `CONFIRM_SCHEDULE` reads back percentage, payment count, dates, and totals from engine facts. On accept, `PROPOSE_WRAP` drafts an agreement marked `pending_client_approval`. Spoken as "sent for client approval," never as a hard commit. From wrap the rep can end the call or reopen with a new ask.
 
-When the ask is feasible and at or under `max_bp`:
+**Escalate vs no-deal.** Hostile tone, a second private-info ask, or a second commitment demand: escalate. Infeasible, but a rescue lump/increment is inside the guardrail: escalate ("needs client approval for extra funds") without saying the amount. Infeasible and no useful term change: no-deal. Ask above the ceiling and counters exhausted: no-deal.
 
-1. Ask already at or below something we offered → confirm
-2. Rep sounds firm after we have countered → confirm their ask
-3. Counter budget used up → confirm (affordable path never no-deals just to be stubborn)
-4. No legal counter below the ask → confirm
-5. Ladder stalled on the grid → jump once toward the ask, else confirm
-6. Next step within `CLOSE_GAP_BP` of the ask → confirm
-7. Otherwise → `COUNTER` at `next_counter()`
+## Safety and correctness
 
-`next_counter()`:
+I treated the model as untrusted input, the same way you treat a form field.
 
-- Target = `min(ask_bp, max_bp)`
-- First offer = largest feasible bp ≤ `ANCHOR_RATIO * target` (else the smallest legal bp)
-- Later offers move halfway toward the target, then snap **down** onto a feasible point
-- Stay strictly below the ask and at or under `max_bp`. And keep that private ceiling out of speech.
+**Before the decision.** NLU output is checked against the utterance. Quotes must appear in the line. Numbers must parse. Out-of-range values are dropped. Short "yeah / okay / fine" only counts as accept when it dominates the line and there is no number in it. Lines that look like prompt injection never accept. Private-info and commitment flags are the LLM flag **or** an un-negated regex cue, because the model alone missed a lot of those.
 
-If the ask sits **above** the ceiling, the agent does not loop the same low counter forever. It tries non-price recovery first (next section), then either escalates for rescue funds or no-deals. The unreachable ladder is capped: at most `MAX_COUNTERS` steps, last offer is the ceiling, then `NO_DEAL(max_counters)`.
+**During the decision.** Policy and the engine are ordinary Python. The model cannot pick a percentage or mark a schedule valid.
 
-### Non-price recovery (when the curve is empty or the ask won't fit)
+**Before speaking.** `template_guard` rejects digits, `$`, `%`, number-words, and unknown placeholders. `rendered_guard` rejects a figure that is not a public fact or a number the creditor already said, a private value in any rendering, and premature commitment phrasing. Fail closed: `Let me check that figure and come back to it.`
 
-Sometimes the % is fine but the payment rules block every schedule. Or the ask is above today's ceiling, but a later start date / softer minimum / more payments unlocks room.
+**After speaking.** Wrap drafts only after the independent validator (`app/adapter/validator.py`) accepts the schedule. That validator does not import the engine's internals. Most effects commit on the speech ack, so a barge-in does not lock in a sentence nobody heard.
 
-The orchestrator searches term alternatives in order: **first payment date → min payment → max payments**. Policy emits `COUNTER_TERMS` for the best alt (highest ceiling when the ask fits nowhere; otherwise the least invasive change that makes the ask feasible).
+The audit log is there so you can see why a turn went the way it did. Belief, blocks, escalations, NLU, `decide()`. It does not yet record the raw LLM HTTP call.
 
-A "yes" on a term alt is **not** a yes on the last price counter. After the curve opens, price negotiation continues under the new rules.
+## Evaluation
 
-### Confirm → wrap → reopen
+I split the eval on purpose. One blended "accuracy" number would hide the thing I care about: policy when language is taken out of the way, and language understanding on messy lines.
 
-`CONFIRM_SCHEDULE` reads back settlement %, payment count, dates, and totals from engine facts. On accept, `PROPOSE_WRAP` drafts an agreement marked `pending_client_approval` — spoken as "sent for client approval," never as a hard commit.
+There is no LLM-only baseline in this repo yet, and no published voice end-to-end timing. I am not going to pretend those runs exist.
 
-From `WRAP`, the rep can end the call, or reopen with a new ask / reject / counter. That clears the draft and returns to `CONFIRM` or `NEGOTIATE`.
+### Offline policy eval
 
-### Escalation vs no-deal
+Oracle NLU, template NLG. This run is about whether the negotiation logic closes the right calls and stays inside the money rules.
 
-| Situation | Outcome |
-|---|---|
-| Hostile tone, repeated private ask, repeated commitment demand | Escalation |
-| Infeasible, but lump/increment rescue is inside the guardrail | Escalation ("needs client approval for extra funds") — amount never spoken |
-| Infeasible, no rescue, no useful term alt | No-deal |
-| Ask above ceiling, counters exhausted at the highest legal bp | No-deal |
-| Affordable ask, counters exhausted | Confirm the ask |
+100 seeded scenarios. Personas: flexible, contradictory, pressuring. Strata: deal possible, needs rescue, no fix. The simulator is code, not an LLM. No API keys. CI runs this on every push.
 
-Belief changes, guard blocks, escalations, NLU analyses, and each `decide()` intent go in the SQLite audit log. The HTTP call to the model (provider, tokens, latency) does not. `LLMClient.on_call` exists; nothing writes it to the log yet.
+Source: [`docs/eval/policy_eval_20261006/summary.md`](docs/eval/policy_eval_20261006/summary.md)
 
-## Run locally
+```bash
+python -m eval.run_eval --nlu oracle --nlg template --sim-phrasing template \
+  --scenarios 100 --seed 7
+```
 
-Python 3.12, keys in `.env` (see `.env.example`):
+| What I measured | Result | n | 95% CI | Why it matters |
+|---|---|---|---|---|
+| [Valid agreements](docs/eval/policy_eval_20261006/summary.md) | 1.0 | 23 | 0.857–1.000 | Every drafted schedule passed the validator under the agreed rules. A wrap with no agreement counts as a fail. |
+| [Deals when a deal exists](docs/eval/policy_eval_20261006/summary.md) | 1.0 | 23 | 0.857–1.000 | When the ask and the client's budget overlap, and the call should not escalate, we got a deal. |
+| [Correct no-deal](docs/eval/policy_eval_20261006/summary.md) | 1.0 | 22 | 0.851–1.000 | On `no_fix` calls that should not escalate, we walked away. |
+| [Correct escalation](docs/eval/policy_eval_20261006/summary.md) | 1.0 | 55 | 0.935–1.000 | Pressure / rescue cases that should escalate, did. |
+| [Rule fields extracted](docs/eval/policy_eval_20261006/summary.md) | 0.670 | 700 | 0.634–0.704 | 7 fields × 100 calls. Deal calls get all 7. Escalations and no-deals end before the late-field read-back, so those three stay assumed. That is why this is not ~1.0. |
+| [False "known"](docs/eval/policy_eval_20261006/summary.md) | 0.000 | 469 | 0.000–0.008 | When the agent marked a field known, it matched the creditor. |
+| [Stuck calls](docs/eval/policy_eval_20261006/summary.md) | 0.000 | 100 | 0.000–0.037 | Nothing hit the 24-turn cap without ending. |
+| [Private figures spoken](docs/eval/policy_eval_20261006/summary.md) | 0 | | | Token match on a blocklist (balances, fees, private max %, rescue amounts). A ceiling counter that equals the max is exempt: that figure was spoken as a public fact. Does not catch paraphrase. |
+| [Unverified figures spoken](docs/eval/policy_eval_20261006/summary.md) | 0 | | | No number in an agent line that was not a public fact or a number the creditor said. |
+| [Price counters (max)](docs/eval/policy_eval_20261006/summary.md) | 4 | | | Equals `MAX_COUNTERS`. An earlier bug spoke 10. |
+
+Mean surplus captured on deals is 0.689: the fraction of the gap between the walk-away floor and the client's max that the agent kept by not immediately confirming the ask. Higher means a cheaper settlement for the client. Mean turns to an outcome: 5.12.
+
+The leak scan tokenizes agent lines. It will miss "your client has enough in the account" with no number, and it does not run on audio.
+
+The simulator and the agent share an author. A different creditor would be a harder test. I have not done that yet.
+
+### NLU corpus
+
+Live model plus repair code, scored against 177 hand-labeled synthetic lines. Demo profile, Groq `gpt-oss-120b`. Needs API keys.
+
+Source: [`docs/eval/nlu_corpus.md`](docs/eval/nlu_corpus.md)
+
+```bash
+python -m eval.nlu_corpus --label AFTER
+```
+
+| Flag | Precision | Recall | Why I care |
+|---|---|---|---|
+| [Asks for client-private info](docs/eval/nlu_corpus.md) | 0.971 | 0.971 | Miss this and policy never refuses. Before repairs: 0.667 / 0.235. |
+| [Demands a commitment](docs/eval/nlu_corpus.md) | 1.000 | 0.923 | Same shape. Before: 0.667 / 0.462. |
+| [Stance = accept](docs/eval/nlu_corpus.md) | 1.000 | 1.000 | Before: precision 0.306. Filler ("uh yeah") was treated as yes. |
+
+Filler false accepts: 0 of 31 (was 21). Term exact-match on lines that have terms: 0.859 (n=64). The prompt did not change between BEFORE and AFTER. The gain is the post-verify repairs.
+
+Still weak, and I am leaving the numbers as they are: `wants_to_end` precision 0.5 ("thanks" mid-call), `firm` precision 0.6, hostility recall 0.4. Homophones and STT typos fail number verification. I wrote the corpus and the regexes, so this is not a blind test set.
+
+### What I did not evaluate
+
+- Full calls with live NLU + live NLG on the current policy. An older 12-scenario run is in [`docs/PROGRESS.md`](docs/PROGRESS.md). I am not treating it as current.
+- An LLM-only agent on the same seeds (roadmap, not built).
+- Voice: VAD → STT → full turn → TTS latency. Browser TTS echo is a real annoyance with the laptop mic open.
+- The hosted demo under load.
+
+`tests/e2e/test_policy_invariants.py` also sweeps seeded calls: counters stay below the ask and at or under the private max, at most `MAX_COUNTERS`, no identical consecutive counters, termination, validator-clean wraps. Default 100 seeds. I ran 500 locally.
+
+## Tech stack
+
+Python 3.12, FastAPI, Pydantic v2, SQLite (audit + optional LLM cache). pytest, ruff. LLM providers from YAML (Groq, Gemini, Cerebras, OpenRouter, Mistral, optional Ollama). Groq Whisper for STT. Browser VAD + `speechSynthesis` for voice. `uv` for the environment.
+
+## Project structure
+
+```text
+app/          Orchestrator, policy, NLU/NLG, guards, voice WebSocket, UI
+feasibility/  Settlement math (vendored, read-only except bug fixes)
+eval/         Offline eval runner, metrics, NLU corpus scorer
+sim/          Creditor simulator (must not import app.agent)
+tests/        Unit, e2e, engine, NLU corpus
+fixtures/     Synthetic clients, offers, demo scenarios
+docs/         Progress log and frozen eval reports
+config/       Provider routes and profiles
+```
+
+More detail: [`docs/PROGRESS.md`](docs/PROGRESS.md), [`docs/eval/`](docs/eval/).
+
+## Running locally
+
+Python 3.12. [`uv`](https://docs.astral.sh/uv/) for the venv.
+
+**Tests and the offline policy eval need no API keys.** The live browser demo and the CLI need at least one of `GROQ_API_KEY` or `GEMINI_API_KEY` in `.env`. Server STT needs Groq.
 
 ```bash
 uv venv --python 3.12 && source .venv/bin/activate
 uv sync --group dev
 cp .env.example .env
+# fill keys only if you want the live demo
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000. Headphones help (browser TTS can echo into the mic). CLI alternative: `python -m app.cli fixtures/demo`.
+Open http://127.0.0.1:8000. Switch to Operator, pick a scenario, start the chat.
 
-## Verify in 60 seconds
+Text-only, same pipeline, auto-acks every sentence:
+
+```bash
+python -m app.cli fixtures/demo
+```
 
 ```bash
 pytest -q
@@ -214,14 +262,20 @@ python -m eval.run_eval --nlu oracle --nlg template --sim-phrasing template \
   --scenarios 100 --seed 7
 ```
 
-The eval needs no keys. `pytest -q` includes the 100-seed policy invariant sweep (`@pytest.mark.slow`; CI skips that marker). There is no `app.replay` CLI.
+CI also runs `ruff check .` and `pytest -q -m "not slow"`. The 100-seed invariant sweep is the `slow` marker; set `DSA_INVARIANT_SEEDS` for a longer local run.
 
-## Limitations
+Live NLU corpus (keys required): `python -m eval.nlu_corpus --label AFTER`
 
-- **Candidate schedules, not exhaustive search.** The engine scores a fixed family of shapes. Feasibility is non-monotonic across settlement %. Counters snap to the 1%…100% grid.
-- **Same-author simulator.** The oracle `TurnAnalysis` and the agent were written together. Offline policy rates are a regression gate, not a blind test against a stranger's creditor.
-- **Synthetic corpus labels.** The 177 NLU lines and the regex cues share an author. Hard negatives are not a held-out set.
-- **Browser TTS echo.** Headphones and barge-in help; this is not a telephony stack.
-- **Demo endpoints are open.** `/scenarios`, `/scenarios/{id}` (includes PRIVATE client finances), `/calls`, `/calls/{id}/events`, `/calls/{id}/export`, `/metrics/summary`, and the call WebSocket have no auth. Fine for synthetic fixtures. Do not point this at real accounts.
-- **Voice e2e not yet measured.** No 20-turn browser timing pass. The policy-eval latency numbers are FakeLLM / template, not a live mic.
-- **Hosted demo cold starts.** Render free tier can sleep; the first hit after idle may take a minute.
+`LLM_PROFILE=offline` forces `FakeLLM` and stays off the network. `local` is Ollama (`qwen3.5:9b` / `gemma4:e4b`). I tried it. NLU was too slow and too weak for the quality gates.
+
+## What I would take from this
+
+Keep financial rules in code you can test without a model. Treat LLM output like a form post: parse it, check it, drop what does not verify.
+
+Separate "what do we do" from "how do we say it." Once those are mixed, you cannot tell a policy bug from a wording bug.
+
+Evaluate the failure modes you actually worry about. Invalid schedules. Spoken private figures. A counter loop that ignores its own cap. Filler that looks like "yes." A 1.0 on a 3-call happy path would have hidden the 10-counter bug.
+
+And write the decision down. If you cannot say why the agent offered 58% after the fact, you do not have a negotiation system. You have a chat window with extra steps.
+
+Still open: a true LLM-only baseline on the same seeds, voice timing, LLM calls in the audit log, labels I did not write myself.

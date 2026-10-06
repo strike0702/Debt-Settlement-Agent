@@ -28,6 +28,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 18 | LLM audit log + replay CLI (ROADMAP) | not done |
 | 19 | Results-first README (ROADMAP) | done |
 | 20 | Correctness and honesty fixes (REVIEW_PLAN) | done |
+| 21 | Latency: measure then cut (REVIEW_PLAN) | done |
 | 24a | A/B harness, ReAct and LLM-only arms (REVIEW_PLAN) | done |
 
 ## Environment facts
@@ -40,7 +41,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 ## Interfaces
 
 ### `app.config`
-- `class Settings(BaseSettings)` — fields: `groq_api_key`, `mistral_api_key`, `gemini_api_key`, `openrouter_api_key`, `cerebras_api_key` (`str | None`); `llm_profile` (`str`, default `"demo"`); `llm_timeout_nlu_s` / `llm_timeout_nlg_s` / `llm_timeout_stt_s` / `llm_timeout_sim_s` (`float`, 6 / 4 / 8 / 15); `llm_cache` (`bool`); `llm_cache_path` (`str`); `nlg_mode` / `nlu_mode` (`str`); `db_path` (`str`); `hostility_threshold` (`float`); `max_turns` / `max_counters` (`int`); `anchor_ratio` / `concession_factor` (`float`); `firm_name` / `opening_disclosure` (`str`).
+- `class Settings(BaseSettings)` — fields: `groq_api_key`, `mistral_api_key`, `gemini_api_key`, `openrouter_api_key`, `cerebras_api_key` (`str | None`); `llm_profile` (`str`, default `"demo"`); `llm_timeout_nlu_s` / `llm_timeout_nlg_s` / `llm_timeout_stt_s` / `llm_timeout_sim_s` (`float`, 6 / 4 / 8 / 15); `llm_cache` (`bool`); `llm_cache_path` (`str`); `nlg_mode` (`llm` | `bank` | `template`) / `nlu_mode` (`str`); `nlg_bank_path` (`str`, `config/nlg_bank.json`); `db_path` (`str`); `hostility_threshold` (`float`); `max_turns` / `max_counters` (`int`); `anchor_ratio` / `concession_factor` (`float`); `firm_name` / `opening_disclosure` (`str`).
 - `get_settings() -> Settings`
 
 ### `app.domain.units`
@@ -195,7 +196,13 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 ### `app.agent.nlg`
 - `SAFE_FALLBACK: str`; `TEMPLATES: dict[Intent, str]`
 - `render_action(action, ref_date, *, creditor_numbers=None, private_blocklist=None, audit=None, call_id=None) -> list[str]` — deterministic template path
-- `async speak_action(action, ref_date, *, llm=None, settings=None, last_rep_line="", creditor_numbers=None, private_blocklist=None, audit=None, call_id=None) -> list[str]` — LLM template → template_guard (1 retry) → fallback `TEMPLATES` → fill → rendered_guard; raises `LLMUnavailable` (Phase 20; orchestrator `_speak` falls back and audits `llm_unavailable`)
+- `async speak_action(action, ref_date, *, llm=None, settings=None, last_rep_line="", creditor_numbers=None, private_blocklist=None, audit=None, call_id=None, blocked_out=None, turn=0) -> list[str]` — `nlg_mode=bank`: bank template (no LLM); `llm`: LLM template → template_guard (1 retry); both fall back to `TEMPLATES` → fill → rendered_guard; raises `LLMUnavailable` (Phase 20; orchestrator `_speak` falls back and audits `llm_unavailable`)
+
+### `app.agent.nlg_bank` (Phase 21)
+- `BankKey = tuple[str, tuple[str, ...]]`; `bank_key(intent, placeholder_ids) -> BankKey`; `action_placeholder_ids(action) -> set[str]`
+- `parse_bank(data) -> dict[BankKey, list[str]]`; `load_bank(path=DEFAULT_BANK_PATH)` (lru_cache; missing file → `{}`)
+- `pick_template(action, *, call_id, turn, bank) -> str | None` — candidates passing `template_guard` with the action's ids; index `sha256(f"{call_id}:{turn}") mod n`
+- `config/nlg_bank.json`: `{generated, profile, per_key, stats, entries: [{intent, placeholders, required, templates}]}`; built by `scripts/build_template_bank.py`
 
 ### `app.agent.nlu`
 - `repair_stance(stance, utterance, *, has_terms=False) -> str` — injection never accepts → reject phrase → accept phrase → dominant short ack with no number/term
@@ -220,7 +227,8 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `apply_effects(session, effects) -> None`
 - `class Orchestrator(session, *, llm=None, settings=None, audit=None, auto_ack=False)`
   - `async start() -> Utterance`
-  - `async on_creditor_text(text, timings=None, *, oracle=None) -> Utterance` — cancel-and-merge during NLU; queue after NLU; affordability via `asyncio.to_thread`; timings `nlu_ms`/`policy_ms`/`nlg_ms`/`server_total_ms`
+  - `async on_creditor_text(text, timings=None, *, oracle=None) -> Utterance` — cancel-and-merge during NLU (merged callers get the same `Utterance`); queue after NLU; affordability via `asyncio.to_thread`; timings `nlu_ms`/`engine_ms`/`policy_ms`/`nlg_ms`/`queue_ms`/`server_total_ms` (Phase 21: `engine_ms` = `_engine_context`; `queue_ms` = rate-limit wait inside the other stages, not additive)
+  - `pop_drained() -> list[Utterance]` — turns run by the post-NLU drain inside `on_sentence_done` (Phase 21; the WS emits them)
   - `async on_sentence_done(ids) -> Agreement | None` — commits effects when all pending sentences acked; drafts agreement on `PROPOSE_WRAP` after validator pass
   - `async on_barge_in(spoken_ids) -> None` — drops pending effects; keeps belief
 
@@ -233,11 +241,12 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 ### `app.voice.ws`
 - `configure(audit, llm, settings=None) -> None`
 - WS `/ws/call/{call_id}` — client: `start{scenario}`, binary wav, `text`, `sentence_done{id}`, `barge_in{spoken_ids}`, `timing{turn,vad_end_to_first_audio_ms}`; optional `oracle` on `text` when `nlu_mode=oracle`
+- Phase 21: `_CallConnection` — reader task → `asyncio.Queue`; every event except `start` runs as its own task (concurrent with NLU); `_send_lock` keeps one handler's frames together; an `Utterance` returned to several merged callers is emitted once (the others get a bare `turn_done`). `latency` keys: `stt_ms`, `nlu_ms`, `engine_ms`, `policy_ms`, `nlg_ms`, `queue_ms` (incl. STT wait), `server_total_ms`
 - server: `transcript`, `say`, `belief`, `eval` (incl. `max_bp`), `blocked`, `escalate`, `latency`, `audit`, `phase`, `agreement`, `stt_error`, `error`, `turn_done`
 
 ### `app.main`
 - `create_app(*, settings=None, llm=None, audit=None) -> FastAPI`
-- `GET /`, `GET /static/*`, `GET /metrics/summary` → `{stage: {p50,p95,n}}`
+- `GET /`, `GET /static/*`, `GET /metrics/summary` → `{stage: {p50,p95,n}}`; stages `stt_ms`, `nlu_ms`, `engine_ms`, `policy_ms`, `nlg_ms`, `queue_ms`, `server_total_ms`, `vad_end_to_first_audio_ms`
 - `app = create_app()` for `uvicorn app.main:app`
 
 ### `app.llm.prompts`
@@ -260,8 +269,10 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
   - `async aclose()`
 - `make_client(settings=None, **kwargs) -> LLMClient | FakeLLM` — offline profile returns `FakeLLM`
 - Roles: `nlu` | `nlg` | `sim` | `stt`. Routing from `config/providers.yaml` profiles (`demo`/`eval`/`local`/`offline`).
-- `on_call` meta (one per finished attempt, success or failure): `{role, provider, model, latency_ms, prompt_tokens, completion_tokens, cache_hit, failover_from, error}`; `error` is `None` on success. `LLMClient.on_call` is a settable property (propagates to the offline FakeLLM it built).
-- Per-request timeout `Settings.llm_timeout_<role>_s`; timeout / `APIConnectionError` / HTTP errors fail over; any other exception propagates (no failover).
+- `on_call` meta (one per finished attempt, success or failure): `{role, provider, model, latency_ms, prompt_tokens, completion_tokens, cache_hit, failover_from, error, queue_ms}`; `error` is `None` on success; `queue_ms` (Phase 21) = limiter wait + short-429 Retry-After sleeps.
+- Phase 21: `class QueueWait` (`.ms`); `queue_wait_scope() -> ContextManager[QueueWait]` sums `queue_ms` of calls inside it. `@dataclass(frozen) RouteTarget(provider, model, params={}, timeout_s=None)` (`.spec`); `parse_route_entry(raw: str | Mapping) -> RouteTarget` (ValueError on unknown keys / bad timeout). Buckets keyed `(provider, model)`, burst `min(rpm, 5)`, refill `rpm/60`/s, start full. Limiter wait + request share the per-attempt timeout. `LLMClient.on_call` is a settable property (propagates to the offline FakeLLM it built).
+- Per-request timeout `Settings.llm_timeout_<role>_s` (or the route's `timeout_s`); timeout / `APIConnectionError` / HTTP errors fail over; any other exception propagates (no failover).
+- `config/providers.yaml` route entry (Phase 21): `provider/model` or `{target: provider/model, params: {...}, timeout_s: N}`; `params` go in the request body via `extra_body` and into the response-cache key (key unchanged when params are empty); `timeout_s` overrides the role timeout for that target.
 
 ### `app.llm.call_audit`
 - `LLM_CALL_ID: ContextVar[str | None]` (name `"llm_call_id"`) — call id of the turn in progress
@@ -736,7 +747,7 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 
 - Files: `tests/nlu_corpus.jsonl` (177 synthetic hand-labelled lines), `eval/nlu_corpus.py`, `docs/eval/{nlu_corpus.md,nlu_corpus_before.jsonl,nlu_corpus_after.jsonl}`, `tests/unit/{test_nlu_repairs,test_nlu_corpus}.py`; `app/agent/nlu.py`; two tests in `tests/unit/test_nlu_nlg_llm.py` rewritten for the OR rule.
 - Interfaces:
-  - CLI `python -m eval.nlu_corpus --label BEFORE|AFTER [--profile demo] [--concurrency 4]` — `llm_cache=True`, cache at `eval/nlu_corpus_cache.db` (keyed by provider/model); rewrites only its own `## <LABEL>` section of the report.
+  - CLI `python -m eval.nlu_corpus --label BEFORE|AFTER [--profile demo] [--concurrency 4]` (Phase 21: `--audit-db`, default `eval/results/nlu_corpus_audit.db`; `run_corpus(..., audit=None, llm=None)`; each line runs in `llm_call_scope("corpus:<id>")`) — `llm_cache=True`, cache at `eval/nlu_corpus_cache.db` (keyed by provider/model); rewrites only its own `## <LABEL>` section of the report.
   - `eval.nlu_corpus`: `load_corpus()`, `expected_flags/predicted_flags`, `expected_terms/predicted_terms`, `score(records) -> dict`, `write_report(path, label, section)`.
   - Corpus line: `id`, `tags`, `text`, `stance`, optional `agent` alias (`default|confirm|counter|min_ask`), `pending`, flag booleans, `hostility`, `terms{field: value}`, `ask_pct`, `cents_ambiguity`.
   - `repair_stance(..., *, has_terms=False)`; see the `app.agent.nlu` interface entry.
@@ -842,3 +853,29 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
   - The opening line is the policy's disclosed template for every arm.
 - Open issues: agent steps run under the 6 s NLU timeout and share NLU quota, so live A/B runs skip and fail over often. `coerce_bp` reads values ≤ 100 as percent. Rate the 20 human pairs once real A/B runs exist (24b).
 - Tests: `pytest -q` 534 passed / 1 skipped (incl. 100 invariant seeds); `ruff check .` clean.
+
+### Phase 21 (2026-10-07) — latency: measure then cut (REVIEW_PLAN F1, F4, F14, F15)
+
+- Files added: `scripts/{latency_probe,build_template_bank}.py`, `app/agent/nlg_bank.py`, `config/nlg_bank.json`, `docs/eval/latency_20261007.md` + `latency_20261007/*.json`, `docs/eval/nlu_corpus_{default,low}_effort.jsonl`, `tests/unit/{test_ws_concurrent,test_nlg_bank}.py`. Changed: `app/llm/client.py`, `app/voice/{ws,metrics_buf}.py`, `app/agent/{orchestrator,nlg}.py`, `app/config.py`, `app/static/app.js` (voice code only), `config/providers.yaml`, `eval/nlu_corpus.py`, `scripts/smoke_llm.py`, `.env.example`, `render.yaml`, `README.md`, `docs/eval/nlu_corpus.md`.
+- New Settings: `nlg_bank_path="config/nlg_bank.json"`; `nlg_mode` accepts `bank` (default stays `llm` in code; `.env.example` and `render.yaml` set `NLG_MODE=bank`).
+- New timing keys (turn timings, WS `latency`, `metrics_buf`, `/metrics/summary`): `engine_ms` (`_engine_context`), `queue_ms` (limiter wait + short-429 Retry-After sleeps, summed via `queue_wait_scope`; inside the other stages, not additive; WS adds STT's wait).
+- providers.yaml route schema: `provider/model` or `{target: provider/model, params: {...}, timeout_s: N}` (see `app.llm.client` interface). Demo `nlu` stays plain default effort; eval `nlu` Gemini has `timeout_s: 20`.
+- F1: buckets per `(provider, model)`, burst `min(rpm, 5)`, refill `rpm/60`/s. Tests: 3 acquires on a fresh rpm=25 bucket < 0.1 s; rpm=600 sustained rate; per-model independence.
+- F4: WS reader task + queue, handlers as tasks. Tests (`test_ws_concurrent.py`, FakeLLM with slow NLU): a second `text` during NLU → one merged turn (NLU prompt has both fragments, one `latency`); a `barge_in` during NLU is applied before the turn's `say`. README cancel-and-merge sentence restored.
+- NLG bank: 45 templates, 8 keys (COUNTER, 3× CONFIRM_SCHEDULE by payment-level count, CLARIFY, READ_BACK, REFUSE_COMMIT, REFUSE_PRIVATE). The builder also drops guard-clean but wrong templates ("N payments of {offer_total}"). Tests: every entry passes `template_guard`; bank mode makes zero LLM calls (unit and a whole offline call).
+- Voice client: `redemptionFrames` 16→8; `vad_end_to_first_audio_ms` sent from `utter.onstart`; local "One moment." after 1.2 s with no `say` (never sent, not acked; 1.5 s echo guard); preferred voices list.
+- Latency (demo, 20 turns each; `docs/eval/latency_20261007.md`): text server_total p50 4126→2369 ms; voice WAV→first `say` p50 5512→3704 ms; STT 681→207; NLG 1245–1440→0; limiter wait p50 ~2.2 s→0. p95 still about 8–9 s, now from Groq's 8K tokens-per-minute 429 Retry-After (visible as `queue_ms`), not from our limiter.
+- Corpus gate: `reasoning_effort: low` FAILS (private-info recall 0.853, commitment 0.846, hostility 0.0 vs AFTER 0.971 / 0.923 / 0.400). Rows DEFAULT_EFFORT + LOW_EFFORT in `docs/eval/nlu_corpus.md`.
+- Carry-over:
+  - [20.1] Measured Gemini NLU p50 11.4 s / p95 17.5 s (n=15) and Groq NLU p95 about 2.5 s. Eval-profile Gemini NLU route gets `timeout_s: 20`; demo keeps 6 s (Groq p95 is well under it). Tests: `test_route_timeout_override_parses_and_validates`, `test_route_timeout_overrides_role_timeout`, `test_shipped_providers_yaml_parses`.
+  - [20.2] Limiter wait and request share one per-attempt `asyncio.timeout`; the wait is reported as `queue_ms`. Test: `test_limiter_wait_bounded_by_role_timeout` (empty bucket → fail over in < 1 s at a 0.2 s timeout).
+  - [20.4] Corpus lines are audited under `corpus:<id>`. Test: `test_corpus_lines_are_audited_per_line`.
+- Deviations:
+  - The corpus gate compares against AFTER as asked, and also adds a DEFAULT_EFFORT row: the NLU prompt changed after AFTER, so DEFAULT_EFFORT is the like-for-like baseline.
+  - The default Groq org's `gpt-oss-120b` daily token cap ran out mid-phase. AFTER probes and the rest of the LOW_EFFORT run used `GROQ_API_KEY_2` / `_3` from the main checkout's `.env` (separate orgs), passed by env override. `GROQ_API_KEY_1` is the same org as the default key.
+  - Short-429 Retry-After sleeps also count in `queue_ms`. Without that, the AFTER tail (Groq TPM) was invisible.
+  - Bank keys were collected from offline sim calls, plus live-only keys.
+  - A `--oracle` probe run was added (all stages live except NLU).
+- Open issues: see the DEFERRED list in the phase-21 report. Main ones: Groq TPM (8K/min, about 7 NLU calls a minute) now sets p95; an NLU `LLMUnavailable` still closes the socket; short-429 sleeps are not bounded by the role timeout; the app reads only `GROQ_API_KEY` (no multi-key pool).
+- Tests: `pytest -q` 541 passed / 1 skipped (incl. slow); `ruff check .` clean. Oracle eval `eval_20261006_212101_s7` (100 scenarios, seed 7): thresholds PASS, rates identical to the frozen pack.
+

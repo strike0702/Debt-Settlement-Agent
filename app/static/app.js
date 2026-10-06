@@ -183,6 +183,30 @@ const BARGE_ECHO_GUARD_MS = 750;
 let utteranceContaminated = false;
 /** Browser STT: ignore finals until the next clean speechstart. */
 let browserIgnoreResults = false;
+/**
+ * Local, number-free filler when no `say` arrives soon after VAD end. Never sent
+ * to the server and never acked: it is not part of the agent's turn.
+ */
+const BACKCHANNEL_TEXT = "One moment.";
+const BACKCHANNEL_AFTER_MS = 1200;
+/** Our own filler must not read as rep speech (echo) or barge. */
+const BACKCHANNEL_GUARD_MS = 1500;
+let backchannelTimer = null;
+let backchannelUtter = null;
+/** Natural-sounding voices first; first match wins (exact name, then prefix). */
+const PREFERRED_VOICES = [
+  "Google US English",
+  "Samantha",
+  "Microsoft Aria Online (Natural) - English (United States)",
+  "Microsoft Jenny Online (Natural) - English (United States)",
+  "Microsoft Aria",
+  "Microsoft Jenny",
+  "Karen",
+  "Daniel",
+  "Alex",
+];
+/** undefined = not chosen yet (voices load async); null = none matched. */
+let cachedVoice;
 
 function money(cents) {
   if (cents == null) return "—";
@@ -989,7 +1013,7 @@ function scheduleListening() {
 
 /**
  * Drop any in-flight VAD clip that heard agent TTS, then re-arm capture.
- * Without this, redemptionFrames (~1.5s) keeps your next words inside a
+ * Without this, redemptionFrames (~0.8 s) keeps your next words inside a
  * contaminated utterance that gets discarded — feels like 3–5s of deafness.
  */
 async function resetVadCapture() {
@@ -1066,6 +1090,83 @@ function ensureVoicesLoaded() {
   }
 }
 
+if (window.speechSynthesis?.addEventListener) {
+  window.speechSynthesis.addEventListener("voiceschanged", () => {
+    cachedVoice = undefined;
+  });
+}
+
+function preferredVoice() {
+  if (cachedVoice !== undefined) return cachedVoice;
+  let voices = [];
+  try {
+    voices = window.speechSynthesis?.getVoices() || [];
+  } catch {
+    voices = [];
+  }
+  if (!voices.length) return null; // not loaded yet; retry next utterance
+  let pick = null;
+  for (const name of PREFERRED_VOICES) {
+    pick = voices.find((v) => v.name === name) || voices.find((v) => v.name.startsWith(name));
+    if (pick) break;
+  }
+  pick = pick || voices.find((v) => /^en[-_]US$/i.test(v.lang)) || null;
+  cachedVoice = pick;
+  return pick;
+}
+
+function applyVoice(utter) {
+  const voice = preferredVoice();
+  if (voice) {
+    utter.voice = voice;
+    utter.lang = voice.lang;
+  }
+}
+
+/** F14: first audio = the reply's first utterance actually starting (onstart). */
+function stampFirstAudio() {
+  if (vadEndAt == null) return;
+  const ms = performance.now() - vadEndAt;
+  vadEndAt = null;
+  sendJson({
+    type: "timing",
+    turn: store.get().latency.at(-1)?.turn ?? null,
+    vad_end_to_first_audio_ms: ms,
+  });
+}
+
+function armBackchannel() {
+  clearTimeout(backchannelTimer);
+  backchannelTimer = setTimeout(speakBackchannel, BACKCHANNEL_AFTER_MS);
+}
+
+function cancelBackchannel() {
+  clearTimeout(backchannelTimer);
+  backchannelTimer = null;
+}
+
+function speakBackchannel() {
+  backchannelTimer = null;
+  const synth = window.speechSynthesis;
+  // Only while the reply is still pending and nothing is playing.
+  if (!synth || agentIsTalking() || !store.get().waiting) return;
+  const utter = new SpeechSynthesisUtterance(BACKCHANNEL_TEXT);
+  applyVoice(utter);
+  utter.rate = 1.05;
+  backchannelUtter = utter; // keep alive (Chrome GC aborts playback)
+  const release = () => {
+    if (backchannelUtter === utter) backchannelUtter = null;
+  };
+  utter.addEventListener("end", release);
+  utter.addEventListener("error", release);
+  bargeSuppressUntil = performance.now() + BACKCHANNEL_GUARD_MS;
+  try {
+    synth.speak(utter);
+  } catch {
+    backchannelUtter = null;
+  }
+}
+
 function drainSayQueue() {
   if (!pendingSayQueue.length) {
     store.set({ speaking: false });
@@ -1093,16 +1194,12 @@ function drainSayQueue() {
   const gen = ++ttsGen;
   const utter = new SpeechSynthesisUtterance(speakableText(next.text));
   currentUtter = utter;
+  applyVoice(utter);
   utter.rate = 1.05;
-  if (vadEndAt != null) {
-    const ms = performance.now() - vadEndAt;
-    sendJson({
-      type: "timing",
-      turn: store.get().latency.at(-1)?.turn ?? null,
-      vad_end_to_first_audio_ms: ms,
-    });
-    vadEndAt = null;
-  }
+  utter.onstart = () => {
+    if (gen !== ttsGen) return;
+    stampFirstAudio();
+  };
   // Chrome pauses long/multi-sentence TTS unless periodically resumed.
   const keepAlive = setInterval(() => {
     if (gen !== ttsGen) {
@@ -1205,6 +1302,7 @@ function applyEvent(msg) {
     return;
   }
   if (type === "say") {
+    cancelBackchannel();
     enqueueSay(msg.id, msg.text);
     return;
   }
@@ -1451,8 +1549,9 @@ async function startMic() {
       baseAssetPath: vadAssetBase,
       positiveSpeechThreshold: 0.35,
       negativeSpeechThreshold: 0.2,
-      // ~1.5 s of silence before cutting — mid-sentence pauses stay in one clip.
-      redemptionFrames: 16,
+      // ~770 ms of silence before cutting. A pause that splits one sentence is
+      // safe: the server merges a fragment that lands during NLU into that turn.
+      redemptionFrames: 8,
       // ~1 s of audio before first speech-positive frame (catch word onsets).
       preSpeechPadFrames: 10,
       // ~290 ms minimum utterance; shorter → onVADMisfire.
@@ -1491,6 +1590,7 @@ async function startMic() {
         ws.send(encodeWav(audio, 16000));
         store.set({ waiting: true, interim: "Transcribing…" });
         renderChat();
+        armBackchannel();
       },
     });
     // Async import often loses the user-gesture; AudioContext stays suspended

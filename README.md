@@ -95,12 +95,12 @@ flowchart LR
 
 - **Browser / text.** Vanilla JS at `/`. Compose box, mic, barge-in.
 - **STT.** Server Whisper, or the browser fallback. VAD is `@ricky0123/vad-web` in the page.
-- **Orchestrator.** One turn: NLU, belief, affordability, policy, NLG, speech ack. Cancel-and-merge (new text while NLU is still running joins that turn) is implemented in the orchestrator and covered by tests, but the live WebSocket handles one event at a time, so it is not wired to live calls yet (planned for Phase 21).
+- **Orchestrator.** One turn: NLU, belief, affordability, policy, NLG, speech ack. Cancel-and-merge if you talk while NLU is still running: the new text joins that turn and NLU reruns on the combined line. The WebSocket runs each event as its own task, so this, barge-in, and speech acks all work while a turn is in flight.
 - **NLU + verification.** LLM JSON, then quote / number / range checks and a few regex repairs.
 - **Belief.** The working picture of the creditor's rules. Tentative values get read back before they count as known.
 - **Policy.** Pure functions. Belief + verified analysis + affordability curve → an `Action`.
 - **Feasibility engine.** `feasibility/` — settlement math I built for an earlier project and brought into this one. For a client, rules, and a percentage: can we fund it, and what is the schedule? When nothing fits it also computes private rescue options (a lump or a draft bump). Policy gets a yes/no on whether rescue stays inside a guardrail. The amount is never spoken.
-- **NLG + guards.** Template, fill, check, speak or fall back.
+- **NLG + guards.** Template, fill, check, speak or fall back. The demo default (`NLG_MODE=bank`) picks a template from `config/nlg_bank.json`, built offline by `scripts/build_template_bank.py` and guard-checked, so no LLM call sits on the reply path; `NLG_MODE=llm` asks the LLM live.
 - **TTS.** `speechSynthesis` in the browser. Not a telephony stack.
 - **Audit log.** Belief changes, guard blocks, escalations, NLU analyses, each `decide()` intent, and every LLM / STT call (role, provider, model, latency, tokens, cache hit, failover, and failed attempts with their error). Append-only SQLite (WAL; triggers reject UPDATE/DELETE).
 

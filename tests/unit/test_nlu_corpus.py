@@ -87,3 +87,27 @@ def test_write_report_keeps_before_above_after(tmp_path: Path) -> None:
     text = p.read_text()
     assert text.index("## BEFORE") < text.index("## AFTER")
     assert "after2" in text and "\nafter\n" not in text
+
+
+async def test_corpus_lines_are_audited_per_line(tmp_path: Path) -> None:
+    """[20.4] each corpus line's LLM call is audited under ``corpus:<id>``."""
+    from app.llm.client import FakeLLM
+    from app.store.audit import AuditLog
+    from eval.nlu_corpus import run_corpus
+
+    corpus = [
+        {"id": "z01", "tags": [], "text": "We need it settled by the end of the month.",
+         "stance": "info"},
+        {"id": "z02", "tags": [], "text": "Let me check with my supervisor first.",
+         "stance": "stall"},
+    ]
+    fake = FakeLLM()
+    for _ in corpus:
+        fake.enqueue("nlu", '{"terms": [], "stance": "info"}')
+    audit = AuditLog(tmp_path / "corpus_audit.db")
+    records, _ = await run_corpus(corpus, profile="offline", audit=audit, llm=fake)
+    assert not any(r.get("skipped") for r in records)
+    for line in corpus:
+        rows = audit.for_call(f"corpus:{line['id']}")
+        assert [r["type"] for r in rows] == ["llm_call"]
+        assert rows[0]["payload"]["role"] == "nlu"

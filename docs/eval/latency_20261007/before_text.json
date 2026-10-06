@@ -1,0 +1,286 @@
+{
+  "samples": [
+    {
+      "stt_ms": null,
+      "nlu_ms": 2516.947958036326,
+      "engine_ms": null,
+      "policy_ms": 0.11487491428852081,
+      "nlg_ms": 0.1165829598903656,
+      "queue_ms": null,
+      "server_total_ms": 2537.0775420451537,
+      "client_first_say_ms": 2538.7181249679998,
+      "intent": "ASK_SETTLEMENT",
+      "call_id": "probe-9c483c45"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1568.6634170124307,
+      "engine_ms": null,
+      "policy_ms": 0.8519589900970459,
+      "nlg_ms": 1599.515000008978,
+      "queue_ms": null,
+      "server_total_ms": 3170.5832919105887,
+      "client_first_say_ms": 3173.9337920444086,
+      "intent": "COUNTER",
+      "call_id": "probe-9c483c45"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1713.7240420561284,
+      "engine_ms": null,
+      "policy_ms": 0.8671249961480498,
+      "nlg_ms": 2428.9944579359144,
+      "queue_ms": null,
+      "server_total_ms": 4145.052874926478,
+      "client_first_say_ms": 4147.535208030604,
+      "intent": "COUNTER",
+      "call_id": "probe-9c483c45"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1659.1127500869334,
+      "engine_ms": null,
+      "policy_ms": 1.5845829620957375,
+      "nlg_ms": 1716.6969160316512,
+      "queue_ms": null,
+      "server_total_ms": 3379.814665997401,
+      "client_first_say_ms": 3383.752917055972,
+      "intent": "CONFIRM_SCHEDULE",
+      "call_id": "probe-9c483c45"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1731.1120829544961,
+      "engine_ms": null,
+      "policy_ms": 1.1791250435635448,
+      "nlg_ms": 0.41033397428691387,
+      "queue_ms": null,
+      "server_total_ms": 1734.868999919854,
+      "client_first_say_ms": 1739.519540918991,
+      "intent": "PROPOSE_WRAP",
+      "call_id": "probe-9c483c45"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 2973.9307500422,
+      "engine_ms": null,
+      "policy_ms": 0.11566607281565666,
+      "nlg_ms": 0.1924580428749323,
+      "queue_ms": null,
+      "server_total_ms": 2976.7907080240548,
+      "client_first_say_ms": 2979.330917005427,
+      "intent": "ASK_SETTLEMENT",
+      "call_id": "probe-ba4d7f70"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1194.9316669488326,
+      "engine_ms": null,
+      "policy_ms": 1.195542048662901,
+      "nlg_ms": 1637.5648330431432,
+      "queue_ms": null,
+      "server_total_ms": 2835.244624991901,
+      "client_first_say_ms": 2838.8777079526335,
+      "intent": "COUNTER",
+      "call_id": "probe-ba4d7f70"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 1882.6504169264808,
+      "engine_ms": null,
+      "policy_ms": 1.1263330234214664,
+      "nlg_ms": 2054.060084046796,
+      "queue_ms": null,
+      "server_total_ms": 3939.304249943234,
+      "client_first_say_ms": 3941.279625054449,
+      "intent": "COUNTER",
+      "call_id": "probe-ba4d7f70"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 2202.6557499775663,
+      "engine_ms": null,
+      "policy_ms": 1.3196250656619668,
+      "nlg_ms": 1901.3190839905292,
+      "queue_ms": null,
+      "server_total_ms": 4106.990374973975,
+      "client_first_say_ms": 4110.343832988292,
+      "intent": "CONFIRM_SCHEDULE",
+      "call_id": "probe-ba4d7f70"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 2259.656999958679,
+      "engine_ms": null,
+      "policy_ms": 0.9098330046981573,
+      "nlg_ms": 0.2854591002687812,
+      "queue_ms": null,
+      "server_total_ms": 2262.311042053625,
+      "client_first_say_ms": 2265.726500074379,
+      "intent": "PROPOSE_WRAP",
+      "call_id": "probe-ba4d7f70"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 2265.9955840790644,
+      "engine_ms": null,
+      "policy_ms": 0.12662506196647882,
+      "nlg_ms": 0.20416604820638895,
+      "queue_ms": null,
+      "server_total_ms": 2269.1819169558585,
+      "client_first_say_ms": 2271.986083011143,
+      "intent": "ASK_SETTLEMENT",
+      "call_id": "probe-5278783d"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 9322.977208066732,
+      "engine_ms": null,
+      "policy_ms": 0.9042080491781235,
+      "nlg_ms": 1222.0132499933243,
+      "queue_ms": null,
+      "server_total_ms": 10547.177957952954,
+      "client_first_say_ms": 10550.209583016112,
+      "intent": "COUNTER",
+      "call_id": "probe-5278783d"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 9446.286624995992,
+      "engine_ms": null,
+      "policy_ms": 1.723624998703599,
+      "nlg_ms": 1734.636666951701,
+      "queue_ms": null,
+      "server_total_ms": 11184.71695901826,
+      "client_first_say_ms": 11190.733290975913,
+      "intent": "COUNTER",
+      "call_id": "probe-5278783d"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 4515.485457959585,
+      "engine_ms": null,
+      "policy_ms": 1.6130420845001936,
+      "nlg_ms": 1618.2656669989228,
+      "queue_ms": null,
+      "server_total_ms": 6137.273833039217,
+      "client_first_say_ms": 6144.017791957594,
+      "intent": "CONFIRM_SCHEDULE",
+      "call_id": "probe-5278783d"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 4584.702958003618,
+      "engine_ms": null,
+      "policy_ms": 0.9805000154301524,
+      "nlg_ms": 0.4355839919298887,
+      "queue_ms": null,
+      "server_total_ms": 4587.841083062813,
+      "client_first_say_ms": 4591.091750073247,
+      "intent": "PROPOSE_WRAP",
+      "call_id": "probe-5278783d"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 8488.758999970742,
+      "engine_ms": null,
+      "policy_ms": 0.13708299957215786,
+      "nlg_ms": 0.19687495660036802,
+      "queue_ms": null,
+      "server_total_ms": 8492.007959051989,
+      "client_first_say_ms": 8494.954250054434,
+      "intent": "ASK_SETTLEMENT",
+      "call_id": "probe-2fcfca15"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 8554.056582972407,
+      "engine_ms": null,
+      "policy_ms": 1.0732910595834255,
+      "nlg_ms": 1280.3684170357883,
+      "queue_ms": null,
+      "server_total_ms": 9837.171958060935,
+      "client_first_say_ms": 9839.558957959525,
+      "intent": "COUNTER",
+      "call_id": "probe-2fcfca15"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 4632.98350002151,
+      "engine_ms": null,
+      "policy_ms": 1.0628750314936042,
+      "nlg_ms": 1892.2477080486715,
+      "queue_ms": null,
+      "server_total_ms": 6528.493792051449,
+      "client_first_say_ms": 6530.605833977461,
+      "intent": "COUNTER",
+      "call_id": "probe-2fcfca15"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 6872.904957970604,
+      "engine_ms": null,
+      "policy_ms": 0.8764590602368116,
+      "nlg_ms": 1789.8349589668214,
+      "queue_ms": null,
+      "server_total_ms": 8664.849916938692,
+      "client_first_say_ms": 8667.278375010937,
+      "intent": "CONFIRM_SCHEDULE",
+      "call_id": "probe-2fcfca15"
+    },
+    {
+      "stt_ms": null,
+      "nlu_ms": 4898.103208048269,
+      "engine_ms": null,
+      "policy_ms": 0.8536659879609942,
+      "nlg_ms": 0.24741690140217543,
+      "queue_ms": null,
+      "server_total_ms": 4900.5736670224,
+      "client_first_say_ms": 4905.13424994424,
+      "intent": "PROPOSE_WRAP",
+      "call_id": "probe-2fcfca15"
+    }
+  ],
+  "summary": {
+    "stt_ms": {
+      "p50": null,
+      "p95": null,
+      "n": 0
+    },
+    "nlu_ms": {
+      "p50": 2745.439354039263,
+      "p95": 9329.142678913195,
+      "n": 20
+    },
+    "engine_ms": {
+      "p50": null,
+      "p95": null,
+      "n": 0
+    },
+    "policy_ms": {
+      "p50": 0.9451665100641549,
+      "p95": 1.6185712302103639,
+      "n": 20
+    },
+    "nlg_ms": {
+      "p50": 1439.9417085223831,
+      "p95": 2072.8068027412523,
+      "n": 20
+    },
+    "queue_ms": {
+      "p50": null,
+      "p95": null,
+      "n": 0
+    },
+    "server_total_ms": {
+      "p50": 4126.021624950226,
+      "p95": 10579.05490800622,
+      "n": 20
+    },
+    "client_first_say_ms": {
+      "p50": 4128.939520509448,
+      "p95": 10582.235768414102,
+      "n": 20
+    }
+  }
+}

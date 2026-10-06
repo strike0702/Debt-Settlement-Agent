@@ -74,6 +74,75 @@ Misses (line ids):
 - terms: h06, f01, f05, f16, f17, d04, t05, t10, t12
 - filler false accept: -
 
+## DEFAULT_EFFORT
+
+- git: `20f6719`  profile=`demo`  ref=2026-04-01
+- lines: 177  skipped (LLM unavailable): 0
+- model share: groq/openai/gpt-oss-120b=173, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 33 | 1 | 1 | 0.971 | 0.971 |
+| demands_commitment | 13 | 12 | 0 | 1 | 1.000 | 0.923 |
+| firm | 6 | 6 | 2 | 0 | 0.750 | 1.000 |
+| wants_to_end | 6 | 6 | 6 | 0 | 0.500 | 1.000 |
+| hostility | 5 | 3 | 0 | 2 | 1.000 | 0.600 |
+| stance=accept | 11 | 11 | 3 | 0 | 0.786 | 1.000 |
+| stance=reject | 9 | 8 | 0 | 1 | 1.000 | 0.889 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.746 |
+| term exact-match (all lines) | 0.977 |
+| term exact-match (lines with terms, n=64) | 0.938 |
+| filler false accepts (n=31) | 2 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP n12; FN f25
+- demands_commitment: FP -; FN c10
+- firm: FP n03, i10; FN -
+- wants_to_end: FP c06, i07, x02, e06, e07, e10; FN -
+- hostility: FP -; FN x02, x04
+- stance=accept: FP i06, f23, f30; FN -
+- stance=reject: FP -; FN a10
+- terms: f01, f16, f17, d04
+- filler false accept: f23, f30
+
+## LOW_EFFORT
+
+- git: `20f6719`  profile=`demo`  ref=2026-04-01
+- lines: 177  skipped (LLM unavailable): 0
+- model share: groq/openai/gpt-oss-120b=173, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 29 | 2 | 5 | 0.935 | 0.853 |
+| demands_commitment | 13 | 11 | 0 | 2 | 1.000 | 0.846 |
+| firm | 6 | 6 | 1 | 0 | 0.857 | 1.000 |
+| wants_to_end | 6 | 6 | 6 | 0 | 0.500 | 1.000 |
+| hostility | 5 | 0 | 0 | 5 | n/a | 0.000 |
+| stance=accept | 11 | 11 | 3 | 0 | 0.786 | 1.000 |
+| stance=reject | 9 | 7 | 0 | 2 | 1.000 | 0.778 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.667 |
+| term exact-match (all lines) | 0.949 |
+| term exact-match (lines with terms, n=64) | 0.859 |
+| filler false accepts (n=31) | 2 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP n12, c10; FN p11, p21, p24, p29, f25
+- demands_commitment: FP -; FN c10, c11
+- firm: FP i10; FN -
+- wants_to_end: FP c06, i07, x02, e06, e07, e10; FN -
+- hostility: FP -; FN x01, x02, x03, x04, x05
+- stance=accept: FP i06, f16, f26; FN -
+- stance=reject: FP -; FN x07, x08
+- terms: n13, h06, f01, f16, f17, f30, d04, t11, a07
+- filler false accept: f16, f26
 
 ## Notes
 
@@ -99,3 +168,28 @@ Misses (line ids):
   verification.
 - The corpus and the regex cues were written by the same author, so the
   hard negatives are not a blind test set.
+
+### Phase 21: `reasoning_effort: low` gate (2026-10-07)
+
+- Question: may the demo `nlu` route run Groq `gpt-oss-120b` with
+  `reasoning_effort: low`? The rule: every flag's precision and recall within
+  2 points of AFTER.
+- `DEFAULT_EFFORT` is the current prompt (it gained a `Today's date:` line after
+  AFTER, so AFTER's cache did not apply) at default effort: 173 LLM lines, all
+  Groq. It is the like-for-like baseline. Its drift from AFTER (accept precision
+  0.786: i06, f23, f30) comes from later accept-repair changes, not from this
+  phase.
+- `LOW_EFFORT` ran with a Groq-only route `{target: groq/openai/gpt-oss-120b,
+  params: {reasoning_effort: low}}`, so no line fails over to another model.
+  The first attempt stopped after 40 lines when the default key's organization
+  hit Groq's `gpt-oss-120b` daily token cap (TPD 200K). The run was resumed on
+  a second Groq key from another organization; the 40 answered lines came back
+  from the response cache. All 173 LLM lines are Groq.
+- Against AFTER, low effort drops `asks_client_private_info` recall
+  0.971 → 0.853 (p11, p21, p24, p29 newly missed), `demands_commitment` recall
+  0.923 → 0.846 (c11), and `hostility` recall 0.400 → 0.000. Against
+  DEFAULT_EFFORT it also drops `stance=reject` recall 0.889 → 0.778.
+  **Gate: FAIL. Demo `nlu` stays at default effort.**
+- What low effort would buy, in Groq request time only (no rate-limit wait):
+  p50 869 ms / p95 1533 ms (n=133 uncached), against 1275 / 2490 ms at default
+  (n=173). Tokens per call: about 886 vs 1154 (−23%).

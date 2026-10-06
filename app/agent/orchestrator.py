@@ -60,7 +60,7 @@ from app.domain.belief import BeliefChange, TermStatus
 from app.domain.facts import Fact
 from app.domain.scenario import CallScenario
 from app.llm.call_audit import llm_call_scope
-from app.llm.client import LLMUnavailable
+from app.llm.client import LLMUnavailable, QueueWait, queue_wait_scope
 from app.store.audit import AuditLog
 from feasibility.models import CreditorRules, add_months, end_of_month
 
@@ -78,6 +78,19 @@ class Utterance:
 
 def _ms_since(t0: float) -> float:
     return (time.perf_counter() - t0) * 1000.0
+
+
+def _close_timings(timings: dict[str, float], t_server: float, queue: QueueWait) -> None:
+    """Fill ``server_total_ms`` and ``queue_ms``; default absent stages to 0.
+
+    ``queue_ms`` is LLM limiter wait already inside ``nlu_ms`` / ``nlg_ms`` (not
+    additive). ``engine_ms`` is affordability / term-alt search in
+    ``_engine_context``; schedule eval for the chosen bp stays in ``policy_ms``.
+    """
+    for key in ("nlu_ms", "engine_ms", "policy_ms", "nlg_ms"):
+        timings.setdefault(key, 0.0)
+    timings["queue_ms"] = queue.ms
+    timings["server_total_ms"] = _ms_since(t_server)
 
 
 def find_alt_first_payment_date(
@@ -429,6 +442,10 @@ class Orchestrator:
         # Engine eval for the in-flight turn; committed to session only on speech ack.
         self._turn_eval: EvalSummary | None = None
         self._turn_agreed_bp: int | None = None
+        # Limiter-wait accumulator for the turn in flight (see ``_close_timings``).
+        self._turn_queue = QueueWait()
+        # Turns run by the post-NLU drain in ``on_sentence_done``; the WS emits them.
+        self._drained: list[Utterance] = []
 
     def _audit(self, actor: str, event_type: str, payload: dict[str, Any] | None = None) -> None:
         if self.audit is not None:
@@ -446,13 +463,10 @@ class Orchestrator:
                     + [Effect(kind="set_phase", data={"phase": Phase.DISCOVERY.value})],
                 }
             )
-            sentences = await self._speak(action, last_rep_line="")
-            timings = {
-                "nlu_ms": 0.0,
-                "policy_ms": 0.0,
-                "nlg_ms": _ms_since(t0),
-                "server_total_ms": _ms_since(t0),
-            }
+            with queue_wait_scope() as queue:
+                sentences = await self._speak(action, last_rep_line="")
+            timings = {"nlg_ms": _ms_since(t0)}
+            _close_timings(timings, t0, queue)
             self._audit(
                 "orchestrator",
                 "start",
@@ -470,10 +484,12 @@ class Orchestrator:
     ) -> Utterance:
         """NLU → belief → afford → decide → NLG.
 
-        Cancel-and-merge during NLU and ``_post_nlu_queue`` during post need
-        concurrent ``on_creditor_text`` callers. The voice WS awaits each handler
-        sequentially, so those paths are for in-process/tests; queued post-NLU
-        text is auto-drained after speech ack (F08).
+        Text that arrives while NLU runs is merged and NLU reruns on the concat;
+        every merged caller gets the same ``Utterance`` (callers emit it once).
+        Text that arrives after NLU (post stage) is queued, the caller gets the
+        in-flight turn's ``Utterance``, and the queue drains after speech ack
+        (``on_sentence_done`` → ``pop_drained``). The voice WS runs handlers as
+        concurrent tasks, so both paths are live.
         """
         out_timings = timings if timings is not None else {}
 
@@ -520,7 +536,9 @@ class Orchestrator:
                 )
                 self._post_nlu_queue = None
         try:
-            result = await self._run_turn(text, out_timings, oracle=oracle)
+            with queue_wait_scope() as queue:
+                self._turn_queue = queue
+                result = await self._run_turn(text, out_timings, oracle=oracle)
             async with self._meta:
                 if self._result_fut is not None and not self._result_fut.done():
                     self._result_fut.set_result(result)
@@ -644,7 +662,7 @@ class Orchestrator:
                     sentences = await self._speak(action, last_rep_line=working)
                     timings["policy_ms"] = 0.0
                     timings["nlg_ms"] = _ms_since(t_nlg)
-                    timings["server_total_ms"] = _ms_since(t_server)
+                    _close_timings(timings, t_server, self._turn_queue)
                     return await self._emit(action, sentences, timings, [])
 
             if (
@@ -663,7 +681,7 @@ class Orchestrator:
                 sentences = await self._speak(action, last_rep_line=working)
                 timings["policy_ms"] = 0.0
                 timings["nlg_ms"] = _ms_since(t_nlg)
-                timings["server_total_ms"] = _ms_since(t_server)
+                _close_timings(timings, t_server, self._turn_queue)
                 self._audit(
                     "policy",
                     "decide",
@@ -702,7 +720,9 @@ class Orchestrator:
 
             self._turn_eval = None
             self._turn_agreed_bp = None
+            t_eng = time.perf_counter()
             afford, rescue_ok, term_alt = await self._engine_context(verified)
+            timings["engine_ms"] = _ms_since(t_eng)
 
             t_pol = time.perf_counter()
             action = decide(
@@ -731,7 +751,7 @@ class Orchestrator:
             t_nlg = time.perf_counter()
             sentences = await self._speak(action, last_rep_line=working)
             timings["nlg_ms"] = _ms_since(t_nlg)
-            timings["server_total_ms"] = _ms_since(t_server)
+            _close_timings(timings, t_server, self._turn_queue)
             self._audit(
                 "orchestrator",
                 "turn_complete",
@@ -827,8 +847,14 @@ class Orchestrator:
                 if self.settings.nlu_mode == "oracle"
                 else None
             )
-            await self.on_creditor_text(queued, timings=None, oracle=drain_oracle)
+            drained = await self.on_creditor_text(queued, timings=None, oracle=drain_oracle)
+            self._drained.append(drained)
         return agreement
+
+    def pop_drained(self) -> list[Utterance]:
+        """Utterances produced by post-NLU drains since the last call (oldest first)."""
+        out, self._drained = self._drained, []
+        return out
 
     @_call_scoped
     async def on_barge_in(self, spoken_ids: list[str] | set[str]) -> None:
@@ -912,13 +938,10 @@ class Orchestrator:
                     next_phase=Phase.END,
                     reason="rep_ended",
                 )
-            sentences = await self._speak(action, last_rep_line="")
-            timings = {
-                "nlu_ms": 0.0,
-                "policy_ms": 0.0,
-                "nlg_ms": _ms_since(t0),
-                "server_total_ms": _ms_since(t0),
-            }
+            with queue_wait_scope() as queue:
+                sentences = await self._speak(action, last_rep_line="")
+            timings = {"nlg_ms": _ms_since(t0)}
+            _close_timings(timings, t0, queue)
             self._audit(
                 "orchestrator",
                 "call_ended",
@@ -1000,7 +1023,9 @@ class Orchestrator:
         session.last_blocked = []
         blocked_out = session.last_blocked
         try:
-            if self.settings.nlg_mode == "template" or self.llm is None:
+            # bank mode needs no LLM; llm mode without a client degrades to TEMPLATES.
+            mode = self.settings.nlg_mode
+            if mode == "template" or (mode != "bank" and self.llm is None):
                 return render_action(
                     action,
                     self._ref,
@@ -1021,6 +1046,7 @@ class Orchestrator:
                 audit=self.audit,
                 call_id=session.call_id,
                 blocked_out=blocked_out,
+                turn=session.neg.turn_idx,
             )
         except LLMUnavailable:
             self._audit("nlg", "llm_unavailable", {"fallback": SAFE_FALLBACK})

@@ -1,17 +1,26 @@
 # Free-tier OpenAI-compatible provider pool. Limits change; check each console.
-# Routes are provider/model; model may contain slashes (e.g. openai/gpt-oss-120b).
+# A route entry is `provider/model` (model may contain slashes, e.g.
+# openai/gpt-oss-120b) or a mapping:
+#   {target: provider/model, params: {reasoning_effort: low}, timeout_s: 20}
+# `params` go into the request body (and the response-cache key); `timeout_s`
+# overrides Settings.llm_timeout_<role>_s for that target. Token buckets are per
+# (provider, model): burst min(rpm, 5), refill rpm/60 per second.
 #
 # Mistral stays in the pool as a *last* fallback only (Experiment plan often needs
 # phone/workspace setup; keys may 429 with limit-req-minute=0 until then).
 
 profiles:
   demo: # latency first; Groq, then Gemini; Mistral last
+    # reasoning_effort: low was gated on the NLU corpus (2026-10-07) and failed:
+    # private-info recall drops > 2 points (docs/eval/nlu_corpus.md, LOW_EFFORT).
     nlu: [groq/openai/gpt-oss-120b, gemini/gemini-3.1-flash-lite, mistral/mistral-small-latest]
     nlg: [groq/openai/gpt-oss-20b, gemini/gemini-3.1-flash-lite]
     stt: [groq/whisper-large-v3-turbo]
   eval: # quota first; never put Mistral first
     nlu:
-      - gemini/gemini-3.1-flash-lite
+      # Measured 2026-10-07: Gemini NLU p50 11.4 s / p95 17.5 s (n=15), so the
+      # 6 s role default would time out nearly every call.
+      - {target: gemini/gemini-3.1-flash-lite, timeout_s: 20}
       - cerebras/gpt-oss-120b
       - groq/openai/gpt-oss-120b
       - openrouter/cohere/north-mini-code:free

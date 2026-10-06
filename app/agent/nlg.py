@@ -1,10 +1,12 @@
 """Deterministic NLG templates plus optional LLM template generation.
 
 Deterministic ``TEMPLATES`` / sync ``render_action`` are the fallback and the
-``NLG_MODE=template`` path. ``speak_action`` (async) may ask the LLM for a
-template, run ``template_guard``, retry once, then fall back; fill facts; run
-``rendered_guard``. LLM never receives PRIVATE values or digits — only
-placeholder meanings from ``app.llm.prompts``.
+``NLG_MODE=template`` path. ``speak_action`` (async) picks the template by mode:
+``bank`` takes a pre-generated, guard-checked template from
+``app.agent.nlg_bank`` (no LLM call); ``llm`` asks the LLM, runs
+``template_guard``, and retries once. Both fall back to ``TEMPLATES``, then fill
+facts and run ``rendered_guard``. LLM never receives PRIVATE values or digits —
+only placeholder meanings from ``app.llm.prompts``.
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ from datetime import date
 from typing import Any, Protocol
 
 from app.agent.guards import rendered_guard, template_guard
+from app.agent.nlg_bank import load_bank, pick_template
 from app.config import Settings, get_settings
 from app.domain.actions import Action, Intent
 from app.llm.client import LLMUnavailable
@@ -231,12 +234,15 @@ async def speak_action(
     audit: AuditLog | None = None,
     call_id: str | None = None,
     blocked_out: list[dict[str, Any]] | None = None,
+    turn: int = 0,
 ) -> list[str]:
-    """LLM template (optional) → template_guard → fill → rendered_guard.
+    """Bank or LLM template → template_guard → fill → rendered_guard.
 
-    On a guard-rejected template after one retry, falls back to ``TEMPLATES``.
+    ``nlg_mode=bank``: template from the bank keyed by (intent, placeholder ids),
+    chosen by ``(call_id, turn)``; never calls the LLM. ``nlg_mode=llm``: on a
+    guard-rejected template after one retry, falls back to ``TEMPLATES``.
     ``LLMUnavailable`` propagates (the orchestrator falls back and audits it).
-    ``TEMPLATE_ONLY_INTENTS`` always use ``TEMPLATES`` (no LLM call).
+    ``TEMPLATE_ONLY_INTENTS`` and ``template_override`` always win.
     """
     cfg = settings or get_settings()
     allowed = _allowed_ids(action)
@@ -246,7 +252,13 @@ async def speak_action(
     use_llm = (
         action.intent not in TEMPLATE_ONLY_INTENTS and action.template_override is None
     )
-    if use_llm and cfg.nlg_mode == "llm" and llm is not None:
+    if use_llm and cfg.nlg_mode == "bank":
+        picked = pick_template(
+            action, call_id=call_id, turn=turn, bank=load_bank(cfg.nlg_bank_path)
+        )
+        if picked is not None:
+            template = picked
+    elif use_llm and cfg.nlg_mode == "llm" and llm is not None:
         placeholder_ids = sorted(allowed)
         messages = nlg_messages(action.intent, placeholder_ids, last_rep_line)
         candidate: str | None = None

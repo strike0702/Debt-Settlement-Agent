@@ -1,0 +1,174 @@
+{
+  "generated": "2026-10-07",
+  "profile": "demo",
+  "per_key": 8,
+  "stats": {
+    "asked": 64,
+    "kept": 45,
+    "rejected": 27,
+    "duplicate": 6,
+    "model:groq/openai/gpt-oss-20b": 64
+  },
+  "entries": [
+    {
+      "intent": "CLARIFY",
+      "placeholders": [
+        "clarify_new",
+        "clarify_old",
+        "field_label"
+      ],
+      "required": [
+        "clarify_new",
+        "clarify_old",
+        "field_label"
+      ],
+      "templates": [
+        "Could you confirm whether {field_label} is {clarify_old} or {clarify_new}?",
+        "Please let me know if {field_label} should be {clarify_old} or {clarify_new}.",
+        "Kindly tell me whether {field_label} equals {clarify_old} or {clarify_new}.",
+        "Would you mind confirming if {field_label} is {clarify_old} or {clarify_new}?",
+        "Could you clarify whether {field_label} should be {clarify_old} or {clarify_new}?",
+        "Please advise if {field_label} is {clarify_old} or {clarify_new}.",
+        "May I ask if {field_label} is {clarify_old} or {clarify_new}?",
+        "Could you help me determine whether {field_label} is {clarify_old} or {clarify_new}?"
+      ]
+    },
+    {
+      "intent": "CONFIRM_SCHEDULE",
+      "placeholders": [
+        "first_payment_date",
+        "last_payment",
+        "num_payments",
+        "offer_total",
+        "payment_level_0",
+        "payment_level_1",
+        "payment_level_2",
+        "settlement_pct"
+      ],
+      "required": [
+        "first_payment_date",
+        "num_payments",
+        "offer_total",
+        "settlement_pct"
+      ],
+      "templates": [
+        "Your {settlement_pct} works. I recommend {num_payments} payments totaling {offer_total} starting {first_payment_date}. Does that fit?"
+      ]
+    },
+    {
+      "intent": "CONFIRM_SCHEDULE",
+      "placeholders": [
+        "first_payment_date",
+        "last_payment",
+        "num_payments",
+        "offer_total",
+        "payment_level_0",
+        "payment_level_1",
+        "settlement_pct"
+      ],
+      "required": [
+        "first_payment_date",
+        "num_payments",
+        "offer_total",
+        "settlement_pct"
+      ],
+      "templates": [
+        "Great, {settlement_pct} is acceptable. We could set {num_payments} payments totalling {offer_total} beginning {first_payment_date}. Would that suit you?",
+        "Understood, {settlement_pct} works. Consider {num_payments} installments totaling {offer_total} starting {first_payment_date}. Does that fit your schedule?",
+        "Got it, {settlement_pct} works. How about {num_payments} payments totaling {offer_total} starting {first_payment_date}? Will that work for you?",
+        "Yes, {settlement_pct} works. Let's outline {num_payments} payments totalling {offer_total} beginning {first_payment_date}. Is that okay with you?"
+      ]
+    },
+    {
+      "intent": "CONFIRM_SCHEDULE",
+      "placeholders": [
+        "first_payment_date",
+        "last_payment",
+        "num_payments",
+        "offer_total",
+        "payment_level_0",
+        "settlement_pct"
+      ],
+      "required": [
+        "first_payment_date",
+        "num_payments",
+        "offer_total",
+        "settlement_pct"
+      ],
+      "templates": [
+        "Excellent, {settlement_pct} works. I suggest {num_payments} payments totaling {offer_total} beginning {first_payment_date}. Does that suit you?",
+        "Yes, {settlement_pct} works. We could set {num_payments} payments totaling {offer_total} starting {first_payment_date}. Does that work?",
+        "Great, {settlement_pct} works. How about {num_payments} payments totaling {offer_total} starting {first_payment_date}? Does that fit your schedule?"
+      ]
+    },
+    {
+      "intent": "COUNTER",
+      "placeholders": [
+        "counter_pct",
+        "offer_total"
+      ],
+      "required": [
+        "counter_pct",
+        "offer_total"
+      ],
+      "templates": [
+        "We can propose {counter_pct} of the balance, which equals {offer_total}.",
+        "We propose {counter_pct} of the balance, totaling {offer_total}.",
+        "Could we settle for {counter_pct} of the balance, amounting to {offer_total}?",
+        "How about {counter_pct} of the balance, which equals {offer_total}?",
+        "We suggest {counter_pct} of the balance, totaling {offer_total}.",
+        "Would {counter_pct} of the balance, or {offer_total}, be acceptable?",
+        "Please consider {counter_pct} of the balance, amounting to {offer_total}.",
+        "We can offer {counter_pct} of the balance, which totals {offer_total}."
+      ]
+    },
+    {
+      "intent": "READ_BACK",
+      "placeholders": [
+        "field_label",
+        "readback_value"
+      ],
+      "required": [
+        "field_label",
+        "readback_value"
+      ],
+      "templates": [
+        "Please confirm the tentative {field_label} as {readback_value}.",
+        "Could you verify the tentative {field_label} is {readback_value}?",
+        "Kindly acknowledge the tentative {field_label} set at {readback_value}.",
+        "Please validate the tentative {field_label} with {readback_value}.",
+        "May I confirm the tentative {field_label} equals {readback_value}?",
+        "Please check that the tentative {field_label} matches {readback_value}.",
+        "Could you confirm the tentative {field_label} is {readback_value}?",
+        "Please verify the tentative {field_label} as {readback_value}."
+      ]
+    },
+    {
+      "intent": "REFUSE_COMMIT",
+      "placeholders": [],
+      "required": [],
+      "templates": [
+        "I'm sorry, but I can only present options for you to consider.",
+        "I\u2019m sorry, but I can only propose options; I\u2019m not able to commit to a settlement.",
+        "I\u2019m sorry, but I can only offer a proposal for your consideration.",
+        "I appreciate your request, but I can only present a proposal for your consideration.",
+        "I\u2019m sorry, but I can only present a proposal for your review.",
+        "I\u2019m sorry, but I can only present options for you to consider.",
+        "I\u2019m sorry, but I can\u2019t confirm that. I can only present a proposal for your review.",
+        "I\u2019m sorry, but I can only propose a solution for your review."
+      ]
+    },
+    {
+      "intent": "REFUSE_PRIVATE",
+      "placeholders": [],
+      "required": [],
+      "templates": [
+        "I\u2019m sorry, but I can\u2019t share that information.",
+        "I\u2019m sorry, but I\u2019m unable to disclose that information.",
+        "I\u2019m sorry, but I\u2019m not able to share that information.",
+        "I\u2019m sorry, but I\u2019m not able to provide that information.",
+        "I\u2019m sorry, but I\u2019m unable to provide that information."
+      ]
+    }
+  ]
+}

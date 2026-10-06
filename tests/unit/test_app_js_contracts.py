@@ -85,3 +85,26 @@ def test_rep_view_shows_human_terms_not_internals() -> None:
     assert 'JSON.stringify(value) : "[]"' not in src
     assert "Last agent intent" not in src
     assert "termsTableHtml(terms, { showStatus: false })" in src
+
+
+def test_voice_latency_client_phase21() -> None:
+    """Phase 21: shorter VAD hangover, onstart first-audio stamp, local backchannel, voices."""
+    src = APP_JS.read_text(encoding="utf-8")
+    assert "redemptionFrames: 8," in src
+    # F14: the timing event is sent from utter.onstart, not when the utterance is queued.
+    onstart = src[src.index("utter.onstart") : src.index("utter.onstart") + 200]
+    assert "stampFirstAudio()" in onstart
+    stamp = src[src.index("function stampFirstAudio") :][:400]
+    assert "vad_end_to_first_audio_ms" in stamp
+    assert src.count("vad_end_to_first_audio_ms") == 1
+    # Backchannel: number-free, local only (never sent), armed on VAD end, cancelled on say.
+    assert 'const BACKCHANNEL_TEXT = "One moment.";' in src
+    assert "const BACKCHANNEL_AFTER_MS = 1200;" in src
+    body = src[src.index("function speakBackchannel") :][:900]
+    assert "sendJson" not in body and "ws.send" not in body
+    assert "armBackchannel();" in src[src.index("onSpeechEnd") :][:900]
+    say = src[src.index('if (type === "say")') :][:120]
+    assert "cancelBackchannel()" in say
+    # Preferred natural voices.
+    assert '"Google US English"' in src and '"Samantha"' in src and "Microsoft Aria" in src
+    assert "applyVoice(utter)" in src

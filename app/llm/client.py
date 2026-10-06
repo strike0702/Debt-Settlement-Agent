@@ -1,16 +1,23 @@
 """Role-based OpenAI-compatible LLM client with provider failover.
 
 Callers ask for a role (``nlu`` / ``nlg`` / ``sim`` / ``stt``), never a model
-name. Routing comes from ``config/providers.yaml`` profiles. Per-provider token
-bucket + optional ``min_interval_s``; short 429 waits retry the same target,
-long waits / daily quota mark it exhausted and fail over. Gemini free-tier
-quota often arrives as HTTP 400 — remapped to 429 when ``quota_as_400``.
-Each request has a per-role timeout (``Settings.llm_timeout_<role>_s``); a
-timeout, connection error, or HTTP error fails over to the next target. Any
-other exception is a bug and propagates.
+name. Routing comes from ``config/providers.yaml`` profiles; a route entry is
+either ``provider/model`` or ``{target: provider/model, params: {...},
+timeout_s: N}`` (params go into the request body and the response-cache key;
+``timeout_s`` overrides the role timeout for that target only). Token buckets are keyed
+by ``(provider, model)`` with burst ``min(rpm, 5)`` and refill ``rpm/60`` per
+second, plus optional ``min_interval_s``; short 429 waits retry the same
+target, long waits / daily quota mark it exhausted and fail over. Gemini
+free-tier quota often arrives as HTTP 400 — remapped to 429 when
+``quota_as_400``. Each attempt (limiter wait + request) is bounded by a
+per-role timeout (``Settings.llm_timeout_<role>_s``); a timeout, connection
+error, or HTTP error fails over to the next target. Any other exception is a
+bug and propagates.
 
 ``on_call`` receives one meta dict per attempt that finished: successes and
-cache hits (``error=None``) and failed targets (``error=<message>``).
+cache hits (``error=None``) and failed targets (``error=<message>``). Each meta
+carries ``queue_ms`` (limiter wait plus short-429 Retry-After sleeps);
+``queue_wait_scope`` sums it for a turn.
 ``app.llm.call_audit`` turns that hook into audit-log rows.
 
 Does not own NLU/NLG prompts or policy. SQLite response cache (temp 0 only).
@@ -28,8 +35,10 @@ import re
 import sqlite3
 import time
 from collections import defaultdict, deque
-from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, TypeVar
@@ -52,6 +61,8 @@ _WHISPER_PROMPT = "settlement, minimum payment, balloon, monthly payments, perce
 _FENCE_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```\s*$", re.DOTALL | re.IGNORECASE)
 _SHORT_RETRY_S = 20.0
 _MAX_SHORT_RETRIES = 3
+# Burst capacity cap: a turn makes at most ~3 calls (STT, NLU, NLG) back to back.
+_BURST_CAP = 5.0
 
 _KEY_ATTR = {
     "GROQ_API_KEY": "groq_api_key",
@@ -82,6 +93,27 @@ def strip_json_fences(text: str) -> str:
     return s
 
 
+class QueueWait:
+    """Mutable sum of limiter wait (ms) for the calls made inside one scope."""
+
+    def __init__(self) -> None:
+        self.ms = 0.0
+
+
+_QUEUE_WAIT: ContextVar[QueueWait | None] = ContextVar("llm_queue_wait", default=None)
+
+
+@contextmanager
+def queue_wait_scope() -> Iterator[QueueWait]:
+    """Sum ``queue_ms`` of every LLM / STT attempt made inside this block."""
+    acc = QueueWait()
+    token = _QUEUE_WAIT.set(acc)
+    try:
+        yield acc
+    finally:
+        _QUEUE_WAIT.reset(token)
+
+
 def _parse_target(spec: str) -> tuple[str, str]:
     """Split ``provider/model`` on the first slash (model may contain slashes)."""
     if "/" not in spec:
@@ -90,20 +122,63 @@ def _parse_target(spec: str) -> tuple[str, str]:
     return provider, model
 
 
+@dataclass(frozen=True)
+class RouteTarget:
+    """One routed target: ``provider/model``, optional request ``params`` and ``timeout_s``."""
+
+    provider: str
+    model: str
+    params: Mapping[str, Any] = field(default_factory=dict)
+    timeout_s: float | None = None
+
+    @property
+    def spec(self) -> str:
+        return f"{self.provider}/{self.model}" if self.model else self.provider
+
+
+def parse_route_entry(raw: str | Mapping[str, Any]) -> RouteTarget:
+    """Parse a providers.yaml route entry (plain string or ``{target, params}``)."""
+    if isinstance(raw, str):
+        provider, model = _parse_target(raw)
+        return RouteTarget(provider, model)
+    if not isinstance(raw, Mapping) or not isinstance(raw.get("target"), str):
+        raise ValueError(f"route entry needs a 'target' string: {raw!r}")
+    extra = set(raw) - {"target", "params", "timeout_s"}
+    if extra:
+        raise ValueError(f"unknown route entry keys {sorted(extra)}: {raw!r}")
+    params = raw.get("params") or {}
+    if not isinstance(params, Mapping):
+        raise ValueError(f"route params must be a mapping: {raw!r}")
+    timeout_s = raw.get("timeout_s")
+    if timeout_s is not None and (
+        isinstance(timeout_s, bool) or not isinstance(timeout_s, (int, float)) or timeout_s <= 0
+    ):
+        raise ValueError(f"route timeout_s must be a positive number: {raw!r}")
+    provider, model = _parse_target(raw["target"])
+    return RouteTarget(
+        provider, model, dict(params), float(timeout_s) if timeout_s is not None else None
+    )
+
+
 def _cache_key(
     provider: str,
     model: str,
     messages: Sequence[Mapping[str, Any]],
     temperature: float,
     max_tokens: int | None,
+    params: Mapping[str, Any] | None = None,
 ) -> str:
-    payload = {
+    payload: dict[str, Any] = {
         "provider": provider,
         "model": model,
         "messages": list(messages),
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
+    # Only add the key when set, so cache entries written before route params
+    # existed (plain-string routes) still hit.
+    if params:
+        payload["params"] = dict(params)
     raw = json.dumps(payload, sort_keys=True, default=str)
     return hashlib.sha256(raw.encode()).hexdigest()
 
@@ -123,13 +198,18 @@ class _ProviderCfg:
 
 
 class _TokenBucket:
-    """Async token bucket; ``rpm == 0`` disables limiting."""
+    """Async token bucket; ``rpm == 0`` disables limiting.
+
+    Starts full with burst capacity ``min(rpm, 5)`` and refills ``rpm/60`` tokens
+    per second, so a turn's back-to-back calls do not wait while the sustained
+    rate still respects ``rpm``.
+    """
 
     def __init__(self, rpm: float, min_interval_s: float = 0.0) -> None:
         self.rpm = rpm
         self.min_interval_s = min_interval_s
-        self._tokens = 1.0 if rpm > 0 else float("inf")
-        self._capacity = max(1.0, rpm / 60.0) if rpm > 0 else float("inf")
+        self._capacity = max(1.0, min(rpm, _BURST_CAP)) if rpm > 0 else float("inf")
+        self._tokens = self._capacity
         self._refill_per_s = rpm / 60.0 if rpm > 0 else 0.0
         self._last = time.monotonic()
         self._last_acquire = 0.0
@@ -144,6 +224,7 @@ class _TokenBucket:
         self._tokens = min(self._capacity, self._tokens + elapsed * self._refill_per_s)
 
     async def acquire(self) -> None:
+        """Wait for a token (and ``min_interval_s``); cancellation consumes none."""
         async with self._lock:
             while True:
                 self._refill()
@@ -265,6 +346,7 @@ class FakeLLM:
             "cache_hit": False,
             "failover_from": None,
             "error": None,
+            "queue_ms": 0.0,
         }
         try:
             raw = self._pop(role)
@@ -330,9 +412,9 @@ class LLMClient:
         self.on_call = on_call
         self._http_clients = dict(http_clients or {})
         self._providers: dict[str, _ProviderCfg] = {}
-        self._profiles: dict[str, dict[str, list[str]]] = {}
+        self._profiles: dict[str, dict[str, list[RouteTarget]]] = {}
         self._openai: dict[str, AsyncOpenAI] = {}
-        self._limiters: dict[str, _TokenBucket] = {}
+        self._limiters: dict[tuple[str, str], _TokenBucket] = {}
         self._target_state: dict[tuple[str, str], _TargetState] = defaultdict(_TargetState)
         self._ollama_tags: set[str] | None = None
         self._ollama_ok = False
@@ -378,7 +460,7 @@ class LLMClient:
             )
         for pname, proute in (data.get("profiles") or {}).items():
             if "all" in proute:
-                specs = list(proute["all"])
+                specs = [parse_route_entry(e) for e in proute["all"]]
                 self._profiles[pname] = {
                     "nlu": specs,
                     "nlg": specs,
@@ -386,7 +468,9 @@ class LLMClient:
                     "stt": specs,
                 }
             else:
-                self._profiles[pname] = {k: list(v) for k, v in proute.items()}
+                self._profiles[pname] = {
+                    k: [parse_route_entry(e) for e in v] for k, v in proute.items()
+                }
 
     def _resolve_key(self, cfg: _ProviderCfg) -> str | None:
         if cfg.api_key:
@@ -419,7 +503,16 @@ class LLMClient:
             if http is not None:
                 kwargs["http_client"] = http
             self._openai[name] = AsyncOpenAI(**kwargs)
-            self._limiters[name] = _TokenBucket(cfg.rpm, cfg.min_interval_s)
+
+    def _limiter(self, provider: str, model: str) -> _TokenBucket:
+        """Token bucket for one ``(provider, model)``; free-tier limits are per model."""
+        key = (provider, model)
+        bucket = self._limiters.get(key)
+        if bucket is None:
+            cfg = self._providers[provider]
+            bucket = _TokenBucket(cfg.rpm, cfg.min_interval_s)
+            self._limiters[key] = bucket
+        return bucket
 
     def _check_ollama(self, cfg: _ProviderCfg) -> bool:
         base = cfg.base_url.rstrip("/")
@@ -458,7 +551,7 @@ class LLMClient:
             return 0.0
         return 0.4
 
-    def _route(self, role: Role) -> list[str]:
+    def _route(self, role: Role) -> list[RouteTarget]:
         profile = self._profiles.get(self.settings.llm_profile)
         if not profile:
             raise LLMUnavailable(f"unknown llm_profile={self.settings.llm_profile!r}")
@@ -497,7 +590,11 @@ class LLMClient:
         completion_tokens: int | None = None,
         cache_hit: bool = False,
         error: str | None = None,
+        queue_ms: float = 0.0,
     ) -> None:
+        acc = _QUEUE_WAIT.get()
+        if acc is not None:
+            acc.ms += queue_ms
         await self._emit(
             {
                 "role": role,
@@ -509,6 +606,7 @@ class LLMClient:
                 "cache_hit": cache_hit,
                 "failover_from": failover_from,
                 "error": error,
+                "queue_ms": queue_ms,
             }
         )
 
@@ -550,6 +648,14 @@ class LLMClient:
         low = body.lower()
         return "resource_exhausted" in low or "quota" in low
 
+    @staticmethod
+    async def _rate_wait(seconds: float, queue: QueueWait | None) -> None:
+        """Sleep out a short 429 Retry-After; it is rate-limit wait, so it counts as queue."""
+        t0 = time.perf_counter()
+        await asyncio.sleep(seconds)
+        if queue is not None:
+            queue.ms += (time.perf_counter() - t0) * 1000.0
+
     async def chat_json(
         self,
         role: Role,
@@ -585,8 +691,8 @@ class LLMClient:
         failover_from: str | None = None
         last_err: Exception | None = None
 
-        for spec in route:
-            provider, model = _parse_target(spec)
+        for target in route:
+            provider, model, params = target.provider, target.model, target.params
             if provider == "fake":
                 if self._fake is None:
                     continue
@@ -605,7 +711,7 @@ class LLMClient:
                 and temperature == 0.0
                 and self.settings.llm_cache
             ):
-                key = _cache_key(provider, model, messages, temperature, max_tokens)
+                key = _cache_key(provider, model, messages, temperature, max_tokens, params)
                 hit = self._cache.get(key)
                 if hit is not None:
                     body, pt, ct = hit
@@ -629,6 +735,7 @@ class LLMClient:
                 ]
 
             t0 = time.perf_counter()
+            queue = QueueWait()
             try:
                 body, pt, ct, latency_ms = await self._call_chat(
                     provider,
@@ -637,7 +744,9 @@ class LLMClient:
                     temperature=temperature,
                     max_tokens=max_tokens,
                     json_mode=want_json and cfg.json_mode,
-                    timeout_s=self._timeout_for(role),
+                    timeout_s=target.timeout_s or self._timeout_for(role),
+                    params=params,
+                    queue=queue,
                 )
             except (_TargetExhausted, _TargetFailed) as e:
                 # Only provider / HTTP / timeout failures fail over; anything else
@@ -650,13 +759,14 @@ class LLMClient:
                     latency_ms=(time.perf_counter() - t0) * 1000.0,
                     failover_from=failover_from,
                     error=str(e),
+                    queue_ms=queue.ms,
                 )
-                failover_from = f"{provider}/{model}"
+                failover_from = target.spec
                 continue
 
             if self._cache is not None and temperature == 0.0 and self.settings.llm_cache:
                 self._cache.put(
-                    _cache_key(provider, model, messages, temperature, max_tokens),
+                    _cache_key(provider, model, messages, temperature, max_tokens, params),
                     body,
                     pt,
                     ct,
@@ -670,6 +780,7 @@ class LLMClient:
                 failover_from=failover_from,
                 prompt_tokens=pt,
                 completion_tokens=ct,
+                queue_ms=queue.ms,
             )
             return body
 
@@ -685,17 +796,24 @@ class LLMClient:
         max_tokens: int | None,
         json_mode: bool,
         timeout_s: float,
+        params: Mapping[str, Any] | None = None,
+        queue: QueueWait | None = None,
     ) -> tuple[str, int | None, int | None, float]:
-        """One target, with 429 / 5xx retries; raises ``_TargetExhausted`` / ``_TargetFailed``."""
+        """One target, with 429 / 5xx retries; raises ``_TargetExhausted`` / ``_TargetFailed``.
+
+        Each attempt's limiter wait and request share one ``timeout_s`` budget.
+        Limiter waits and short-429 Retry-After sleeps are added to ``queue.ms``;
+        ``latency_ms`` is the last request's time only.
+        """
         client = self._openai[provider]
-        limiter = self._limiters[provider]
+        limiter = self._limiter(provider, model)
         backoff_s = [1.0, 2.0, 4.0]
         attempt_5xx = 0
         short_retries = 0
 
         while True:
-            await limiter.acquire()
-            t0 = time.perf_counter()
+            t_q = time.perf_counter()
+            t0 = t_q
             try:
                 kwargs: dict[str, Any] = {
                     "model": model,
@@ -706,10 +824,21 @@ class LLMClient:
                     kwargs["max_tokens"] = max_tokens
                 if json_mode:
                     kwargs["response_format"] = {"type": "json_object"}
+                if params:
+                    # extra_body: provider-specific knobs (reasoning_effort, …)
+                    # the SDK signature may not know.
+                    kwargs["extra_body"] = dict(params)
                 # SDK timeout covers real sockets; asyncio.timeout also bounds
-                # transports that ignore httpx timeouts (and any SDK slack).
+                # the limiter wait and transports that ignore httpx timeouts.
                 async with asyncio.timeout(timeout_s):
-                    resp = await client.chat.completions.create(**kwargs, timeout=timeout_s)
+                    try:
+                        await limiter.acquire()
+                    finally:
+                        if queue is not None:
+                            queue.ms += (time.perf_counter() - t_q) * 1000.0
+                    t0 = time.perf_counter()
+                    remaining = max(0.001, timeout_s - (t0 - t_q))
+                    resp = await client.chat.completions.create(**kwargs, timeout=remaining)
             except TimeoutError as e:
                 raise _TargetFailed(f"{provider}/{model} timed out after {timeout_s}s") from e
             except RateLimitError as e:
@@ -720,7 +849,7 @@ class LLMClient:
                     and short_retries < _MAX_SHORT_RETRIES
                 ):
                     short_retries += 1
-                    await asyncio.sleep(ra)
+                    await self._rate_wait(ra, queue)
                     continue
                 self._mark_exhausted(provider, model, ra)
                 raise _TargetExhausted(f"{provider}/{model} rate limited: {e}") from e
@@ -733,7 +862,7 @@ class LLMClient:
                         and short_retries < _MAX_SHORT_RETRIES
                     ):
                         short_retries += 1
-                        await asyncio.sleep(ra)
+                        await self._rate_wait(ra, queue)
                         continue
                     self._mark_exhausted(provider, model, ra)
                     raise _TargetExhausted(
@@ -747,7 +876,7 @@ class LLMClient:
                         and short_retries < _MAX_SHORT_RETRIES
                     ):
                         short_retries += 1
-                        await asyncio.sleep(ra)
+                        await self._rate_wait(ra, queue)
                         continue
                     self._mark_exhausted(provider, model, ra)
                     raise _TargetExhausted(f"{provider}/{model} 429: {e}") from e
@@ -781,15 +910,17 @@ class LLMClient:
         last_err: Exception | None = None
         use_prompt = prompt if prompt is not None else _WHISPER_PROMPT
 
-        for spec in route:
-            provider, model = _parse_target(spec)
+        for target in route:
+            provider, model = target.provider, target.model
             if not self._provider_usable(provider, model):
                 continue
             t0 = time.perf_counter()
+            queue = QueueWait()
             try:
                 try:
                     text, latency_ms = await self._transcribe_once(
-                        provider, model, wav_bytes, use_prompt
+                        provider, model, wav_bytes, use_prompt,
+                        params=target.params, queue=queue, timeout_s=target.timeout_s,
                     )
                 except RateLimitError as e:
                     ra = self._retry_after_seconds(e)
@@ -797,10 +928,11 @@ class LLMClient:
                         self._mark_exhausted(provider, model, ra)
                         raise
                     # Short Retry-After: one retry on the same target, then give up on it.
-                    await asyncio.sleep(ra)
+                    await self._rate_wait(ra, queue)
                     try:
                         text, latency_ms = await self._transcribe_once(
-                            provider, model, wav_bytes, use_prompt
+                            provider, model, wav_bytes, use_prompt,
+                            params=target.params, queue=queue, timeout_s=target.timeout_s,
                         )
                     except _STT_TARGET_ERRORS:
                         self._mark_exhausted(provider, model, ra)
@@ -814,35 +946,55 @@ class LLMClient:
                     latency_ms=(time.perf_counter() - t0) * 1000.0,
                     failover_from=failover_from,
                     error=str(e) or type(e).__name__,
+                    queue_ms=queue.ms,
                 )
-                failover_from = f"{provider}/{model}"
+                failover_from = target.spec
                 continue
             await self._emit_call(
-                "stt", provider, model, latency_ms=latency_ms, failover_from=failover_from
+                "stt",
+                provider,
+                model,
+                latency_ms=latency_ms,
+                failover_from=failover_from,
+                queue_ms=queue.ms,
             )
             return text
 
         raise LLMUnavailable(str(last_err) if last_err else "no usable STT targets")
 
     async def _transcribe_once(
-        self, provider: str, model: str, wav_bytes: bytes, prompt: str
+        self,
+        provider: str,
+        model: str,
+        wav_bytes: bytes,
+        prompt: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        queue: QueueWait | None = None,
+        timeout_s: float | None = None,
     ) -> tuple[str, float]:
-        """One STT request on one target, bounded by ``llm_timeout_stt_s``."""
+        """One STT request on one target; limiter wait + request bounded by the STT timeout."""
         client = self._openai[provider]
-        await self._limiters[provider].acquire()
-        timeout_s = self._timeout_for("stt")
-        t0 = time.perf_counter()
+        timeout_s = timeout_s or self._timeout_for("stt")
         # The SDK wants a named file-like object for the multipart upload.
         bio = io.BytesIO(wav_bytes)
         bio.name = "audio.wav"
+        t_q = time.perf_counter()
         async with asyncio.timeout(timeout_s):
+            try:
+                await self._limiter(provider, model).acquire()
+            finally:
+                if queue is not None:
+                    queue.ms += (time.perf_counter() - t_q) * 1000.0
+            t0 = time.perf_counter()
             resp = await client.audio.transcriptions.create(
                 model=model,
                 file=bio,
                 language="en",
                 temperature=0,
                 prompt=prompt,
-                timeout=timeout_s,
+                timeout=max(0.001, timeout_s - (t0 - t_q)),
+                **({"extra_body": dict(params)} if params else {}),
             )
         latency_ms = (time.perf_counter() - t0) * 1000.0
         text = resp.text if hasattr(resp, "text") else str(resp)

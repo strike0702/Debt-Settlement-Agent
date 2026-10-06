@@ -6,6 +6,10 @@ are free) and scores the post-verified output against the hand labels. Writes
 the ``## <LABEL>`` section of ``docs/eval/nlu_corpus.md`` (BEFORE kept above
 AFTER) plus raw per-line predictions in ``docs/eval/nlu_corpus_<label>.jsonl``.
 
+Each line runs inside ``llm_call_scope("corpus:<id>")`` with an audit hook, so
+every LLM call is written to ``--audit-db`` (default
+``eval/results/nlu_corpus_audit.db``, git-ignored).
+
 Not the policy eval (``eval.run_eval``): no orchestrator, no simulator.
 CLI: ``python -m eval.nlu_corpus --label BEFORE [--profile demo]``.
 """
@@ -25,13 +29,16 @@ from typing import Any
 from app.agent.nlu import VerifiedAnalysis, analyze
 from app.config import get_settings
 from app.domain.fields import FIELDS_BY_NAME
+from app.llm.call_audit import audit_llm_calls, llm_call_scope
 from app.llm.client import LLMUnavailable, make_client
+from app.store.audit import AuditLog
 
 CORPUS_PATH = Path("tests/nlu_corpus.jsonl")
 REPORT_PATH = Path("docs/eval/nlu_corpus.md")
 CACHE_PATH = "eval/nlu_corpus_cache.db"
+AUDIT_PATH = Path("eval/results/nlu_corpus_audit.db")
 REF = date(2026, 4, 1)
-SECTION_ORDER = ("BEFORE", "AFTER")
+SECTION_ORDER = ("BEFORE", "AFTER", "DEFAULT_EFFORT", "LOW_EFFORT")
 
 FLAGS = (
     "asks_client_private_info",
@@ -246,9 +253,18 @@ def write_report(path: Path, label: str, section: str) -> None:
 
 
 async def run_corpus(
-    corpus: list[dict[str, Any]], *, profile: str, concurrency: int = 4
+    corpus: list[dict[str, Any]],
+    *,
+    profile: str,
+    concurrency: int = 4,
+    audit: AuditLog | None = None,
+    llm: Any | None = None,
 ) -> tuple[list[dict[str, Any]], Counter[str]]:
-    """Analyze every line; returns per-line records and answering-model counts."""
+    """Analyze every line; returns per-line records and answering-model counts.
+
+    With ``audit``, each line's LLM calls are audited under ``corpus:<id>``.
+    ``llm`` overrides the client built from ``profile`` (tests).
+    """
     settings = get_settings().model_copy(
         update={
             "llm_profile": profile,
@@ -266,7 +282,12 @@ async def run_corpus(
         if meta.get("model") and tid in current:
             line_models[current[tid]] = f"{meta.get('provider')}/{meta['model']}"
 
-    llm = make_client(settings, on_call=on_call)
+    hook = audit_llm_calls(audit, then=on_call) if audit is not None else on_call
+    owns_llm = llm is None
+    if llm is None:
+        llm = make_client(settings, on_call=hook)
+    else:
+        llm.on_call = hook
     sem = asyncio.Semaphore(concurrency)
 
     async def one(line: dict[str, Any]) -> dict[str, Any]:
@@ -284,10 +305,11 @@ async def run_corpus(
                 },
             }
             try:
-                out = await analyze(
-                    line["text"], agent, line.get("pending"),
-                    llm=llm, settings=settings, ref=REF,
-                )
+                with llm_call_scope(f"corpus:{line['id']}"):
+                    out = await analyze(
+                        line["text"], agent, line.get("pending"),
+                        llm=llm, settings=settings, ref=REF,
+                    )
             except LLMUnavailable as e:
                 rec["skipped"] = True
                 rec["error"] = str(e)[:200]
@@ -304,7 +326,7 @@ async def run_corpus(
         records = await asyncio.gather(*(one(ln) for ln in corpus))
     finally:
         aclose = getattr(llm, "aclose", None)
-        if aclose is not None:
+        if owns_llm and aclose is not None:
             await aclose()
     for r in records:
         if not r.get("skipped"):
@@ -325,12 +347,20 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--label", required=True, help="report section, e.g. BEFORE / AFTER")
     ap.add_argument("--profile", default="demo")
     ap.add_argument("--concurrency", type=int, default=4)
+    ap.add_argument("--audit-db", type=Path, default=AUDIT_PATH)
     args = ap.parse_args(argv)
 
     corpus = load_corpus()
-    records, models = asyncio.run(
-        run_corpus(corpus, profile=args.profile, concurrency=args.concurrency)
-    )
+    args.audit_db.parent.mkdir(parents=True, exist_ok=True)
+    audit = AuditLog(args.audit_db)
+    try:
+        records, models = asyncio.run(
+            run_corpus(
+                corpus, profile=args.profile, concurrency=args.concurrency, audit=audit
+            )
+        )
+    finally:
+        audit.close()
     summary = score(records)
     meta = {"git": _git_sha(), "profile": args.profile, "models": models}
     write_report(REPORT_PATH, args.label, render_section(args.label, summary, meta))

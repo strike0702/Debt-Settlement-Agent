@@ -13,7 +13,7 @@ services:
       - key: LLM_PROFILE
         value: demo
       - key: NLG_MODE
-        value: llm
+        value: bank # guard-checked template bank, no NLG LLM call; `llm` still works
       - key: NLU_MODE
         value: llm
       - key: LLM_CACHE

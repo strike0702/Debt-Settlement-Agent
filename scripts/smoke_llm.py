@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from app.config import get_settings  # noqa: E402
-from app.llm.client import LLMClient, LLMUnavailable  # noqa: E402
+from app.llm.client import LLMClient, LLMUnavailable, parse_route_entry  # noqa: E402
 
 
 class SmokeOut(BaseModel):
@@ -77,12 +77,8 @@ async def _one(provider: str, model: str) -> tuple[str, float]:
     if provider not in client._openai:
         await client.aclose()
         raise LLMUnavailable(f"{provider} not initialized")
-    client._profiles["demo"] = {
-        "nlu": [f"{provider}/{model}"],
-        "nlg": [f"{provider}/{model}"],
-        "sim": [f"{provider}/{model}"],
-        "stt": [f"{provider}/{model}"],
-    }
+    target = [parse_route_entry(f"{provider}/{model}")]
+    client._profiles["demo"] = {"nlu": target, "nlg": target, "sim": target, "stt": target}
     t0 = time.perf_counter()
     out = await client.chat_json(
         "nlu",

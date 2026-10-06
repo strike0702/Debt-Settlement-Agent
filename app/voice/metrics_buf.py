@@ -11,11 +11,15 @@ from collections import defaultdict
 from threading import Lock
 from typing import Any
 
+# ``queue_ms`` is LLM limiter wait already inside stt/nlu/nlg (not additive);
+# ``engine_ms`` is affordability / term-alt search, outside ``policy_ms``.
 _STAGES = (
     "stt_ms",
     "nlu_ms",
+    "engine_ms",
     "policy_ms",
     "nlg_ms",
+    "queue_ms",
     "server_total_ms",
     "vad_end_to_first_audio_ms",
 )

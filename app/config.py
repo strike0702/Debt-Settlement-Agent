@@ -1,6 +1,7 @@
 """Application settings from environment / ``.env`` (pydantic-settings).
 
-API keys, LLM profile and per-role request timeouts, NLG/NLU mode, DB path,
+API keys, LLM profile and per-role request timeouts, NLG/NLU mode (and the
+NLG template-bank path), DB path,
 negotiation knobs (max turns, anchor ratio, firm disclosure). Call
 ``get_settings()``; do not construct ``Settings`` ad hoc in hot paths.
 """
@@ -25,7 +26,9 @@ class Settings(BaseSettings):
     llm_profile: str = "demo"
     llm_cache: bool = True
     llm_cache_path: str = "llm_cache.db"
+    # llm | bank | template. bank = guard-checked templates from nlg_bank_path, no LLM.
     nlg_mode: str = "llm"
+    nlg_bank_path: str = "config/nlg_bank.json"
     nlu_mode: str = "llm"
     # Per-request LLM timeouts (s). A timeout fails over to the next route target.
     llm_timeout_nlu_s: float = 6.0

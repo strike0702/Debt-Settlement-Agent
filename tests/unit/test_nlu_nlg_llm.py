@@ -592,7 +592,7 @@ def test_tiers_never_auto_verified() -> None:
         terms=[
             ExtractedTerm(
                 field="min_payment_tiers",
-                value=[{"up_to_payments": 99, "min_cents": 1}],
+                value=[{"from_payment": 4, "min_cents": 7500}],
                 quote="tiers",
                 hedged=False,
             )

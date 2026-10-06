@@ -135,6 +135,30 @@ def _build_client(
     )
 
 
+_TIER_RATE = 0.3
+
+
+def _sample_tiers(
+    key: str, *, max_payments: int, min_pay: int
+) -> tuple[tuple[int, int], ...]:
+    """0–2 rising ``(from_payment, min_cents)`` floors above ``min_pay``.
+
+    Uses its own ``Random(key)`` so adding tiers does not shift the main
+    sampler's draws for the other fields.
+    """
+    trng = Random(key)
+    if max_payments < 3 or trng.random() >= _TIER_RATE:
+        return ()
+    n = trng.choice((1, 2)) if max_payments >= 5 else 1
+    froms = sorted(trng.sample(range(2, max_payments + 1), n))
+    mins: list[int] = []
+    cur = min_pay
+    for _ in froms:
+        cur += trng.randint(1, 4) * 2500
+        mins.append(cur)
+    return tuple(zip(froms, mins, strict=True))
+
+
 def _sample_raw(
     rng: Random,
     *,
@@ -202,7 +226,15 @@ def _sample_raw(
 
     max_segments = 2 if structure != "flexible" else rng.randint(2, 4)
     max_token = max_payments
-    tiers: tuple[tuple[int, int], ...] = ()
+    tiers = (
+        _sample_tiers(
+            f"tiers:{draft_cents}:{creditor_bal}:{max_payments}:{min_pay}",
+            max_payments=max_payments,
+            min_pay=min_pay,
+        )
+        if bias == "deal"
+        else ()
+    )
 
     true = TrueRules(
         max_payments=max_payments,

@@ -42,3 +42,5 @@ class TurnAnalysis(BaseModel):
     asks_for_schedule: bool = False
     # True when the rep says the number is final / their floor / cannot go lower.
     firm: bool = False
+    # Tiers phrased as "first N payments": dropped by NLU, policy asks to rephrase.
+    tiers_ambiguous: bool = False

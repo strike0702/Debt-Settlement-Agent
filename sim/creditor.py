@@ -26,6 +26,7 @@ import re
 from dataclasses import dataclass, field
 from dataclasses import replace as dc_replace
 from datetime import date
+from string import ascii_lowercase
 from typing import Any, Literal, Protocol
 
 from app.adapter.engine_adapter import evaluate
@@ -33,7 +34,13 @@ from app.adapter.validator import validate
 from app.domain.actions import Action, Intent
 from app.domain.facts import Fact
 from app.domain.nlu_types import ExtractedTerm, TurnAnalysis
-from app.domain.units import render_count, render_date, render_money, render_pct
+from app.domain.units import (
+    render_count,
+    render_date,
+    render_money,
+    render_ordinal,
+    render_pct,
+)
 from app.llm.client import LLMUnavailable
 from feasibility.models import CreditorRules
 from sim.personas import Persona, get_persona
@@ -61,6 +68,18 @@ _COMMIT_PHRASE_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+
+
+def _spoken_tiers(action: Action, prefix: str) -> list[tuple[int, int]]:
+    """Rebuild ``[(from_payment, min_cents)]`` from lettered tier facts on ``action``."""
+    out: list[tuple[int, int]] = []
+    for tag in ascii_lowercase:
+        frm = action.facts.get(f"{prefix}_tier_{tag}_from")
+        cents = action.facts.get(f"{prefix}_tier_{tag}_min")
+        if frm is None or cents is None:
+            break
+        out.append((int(frm.value), int(cents.value)))  # type: ignore[arg-type]
+    return out
 
 
 class _SimLLM(Protocol):
@@ -311,9 +330,12 @@ class CreditorPolicy:
                 return "There are no tiered minimums.", [
                     self._term(field, [], "no tiered minimums")
                 ]
-            return "Tiered minimums apply on this account.", [
-                self._term(field, tiers, "Tiered minimums")
-            ]
+            text = " ".join(
+                f"From the {render_ordinal(frm)} payment on, the minimum is "
+                f"{render_money(cents)}."
+                for frm, cents in tiers
+            )
+            return text, [self._term(field, tiers, text.rstrip("."))]
         return "I am not sure about that term.", []
 
     def _ask_settlement_reply(self) -> CreditorReply:
@@ -536,15 +558,15 @@ class CreditorPolicy:
             field = action.text_slots.get("field") or action.reason or ""
             true_v = self._rule_value(field) if field else None
             spoken = None
-            if "readback_value" in action.facts:
+            if field == "min_payment_tiers":
+                # Per-tier ordinal + money facts; none means "no special tiers".
+                spoken = _spoken_tiers(action, "readback_value")
+            elif "readback_value" in action.facts:
                 spoken = action.facts["readback_value"].value
             elif "readback_value" in action.text_slots:
                 spoken = action.text_slots["readback_value"]
-            # Enum / tier read-backs arrive as text slots (``str(value)``);
-            # empty tiers are spoken as "no special payment tiers".
-            if isinstance(true_v, list) and not true_v and isinstance(spoken, str):
-                matches = spoken == "[]" or spoken.startswith("no ")
-            elif isinstance(spoken, str) and not isinstance(true_v, str):
+            # Enum read-backs arrive as text slots (``str(value)``).
+            if isinstance(spoken, str) and not isinstance(true_v, str):
                 matches = true_v is not None and spoken == str(true_v)
             else:
                 matches = spoken is not None and spoken == true_v
@@ -567,6 +589,8 @@ class CreditorPolicy:
         if intent == Intent.CLARIFY:
             # Settle on the real (agreed) value; no further flips.
             field = action.text_slots.get("field") or action.reason or "max_payments"
+            if field == "tiers_ambiguous":
+                field = "min_payment_tiers"
             self._contradicted = True
             text, terms = self._reveal_field(field)
             return CreditorReply(

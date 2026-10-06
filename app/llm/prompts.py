@@ -95,7 +95,10 @@ Units:
   Bare digits with no $ / dollars / cents stay empty so the agent can clarify.
 - payment_structure: "even" | "balloon" | "flexible"
 - first_payment_date: YYYY-MM-DD
-- min_payment_tiers: list of {"up_to_payments":int,"min_cents":int}
+- min_payment_tiers: list of {"from_payment":int,"min_cents":int}; from_payment is
+  the 1-based payment number where that higher minimum starts
+  ("from the fourth payment on, at least $75" → [{"from_payment":4,"min_cents":7500}]).
+  "No tiers" / "no tiered minimums" → [].
 - settlement_ask_pct: percent points as a bare number (45.0), not an object
 Each term quote must be a verbatim substring of the utterance.
 hedged=true for hedges like about/around/roughly.

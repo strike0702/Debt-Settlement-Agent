@@ -70,6 +70,7 @@ class VerifiedAnalysis(BaseModel):
     # Bare number for a cents field with no $/dollars/cents cue — ask which unit.
     cents_ambiguity_bare: int | None = None
     cents_ambiguity_field: str | None = None
+    tiers_ambiguous: bool = False
 
     def to_turn_analysis(self) -> TurnAnalysis:
         """Drop verified flags for ``policy.decide``."""
@@ -93,6 +94,7 @@ class VerifiedAnalysis(BaseModel):
             wants_to_end=self.wants_to_end,
             asks_for_schedule=self.asks_for_schedule,
             firm=self.firm,
+            tiers_ambiguous=self.tiers_ambiguous,
         )
 
 
@@ -438,6 +440,41 @@ def coerce_analysis_payload(data: dict[str, Any]) -> dict[str, Any]:
 
     out["terms"] = terms
     return out
+
+
+def coerce_tiers(raw: Any) -> list[tuple[int, int]] | None:
+    """LLM / oracle tiers → engine ``[(from_payment, min_cents)]`` sorted; None if malformed.
+
+    Items are ``{"from_payment", "min_cents"}`` dicts (LLM) or 2-int pairs
+    (oracle). Any bad item, a non-list, or a repeated ``from_payment``
+    rejects the whole value rather than guessing.
+    """
+    if not isinstance(raw, list):
+        return None
+    out: list[tuple[int, int]] = []
+    for item in raw:
+        if isinstance(item, dict):
+            if set(item) != {"from_payment", "min_cents"}:
+                return None
+            pair = (item["from_payment"], item["min_cents"])
+        elif isinstance(item, (list, tuple)) and len(item) == 2:
+            pair = (item[0], item[1])
+        else:
+            return None
+        frm, cents = pair
+        if not all(isinstance(v, int) and not isinstance(v, bool) for v in pair):
+            return None
+        if frm < 1 or cents <= 0:
+            return None
+        out.append((frm, cents))
+    if len({frm for frm, _ in out}) != len(out):
+        return None
+    return sorted(out)
+
+
+# "for the first three payments" reads as an up-to cap, not the engine's from-N
+# shape; ask the rep to restate instead of converting.
+_TIERS_FIRST_N_RE = re.compile(r"\b(?:first|initial)\s+(?:\w+\s+)?payments\b", re.IGNORECASE)
 
 
 def _parse_analysis(text: str) -> TurnAnalysis:
@@ -817,6 +854,7 @@ def post_verify(
     verified_terms: list[VerifiedTerm] = []
     cents_ambiguity_bare: int | None = None
     cents_ambiguity_field: str | None = None
+    tiers_ambiguous = False
 
     def _log(event: str, payload: dict[str, Any]) -> None:
         if audit is not None and call_id is not None:
@@ -828,6 +866,16 @@ def post_verify(
             continue
         value: Any = term.value
         spec = FIELDS_BY_NAME.get(term.field)
+        if spec is not None and spec.kind == "tiers":
+            tiers = coerce_tiers(value)
+            if tiers is None:
+                _log("nlu_rejected_tiers", {"value": value, "quote": term.quote})
+                continue
+            if tiers and _TIERS_FIRST_N_RE.search(utterance):
+                tiers_ambiguous = True
+                _log("nlu_tiers_ambiguous", {"value": tiers, "quote": term.quote})
+                continue
+            value = tiers
         # Pure digit amount for a cents field → clarify dollars vs cents.
         if (
             spec is not None
@@ -936,7 +984,12 @@ def post_verify(
         else:
             ask_verified = True
 
-    has_terms = bool(verified_terms) or ask_pct is not None or cents_ambiguity_bare is not None
+    has_terms = (
+        bool(verified_terms)
+        or ask_pct is not None
+        or cents_ambiguity_bare is not None
+        or tiers_ambiguous
+    )
     dispositions = _repair_dispositions(analysis, utterance, has_terms=has_terms)
     if analysis.readback_response and dispositions["readback_response"] is None:
         _log(
@@ -953,6 +1006,7 @@ def post_verify(
         revises_terms=repair_revises_terms(utterance),
         cents_ambiguity_bare=cents_ambiguity_bare,
         cents_ambiguity_field=cents_ambiguity_field,
+        tiers_ambiguous=tiers_ambiguous,
     )
 
 

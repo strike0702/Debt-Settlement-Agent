@@ -44,6 +44,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `render_date(d: date, ref: date) -> str`
 - `parse_date(text: str, ref: date) -> date`
 - `render_count(n: int) -> str`
+- `render_ordinal(n: int) -> str` — `1st`, `2nd`, `11th`, `22nd`
 - `parse_count(text: str) -> int`
 - `bp_to_decimal(bp: int) -> Decimal`
 
@@ -56,7 +57,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `REQUIRED_FIELDS: list[str]`
 
 ### `app.domain.facts`
-- `class Fact(BaseModel)` — `id: str`, `kind: Literal["money","pct","count","date"]`, `value: int | date`, `visibility: Literal["PUBLIC","PRIVATE"]`, `source: Literal["engine","creditor","config"]`; `render(self, ref: date) -> str`
+- `class Fact(BaseModel)` — `id: str`, `kind: Literal["money","pct","count","date","ordinal"]`, `value: int | date`, `visibility: Literal["PUBLIC","PRIVATE"]`, `source: Literal["engine","creditor","config"]`; `render(self, ref: date) -> str`
 - `class FactSet(BaseModel)` — `facts: dict[str, Fact]`; `add(fact)`, `get(id) -> Fact | None`, `public() -> dict[str, Fact]`, `private() -> dict[str, Fact]`, `ids() -> set[str]`
 
 ### `app.domain.belief`
@@ -119,7 +120,8 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
   - Unresolved CONTRADICTED after 2 CLARIFY → `ESCALATE(contradiction_unresolved)`
   - Ceiling ladder (ask above ceiling / off grid): at most `max_counters` COUNTERs, the last one at the ceiling; no same-bp re-offer — any non-accept once the ceiling is on the table → `NO_DEAL(max_counters)`
   - CONFIRM wrap only on `stance == "accept"` (not `readback_response`); contradiction/tentative before wrap. Exception: a READ_BACK that preempts a CONFIRM accept keeps `Phase.CONFIRM` and emits `note_confirm_accepted` (→ `NegotiationState.accepted_confirm_key`); the readback "confirm" then wraps (fingerprint unchanged) or re-confirms `confirmed_bp` as `terms_revised`
-  - Empty tiers speak as "no special payment tiers" (READ_BACK `template_override`, CLARIFY slot), never `str([])`
+  - Tiers speak via `template_override` over PUBLIC per-tier facts `<prefix>_tier_<a|b|…>_from` (ordinal) / `_min` (money), prefix `readback_value` / `clarify_old` / `clarify_new`: "a minimum of $75 from the 4th payment on" joined by "and"; empty → "no special payment tiers". Ids are lettered because placeholder ids must be digit-free.
+  - `TurnAnalysis.tiers_ambiguous` → CLARIFY(`tiers_ambiguous`, number-free ask to restate from which payment); after two (`clarify_counts["min_payment_tiers"]`) → `ESCALATE(tiers_unresolved)`
   - `wants_to_end` → NO_DEAL when not accepting
   - `_confirm_key` fingerprints all CreditorRules fields; `next_counter` → `None` when no legal bp
 - `draft_agreement(*, creditor, bp, offer_total, rows, assumed_fields, audit=None, call_id=None) -> Agreement`
@@ -179,6 +181,8 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `class VerifiedAnalysis` — terms + TurnAnalysis stance fields + `ask_verified`; `to_turn_analysis() -> TurnAnalysis`
 - `normalize_for_quote(text) -> str`; `quote_in_utterance(quote, utterance) -> bool`
 - `coerce_analysis_payload(data) -> dict` — field-keyed LLM shapes → `terms[]`
+- `coerce_tiers(raw) -> list[tuple[int, int]] | None` — `{"from_payment","min_cents"}` dicts or 2-int pairs → sorted engine tuples; None (term dropped, `nlu_rejected_tiers` audited) on any bad item, extra/other keys, `from_payment < 1`, `min_cents <= 0`, or duplicate `from_payment`
+- `VerifiedAnalysis.tiers_ambiguous` — non-empty tiers in an utterance with "first/initial … payments" are dropped (`nlu_tiers_ambiguous`) instead of converted
 - `post_verify(analysis, utterance, *, ref=None, audit=None, call_id=None) -> VerifiedAnalysis`
 - `async analyze(utterance, last_agent_line, pending_readback, *, llm=None, settings=None, oracle=None, audit=None, call_id=None, ref=None) -> VerifiedAnalysis`
 - `NLU_MODE=oracle` requires `oracle=TurnAnalysis` (skips LLM); re-raises `LLMUnavailable` for eval `skipped_quota`
@@ -732,4 +736,17 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - NLU date: `nlu_messages(..., ref=)` adds `Today's date:`. Corpus h06/f05/t05/t12 rerun ad hoc (demo, Groq): 4/4 dates correct. `docs/eval/nlu_corpus.md` not regenerated (the prompt change misses the cache for every line).
 - Eval `eval_20261006_000830_s7` (oracle/template, n=100, seed 7): thresholds PASS. `surplus_captured` 0.689 (was 0.557 on `eval_20261005_235945_s7`), `turns_to_outcome` 5.04 (was 5.48); validity / deal / no-deal / escalation rates unchanged at 1; 0 lines with `[]`; 0 CONFIRM → READ_BACK → COUNTER.
 - Tests: `tests/unit/test_policy.py` (+5), `tests/unit/test_nlu_repairs.py` (+2), `tests/e2e/test_policy_invariants.py::test_regression_s0007_000_tiers_readback_after_accept`. 464 passed offline (+1 skipped live); `ruff check .` clean.
-- Still open: non-empty tiers still read back as `str(list)` (digits in a text slot); not seen in the sim.
+- Still open: non-empty tiers still read back as `str(list)` (digits in a text slot); not seen in the sim. → fixed in "min_payment_tiers end to end" below.
+
+### min_payment_tiers end to end (2026-10-06)
+
+- **Why:** a non-empty tier was broken at every step. The NLU prompt asked for `{"up_to_payments","min_cents"}` (wrong meaning), dicts went into belief unconverted, the READ_BACK put `str(dict)` in a text slot (the guard blocked it, so "Let me check that figure…" and the tier was never confirmed), and a confirmed dict would crash the engine (`for frm, m in tiers` unpacks dict keys). The sim never generated tiers, so the eval could not see it.
+- Fix (tests first):
+  - NLU: prompt schema `{"from_payment","min_cents"}` with an example; `coerce_tiers` → sorted `(from_payment, min_cents)`; malformed dropped + audited. No `up_to_payments` alias. "First N payments" phrasing → `tiers_ambiguous` → policy CLARIFY, escalate after two.
+  - Speech: new `Fact` kind `ordinal` (`render_ordinal`); tier READ_BACK / CLARIFY built from per-tier PUBLIC ordinal + money facts ("So I have a minimum of $75 from the 4th payment on. Is that right?"). No dict/list text in slots.
+  - Sim: deal-biased samples get 1–2 rising tiers (30%, `from` in 2..max_payments, each floor $25–$100 above the last) from an independent `Random(key)`; the rep reveals them in words; READ_BACK matching rebuilds tiers from the facts; CLARIFY `tiers_ambiguous` re-reveals tiers.
+- Files: `app/domain/{units,facts,nlu_types}.py`, `app/agent/{nlu,policy}.py`, `app/llm/prompts.py`, `sim/{scenarios,creditor}.py`, `tests/unit/test_tiers.py` (new, 36), `tests/e2e/test_tiers_e2e.py` (new), `tests/unit/test_nlu_nlg_llm.py` (one test moved to the new schema).
+- Eval `eval_20261006_003052_s7` (oracle/template, n=100, seed 7): thresholds PASS. 11/100 scenarios have tiers (4 with two); 8 reach a deal, 8/8 `agreement_valid`, 8/8 score 7/7 rule fields; no agent line with brackets. Overall rates unchanged (validity / deal / no-deal / escalation 1, `false_known_rate` 0, `guard_blocks` 0); `turns_to_outcome` 5.12, `surplus_captured` 0.689.
+- Deviation: tiered deal samples can fail deal classification and resample, so seed-7 deal scenarios are not guaranteed identical to earlier runs; the Phase 14 and cleanup regressions still pass.
+- Tests: 501 passed offline (+1 skipped live); `ruff check .` clean.
+- Not done (by request): per-tier quote verification; tiers stay unverified → always read back. Live NLU on tier phrasing not measured (no corpus lines with tiers).

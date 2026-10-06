@@ -7,7 +7,8 @@ is first-match and its order is load-bearing:
 
 1. ``_decide_interruptions``: turn cap, hostility, private ask, commitment
    demand, post-proposal phases (``_decide_wrap``), schedule request, end.
-2. ``_decide_clarify``: CONTRADICTED → CLARIFY (escalate after two); TENTATIVE → READ_BACK.
+2. ``_decide_clarify``: "first N payments" tiers / CONTRADICTED → CLARIFY (escalate
+   after two); TENTATIVE → READ_BACK.
 3. ``_decide_confirm``: accept of the unchanged CONFIRM on the table → PROPOSE_WRAP.
 4. ``_decide_discovery``: ASK a missing required field, then ASK_SETTLEMENT.
 5. ``_decide_negotiate``: empty curve (term alt / rescue / no-deal), term alt over
@@ -21,6 +22,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from math import ceil
+from string import ascii_lowercase
 from typing import Any, Literal
 
 from pydantic import BaseModel
@@ -312,6 +314,27 @@ def _fact_for_value(fact_id: str, field: str, value: Any) -> Fact:
 _NO_TIERS_TEXT = "no special payment tiers"
 
 
+def _tiers_phrase(
+    prefix: str, tiers: Any, facts: dict[str, Fact], required: set[str]
+) -> str:
+    """Template fragment for ``[(from_payment, min_cents)]``; figures ride in PUBLIC facts."""
+    if not tiers:
+        return _NO_TIERS_TEXT
+    parts: list[str] = []
+    # Placeholder ids must be digit-free (template guard), so tiers are lettered.
+    for tag, (frm, cents) in zip(ascii_lowercase, tiers, strict=False):
+        from_id, min_id = f"{prefix}_tier_{tag}_from", f"{prefix}_tier_{tag}_min"
+        facts[from_id] = Fact(
+            id=from_id, kind="ordinal", value=int(frm), visibility="PUBLIC", source="creditor"
+        )
+        facts[min_id] = Fact(
+            id=min_id, kind="money", value=int(cents), visibility="PUBLIC", source="creditor"
+        )
+        required.update((from_id, min_id))
+        parts.append(f"a minimum of {{{min_id}}} from the {{{from_id}}} payment on")
+    return " and ".join(parts)
+
+
 def _spoken_value(
     fact_id: str,
     field: str,
@@ -319,15 +342,22 @@ def _spoken_value(
     facts: dict[str, Fact],
     text_slots: dict[str, str],
     required: set[str],
-) -> None:
-    """Numeric values speak via a PUBLIC fact placeholder; enums and tiers via a text slot."""
-    if value is not None and FIELDS_BY_NAME[field].kind in _NUMERIC_KINDS:
+) -> str:
+    """Stage ``value`` for speech and return the template fragment that speaks it.
+
+    Numbers ride in PUBLIC facts and enums in a text slot (both ``{fact_id}``).
+    Tiers return a whole phrase over per-tier ordinal + money facts, so the
+    caller must use it as a ``template_override``.
+    """
+    kind = FIELDS_BY_NAME[field].kind
+    if kind == "tiers":
+        return _tiers_phrase(fact_id, value, facts, required)
+    if value is not None and kind in _NUMERIC_KINDS:
         facts[fact_id] = _fact_for_value(fact_id, field, value)
         required.add(fact_id)
-    elif FIELDS_BY_NAME[field].kind == "tiers" and value is not None and not value:
-        text_slots[fact_id] = _NO_TIERS_TEXT
     else:
         text_slots[fact_id] = str(value)
+    return "{" + fact_id + "}"
 
 
 def cents_ambiguity_clarify_action(
@@ -876,8 +906,26 @@ def _decide_wrap(t: _Turn) -> Action:
 
 
 def _decide_clarify(t: _Turn) -> Action | None:
-    """Resolve CONTRADICTED (CLARIFY, escalate after two) then TENTATIVE (READ_BACK)."""
+    """Ambiguous tiers, then CONTRADICTED (CLARIFY, escalate after two), then TENTATIVE."""
     belief = t.belief
+    if t.analysis.tiers_ambiguous:
+        if t.neg.clarify_counts.get("min_payment_tiers", 0) >= 2:
+            return _escalate(
+                t.effects,
+                reason="tiers_unresolved",
+                spoken_reason="I need a specialist to confirm the payment tiers.",
+            )
+        return Action(
+            intent=Intent.CLARIFY,
+            effects=t.effects
+            + [Effect(kind="note_clarify", data={"field": "min_payment_tiers"})],
+            next_phase=Phase.DISCOVERY,
+            reason="tiers_ambiguous",
+            template_override=(
+                "Just to be sure on the payment tiers: from which payment number "
+                "does each higher minimum start, and what is that minimum?"
+            ),
+        )
     contradicted = belief.contradicted_fields()
     if contradicted:
         fname = contradicted[0]
@@ -892,8 +940,9 @@ def _decide_clarify(t: _Turn) -> Action | None:
         slots = {"field_label": FIELDS_BY_NAME[fname].label}
         required: set[str] = set()
         old = term.history[-1] if term.history else None
-        _spoken_value("clarify_old", fname, old, facts, slots, required)
-        _spoken_value("clarify_new", fname, term.value, facts, slots, required)
+        old_s = _spoken_value("clarify_old", fname, old, facts, slots, required)
+        new_s = _spoken_value("clarify_new", fname, term.value, facts, slots, required)
+        is_tiers = FIELDS_BY_NAME[fname].kind == "tiers"
         return Action(
             intent=Intent.CLARIFY,
             facts=facts,
@@ -902,6 +951,12 @@ def _decide_clarify(t: _Turn) -> Action | None:
             effects=t.effects + [Effect(kind="note_clarify", data={"field": fname})],
             next_phase=Phase.DISCOVERY,
             reason=fname,
+            template_override=(
+                f"Earlier you mentioned {old_s}, and now I am hearing {new_s}. "
+                "Which of those should I use?"
+                if is_tiers
+                else None
+            ),
         )
     tentative = belief.tentative_fields()
     if tentative:
@@ -910,7 +965,7 @@ def _decide_clarify(t: _Turn) -> Action | None:
         slots = {"field_label": FIELDS_BY_NAME[fname].label}
         required = set()
         value = belief.get(fname).value
-        _spoken_value("readback_value", fname, value, facts, slots, required)
+        spoken = _spoken_value("readback_value", fname, value, facts, slots, required)
         effects = t.effects + [Effect(kind="set_pending_readback", data={"field": fname})]
         # A READ_BACK mid-CONFIRM keeps the phase, and an accept it preempted is
         # remembered so the readback "yes" wraps instead of reopening the ladder.
@@ -923,7 +978,7 @@ def _decide_clarify(t: _Turn) -> Action | None:
             effects.append(
                 Effect(kind="note_confirm_accepted", data={"key": list(neg.last_confirm_key)})
             )
-        empty_tiers = FIELDS_BY_NAME[fname].kind == "tiers" and value is not None and not value
+        is_tiers = FIELDS_BY_NAME[fname].kind == "tiers"
         return Action(
             intent=Intent.READ_BACK,
             facts=facts,
@@ -932,9 +987,7 @@ def _decide_clarify(t: _Turn) -> Action | None:
             effects=effects,
             next_phase=Phase.CONFIRM if in_confirm else Phase.DISCOVERY,
             reason=fname,
-            template_override=(
-                f"So there are {_NO_TIERS_TEXT}. Is that right?" if empty_tiers else None
-            ),
+            template_override=f"So I have {spoken}. Is that right?" if is_tiers else None,
         )
     return None
 

@@ -1,4 +1,4 @@
-"""Spoken-unit render/parse helpers (money, pct, date, count).
+"""Spoken-unit render/parse helpers (money, pct, date, count, ordinal).
 
 Money is integer cents. Settlement percentages are integer basis points
 (4500 = 45%). Spoken forms never come from the LLM — only from these
@@ -107,6 +107,15 @@ def parse_date(text: str, ref: date) -> date:
 def render_count(n: int) -> str:
     """Render a count as digits, e.g. `6`."""
     return str(n)
+
+
+def render_ordinal(n: int) -> str:
+    """Render a 1-based position as `1st`, `2nd`, `11th`, `22nd`."""
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
 
 
 def parse_count(text: str) -> int:

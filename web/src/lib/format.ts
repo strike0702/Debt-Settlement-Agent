@@ -3,13 +3,22 @@
  * percentages as basis points; this is the only place they become strings.
  * Always en-US ("$1,250.00", never "US$").
  */
-import type { TermField, TermValue } from "@/types/events";
+import type { TermField } from "@/types/protocol";
 
 const USD = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
 export function money(cents: number | null | undefined): string {
   if (cents == null) return "—";
   return USD.format(cents / 100);
+}
+
+/** Spoken style, as the agent says it: whole dollars drop the cents ("$75", "$75.50"). */
+export function moneyShort(cents: number): string {
+  return cents % 100 === 0 ? `$${(cents / 100).toLocaleString("en-US")}` : money(cents);
+}
+
+function isTier(v: unknown): v is [number, number] {
+  return Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === "number");
 }
 
 /** 4500 → "45%", 4250 → "42.5%". */
@@ -58,14 +67,18 @@ export function fieldLabel(field: string): string {
   return (FIELD_LABEL as Record<string, string>)[field] ?? field;
 }
 
-/** Render a belief/NLU value for its field ("$100.00", "Nov 2, 2026", "No special tiers"). */
-export function termValue(field: string, value: TermValue): string {
+/**
+ * Render a belief/NLU value for its field ("$100.00", "Nov 2, 2026", "No special tiers").
+ * Tiers use the spoken money style ("$75 from the 4th payment"), matching the agent's line.
+ * `unknown` because a dropped NLU term can carry anything the LLM produced.
+ */
+export function termValue(field: string, value: unknown): string {
   if (value == null) return "—";
   if (field === "min_payment_cents" && typeof value === "number") return money(value);
   if (field === "first_payment_date" && typeof value === "string") return isoDate(value);
-  if (field === "min_payment_tiers" && Array.isArray(value)) {
+  if (field === "min_payment_tiers" && Array.isArray(value) && value.every(isTier)) {
     if (value.length === 0) return "No special tiers";
-    return value.map(([from, cents]) => `${money(cents)} from the ${ordinal(from)} payment`).join(" and ");
+    return value.map(([from, cents]) => `${moneyShort(cents)} from the ${ordinal(from)} payment`).join(" and ");
   }
   if (Array.isArray(value)) return JSON.stringify(value);
   return String(value);

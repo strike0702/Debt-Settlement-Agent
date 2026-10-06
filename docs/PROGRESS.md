@@ -30,6 +30,8 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 20 | Correctness and honesty fixes (REVIEW_PLAN) | done |
 | 21 | Latency: measure then cut (REVIEW_PLAN) | done |
 | 22 | Decision trace, role-scoped streams, autoplay (REVIEW_PLAN) | done |
+| 23a | Web call console: scaffold and components (REVIEW_PLAN) | done |
+| 23b | Web call console: wire-up and cutover (REVIEW_PLAN) | done (voice call not run by hand, see handoff) |
 | 24a | A/B harness, ReAct and LLM-only arms (REVIEW_PLAN) | done |
 | 27 | Provider API key pool (user request) | done |
 
@@ -259,6 +261,15 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `new_autoplay_call(call, scenario_id, *, settings, audit, call_id=None) -> (Orchestrator, CreditorPolicy)` — orchestrator `llm=None`, `auto_ack=True`
 - `async run_autoplay(orch, creditor, *, on_agent, on_creditor, pause_s=0.0, max_turns=None) -> AutoplayResult(outcome, phase, final_intent, turns)`; `outcome_of(phase, intent, *, has_agreement)` → `deal`|`no_deal`|`escalate`|`incomplete`
 
+### `app.domain.scenario` (Phase 23b addition)
+- `rep_card_suggestions(markdown) -> list[str]` — `- ` bullets under the rep card's `## Suggested replies` heading, in order. Every curated `fixtures/scenarios/*/rep_card.md` has that section (digit-free lines).
+
+### `web/` (Phase 23b; see `web/README.md`)
+- `npm run gen:types` → `web/src/types/events.ts` from `events.schema.json` (CI diff-checks it); hand-written aliases in `web/src/types/protocol.ts`.
+- `useCall(makeSocket?, makeId?)` → `{events, status, callId, lastCallId, view, autoplay, start(scenarioId, {view, autoplay}), end(), sendText(text, source?), sendJson, sendWav, addLocal, subscribe}`; autoplay start sends `autoplay_pause_ms: 1200`.
+- `useVoice(io, deps?, sttMode?)` over `VoiceEngine` (`web/src/lib/voice/engine.ts`); `VoiceIO = {sendJson, sendWav, sendRepText, currentTurn, onTtsOnset?}`.
+- `reduceCall` accepts a client-local `{type:"tts_onset", turn, ms}` → `turn_trace.timings.tts_onset_ms`.
+
 ### `app.cli`
 - `python -m app.cli [fixtures/demo]` — type as rep; auto-acks; prints lines, belief, timings, verdict
 
@@ -275,7 +286,8 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 ### `app.main`
 - `create_app(*, settings=None, llm=None, audit=None) -> FastAPI`
 - `GET /healthz` → `{"status": "ok"}` (Phase 22, keep-warm)
-- `GET /`, `GET /static/*`, `GET /metrics/summary` → `{stage: {p50,p95,n}}`; stages `stt_ms`, `nlu_ms`, `engine_ms`, `policy_ms`, `nlg_ms`, `queue_ms`, `server_total_ms`, `vad_end_to_first_audio_ms`
+- Phase 23b: `create_app(..., web_dist: Path | None = None)`; `WEB_DIST = <repo>/web/dist`. `GET /` and any non-API path → `web/dist/index.html` (`Cache-Control: no-cache`); dist-root files (favicon) as-is, no-cache; `/assets/*` → `public, max-age=31536000, immutable`; paths under `ws`, `scenarios`, `calls`, `metrics`, `healthz`, `assets` never fall back (404); no build → 503 with the build command. `GET /scenarios` rows add `suggested: list[str]` (rep card). `GET /calls/{id}/events?view=rep|operator` and `/calls/{id}/export?view=…` (default `operator`; `rep` drops `is_private_audit` rows; export adds `view`; other values → 400)
+- `GET /metrics/summary` → `{stage: {p50,p95,n}}`; stages `stt_ms`, `nlu_ms`, `engine_ms`, `policy_ms`, `nlg_ms`, `queue_ms`, `server_total_ms`, `vad_end_to_first_audio_ms`
 - `app = create_app()` for `uvicorn app.main:app`
 
 ### `app.llm.prompts`
@@ -964,3 +976,31 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
   - STT 5xx now gets the same-key backoff (inside the STT deadline) instead of failing over at once.
 - Open issues: see the DEFERRED lines in the phase-27 report (smoke script and eval settings do not see suffixed pools; Cerebras key on Render; daily-quota 429s without Retry-After are retried every 60 s).
 - Tests: `pytest -q` 580 passed / 2 skipped (incl. slow); `ruff check .` clean.
+
+### Phase 23b (2026-10-07) — web console wire-up and cutover (REVIEW_PLAN §2(a))
+
+- Files (new): `web/scripts/gen-types.mjs`, `web/src/types/protocol.ts`, `web/src/hooks/{useCall,useVoice,useScenarios}.ts` (+ `useCall.test.ts`, `useVoice.test.ts`), `web/src/lib/voice/{engine,vad,speech,wav}.ts`, `web/src/components/ScenarioBrief.tsx`, `tests/unit/test_web_serving.py`, `docs/assets/console-{operator-autoplay,creditor-live}.jpg` (120 KB, 105 KB). Regenerated: `web/src/types/events.ts`, `web/src/fixtures/call_easy_deal.json`. Changed: `app/main.py`, `app/domain/scenario.py`, `fixtures/scenarios/*/rep_card.md`, `web/src/{App.tsx, components/{AppShell,Conversation,DecisionTrace}.tsx, lib/{callState,format,repView}.ts, fixtures/index.ts, index.css}`, `web/scripts/gen-fixture.mjs`, `web/vite.config.ts`, `web/package.json` (+ `json-schema-to-typescript`), `.github/workflows/ci.yml`, `render.yaml`, `README.md`, `web/README.md`, `tests/unit/{test_ws_views,test_events_schema}.py`. Removed: `app/static/` (`index.html`, `app.js`), `tests/unit/test_app_js_contracts.py`.
+- Interfaces: see `app.main`, `app.domain.scenario` and `web/` above.
+- The test_app_js_contracts assertions are now behaviour tests (`useVoice.test.ts`: TTS ack on error, benign cancel, stale handlers after barge, barge spoken ids, echo guard, contaminated clip, Loading/Listening/Transcribing cues, browser STT paused during TTS, pinned VAD settings, onstart timing once, local backchannel, preferred voices, WAV encoding; `useCall.test.ts`: the log download survives the end of a call; `callState.test.ts` and `creditorLens.test.tsx`: en-US money, tiers in the spoken style, no status chips or `[]` in the rep lens).
+- CI: new `web` job on Node 24 (`npm ci` → `gen:types` + `git diff --exit-code` → typecheck → lint → test → build). Render: downloads Node v24.21.0, then `(cd web && npm ci && npm run build)`, then `uv sync`.
+- Manual check (Chrome, local uvicorn on :8023, demo profile, 2026-10-07):
+  - Autoplay on every scenario, each ending as its card says: balloon_structure deal (6 turns), counter_ladder deal (6), easy_deal deal (6), late_start_date deal (7), no_space no deal (4), rescue_escalate escalate (5). Screenshot: `docs/assets/console-operator-autoplay.jpg`.
+  - Live text call on easy_deal in the creditor's eye (`?view=rep`, live LLM NLU, the 6 suggested replies clicked in order): every line got an agent reply, with no errors. It ended `NO_DEAL_WRAP`, because the scripted replies did not match the agent's read-back questions; this is not a wiring fault. The 133 WS frames the page received, captured by wrapping `WebSocket` in the page (the scripted equivalent of reading the DevTools WS panel), contain no `affordability` / `max_bp` / `program_fee_cents` / `bank_fee_cents` / `balance_cents` / `additional_funds` keys, no non-null `offending`, no private audit rows, and none of the scenario's fee or savings amounts. The page shows 9 lock panels. Screenshot: `docs/assets/console-creditor-live.jpg`. Automated Chrome refused `speechSynthesis` (no user gesture), so each line showed "Speech playback failed" and was still acked (F06 path).
+  - Fixture mode (`?fixture=1`) replays to the drafted agreement on the served build.
+  - Lighthouse accessibility (lighthouse 12, headless): 96 at first, with one finding (dark-theme primary button, white on `#3987e5` at 3.6:1). After setting the dark `--accent-fg` to near-black: **100**.
+  - **Not done: a voice call.** Automated Chrome has no microphone input, and granting the mic permission prompt is the user's call. The voice path is covered by the ported unit tests only. To run it by hand: `npm run build` in `web/`, start uvicorn, Start call, then mic on (Server STT) and speak two turns.
+- Carry-over:
+  - [23a.1] The generated schema has `ask_bp`, `ask_quote`, `counter_bp`, `stance`, guards `{stage, ok, reason, offending}` and `AuditEvent.private`, so no adapter or server change was needed. `timings` is `dict[str, float|null]` with no `tts_onset_ms`, so the client measures it (`say` → `onstart`) and adds it through the local `tts_onset` event. Tests: `test_web_fixture_frames_match_the_protocol` (every fixture frame validates against `SERVER_EVENT_ADAPTER`) and the `tts_onset` tests in `useVoice.test.ts`.
+  - [23a.2] `/scenarios` returns `suggested` from each rep card's new `## Suggested replies` section. The UI loads it, and the static catalog is now fixture-only. Tests: `test_scenarios_carry_rep_card_suggestions`, `test_rep_card_suggestions_parses_only_its_section`.
+  - [23a.3] The Decision trace and State columns are lazy-loaded, so the main chunk is 130 kB and Recharts loads after first paint. The default warning limit was **not** restored: Recharts 3 alone is 545 kB, and splitting its deps out leaves that unchanged (tried). The limit stays at 600.
+  - [23a.5] Tiers use the spoken style: `moneyShort` gives "$75 from the 4th payment" and keeps cents only when non-zero. Test: `callState.test.ts` tier case.
+  - [22.1] `?view=rep` on `/calls/{id}/events` and `/export`; the UI's Download log uses the lens's view. Test: `test_rep_http_export_and_events_leak_no_private_value` (the operator export trips the scan and the rep export does not; 400 on an unknown view).
+- Deviations:
+  - vad-web still loads from jsDelivr at mic-on time (same pins as Phase 21), not from npm, so the bundle stays small and the pins are unchanged.
+  - STT modes are `server` | `browser` (the old `auto` = server with fallback, which `server` now does).
+  - The socket view is fixed per call. Changing the lens mid-call re-filters client-side; operator detail for a rep-view call is not recoverable, and a notice says so.
+  - The fixture generator now follows the real protocol: `reason_key`, `nlg.source` / `fallback_reason`, guard `offending`, no `fallback` guard stage, latency `engine_ms` / `queue_ms`, audit privacy by `is_private_audit`, and `tts_onset` as a local frame.
+  - Fixed during the manual check: a finished call (its socket stays open after `autoplay_done` / END) locked the scenario picker; duplicate React keys on repeated guard stages.
+- Oracle eval `eval_20261006_224448_s7` (`--nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7`): thresholds PASS.
+- Tests: `pytest -q` 615 passed / 2 skipped (incl. slow, 173 s); `ruff check .` clean; web: typecheck, lint, 46 Vitest tests, build all green.
+- Open issues: see the DEFERRED lines in the phase-23b report.

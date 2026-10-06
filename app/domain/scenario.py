@@ -275,6 +275,19 @@ def load_rep_card(scenario_id: str, *, root: Path | None = None) -> str:
     return path.read_text()
 
 
+def rep_card_suggestions(markdown: str) -> list[str]:
+    """Bullet lines under the rep card's ``## Suggested replies`` heading, in order."""
+    out: list[str] = []
+    inside = False
+    for line in markdown.splitlines():
+        if line.startswith("## "):
+            inside = line[3:].strip().lower() == "suggested replies"
+            continue
+        if inside and line.startswith("- "):
+            out.append(line[2:].strip())
+    return out
+
+
 def details_from_scenario(
     sc: CallScenario,
     *,

@@ -65,3 +65,18 @@ def test_every_frame_of_an_autoplay_call_validates(tmp_path: Path) -> None:
                 break
     for frame in frames:
         SERVER_EVENT_ADAPTER.validate_python(frame)
+
+
+def test_web_fixture_frames_match_the_protocol() -> None:
+    """The UI's recorded fixture is valid wire data (``tts_onset`` is client-local)."""
+    import json
+    from pathlib import Path
+
+    from app.schemas.events import SERVER_EVENT_ADAPTER
+
+    path = Path(__file__).resolve().parents[2] / "web/src/fixtures/call_easy_deal.json"
+    frames = json.loads(path.read_text())["frames"]
+    server = [f["ev"] for f in frames if f["ev"]["type"] != "tts_onset"]
+    assert len(server) > 100 and len(server) < len(frames)
+    for ev in server:
+        SERVER_EVENT_ADAPTER.validate_python(ev)

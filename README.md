@@ -236,7 +236,7 @@ More detail: [`docs/PROGRESS.md`](docs/PROGRESS.md), [`docs/eval/`](docs/eval/).
 
 ## Running locally
 
-Python 3.12. [`uv`](https://docs.astral.sh/uv/) for the venv.
+Python 3.12. [`uv`](https://docs.astral.sh/uv/) for the venv. Node 24 (or ≥ 22.22) to build the web UI.
 
 **Tests and the offline policy eval need no API keys.** The live browser demo and the CLI need at least one of `GROQ_API_KEY` or `GEMINI_API_KEY` in `.env`. Server STT needs Groq.
 
@@ -245,10 +245,11 @@ uv venv --python 3.12 && source .venv/bin/activate
 uv sync --group dev
 cp .env.example .env
 # fill keys only if you want the live demo
+(cd web && npm ci && npm run build)   # FastAPI serves web/dist at /
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000. Switch to Operator, pick a scenario, start the chat.
+Open http://127.0.0.1:8000. Pick a scenario card, then **Watch a call** (the simulated rep plays it; no keys needed) or **Start call** (you play the rep: type, click a suggested reply, or use the mic). The **Creditor's eye** lens shows only what the rep's stream carries. For UI work, `npm run dev` in `web/` serves on :5173 with hot reload and proxies the API to :8000; see [`web/README.md`](web/README.md).
 
 Text-only, same pipeline, auto-acks every sentence:
 

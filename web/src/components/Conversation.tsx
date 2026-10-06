@@ -3,10 +3,11 @@
  *
  * Chat bubbles (agent left, creditor rep right), the mic with its
  * listening/thinking/speaking state, suggested rep replies from the scenario
- * card, and a text box. 23a renders state only; `onSend` / `onMicToggle`
- * are wired to the socket and VAD in 23b and are optional here.
+ * card, and a text box. `onSend` / `onMicToggle` are wired by App to the
+ * call socket and `useVoice`; when absent (replay, no call) their controls
+ * are disabled. `interim` is the voice cue or a live browser-STT partial.
  */
-import { Mic, MicOff, Send } from "lucide-react";
+import { Mic, MicOff, Send, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -23,6 +24,13 @@ export interface ConversationProps {
   onSend?: (text: string) => void;
   onMicToggle?: () => void;
   emptyHint: string;
+  /** Placeholder for the text box when sending is disabled. */
+  idleHint?: string;
+  interim?: string;
+  notice?: string;
+  onDismissNotice?: () => void;
+  sttMode?: "server" | "browser";
+  onSttMode?: (m: "server" | "browser") => void;
 }
 
 const MIC_DOT: Record<MicState, string> = {
@@ -40,6 +48,12 @@ export function Conversation({
   onSend,
   onMicToggle,
   emptyHint,
+  idleHint = "Replaying a recorded call",
+  interim,
+  notice,
+  onDismissNotice,
+  sttMode,
+  onSttMode,
 }: ConversationProps) {
   const [draft, setDraft] = useState("");
   const log = useRef<HTMLDivElement>(null);
@@ -47,7 +61,7 @@ export function Conversation({
   useEffect(() => {
     const el = log.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, interim]);
 
   const send = (text: string) => {
     if (!onSend || !text.trim()) return;
@@ -61,6 +75,20 @@ export function Conversation({
         title="Conversation"
         aside={
           <div className="flex items-center gap-2">
+            {sttMode && onSttMode && (
+              <label className="flex items-center gap-1 text-sm text-muted">
+                <span className="sr-only">Speech recognition</span>
+                <select
+                  className="rounded-md border border-border bg-surface px-1.5 py-1 text-sm text-fg"
+                  value={sttMode}
+                  onChange={(e) => onSttMode(e.target.value as "server" | "browser")}
+                  title="Where speech is transcribed"
+                >
+                  <option value="server">Server STT</option>
+                  <option value="browser">Browser STT</option>
+                </select>
+              </label>
+            )}
             <span className="inline-flex items-center gap-2 text-sm text-muted" aria-live="polite">
               <span className={cn("h-2 w-2 rounded-full", MIC_DOT[mic])} aria-hidden />
               {MIC_LABEL[mic]}
@@ -90,7 +118,23 @@ export function Conversation({
         ) : (
           messages.map((m) => <Bubble key={m.key} msg={m} />)
         )}
+        {interim && (
+          <p className="self-end text-sm italic text-muted" aria-live="polite" data-testid="interim">
+            {interim}
+          </p>
+        )}
       </div>
+
+      {notice && (
+        <div role="status" className="mx-4 mb-2 flex items-start gap-2 rounded-lg border border-warn bg-surface-2 px-3 py-2 text-sm">
+          <span className="flex-1">{notice}</span>
+          {onDismissNotice && (
+            <button type="button" aria-label="Dismiss notice" className="cursor-pointer text-muted hover:text-fg" onClick={onDismissNotice}>
+              <X className="h-4 w-4" aria-hidden />
+            </button>
+          )}
+        </div>
+      )}
 
       {suggested.length > 0 && (
         <div className="border-t border-border px-4 pt-3">
@@ -131,7 +175,7 @@ export function Conversation({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           disabled={!onSend}
-          placeholder={onSend ? "Type as the creditor rep…" : "Replaying a recorded call"}
+          placeholder={onSend ? "Type as the creditor rep…" : idleHint}
           className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 text-base placeholder:text-faint disabled:opacity-60"
         />
         <Button type="submit" variant="primary" size="icon" aria-label="Send" disabled={!onSend || !draft.trim()}>

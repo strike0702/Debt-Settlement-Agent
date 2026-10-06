@@ -1,5 +1,8 @@
 // Builds web/src/fixtures/call_easy_deal.json from a hand-written synthetic call.
 // Usage (from web/): node scripts/gen-fixture.mjs src/fixtures/call_easy_deal.json
+// Frames follow the generated protocol (src/types/events.ts), plus the client-side
+// `tts_onset` event the voice engine adds. Audit privacy uses the server's rule
+// (app/voice/views.py is_private_audit), so fixture mode filters like ?view=rep.
 import { writeFileSync } from "node:fs";
 
 const out = process.argv[2];
@@ -53,12 +56,14 @@ const beliefEv = () => ({
   terms: Object.entries(terms).map(([field, v]) => ({ field, ...structuredClone(v) })),
 });
 
-function audit(actor, event, payload, priv = false) {
+const PRIVATE_ACTORS = new Set(["engine", "agent", "llm"]);
+const PRIVATE_EVENTS = new Set(["blocked", "effects_committed", "barge_in", "nlg_template_rejected", "llm_unavailable"]);
+
+function audit(actor, event, payload) {
   auditId += 1;
   const ts = new Date(Date.UTC(2026, 9, 7, 15, 0, 0) + t).toISOString();
-  const row = { type: "audit", id: auditId, ts, actor, event, payload };
-  if (priv) row.private = true;
-  return row;
+  const priv = PRIVATE_ACTORS.has(actor) || PRIVATE_EVENTS.has(event);
+  return { type: "audit", id: auditId, ts, actor, event, payload, private: priv };
 }
 
 let phase = "OPENING";
@@ -78,6 +83,7 @@ function turn(n, spec) {
     intent,
     reason,
     reason_text,
+    reason_key = intent === "OPENING" ? "opening" : reason?.startsWith("bp=") ? (intent === "COUNTER" ? "counter" : "confirm") : (reason ?? intent.toLowerCase()),
     counter_bp = null,
     nlg,
     sentences,
@@ -88,6 +94,7 @@ function turn(n, spec) {
     agreement = null,
   } = spec;
 
+  const { tts_onset_ms, ...serverTimings } = timings;
   if (creditor) {
     push(2600, {
       type: "transcript",
@@ -148,8 +155,10 @@ function turn(n, spec) {
     turn: n,
     stt_ms: timings.stt_ms ?? null,
     nlu_ms: timings.nlu_ms ?? null,
+    engine_ms: timings.engine_ms ?? null,
     policy_ms: timings.policy_ms ?? null,
     nlg_ms: timings.nlg_ms ?? null,
+    queue_ms: timings.queue_ms ?? null,
     server_total_ms: Math.round(serverMs * 10) / 10,
   });
 
@@ -161,8 +170,8 @@ function turn(n, spec) {
     for (const d of dropped) push(0, audit("nlu", "post_verify_drop", { field: d.field, reason: d.reason }));
     for (const c of changes) push(0, audit("belief", "belief_change", { field: c.field, old_status: c.old_status, new_status: c.new_status, quote: c.quote }));
   }
-  push(0, audit("engine", "affordability", { max_bp: MAX_BP, feasible_points: curve.filter((p) => p.feasible).length }, true));
-  if (evalEv) push(0, audit("engine", "evaluate", { feasible: evalEv.feasible, offer_total_cents: evalEv.offer_total_cents, program_fee_cents: evalEv.program_fee_cents }, true));
+  push(0, audit("engine", "affordability", { max_bp: MAX_BP, feasible_points: curve.filter((p) => p.feasible).length }));
+  if (evalEv) push(0, audit("engine", "evaluate", { feasible: evalEv.feasible, offer_total_cents: evalEv.offer_total_cents, program_fee_cents: evalEv.program_fee_cents }));
   push(0, audit("policy", "decide", { intent, reason }));
   if (nlg.mode === "llm") push(0, audit("llm", "llm_call", { role: "nlg", provider: "cerebras", model: "synthetic-nlg-model", latency_ms: timings.nlg_ms, prompt_tokens: 402, completion_tokens: 38, cache_hit: false, failover_from: null, error: null }));
   for (const b of blocked) push(0, audit("guard", "blocked", b));
@@ -178,13 +187,15 @@ function turn(n, spec) {
     dropped,
     belief_changes: changes,
     affordability: { max_bp: MAX_BP, curve },
-    decide: { intent, reason, reason_text },
+    decide: { intent, reason: reason ?? null, reason_key, reason_text },
     counter_bp,
     nlg,
     spoken: sentences.map((text, i) => ({ id: ids[i], text })),
-    timings,
+    timings: serverTimings,
   });
   push(0, { type: "turn_done" });
+  // Client-measured: `say` received → TTS audibly starts (the voice engine adds it).
+  if (tts_onset_ms != null) push(tts_onset_ms, { type: "tts_onset", turn: n, ms: tts_onset_ms });
 
   // Client TTS finishes and acks each sentence; effects commit on the last ack.
   sentences.forEach((text, i) => {
@@ -203,15 +214,17 @@ function turn(n, spec) {
 
 const tmpl = (template, extra = {}) => ({
   mode: "template",
+  source: "default",
   template,
   guards: [
-    { stage: "template", ok: true, reason: null },
-    { stage: "rendered", ok: true, reason: null },
+    { stage: "template", ok: true, reason: null, offending: null },
+    { stage: "rendered", ok: true, reason: null, offending: null },
   ],
   fallback_used: false,
+  fallback_reason: null,
   ...extra,
 });
-const llm = (template, extra = {}) => ({ ...tmpl(template), mode: "llm", ...extra });
+const llm = (template, extra = {}) => ({ ...tmpl(template), mode: "llm", source: "llm", ...extra });
 
 // ---- turn 0: opening
 turn(0, {
@@ -294,11 +307,11 @@ turn(3, {
   counter_bp: 3700,
   nlg: llm("We can propose {counter_pct} of the balance, which is {offer_total}. Would that work?", {
     guards: [
-      { stage: "template", ok: true, reason: null },
-      { stage: "rendered", ok: false, reason: "number_not_from_facts" },
-      { stage: "fallback", ok: true, reason: null },
+      { stage: "template", ok: true, reason: null, offending: null },
+      { stage: "rendered", ok: false, reason: "number_not_from_facts", offending: ["forty"] },
     ],
     fallback_used: true,
+    fallback_reason: "rendered_guard",
   }),
   blocked: [{ stage: "rendered", reason: "number_not_from_facts", offending: ["forty"] }],
   sentences: ["We can propose 37% of the balance, which is $462.50.", "Would that work?"],

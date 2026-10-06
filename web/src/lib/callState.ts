@@ -1,13 +1,17 @@
 /**
  * Folds the server event stream into one view model for the call console.
  *
- * Pure and framework-free: the fixture replay (23a) and the live `useCall`
- * hook (23b) both feed events through `reduceCall`. It does not filter
- * private data; `toRepView` in `repView.ts` does that before events get here.
+ * Pure and framework-free: the fixture replay and the live `useCall` hook both
+ * feed events through `reduceCall`. Besides server events it takes one local
+ * event, `tts_onset` (from `useVoice`: `say` received → speech audibly starts),
+ * which becomes the `tts_onset_ms` stage of that turn's latency waterfall.
+ * It does not filter private data; `toRepView` in `repView.ts` does that
+ * before events get here.
  */
 import type {
   AgreementEvent,
   AuditEvent,
+  AutoplayDoneEvent,
   BeliefTerm,
   BlockedEvent,
   EscalateEvent,
@@ -17,7 +21,16 @@ import type {
   Phase,
   ServerEvent,
   TurnTraceEvent,
-} from "@/types/events";
+} from "@/types/protocol";
+
+/** Client-measured: ms from the turn's first `say` to `SpeechSynthesisUtterance.onstart`. */
+export interface TtsOnsetEvent {
+  type: "tts_onset";
+  turn: number;
+  ms: number;
+}
+
+export type CallEvent = ServerEvent | TtsOnsetEvent;
 
 export interface ChatMessage {
   key: string;
@@ -39,6 +52,10 @@ export interface CallState {
   turn: number;
   agreement: AgreementEvent | null;
   escalation: EscalateEvent | null;
+  /** Set by the last frame of an autoplayed call. */
+  autoplay: AutoplayDoneEvent | null;
+  /** TTS onsets that arrived before their turn's trace. */
+  ttsOnset: Record<number, number>;
   errors: string[];
   /** Rep line received, agent reply not yet out. */
   thinking: boolean;
@@ -59,13 +76,19 @@ export const initialCallState: CallState = {
   turn: 0,
   agreement: null,
   escalation: null,
+  autoplay: null,
+  ttsOnset: {},
   errors: [],
   thinking: false,
   speakingId: null,
 };
 
-/** Apply one server event. Never mutates `state`. */
-export function reduceCall(state: CallState, ev: ServerEvent): CallState {
+function withOnset(t: TurnTraceEvent, ms: number | undefined): TurnTraceEvent {
+  return ms == null ? t : { ...t, timings: { ...t.timings, tts_onset_ms: ms } };
+}
+
+/** Apply one event. Never mutates `state`. */
+export function reduceCall(state: CallState, ev: CallEvent): CallState {
   switch (ev.type) {
     case "transcript": {
       const last = state.messages.at(-1);
@@ -121,8 +144,18 @@ export function reduceCall(state: CallState, ev: ServerEvent): CallState {
     case "turn_trace":
       return {
         ...state,
-        traces: [...state.traces.filter((t) => t.turn !== ev.turn), ev],
+        traces: [...state.traces.filter((t) => t.turn !== ev.turn), withOnset(ev, state.ttsOnset[ev.turn])],
       };
+    case "tts_onset":
+      if (state.traces.some((t) => t.turn === ev.turn)) {
+        return {
+          ...state,
+          traces: state.traces.map((t) => (t.turn === ev.turn ? withOnset(t, ev.ms) : t)),
+        };
+      }
+      return { ...state, ttsOnset: { ...state.ttsOnset, [ev.turn]: ev.ms } };
+    case "autoplay_done":
+      return { ...state, autoplay: ev, thinking: false };
     case "stt_error":
     case "error":
       return { ...state, thinking: false, errors: [...state.errors, ev.message] };
@@ -131,7 +164,7 @@ export function reduceCall(state: CallState, ev: ServerEvent): CallState {
   }
 }
 
-export function foldCall(events: readonly ServerEvent[]): CallState {
+export function foldCall(events: readonly CallEvent[]): CallState {
   return events.reduce(reduceCall, initialCallState);
 }
 

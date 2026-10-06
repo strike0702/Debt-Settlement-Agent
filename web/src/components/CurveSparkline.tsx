@@ -7,7 +7,7 @@
 import { Area, AreaChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PrivateTag } from "@/components/PrivateLock";
 import { pct } from "@/lib/format";
-import type { CurvePoint } from "@/types/events";
+import type { CurvePoint } from "@/types/protocol";
 
 export interface CurveSparklineProps {
   curve: CurvePoint[];

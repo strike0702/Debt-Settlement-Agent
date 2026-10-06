@@ -6,7 +6,7 @@
  * back to listening. 23b's `useVoice` drives this from VAD and TTS callbacks;
  * fixture mode drives it from replayed server events via `micEventFor`.
  */
-import type { ServerEvent } from "@/types/events";
+import type { ServerEvent } from "@/types/protocol";
 
 export type MicState = "off" | "listening" | "thinking" | "speaking";
 

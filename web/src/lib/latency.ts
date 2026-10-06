@@ -3,7 +3,7 @@
  * starts where the previous one ended. Stages missing from the trace are
  * skipped, so offline template turns just show fewer bars.
  */
-import type { TraceTimings } from "@/types/events";
+import type { TraceTimings } from "@/types/protocol";
 
 export const STAGES = [
   ["stt_ms", "Speech to text"],

@@ -9,7 +9,7 @@ import { AppShell } from "@/components/AppShell";
 import { Conversation } from "@/components/Conversation";
 import { DecisionTrace } from "@/components/DecisionTrace";
 import { StatePanel } from "@/components/StatePanel";
-import { easyDeal, SCENARIOS } from "@/fixtures";
+import { easyDeal, FIXTURE_SCENARIOS } from "@/fixtures";
 import { money, pct } from "@/lib/format";
 import type { Lens } from "@/lib/lens";
 import { fullCall } from "@/test/fixtureState";
@@ -18,7 +18,7 @@ function renderConsole(lens: Lens) {
   const state = fullCall(lens);
   return render(
     <AppShell
-      scenarios={SCENARIOS}
+      scenarios={FIXTURE_SCENARIOS}
       selected="easy_deal"
       onSelect={() => {}}
       onWatch={() => {}}
@@ -75,10 +75,23 @@ describe("creditor lens", () => {
     expect(screen.queryByText("affordability")).not.toBeInTheDocument();
   });
 
+  it("shows human terms, not internals (F10–F12, ported from test_app_js_contracts)", () => {
+    renderConsole("creditor");
+    const terms = screen.getByText("Terms we've heard").closest("div.rounded-xl")!;
+    const text = terms.textContent ?? "";
+    for (const status of ["known", "tentative", "contradicted", "assumed", "unknown"]) {
+      expect(text.toLowerCase()).not.toMatch(new RegExp(`\\b${status}\\b`));
+    }
+    expect(text).toContain("No special tiers");
+    expect(text).not.toContain("[]");
+    expect(document.body.textContent).not.toContain("Last agent intent");
+    expect(document.body.textContent).not.toContain("US$");
+  });
+
   it("the rep-view filter drops every private field and audit row", () => {
     const rep = eventsForLens(easyDeal.frames.map((f) => f.ev), "creditor");
     const json = JSON.stringify(rep);
-    for (const key of ["max_bp", "program_fee_cents", "bank_fee_cents", "balance_cents", "additional_funds", "affordability", "\"private\":true"]) {
+    for (const key of ["max_bp", "program_fee_cents", "bank_fee_cents", "balance_cents", "additional_funds", "affordability", "\"private\":true", "\"offending\":["]) {
       expect(json).not.toContain(key);
     }
     expect(rep.some((e) => e.type === "turn_trace")).toBe(true);

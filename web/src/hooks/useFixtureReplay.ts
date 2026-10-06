@@ -7,10 +7,10 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Frame } from "@/fixtures";
-import type { ServerEvent } from "@/types/events";
+import type { CallEvent } from "@/lib/callState";
 
 export interface Replay {
-  events: ServerEvent[];
+  events: CallEvent[];
   playing: boolean;
   done: boolean;
   start: () => void;

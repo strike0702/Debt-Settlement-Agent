@@ -5,7 +5,13 @@ services:
     name: debt-settlement-agent
     runtime: python
     plan: free
-    buildCommand: pip install uv && uv sync
+    # Install a pinned Node (the Python runtime's own Node, if any, is too old for
+    # Vite 8), build web/dist, then sync Python. FastAPI serves web/dist at /.
+    buildCommand: >-
+      curl -fsSL https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.xz | tar -xJ -C /tmp &&
+      export PATH=/tmp/node-v24.21.0-linux-x64/bin:$PATH &&
+      (cd web && npm ci && npm run build) &&
+      pip install uv && uv sync
     startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION

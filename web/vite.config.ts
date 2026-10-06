@@ -14,7 +14,9 @@ export default defineConfig({
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
   build: {
-    // Recharts is ~545 kB minified (~160 kB gzip) on its own; it is a separate cached chunk.
+    // Recharts 3 is ~545 kB minified (~160 kB gzip) by itself (its d3/redux deps are
+    // inlined), so no split gets it under the 500 kB default. It is off the critical
+    // path instead: App lazy-loads the two chart columns after first paint.
     chunkSizeWarningLimit: 600,
     rolldownOptions: {
       output: {

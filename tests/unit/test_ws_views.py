@@ -97,3 +97,24 @@ def test_unknown_view_is_rejected(tmp_path: Path) -> None:
     with make_client(tmp_path) as client, client.websocket_connect("/ws/call/x?view=admin") as ws:
         msg = ws.receive_json()
     assert msg["type"] == "error" and "view" in msg["message"]
+
+
+def test_rep_http_export_and_events_leak_no_private_value(tmp_path: Path) -> None:
+    """[22.1] ``/calls/{id}/export?view=rep`` and ``/events?view=rep`` drop private rows."""
+    with make_client(tmp_path) as client:
+        with client.websocket_connect("/ws/call/http-rep?view=rep") as ws:
+            frames = scripted_easy_deal(ws)
+        session = _SESSIONS[-1]
+        private = _scenario_private(session)
+        ref = session.scenario.client.as_of_date
+        op = client.get("/calls/http-rep/export").json()
+        rep = client.get("/calls/http-rep/export?view=rep").json()
+        rep_events = client.get("/calls/http-rep/events?view=rep").json()
+        assert client.get("/calls/http-rep/events?view=nope").status_code == 400
+    # The rep-view frames give the scan what the rep said and heard (its exemptions);
+    # they are clean on their own (test above), so any hit comes from the HTTP body.
+    assert leaked_private_values([*frames, op], private, ref=ref) != []
+    assert leaked_private_values([*frames, rep], private, ref=ref) == []
+    assert leaked_private_values([*frames, *rep_events], private, ref=ref) == []
+    assert rep["view"] == "rep" and len(rep["events"]) < len(op["events"])
+    assert {e["actor"] for e in rep["events"]}.isdisjoint({"engine", "agent", "llm"})

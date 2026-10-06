@@ -145,8 +145,10 @@
     "turn": 0,
     "stt_ms": null,
     "nlu_ms": null,
+    "engine_ms": 8.4,
     "policy_ms": 0.1,
     "nlg_ms": 0.3,
+    "queue_ms": 0,
     "server_total_ms": 8.8
    }
   },
@@ -176,7 +178,8 @@
     "payload": {
      "intent": "OPENING",
      "reason": "opening"
-    }
+    },
+    "private": false
    }
   },
   {
@@ -599,25 +602,30 @@
     "decide": {
      "intent": "OPENING",
      "reason": "opening",
+     "reason_key": "opening",
      "reason_text": "Open the call: say who we are and that an automated agent is speaking."
     },
     "counter_bp": null,
     "nlg": {
      "mode": "template",
+     "source": "default",
      "template": "Hello, this is an automated agent calling on behalf of {firm_name} about a client's account with you. {opening_disclosure} What payment terms can you work with for a settlement?",
      "guards": [
       {
        "stage": "template",
        "ok": true,
-       "reason": null
+       "reason": null,
+       "offending": null
       },
       {
        "stage": "rendered",
        "ok": true,
-       "reason": null
+       "reason": null,
+       "offending": null
       }
      ],
-     "fallback_used": false
+     "fallback_used": false,
+     "fallback_reason": null
     },
     "spoken": [
      {
@@ -637,8 +645,7 @@
      "queue_ms": 0,
      "engine_ms": 8.4,
      "policy_ms": 0.1,
-     "nlg_ms": 0.3,
-     "tts_onset_ms": 290
+     "nlg_ms": 0.3
     }
    }
   },
@@ -649,7 +656,15 @@
    }
   },
   {
-   "t": 6960,
+   "t": 775,
+   "ev": {
+    "type": "tts_onset",
+    "turn": 0,
+    "ms": 290
+   }
+  },
+  {
+   "t": 7250,
    "ev": {
     "type": "phase",
     "phase": "OPENING",
@@ -658,13 +673,13 @@
    }
   },
   {
-   "t": 6960,
+   "t": 7250,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 10685,
+   "t": 10975,
    "ev": {
     "type": "phase",
     "phase": "OPENING",
@@ -673,13 +688,13 @@
    }
   },
   {
-   "t": 10685,
+   "t": 10975,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 13915,
+   "t": 14205,
    "ev": {
     "type": "phase",
     "phase": "DISCOVERY",
@@ -688,13 +703,13 @@
    }
   },
   {
-   "t": 13915,
+   "t": 14205,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 16515,
+   "t": 16805,
    "ev": {
     "type": "transcript",
     "role": "creditor",
@@ -705,7 +720,7 @@
    }
   },
   {
-   "t": 17747,
+   "t": 18037,
    "ev": {
     "type": "say",
     "id": "t1-s0",
@@ -713,7 +728,7 @@
    }
   },
   {
-   "t": 17747,
+   "t": 18037,
    "ev": {
     "type": "transcript",
     "role": "agent",
@@ -724,7 +739,7 @@
    }
   },
   {
-   "t": 17752,
+   "t": 18042,
    "ev": {
     "type": "belief",
     "terms": [
@@ -796,7 +811,7 @@
    }
   },
   {
-   "t": 17752,
+   "t": 18042,
    "ev": {
     "type": "phase",
     "phase": "DISCOVERY",
@@ -805,37 +820,40 @@
    }
   },
   {
-   "t": 17752,
+   "t": 18042,
    "ev": {
     "type": "latency",
     "turn": 1,
     "stt_ms": 410,
     "nlu_ms": 812,
+    "engine_ms": 9.1,
     "policy_ms": 0.2,
     "nlg_ms": 0.3,
+    "queue_ms": 0,
     "server_total_ms": 821.6
    }
   },
   {
-   "t": 17752,
+   "t": 18042,
    "ev": {
     "type": "audit",
     "id": 3,
-    "ts": "2026-10-07T15:00:17.752Z",
+    "ts": "2026-10-07T15:00:18.042Z",
     "actor": "creditor",
     "event": "utterance",
     "payload": {
      "text": "Sure. We can take up to eight monthly payments, at least one hundred dollars each, all the same amount.",
      "turn": 1
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 17752,
+   "t": 18042,
    "ev": {
     "type": "audit",
     "id": 4,
-    "ts": "2026-10-07T15:00:17.752Z",
+    "ts": "2026-10-07T15:00:18.042Z",
     "actor": "llm",
     "event": "llm_call",
     "payload": {
@@ -848,15 +866,16 @@
      "cache_hit": false,
      "failover_from": null,
      "error": null
-    }
+    },
+    "private": true
    }
   },
   {
-   "t": 17752,
+   "t": 18042,
    "ev": {
     "type": "audit",
     "id": 5,
-    "ts": "2026-10-07T15:00:17.752Z",
+    "ts": "2026-10-07T15:00:18.042Z",
     "actor": "nlu",
     "event": "nlu_result",
     "payload": {
@@ -867,29 +886,31 @@
       "min_payment_cents",
       "payment_structure"
      ]
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 17752,
+   "t": 18042,
    "ev": {
     "type": "audit",
     "id": 6,
-    "ts": "2026-10-07T15:00:17.752Z",
+    "ts": "2026-10-07T15:00:18.042Z",
     "actor": "nlu",
     "event": "post_verify_drop",
     "payload": {
      "field": "first_payment_date",
      "reason": "quote_not_in_utterance"
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 17752,
+   "t": 18042,
    "ev": {
     "type": "audit",
     "id": 7,
-    "ts": "2026-10-07T15:00:17.752Z",
+    "ts": "2026-10-07T15:00:18.042Z",
     "actor": "belief",
     "event": "belief_change",
     "payload": {
@@ -897,15 +918,16 @@
      "old_status": "UNKNOWN",
      "new_status": "KNOWN",
      "quote": "up to eight monthly payments"
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 17752,
+   "t": 18042,
    "ev": {
     "type": "audit",
     "id": 8,
-    "ts": "2026-10-07T15:00:17.752Z",
+    "ts": "2026-10-07T15:00:18.042Z",
     "actor": "belief",
     "event": "belief_change",
     "payload": {
@@ -913,15 +935,16 @@
      "old_status": "UNKNOWN",
      "new_status": "KNOWN",
      "quote": "at least one hundred dollars each"
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 17752,
+   "t": 18042,
    "ev": {
     "type": "audit",
     "id": 9,
-    "ts": "2026-10-07T15:00:17.752Z",
+    "ts": "2026-10-07T15:00:18.042Z",
     "actor": "belief",
     "event": "belief_change",
     "payload": {
@@ -929,15 +952,16 @@
      "old_status": "UNKNOWN",
      "new_status": "KNOWN",
      "quote": "all the same amount"
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 17752,
+   "t": 18042,
    "ev": {
     "type": "audit",
     "id": 10,
-    "ts": "2026-10-07T15:00:17.752Z",
+    "ts": "2026-10-07T15:00:18.042Z",
     "actor": "engine",
     "event": "affordability",
     "payload": {
@@ -948,21 +972,22 @@
    }
   },
   {
-   "t": 17752,
+   "t": 18042,
    "ev": {
     "type": "audit",
     "id": 11,
-    "ts": "2026-10-07T15:00:17.752Z",
+    "ts": "2026-10-07T15:00:18.042Z",
     "actor": "policy",
     "event": "decide",
     "payload": {
      "intent": "ASK_SETTLEMENT",
      "reason": "missing_ask"
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 17752,
+   "t": 18042,
    "ev": {
     "type": "turn_trace",
     "turn": 1,
@@ -1438,25 +1463,30 @@
     "decide": {
      "intent": "ASK_SETTLEMENT",
      "reason": "missing_ask",
+     "reason_key": "missing_ask",
      "reason_text": "All required terms are known, so ask what settlement percentage they want."
     },
     "counter_bp": null,
     "nlg": {
      "mode": "template",
+     "source": "default",
      "template": "What settlement percentage of the balance are you looking for?",
      "guards": [
       {
        "stage": "template",
        "ok": true,
-       "reason": null
+       "reason": null,
+       "offending": null
       },
       {
        "stage": "rendered",
        "ok": true,
-       "reason": null
+       "reason": null,
+       "offending": null
       }
      ],
-     "fallback_used": false
+     "fallback_used": false,
+     "fallback_reason": null
     },
     "spoken": [
      {
@@ -1470,19 +1500,26 @@
      "nlu_ms": 812,
      "engine_ms": 9.1,
      "policy_ms": 0.2,
-     "nlg_ms": 0.3,
-     "tts_onset_ms": 300
+     "nlg_ms": 0.3
     }
    }
   },
   {
-   "t": 17752,
+   "t": 18042,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 21422,
+   "t": 18342,
+   "ev": {
+    "type": "tts_onset",
+    "turn": 1,
+    "ms": 300
+   }
+  },
+  {
+   "t": 22012,
    "ev": {
     "type": "phase",
     "phase": "NEGOTIATE",
@@ -1491,13 +1528,13 @@
    }
   },
   {
-   "t": 21422,
+   "t": 22012,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 24022,
+   "t": 24612,
    "ev": {
     "type": "transcript",
     "role": "creditor",
@@ -1508,7 +1545,7 @@
    }
   },
   {
-   "t": 25670,
+   "t": 26260,
    "ev": {
     "type": "say",
     "id": "t2-s0",
@@ -1516,7 +1553,7 @@
    }
   },
   {
-   "t": 25670,
+   "t": 26260,
    "ev": {
     "type": "transcript",
     "role": "agent",
@@ -1527,7 +1564,7 @@
    }
   },
   {
-   "t": 25710,
+   "t": 26300,
    "ev": {
     "type": "say",
     "id": "t2-s1",
@@ -1535,7 +1572,7 @@
    }
   },
   {
-   "t": 25710,
+   "t": 26300,
    "ev": {
     "type": "transcript",
     "role": "agent",
@@ -1546,7 +1583,7 @@
    }
   },
   {
-   "t": 25715,
+   "t": 26305,
    "ev": {
     "type": "belief",
     "terms": [
@@ -1618,7 +1655,7 @@
    }
   },
   {
-   "t": 25715,
+   "t": 26305,
    "ev": {
     "type": "phase",
     "phase": "NEGOTIATE",
@@ -1627,7 +1664,7 @@
    }
   },
   {
-   "t": 25715,
+   "t": 26305,
    "ev": {
     "type": "eval",
     "feasible": true,
@@ -1676,37 +1713,40 @@
    }
   },
   {
-   "t": 25715,
+   "t": 26305,
    "ev": {
     "type": "latency",
     "turn": 2,
     "stt_ms": 380,
     "nlu_ms": 744,
+    "engine_ms": 11.7,
     "policy_ms": 0.2,
     "nlg_ms": 512,
+    "queue_ms": 0,
     "server_total_ms": 1267.9
    }
   },
   {
-   "t": 25715,
+   "t": 26305,
    "ev": {
     "type": "audit",
     "id": 12,
-    "ts": "2026-10-07T15:00:25.715Z",
+    "ts": "2026-10-07T15:00:26.305Z",
     "actor": "creditor",
     "event": "utterance",
     "payload": {
      "text": "We are looking for forty-five percent of the balance.",
      "turn": 2
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 25715,
+   "t": 26305,
    "ev": {
     "type": "audit",
     "id": 13,
-    "ts": "2026-10-07T15:00:25.715Z",
+    "ts": "2026-10-07T15:00:26.305Z",
     "actor": "llm",
     "event": "llm_call",
     "payload": {
@@ -1719,30 +1759,32 @@
      "cache_hit": false,
      "failover_from": null,
      "error": null
-    }
+    },
+    "private": true
    }
   },
   {
-   "t": 25715,
+   "t": 26305,
    "ev": {
     "type": "audit",
     "id": 14,
-    "ts": "2026-10-07T15:00:25.715Z",
+    "ts": "2026-10-07T15:00:26.305Z",
     "actor": "nlu",
     "event": "nlu_result",
     "payload": {
      "stance": "offer",
      "ask_bp": 4500,
      "terms": []
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 25715,
+   "t": 26305,
    "ev": {
     "type": "audit",
     "id": 15,
-    "ts": "2026-10-07T15:00:25.715Z",
+    "ts": "2026-10-07T15:00:26.305Z",
     "actor": "engine",
     "event": "affordability",
     "payload": {
@@ -1753,11 +1795,11 @@
    }
   },
   {
-   "t": 25715,
+   "t": 26305,
    "ev": {
     "type": "audit",
     "id": 16,
-    "ts": "2026-10-07T15:00:25.715Z",
+    "ts": "2026-10-07T15:00:26.305Z",
     "actor": "engine",
     "event": "evaluate",
     "payload": {
@@ -1769,25 +1811,26 @@
    }
   },
   {
-   "t": 25715,
+   "t": 26305,
    "ev": {
     "type": "audit",
     "id": 17,
-    "ts": "2026-10-07T15:00:25.715Z",
+    "ts": "2026-10-07T15:00:26.305Z",
     "actor": "policy",
     "event": "decide",
     "payload": {
      "intent": "COUNTER",
      "reason": "bp=3200"
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 25715,
+   "t": 26305,
    "ev": {
     "type": "audit",
     "id": 18,
-    "ts": "2026-10-07T15:00:25.715Z",
+    "ts": "2026-10-07T15:00:26.305Z",
     "actor": "llm",
     "event": "llm_call",
     "payload": {
@@ -1800,11 +1843,12 @@
      "cache_hit": false,
      "failover_from": null,
      "error": null
-    }
+    },
+    "private": true
    }
   },
   {
-   "t": 25715,
+   "t": 26305,
    "ev": {
     "type": "turn_trace",
     "turn": 2,
@@ -2223,25 +2267,30 @@
     "decide": {
      "intent": "COUNTER",
      "reason": "bp=3200",
+     "reason_key": "counter",
      "reason_text": "Counter at 32%: the first offer anchors at 70% of their ask."
     },
     "counter_bp": 3200,
     "nlg": {
      "mode": "llm",
+     "source": "llm",
      "template": "We can propose {counter_pct} of the balance, which is {offer_total}. Would that work?",
      "guards": [
       {
        "stage": "template",
        "ok": true,
-       "reason": null
+       "reason": null,
+       "offending": null
       },
       {
        "stage": "rendered",
        "ok": true,
-       "reason": null
+       "reason": null,
+       "offending": null
       }
      ],
-     "fallback_used": false
+     "fallback_used": false,
+     "fallback_reason": null
     },
     "spoken": [
      {
@@ -2259,19 +2308,26 @@
      "nlu_ms": 744,
      "engine_ms": 11.7,
      "policy_ms": 0.2,
-     "nlg_ms": 512,
-     "tts_onset_ms": 310
+     "nlg_ms": 512
     }
    }
   },
   {
-   "t": 25715,
+   "t": 26305,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 28835,
+   "t": 26615,
+   "ev": {
+    "type": "tts_onset",
+    "turn": 2,
+    "ms": 310
+   }
+  },
+  {
+   "t": 29735,
    "ev": {
     "type": "phase",
     "phase": "NEGOTIATE",
@@ -2280,7 +2336,7 @@
    }
   },
   {
-   "t": 28835,
+   "t": 29735,
    "ev": {
     "type": "eval",
     "feasible": true,
@@ -2329,13 +2385,13 @@
    }
   },
   {
-   "t": 28835,
+   "t": 29735,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 29975,
+   "t": 30875,
    "ev": {
     "type": "phase",
     "phase": "NEGOTIATE",
@@ -2344,7 +2400,7 @@
    }
   },
   {
-   "t": 29975,
+   "t": 30875,
    "ev": {
     "type": "eval",
     "feasible": true,
@@ -2393,13 +2449,13 @@
    }
   },
   {
-   "t": 29975,
+   "t": 30875,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 32575,
+   "t": 33475,
    "ev": {
     "type": "transcript",
     "role": "creditor",
@@ -2410,7 +2466,7 @@
    }
   },
   {
-   "t": 34374,
+   "t": 35274,
    "ev": {
     "type": "say",
     "id": "t3-s0",
@@ -2418,7 +2474,7 @@
    }
   },
   {
-   "t": 34374,
+   "t": 35274,
    "ev": {
     "type": "transcript",
     "role": "agent",
@@ -2429,7 +2485,7 @@
    }
   },
   {
-   "t": 34414,
+   "t": 35314,
    "ev": {
     "type": "say",
     "id": "t3-s1",
@@ -2437,7 +2493,7 @@
    }
   },
   {
-   "t": 34414,
+   "t": 35314,
    "ev": {
     "type": "transcript",
     "role": "agent",
@@ -2448,7 +2504,7 @@
    }
   },
   {
-   "t": 34419,
+   "t": 35319,
    "ev": {
     "type": "belief",
     "terms": [
@@ -2520,7 +2576,7 @@
    }
   },
   {
-   "t": 34419,
+   "t": 35319,
    "ev": {
     "type": "phase",
     "phase": "NEGOTIATE",
@@ -2529,7 +2585,7 @@
    }
   },
   {
-   "t": 34419,
+   "t": 35319,
    "ev": {
     "type": "eval",
     "feasible": true,
@@ -2578,7 +2634,7 @@
    }
   },
   {
-   "t": 34419,
+   "t": 35319,
    "ev": {
     "type": "blocked",
     "stage": "rendered",
@@ -2589,37 +2645,40 @@
    }
   },
   {
-   "t": 34419,
+   "t": 35319,
    "ev": {
     "type": "latency",
     "turn": 3,
     "stt_ms": 395,
     "nlu_ms": 790,
+    "engine_ms": 10.2,
     "policy_ms": 0.2,
     "nlg_ms": 604,
+    "queue_ms": 0,
     "server_total_ms": 1404.4
    }
   },
   {
-   "t": 34419,
+   "t": 35319,
    "ev": {
     "type": "audit",
     "id": 19,
-    "ts": "2026-10-07T15:00:34.419Z",
+    "ts": "2026-10-07T15:00:35.319Z",
     "actor": "creditor",
     "event": "utterance",
     "payload": {
      "text": "Thirty-two is too low. I could do forty-two percent.",
      "turn": 3
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 34419,
+   "t": 35319,
    "ev": {
     "type": "audit",
     "id": 20,
-    "ts": "2026-10-07T15:00:34.419Z",
+    "ts": "2026-10-07T15:00:35.319Z",
     "actor": "llm",
     "event": "llm_call",
     "payload": {
@@ -2632,30 +2691,32 @@
      "cache_hit": false,
      "failover_from": null,
      "error": null
-    }
+    },
+    "private": true
    }
   },
   {
-   "t": 34419,
+   "t": 35319,
    "ev": {
     "type": "audit",
     "id": 21,
-    "ts": "2026-10-07T15:00:34.419Z",
+    "ts": "2026-10-07T15:00:35.319Z",
     "actor": "nlu",
     "event": "nlu_result",
     "payload": {
      "stance": "counter",
      "ask_bp": 4200,
      "terms": []
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 34419,
+   "t": 35319,
    "ev": {
     "type": "audit",
     "id": 22,
-    "ts": "2026-10-07T15:00:34.419Z",
+    "ts": "2026-10-07T15:00:35.319Z",
     "actor": "engine",
     "event": "affordability",
     "payload": {
@@ -2666,11 +2727,11 @@
    }
   },
   {
-   "t": 34419,
+   "t": 35319,
    "ev": {
     "type": "audit",
     "id": 23,
-    "ts": "2026-10-07T15:00:34.419Z",
+    "ts": "2026-10-07T15:00:35.319Z",
     "actor": "engine",
     "event": "evaluate",
     "payload": {
@@ -2682,25 +2743,26 @@
    }
   },
   {
-   "t": 34419,
+   "t": 35319,
    "ev": {
     "type": "audit",
     "id": 24,
-    "ts": "2026-10-07T15:00:34.419Z",
+    "ts": "2026-10-07T15:00:35.319Z",
     "actor": "policy",
     "event": "decide",
     "payload": {
      "intent": "COUNTER",
      "reason": "bp=3700"
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 34419,
+   "t": 35319,
    "ev": {
     "type": "audit",
     "id": 25,
-    "ts": "2026-10-07T15:00:34.419Z",
+    "ts": "2026-10-07T15:00:35.319Z",
     "actor": "llm",
     "event": "llm_call",
     "payload": {
@@ -2713,15 +2775,16 @@
      "cache_hit": false,
      "failover_from": null,
      "error": null
-    }
+    },
+    "private": true
    }
   },
   {
-   "t": 34419,
+   "t": 35319,
    "ev": {
     "type": "audit",
     "id": 26,
-    "ts": "2026-10-07T15:00:34.419Z",
+    "ts": "2026-10-07T15:00:35.319Z",
     "actor": "guard",
     "event": "blocked",
     "payload": {
@@ -2730,11 +2793,12 @@
      "offending": [
       "forty"
      ]
-    }
+    },
+    "private": true
    }
   },
   {
-   "t": 34419,
+   "t": 35319,
    "ev": {
     "type": "turn_trace",
     "turn": 3,
@@ -3153,30 +3217,32 @@
     "decide": {
      "intent": "COUNTER",
      "reason": "bp=3700",
+     "reason_key": "counter",
      "reason_text": "Counter at 37%: concede half the gap toward their new ask."
     },
     "counter_bp": 3700,
     "nlg": {
      "mode": "llm",
+     "source": "llm",
      "template": "We can propose {counter_pct} of the balance, which is {offer_total}. Would that work?",
      "guards": [
       {
        "stage": "template",
        "ok": true,
-       "reason": null
+       "reason": null,
+       "offending": null
       },
       {
        "stage": "rendered",
        "ok": false,
-       "reason": "number_not_from_facts"
-      },
-      {
-       "stage": "fallback",
-       "ok": true,
-       "reason": null
+       "reason": "number_not_from_facts",
+       "offending": [
+        "forty"
+       ]
       }
      ],
-     "fallback_used": true
+     "fallback_used": true,
+     "fallback_reason": "rendered_guard"
     },
     "spoken": [
      {
@@ -3194,19 +3260,26 @@
      "nlu_ms": 790,
      "engine_ms": 10.2,
      "policy_ms": 0.2,
-     "nlg_ms": 604,
-     "tts_onset_ms": 305
+     "nlg_ms": 604
     }
    }
   },
   {
-   "t": 34419,
+   "t": 35319,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 37539,
+   "t": 35624,
+   "ev": {
+    "type": "tts_onset",
+    "turn": 3,
+    "ms": 305
+   }
+  },
+  {
+   "t": 38744,
    "ev": {
     "type": "phase",
     "phase": "NEGOTIATE",
@@ -3215,7 +3288,7 @@
    }
   },
   {
-   "t": 37539,
+   "t": 38744,
    "ev": {
     "type": "eval",
     "feasible": true,
@@ -3264,13 +3337,13 @@
    }
   },
   {
-   "t": 37539,
+   "t": 38744,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 38679,
+   "t": 39884,
    "ev": {
     "type": "phase",
     "phase": "NEGOTIATE",
@@ -3279,7 +3352,7 @@
    }
   },
   {
-   "t": 38679,
+   "t": 39884,
    "ev": {
     "type": "eval",
     "feasible": true,
@@ -3328,13 +3401,13 @@
    }
   },
   {
-   "t": 38679,
+   "t": 39884,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 41279,
+   "t": 42484,
    "ev": {
     "type": "transcript",
     "role": "creditor",
@@ -3345,7 +3418,7 @@
    }
   },
   {
-   "t": 42943,
+   "t": 44148,
    "ev": {
     "type": "say",
     "id": "t4-s0",
@@ -3353,7 +3426,7 @@
    }
   },
   {
-   "t": 42943,
+   "t": 44148,
    "ev": {
     "type": "transcript",
     "role": "agent",
@@ -3364,7 +3437,7 @@
    }
   },
   {
-   "t": 42983,
+   "t": 44188,
    "ev": {
     "type": "say",
     "id": "t4-s1",
@@ -3372,7 +3445,7 @@
    }
   },
   {
-   "t": 42983,
+   "t": 44188,
    "ev": {
     "type": "transcript",
     "role": "agent",
@@ -3383,7 +3456,7 @@
    }
   },
   {
-   "t": 43023,
+   "t": 44228,
    "ev": {
     "type": "say",
     "id": "t4-s2",
@@ -3391,7 +3464,7 @@
    }
   },
   {
-   "t": 43023,
+   "t": 44228,
    "ev": {
     "type": "transcript",
     "role": "agent",
@@ -3402,7 +3475,7 @@
    }
   },
   {
-   "t": 43028,
+   "t": 44233,
    "ev": {
     "type": "belief",
     "terms": [
@@ -3474,7 +3547,7 @@
    }
   },
   {
-   "t": 43028,
+   "t": 44233,
    "ev": {
     "type": "phase",
     "phase": "NEGOTIATE",
@@ -3483,7 +3556,7 @@
    }
   },
   {
-   "t": 43028,
+   "t": 44233,
    "ev": {
     "type": "eval",
     "feasible": true,
@@ -3539,37 +3612,40 @@
    }
   },
   {
-   "t": 43028,
+   "t": 44233,
    "ev": {
     "type": "latency",
     "turn": 4,
     "stt_ms": 402,
     "nlu_ms": 701,
+    "engine_ms": 12.3,
     "policy_ms": 0.3,
     "nlg_ms": 548,
+    "queue_ms": 0,
     "server_total_ms": 1261.6
    }
   },
   {
-   "t": 43028,
+   "t": 44233,
    "ev": {
     "type": "audit",
     "id": 27,
-    "ts": "2026-10-07T15:00:43.028Z",
+    "ts": "2026-10-07T15:00:44.233Z",
     "actor": "creditor",
     "event": "utterance",
     "payload": {
      "text": "Forty percent is my floor. I can't go lower than that.",
      "turn": 4
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 43028,
+   "t": 44233,
    "ev": {
     "type": "audit",
     "id": 28,
-    "ts": "2026-10-07T15:00:43.028Z",
+    "ts": "2026-10-07T15:00:44.233Z",
     "actor": "llm",
     "event": "llm_call",
     "payload": {
@@ -3582,30 +3658,32 @@
      "cache_hit": false,
      "failover_from": null,
      "error": null
-    }
+    },
+    "private": true
    }
   },
   {
-   "t": 43028,
+   "t": 44233,
    "ev": {
     "type": "audit",
     "id": 29,
-    "ts": "2026-10-07T15:00:43.028Z",
+    "ts": "2026-10-07T15:00:44.233Z",
     "actor": "nlu",
     "event": "nlu_result",
     "payload": {
      "stance": "offer",
      "ask_bp": 4000,
      "terms": []
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 43028,
+   "t": 44233,
    "ev": {
     "type": "audit",
     "id": 30,
-    "ts": "2026-10-07T15:00:43.028Z",
+    "ts": "2026-10-07T15:00:44.233Z",
     "actor": "engine",
     "event": "affordability",
     "payload": {
@@ -3616,11 +3694,11 @@
    }
   },
   {
-   "t": 43028,
+   "t": 44233,
    "ev": {
     "type": "audit",
     "id": 31,
-    "ts": "2026-10-07T15:00:43.028Z",
+    "ts": "2026-10-07T15:00:44.233Z",
     "actor": "engine",
     "event": "evaluate",
     "payload": {
@@ -3632,25 +3710,26 @@
    }
   },
   {
-   "t": 43028,
+   "t": 44233,
    "ev": {
     "type": "audit",
     "id": 32,
-    "ts": "2026-10-07T15:00:43.028Z",
+    "ts": "2026-10-07T15:00:44.233Z",
     "actor": "policy",
     "event": "decide",
     "payload": {
      "intent": "CONFIRM_SCHEDULE",
      "reason": "bp=4000"
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 43028,
+   "t": 44233,
    "ev": {
     "type": "audit",
     "id": 33,
-    "ts": "2026-10-07T15:00:43.028Z",
+    "ts": "2026-10-07T15:00:44.233Z",
     "actor": "llm",
     "event": "llm_call",
     "payload": {
@@ -3663,11 +3742,12 @@
      "cache_hit": false,
      "failover_from": null,
      "error": null
-    }
+    },
+    "private": true
    }
   },
   {
-   "t": 43028,
+   "t": 44233,
    "ev": {
     "type": "turn_trace",
     "turn": 4,
@@ -4086,25 +4166,30 @@
     "decide": {
      "intent": "CONFIRM_SCHEDULE",
      "reason": "bp=4000",
+     "reason_key": "confirm",
      "reason_text": "Accept 40%: their stated floor is one the client can afford, so read back the schedule."
     },
     "counter_bp": 4000,
     "nlg": {
      "mode": "llm",
+     "source": "llm",
      "template": "{settlement_pct} works for us. We can do {num_payments} payments totaling {offer_total}, starting {first_payment_date}. Would that work?",
      "guards": [
       {
        "stage": "template",
        "ok": true,
-       "reason": null
+       "reason": null,
+       "offending": null
       },
       {
        "stage": "rendered",
        "ok": true,
-       "reason": null
+       "reason": null,
+       "offending": null
       }
      ],
-     "fallback_used": false
+     "fallback_used": false,
+     "fallback_reason": null
     },
     "spoken": [
      {
@@ -4126,19 +4211,26 @@
      "nlu_ms": 701,
      "engine_ms": 12.3,
      "policy_ms": 0.3,
-     "nlg_ms": 548,
-     "tts_onset_ms": 298
+     "nlg_ms": 548
     }
    }
   },
   {
-   "t": 43028,
+   "t": 44233,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 44223,
+   "t": 44531,
+   "ev": {
+    "type": "tts_onset",
+    "turn": 4,
+    "ms": 298
+   }
+  },
+  {
+   "t": 45726,
    "ev": {
     "type": "phase",
     "phase": "NEGOTIATE",
@@ -4147,7 +4239,7 @@
    }
   },
   {
-   "t": 44223,
+   "t": 45726,
    "ev": {
     "type": "eval",
     "feasible": true,
@@ -4203,13 +4295,13 @@
    }
   },
   {
-   "t": 44223,
+   "t": 45726,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 47728,
+   "t": 49231,
    "ev": {
     "type": "phase",
     "phase": "NEGOTIATE",
@@ -4218,7 +4310,7 @@
    }
   },
   {
-   "t": 47728,
+   "t": 49231,
    "ev": {
     "type": "eval",
     "feasible": true,
@@ -4274,13 +4366,13 @@
    }
   },
   {
-   "t": 47728,
+   "t": 49231,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 48868,
+   "t": 50371,
    "ev": {
     "type": "phase",
     "phase": "CONFIRM",
@@ -4289,7 +4381,7 @@
    }
   },
   {
-   "t": 48868,
+   "t": 50371,
    "ev": {
     "type": "eval",
     "feasible": true,
@@ -4345,13 +4437,13 @@
    }
   },
   {
-   "t": 48868,
+   "t": 50371,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 51468,
+   "t": 52971,
    "ev": {
     "type": "transcript",
     "role": "creditor",
@@ -4362,7 +4454,7 @@
    }
   },
   {
-   "t": 52274,
+   "t": 53777,
    "ev": {
     "type": "say",
     "id": "t5-s0",
@@ -4370,7 +4462,7 @@
    }
   },
   {
-   "t": 52274,
+   "t": 53777,
    "ev": {
     "type": "transcript",
     "role": "agent",
@@ -4381,7 +4473,7 @@
    }
   },
   {
-   "t": 52314,
+   "t": 53817,
    "ev": {
     "type": "say",
     "id": "t5-s1",
@@ -4389,7 +4481,7 @@
    }
   },
   {
-   "t": 52314,
+   "t": 53817,
    "ev": {
     "type": "transcript",
     "role": "agent",
@@ -4400,7 +4492,7 @@
    }
   },
   {
-   "t": 52319,
+   "t": 53822,
    "ev": {
     "type": "belief",
     "terms": [
@@ -4472,7 +4564,7 @@
    }
   },
   {
-   "t": 52319,
+   "t": 53822,
    "ev": {
     "type": "phase",
     "phase": "CONFIRM",
@@ -4481,37 +4573,40 @@
    }
   },
   {
-   "t": 52319,
+   "t": 53822,
    "ev": {
     "type": "latency",
     "turn": 5,
     "stt_ms": 350,
     "nlu_ms": 455,
+    "engine_ms": 0.4,
     "policy_ms": 0.2,
     "nlg_ms": 0.3,
+    "queue_ms": 0,
     "server_total_ms": 455.9
    }
   },
   {
-   "t": 52319,
+   "t": 53822,
    "ev": {
     "type": "audit",
     "id": 34,
-    "ts": "2026-10-07T15:00:52.319Z",
+    "ts": "2026-10-07T15:00:53.822Z",
     "actor": "creditor",
     "event": "utterance",
     "payload": {
      "text": "Yes, that works for us.",
      "turn": 5
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 52319,
+   "t": 53822,
    "ev": {
     "type": "audit",
     "id": 35,
-    "ts": "2026-10-07T15:00:52.319Z",
+    "ts": "2026-10-07T15:00:53.822Z",
     "actor": "llm",
     "event": "llm_call",
     "payload": {
@@ -4524,30 +4619,32 @@
      "cache_hit": false,
      "failover_from": null,
      "error": null
-    }
+    },
+    "private": true
    }
   },
   {
-   "t": 52319,
+   "t": 53822,
    "ev": {
     "type": "audit",
     "id": 36,
-    "ts": "2026-10-07T15:00:52.319Z",
+    "ts": "2026-10-07T15:00:53.822Z",
     "actor": "nlu",
     "event": "nlu_result",
     "payload": {
      "stance": "accept",
      "ask_bp": null,
      "terms": []
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 52319,
+   "t": 53822,
    "ev": {
     "type": "audit",
     "id": 37,
-    "ts": "2026-10-07T15:00:52.319Z",
+    "ts": "2026-10-07T15:00:53.822Z",
     "actor": "engine",
     "event": "affordability",
     "payload": {
@@ -4558,21 +4655,22 @@
    }
   },
   {
-   "t": 52319,
+   "t": 53822,
    "ev": {
     "type": "audit",
     "id": 38,
-    "ts": "2026-10-07T15:00:52.319Z",
+    "ts": "2026-10-07T15:00:53.822Z",
     "actor": "policy",
     "event": "decide",
     "payload": {
      "intent": "PROPOSE_WRAP",
      "reason": "confirmed"
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 52319,
+   "t": 53822,
    "ev": {
     "type": "turn_trace",
     "turn": 5,
@@ -4991,25 +5089,30 @@
     "decide": {
      "intent": "PROPOSE_WRAP",
      "reason": "confirmed",
+     "reason_key": "confirmed",
      "reason_text": "They accepted the read-back schedule, so send it to the client for approval."
     },
     "counter_bp": null,
     "nlg": {
      "mode": "template",
+     "source": "default",
      "template": "I have sent this proposal to the client for approval. Do you need anything else before we end the call?",
      "guards": [
       {
        "stage": "template",
        "ok": true,
-       "reason": null
+       "reason": null,
+       "offending": null
       },
       {
        "stage": "rendered",
        "ok": true,
-       "reason": null
+       "reason": null,
+       "offending": null
       }
      ],
-     "fallback_used": false
+     "fallback_used": false,
+     "fallback_reason": null
     },
     "spoken": [
      {
@@ -5027,19 +5130,26 @@
      "nlu_ms": 455,
      "engine_ms": 0.4,
      "policy_ms": 0.2,
-     "nlg_ms": 0.3,
-     "tts_onset_ms": 300
+     "nlg_ms": 0.3
     }
    }
   },
   {
-   "t": 52319,
+   "t": 53822,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 55494,
+   "t": 54122,
+   "ev": {
+    "type": "tts_onset",
+    "turn": 5,
+    "ms": 300
+   }
+  },
+  {
+   "t": 57297,
    "ev": {
     "type": "phase",
     "phase": "CONFIRM",
@@ -5048,7 +5158,7 @@
    }
   },
   {
-   "t": 55494,
+   "t": 57297,
    "ev": {
     "type": "eval",
     "feasible": true,
@@ -5104,13 +5214,13 @@
    }
   },
   {
-   "t": 55494,
+   "t": 57297,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 58449,
+   "t": 60252,
    "ev": {
     "type": "phase",
     "phase": "WRAP",
@@ -5119,7 +5229,7 @@
    }
   },
   {
-   "t": 58449,
+   "t": 60252,
    "ev": {
     "type": "eval",
     "feasible": true,
@@ -5175,7 +5285,7 @@
    }
   },
   {
-   "t": 58449,
+   "t": 60252,
    "ev": {
     "type": "agreement",
     "creditor": "NorthPeak Collections",
@@ -5225,27 +5335,28 @@
    }
   },
   {
-   "t": 58449,
+   "t": 60252,
    "ev": {
     "type": "audit",
     "id": 39,
-    "ts": "2026-10-07T15:00:58.449Z",
+    "ts": "2026-10-07T15:01:00.252Z",
     "actor": "orchestrator",
     "event": "agreement_drafted",
     "payload": {
      "bp": 4000,
      "offer_total": 50000
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 58449,
+   "t": 60252,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 61049,
+   "t": 62852,
    "ev": {
     "type": "transcript",
     "role": "creditor",
@@ -5256,7 +5367,7 @@
    }
   },
   {
-   "t": 61782,
+   "t": 63585,
    "ev": {
     "type": "say",
     "id": "t6-s0",
@@ -5264,7 +5375,7 @@
    }
   },
   {
-   "t": 61782,
+   "t": 63585,
    "ev": {
     "type": "transcript",
     "role": "agent",
@@ -5275,7 +5386,7 @@
    }
   },
   {
-   "t": 61822,
+   "t": 63625,
    "ev": {
     "type": "say",
     "id": "t6-s1",
@@ -5283,7 +5394,7 @@
    }
   },
   {
-   "t": 61822,
+   "t": 63625,
    "ev": {
     "type": "transcript",
     "role": "agent",
@@ -5294,7 +5405,7 @@
    }
   },
   {
-   "t": 61827,
+   "t": 63630,
    "ev": {
     "type": "belief",
     "terms": [
@@ -5366,7 +5477,7 @@
    }
   },
   {
-   "t": 61827,
+   "t": 63630,
    "ev": {
     "type": "phase",
     "phase": "WRAP",
@@ -5375,37 +5486,40 @@
    }
   },
   {
-   "t": 61827,
+   "t": 63630,
    "ev": {
     "type": "latency",
     "turn": 6,
     "stt_ms": 330,
     "nlu_ms": 402,
+    "engine_ms": 0.3,
     "policy_ms": 0.1,
     "nlg_ms": 0.2,
+    "queue_ms": 0,
     "server_total_ms": 402.6
    }
   },
   {
-   "t": 61827,
+   "t": 63630,
    "ev": {
     "type": "audit",
     "id": 40,
-    "ts": "2026-10-07T15:01:01.827Z",
+    "ts": "2026-10-07T15:01:03.630Z",
     "actor": "creditor",
     "event": "utterance",
     "payload": {
      "text": "No, that's everything. Thanks.",
      "turn": 6
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 61827,
+   "t": 63630,
    "ev": {
     "type": "audit",
     "id": 41,
-    "ts": "2026-10-07T15:01:01.827Z",
+    "ts": "2026-10-07T15:01:03.630Z",
     "actor": "llm",
     "event": "llm_call",
     "payload": {
@@ -5418,30 +5532,32 @@
      "cache_hit": false,
      "failover_from": null,
      "error": null
-    }
+    },
+    "private": true
    }
   },
   {
-   "t": 61827,
+   "t": 63630,
    "ev": {
     "type": "audit",
     "id": 42,
-    "ts": "2026-10-07T15:01:01.827Z",
+    "ts": "2026-10-07T15:01:03.630Z",
     "actor": "nlu",
     "event": "nlu_result",
     "payload": {
      "stance": "accept",
      "ask_bp": null,
      "terms": []
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 61827,
+   "t": 63630,
    "ev": {
     "type": "audit",
     "id": 43,
-    "ts": "2026-10-07T15:01:01.827Z",
+    "ts": "2026-10-07T15:01:03.630Z",
     "actor": "engine",
     "event": "affordability",
     "payload": {
@@ -5452,21 +5568,22 @@
    }
   },
   {
-   "t": 61827,
+   "t": 63630,
    "ev": {
     "type": "audit",
     "id": 44,
-    "ts": "2026-10-07T15:01:01.827Z",
+    "ts": "2026-10-07T15:01:03.630Z",
     "actor": "policy",
     "event": "decide",
     "payload": {
      "intent": "CLOSE",
      "reason": "thanks_accept"
-    }
+    },
+    "private": false
    }
   },
   {
-   "t": 61827,
+   "t": 63630,
    "ev": {
     "type": "turn_trace",
     "turn": 6,
@@ -5885,25 +6002,30 @@
     "decide": {
      "intent": "CLOSE",
      "reason": "thanks_accept",
+     "reason_key": "thanks_accept",
      "reason_text": "The rep has nothing else, so close the call politely."
     },
     "counter_bp": null,
     "nlg": {
      "mode": "template",
+     "source": "default",
      "template": "Thank you for your time. Goodbye.",
      "guards": [
       {
        "stage": "template",
        "ok": true,
-       "reason": null
+       "reason": null,
+       "offending": null
       },
       {
        "stage": "rendered",
        "ok": true,
-       "reason": null
+       "reason": null,
+       "offending": null
       }
      ],
-     "fallback_used": false
+     "fallback_used": false,
+     "fallback_reason": null
     },
     "spoken": [
      {
@@ -5921,19 +6043,26 @@
      "nlu_ms": 402,
      "engine_ms": 0.3,
      "policy_ms": 0.1,
-     "nlg_ms": 0.2,
-     "tts_onset_ms": 295
+     "nlg_ms": 0.2
     }
    }
   },
   {
-   "t": 61827,
+   "t": 63630,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 63407,
+   "t": 63925,
+   "ev": {
+    "type": "tts_onset",
+    "turn": 6,
+    "ms": 295
+   }
+  },
+  {
+   "t": 65505,
    "ev": {
     "type": "phase",
     "phase": "WRAP",
@@ -5942,7 +6071,7 @@
    }
   },
   {
-   "t": 63407,
+   "t": 65505,
    "ev": {
     "type": "eval",
     "feasible": true,
@@ -5998,13 +6127,13 @@
    }
   },
   {
-   "t": 63407,
+   "t": 65505,
    "ev": {
     "type": "turn_done"
    }
   },
   {
-   "t": 64107,
+   "t": 66205,
    "ev": {
     "type": "phase",
     "phase": "END",
@@ -6013,7 +6142,7 @@
    }
   },
   {
-   "t": 64107,
+   "t": 66205,
    "ev": {
     "type": "eval",
     "feasible": true,
@@ -6069,7 +6198,7 @@
    }
   },
   {
-   "t": 64107,
+   "t": 66205,
    "ev": {
     "type": "turn_done"
    }

@@ -17,7 +17,7 @@ import type { Lens } from "@/lib/lens";
 import { cn } from "@/lib/cn";
 import { fieldLabel, pct, termValue } from "@/lib/format";
 import { splitByQuotes, splitTemplate } from "@/lib/highlight";
-import type { TurnTraceEvent } from "@/types/events";
+import type { TurnTraceEvent } from "@/types/protocol";
 
 export interface DecisionTraceProps {
   traces: TurnTraceEvent[];
@@ -183,8 +183,9 @@ export function TurnCard({ trace, lens, latest }: { trace: TurnTraceEvent; lens:
           )}
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {trace.nlg.guards.map((g) => (
-            <Badge key={g.stage} tone={g.ok ? "good" : "bad"}>
+          {trace.nlg.guards.map((g, i) => (
+            // A stage can repeat (LLM attempt, then the template fallback).
+            <Badge key={`${g.stage}-${i}`} tone={g.ok ? "good" : "bad"}>
               {g.ok ? <Check aria-hidden className="h-3 w-3" /> : <X aria-hidden className="h-3 w-3" />}
               {g.stage} {g.ok ? "passed" : `blocked: ${(g.reason ?? "").replaceAll("_", " ")}`}
             </Badge>

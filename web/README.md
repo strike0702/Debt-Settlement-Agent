@@ -1,8 +1,8 @@
-# web/: settlement call console (Phase 23a)
+# web/: settlement call console (Phases 23a, 23b)
 
 The new frontend for the debt settlement agent: a single "call console" screen that shows the conversation, **why** the agent made each move, and the negotiation state side by side. Built with Vite, React 18, TypeScript (strict), Tailwind v4, shadcn/ui-style primitives, Recharts, and Vitest.
 
-Phase 23a covers the scaffold and components only. It renders from a recorded fixture and does not talk to the backend. Phase 23b wires the live socket, voice, and generated types (see [Handoff to 23b](#handoff-to-23b)).
+23a built the scaffold and components against a recorded fixture. 23b wired it to the backend: generated WS types, the live call socket, autoplay, voice, `/scenarios` cards, the operator brief, and FastAPI serving `web/dist` at `/` (the old `app/static` UI is gone).
 
 | 1440 px, operator lens | 390 px |
 |---|---|
@@ -17,16 +17,19 @@ Creditor's eye (rep lens), dark theme: every private panel is a lock.
 ```bash
 cd web
 npm ci
-npm run dev            # http://localhost:5173/?fixture=1  (replays the recorded call)
-npm run build          # → web/dist
+npm run build          # → web/dist, served by FastAPI at http://127.0.0.1:8000/
+npm run dev            # http://localhost:5173 with hot reload (proxies the API to :8000)
+npm run gen:types      # regenerate src/types/events.ts from events.schema.json
 npm run typecheck
 npm test               # vitest run
 npm run lint
 ```
 
-- `?fixture=1` replays `src/fixtures/call_easy_deal.json` with its recorded timing and starts on load. Add `&speed=4` to play faster. The full call is about 64 s at 1×.
-- Without `?fixture=1` the page shows the empty console and a link to fixture mode, because live calls arrive in 23b.
-- The dev server proxies `/ws` (WebSocket), `/scenarios`, `/calls`, and `/metrics` to `http://127.0.0.1:8000` (`uv run uvicorn app.main:app --reload`).
+- Live (default): scenario cards come from `/scenarios`. **Watch a call** opens `/ws/call/{id}?view=…` with the Phase 22 autoplay start (`autoplay: true, autoplay_pause_ms: 1200`); the server's sim creditor plays the rep with template phrasing, so it needs no keys. **Start call** opens the same socket for you to play the rep by typing, clicking a suggested reply (from the scenario's rep card), or using the mic.
+- The socket's view is fixed per call: `?view=rep` in the creditor's eye, `operator` otherwise. Switching to the creditor's eye mid-call re-filters on the client (`toRepView`); switching back to operator during a rep call shows a notice, because a rep stream never carried the private data.
+- **Download log** fetches `/calls/{id}/export?view=rep|operator` for the last call (it survives the end of the call); the rep export drops private audit rows.
+- `?fixture=1` replays `src/fixtures/call_easy_deal.json` with no backend (`&speed=4` to play faster).
+- Node: CI and Render use Node 24 (Vitest and jsdom need ≥ 22.22 or ≥ 24.15).
 
 ## Layout
 
@@ -40,19 +43,27 @@ npm run lint
 
 ```
 src/
-  types/events.ts          WS protocol types, hand-written (REPLACED in 23b)
+  types/events.ts          WS protocol types, GENERATED from events.schema.json (npm run gen:types)
+  types/protocol.ts        hand-written aliases (TermField, TermValue, …) and HTTP shapes (/scenarios, brief)
   fixtures/
-    call_easy_deal.json    recorded operator stream: {t, ev} frames + private_values
-    index.ts               typed fixture + static scenario catalog with suggested replies
+    call_easy_deal.json    synthetic operator stream: {t, ev} frames + private_values (validated by pytest)
+    index.ts               typed fixture + the one-entry catalog fixture mode shows
   lib/
-    callState.ts           reduceCall / foldCall: events → CallState (pure, reusable by useCall)
-    repView.ts             toRepView: client mirror of the Phase 22 rep-stream filter
+    callState.ts           reduceCall / foldCall: events (+ local tts_onset) → CallState
+    repView.ts             toRepView: client mirror of app/voice/views.py redact_for_view
+    voice/engine.ts        VoiceEngine: TTS + sentence_done acks, barge-in, echo guard, VAD/browser STT, backchannel
+    voice/vad.ts           pinned vad-web 0.0.22 + onnxruntime-web 1.14.0 (CDN) and Phase 21 VAD settings
+    voice/speech.ts        speakableText, preferred voices, benign TTS errors
+    voice/wav.ts           16 kHz mono 16-bit WAV encoder
     mic.ts                 mic state machine (off/listening/thinking/speaking)
     format.ts              cents → "$1,250.00" (en-US), bp → "45%", field labels
     highlight.ts           quote and {placeholder} splitting
     latency.ts             waterfall rows from turn_trace timings
     lens.ts                Lens ("operator" | "creditor") → server view ("operator" | "rep")
   hooks/
+    useCall.ts             one call socket: start / autoplay / text / WAV / end, raw frames + subscribers
+    useVoice.ts            React wrapper over VoiceEngine (mic state, notices, STT mode)
+    useScenarios.ts        /scenarios catalog; /scenarios/{id} brief (operator lens only)
     useFixtureReplay.ts    timed replay of frames
     useTheme.ts            light/dark toggle (persisted; applied pre-paint in index.html)
   components/
@@ -62,8 +73,10 @@ src/
     CurveSparkline.tsx     feasibility curve 1–100% with ask, ours, dashed private ceiling
     StatePanel.tsx         agreement, ladder chart, schedule, belief table, latency, audit
     PrivateLock.tsx        lock panel (creditor lens) and lock tag (operator lens)
+    ScenarioBrief.tsx      operator brief: creditor, client finances, firm fees (PRIVATE)
     ui/                    button, card, badge, segmented (shadcn-style)
 scripts/gen-fixture.mjs    regenerates the fixture from its hand-written turn specs
+scripts/gen-types.mjs      events.schema.json → src/types/events.ts (json-schema-to-typescript)
 docs/screenshots/          README images
 ```
 
@@ -79,35 +92,27 @@ docs/screenshots/          README images
 
 Private data is hidden at two layers:
 
-1. **The stream.** In fixture mode, `toRepView` drops `turn_trace.affordability`, `eval.max_bp`, `eval.program_fee_cents`, and `eval.additional_funds`; removes the fee, bank-fee, and balance columns from schedule rows (on both eval and agreement); and drops audit rows marked `private`. Live, the server does this (Phase 22 `?view=rep`).
+1. **The stream.** Live, the server filters `?view=rep` (`app/voice/views.py`). In fixture mode, and when the lens flips mid-call, `toRepView` does the same: drops `turn_trace.affordability`, `eval.max_bp`, `eval.program_fee_cents`, and `eval.additional_funds`; removes the fee, bank-fee, and balance columns from schedule rows (on both eval and agreement); drops `blocked.offending` and nulls guard `offending`; and drops audit rows marked `private`. The scenario brief is not fetched in the creditor's eye.
 2. **The components.** In the creditor lens, components never render those fields even if they are present. `DecisionTrace` is tested with unfiltered operator traces in the creditor lens and still shows only locks.
 
 `src/creditorLens.test.tsx` renders the whole recorded call in each lens. In the operator lens it asserts that every private string (`52%`, `$45.00`, `$9.50`, `$225.00`, and each savings balance) appears, which proves the test can detect them. In the creditor lens it asserts that none of them appear, with `<details>` sections forced open.
 
-## Handoff to 23b
+## Voice (ported from the old app.js in 23b)
 
-**Replace:**
-- `src/types/events.ts` → generated from `events.schema.json` (`npm run gen:types`). Names that are likely to differ from the real Phase 22 models, so check these first:
-  - `TurnTraceEvent`: `ask_bp`, `ask_quote`, `counter_bp`, and `stance` are fields 23a **added** for the sparkline and ladder. The REVIEW_PLAN Phase 22 list does not name them; if Phase 22 did not emit them, derive them in an adapter from `decide` and the eval, or add them server-side.
-  - `nlg.guards[]` uses `{stage, ok, reason}`, and `timings` uses `queue_ms`, `engine_ms`, and `tts_onset_ms`. These are assumed from §2a's waterfall stages.
-  - `AuditEvent.private` is assumed to be the marker the server uses for private rows. If the rep stream simply omits those rows, drop the field.
-  - `min_payment_tiers` values are typed as `[from_payment, min_cents]` pairs, because `BeliefState` stores tuples from `coerce_tiers`. If the generated schema types them differently, update `TierValue` and `format.termValue`.
-- Fixture mode can stay for tests and demos. Regenerate the JSON with `node scripts/gen-fixture.mjs src/fixtures/call_easy_deal.json` after the types change.
+`useVoice` wraps `VoiceEngine`, a framework-free port of the old `app/static/app.js` voice code. Its browser APIs are injected, so `useVoice.test.ts` drives it with fakes. Those tests replace `tests/unit/test_app_js_contracts.py`.
 
-**Wire:**
-- `useCall(scenarioId, lens)` over `/ws/call/{id}?view=${viewFor(lens)}`: feed every server event to `reduceCall` (from `lib/callState.ts`). Changing the lens means reconnecting on the other view. Fixture mode instead re-filters the stored operator events.
-- `AppShell.onWatch` → send `{type: "start", scenario_id, autoplay: true}`.
-- `Conversation.onSend` → send `{type: "text", text, source}`, and `onMicToggle` → `useVoice`. Both props are optional today, and their controls are disabled when the prop is absent.
-- `useVoice` should drive the mic using `micReducer` events (`rep_done`, `agent_say`, `agent_done`, `barge_in`, `call_over`).
-- Scenario cards: `SCENARIOS` in `fixtures/index.ts` is a static copy of the `meta.json` titles plus hand-picked suggested replies for `easy_deal`. Replace it with `/scenarios`, and take suggestions from each rep card.
-
-**Not done in 23a (by design):** live socket, voice/VAD/TTS, the operator scenario brief (`/scenarios/{id}`), serving `web/dist` from FastAPI, and CI/render.yaml changes.
+- **TTS:** one `SpeechSynthesisUtterance` per `say`, expanding `%`/`$` for speech only. Every sentence is acked with `sentence_done`, also when playback fails (F06) or when there is no `speechSynthesis`. The current utterance stays referenced, because Chrome garbage-collects it otherwise. A generation counter makes a stale `onend` after a cancel a no-op.
+- **Barge-in:** speech over the agent after the 750 ms echo guard sends `barge_in{spoken_ids}`, with the acked ids plus the one in flight. That clip is marked contaminated and never transcribed, and VAD capture is reset. A typed reply while the agent is speaking barges first.
+- **STT:** in server mode, vad-web sends 16 kHz WAV frames. In browser mode, `webkitSpeechRecognition` runs and is stopped for the whole agent turn, then re-armed 500 ms after it. A VAD load failure or a server `stt_error` falls back to browser STT.
+- **Latency:** `timing{vad_end_to_first_audio_ms}` is sent once per reply, from `onstart`. A local "One moment." plays if no `say` arrives within 1.2 s; it is never sent or acked. The `say`→`onstart` gap becomes the waterfall's "Voice onset" stage (local `tts_onset` event).
+- **Autoplay** calls are passive: no TTS and no acks, because the server auto-acks.
 
 ## Deviations and notes
 
 - Tool versions are the current releases: Vite 8 (Rolldown), Tailwind v4 (`@tailwindcss/vite`, no PostCSS config), TypeScript 6, Vitest 5, ESLint 10. `@vitejs/plugin-react@6` requires Vite 8.
 - The "shadcn/ui primitives" are hand-written in the shadcn style (`cva` + `cn`) instead of installed through the shadcn CLI, so there is no `components.json` and no Radix dependency yet. The lens toggle is a radio group, and the audit log uses native `<details>`.
-- Recharts is a separate ~545 kB (≈160 kB gzip) chunk, so `chunkSizeWarningLimit` is 600.
+- Recharts 3 is a separate ~545 kB (≈160 kB gzip) chunk, so `chunkSizeWarningLimit` is 600. Its d3/redux deps are inlined, so splitting does not get it under 500 kB. Since 23b, App lazy-loads the Decision trace and State columns, so the charts load after first paint and the main chunk is ~130 kB.
+- 23b: the dark theme's `--accent-fg` is near-black, because white on `#3987e5` is 3.6:1 (Lighthouse contrast). Lighthouse accessibility scores 100.
 - The fixture is generated by `scripts/gen-fixture.mjs` from hand-written, synthetic turn specs rather than typed as raw JSON, so frame timestamps, sentence ids, and audit ids stay consistent. None of it was recorded from a real backend.
 - The README screenshots were taken with headless Chrome through puppeteer-core, run from a scratch directory. puppeteer-core is not a dependency of `web/`.
 - Decision trace shows the newest turn first, and the conversation reads oldest first.

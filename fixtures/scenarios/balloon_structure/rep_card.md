@@ -18,3 +18,12 @@ You are the **creditor collections rep**. Prefer a balloon structure.
 | Minimum payment | $20 |
 | Structure | balloon |
 | Opening ask | 40% |
+
+## Suggested replies
+
+Click one in the console, or say it in your own words.
+
+- Up to six payments, at least twenty dollars each, and we need a balloon structure.
+- We are looking for forty percent of the balance.
+- Yes, that works for us.
+- No, that's everything. Thanks.

@@ -1,19 +1,21 @@
 /**
- * Client-side mirror of the Phase 22 rep ("creditor's eye") stream filter.
+ * Client-side mirror of the server's rep ("creditor's eye") stream filter,
+ * `redact_for_view` in app/voice/views.py.
  *
- * The server filters the live rep stream; this exists so fixture mode, which
- * replays an operator recording, shows exactly what a rep stream would carry.
- * Components also refuse to render private fields in the creditor lens, so a
- * leak needs both this filter and a component to fail.
+ * Live rep calls are filtered by the server. This exists for fixture mode
+ * (which replays an operator recording) and for switching to the creditor's
+ * eye in the middle of an operator call. Components also refuse to render
+ * private fields in the creditor lens, so a leak needs both layers to fail.
  */
-import type { EvalEvent, ScheduleRow, ServerEvent } from "@/types/events";
+import type { CallEvent } from "@/lib/callState";
+import type { EvalEvent, ScheduleRow } from "@/types/protocol";
 
 function publicRow(r: ScheduleRow): ScheduleRow {
   return { date: r.date, creditor_payment_cents: r.creditor_payment_cents };
 }
 
 /** Return the event as the rep stream would send it, or null to drop it. */
-export function toRepView(ev: ServerEvent): ServerEvent | null {
+export function toRepView(ev: CallEvent): CallEvent | null {
   switch (ev.type) {
     case "eval": {
       const out: EvalEvent = {
@@ -29,9 +31,13 @@ export function toRepView(ev: ServerEvent): ServerEvent | null {
     }
     case "agreement":
       return { ...ev, rows: ev.rows.map(publicRow) };
+    case "blocked": {
+      const { offending: _private, ...rest } = ev;
+      return rest;
+    }
     case "turn_trace": {
       const { affordability: _private, ...rest } = ev;
-      return rest;
+      return { ...rest, nlg: { ...rest.nlg, guards: rest.nlg.guards.map((g) => ({ ...g, offending: null })) } };
     }
     case "audit":
       return ev.private ? null : ev;

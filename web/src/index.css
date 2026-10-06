@@ -60,7 +60,8 @@
   --muted: #c3c2b7;
   --faint: #8d8c84;
   --accent: #3987e5;
-  --accent-fg: #ffffff;
+  /* White on #3987e5 is 3.6:1 (fails WCAG AA for 14 px); near-black is 5.3:1. */
+  --accent-fg: #0b0b0b;
   --accent-soft: #1b2c42;
   --series-ask: #d95926;
   --good: #4ac26b;

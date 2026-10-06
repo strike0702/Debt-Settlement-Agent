@@ -56,11 +56,15 @@ describe("formatting and highlighting", () => {
     expect(pct(4500)).toBe("45%");
     expect(pct(4250)).toBe("42.5%");
   });
-  it("renders tiers like the rep view (Phase 20 F10)", () => {
+  it("renders tiers in the agent's spoken style (Phase 20 F10, 23a.5)", () => {
     expect(termValue("min_payment_tiers", [])).toBe("No special tiers");
-    expect(termValue("min_payment_tiers", [[4, 7500], [8, 5000]])).toBe(
-      "$75.00 from the 4th payment and $50.00 from the 8th payment",
+    expect(termValue("min_payment_tiers", [[4, 7500], [8, 5050]])).toBe(
+      "$75 from the 4th payment and $50.50 from the 8th payment",
     );
+    // F10/F11 (ported from test_app_js_contracts): en-US money, never "US$", never a raw "[]".
+    expect(money(123456)).toBe("$1,234.56");
+    expect(money(123456)).not.toContain("US$");
+    expect(termValue("min_payment_tiers", [])).not.toBe("[]");
     expect([1, 2, 3, 11, 12, 22].map(ordinal)).toEqual(["1st", "2nd", "3rd", "11th", "12th", "22nd"]);
   });
   it("highlights quotes case-insensitively and merges overlaps", () => {

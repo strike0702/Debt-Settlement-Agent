@@ -28,7 +28,7 @@ import { ladderPoints } from "@/lib/callState";
 import { fieldLabel, isoDate, money, ms, pct, termValue } from "@/lib/format";
 import { waterfall } from "@/lib/latency";
 import type { Lens } from "@/lib/lens";
-import type { AuditEvent, BeliefTerm, ScheduleRow, TurnTraceEvent } from "@/types/events";
+import type { AuditEvent, BeliefTerm, ScheduleRow, TurnTraceEvent } from "@/types/protocol";
 
 const TOOLTIP_STYLE = {
   background: "var(--surface)",

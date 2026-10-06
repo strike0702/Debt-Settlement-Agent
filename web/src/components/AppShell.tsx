@@ -11,14 +11,13 @@ import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
-import type { ScenarioCard } from "@/fixtures";
 import { cn } from "@/lib/cn";
 import type { Lens } from "@/lib/lens";
 import type { Theme } from "@/hooks/useTheme";
-import type { Phase } from "@/types/events";
+import type { Phase, ScenarioMeta } from "@/types/protocol";
 
 export interface AppShellProps {
-  scenarios: ScenarioCard[];
+  scenarios: ScenarioMeta[];
   selected: string;
   onSelect: (id: string) => void;
   onWatch: () => void;
@@ -31,6 +30,8 @@ export interface AppShellProps {
   theme: Theme;
   onTheme: () => void;
   notice?: ReactNode;
+  /** Extra call controls next to "Watch a call" (start/end a live call, download). */
+  actions?: ReactNode;
   conversation: ReactNode;
   trace: ReactNode;
   state: ReactNode;
@@ -78,10 +79,13 @@ export function AppShell(p: AppShellProps) {
       <section aria-label="Scenarios" className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-base font-semibold">Pick a scenario</h2>
-          <Button variant="primary" onClick={p.onWatch} disabled={p.watchDisabled} className="ml-auto">
-            {p.playing ? <RotateCcw className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            {p.watchLabel}
-          </Button>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {p.actions}
+            <Button variant="primary" onClick={p.onWatch} disabled={p.watchDisabled}>
+              {p.playing ? <RotateCcw className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+              {p.watchLabel}
+            </Button>
+          </div>
         </div>
         <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 wide:mx-0 wide:grid wide:grid-cols-6 wide:overflow-visible wide:px-0">
           {p.scenarios.map((s) => (

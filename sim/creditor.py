@@ -540,8 +540,11 @@ class CreditorPolicy:
                 spoken = action.facts["readback_value"].value
             elif "readback_value" in action.text_slots:
                 spoken = action.text_slots["readback_value"]
-            # Enum / tier read-backs arrive as text slots (``str(value)``).
-            if isinstance(spoken, str) and not isinstance(true_v, str):
+            # Enum / tier read-backs arrive as text slots (``str(value)``);
+            # empty tiers are spoken as "no special payment tiers".
+            if isinstance(true_v, list) and not true_v and isinstance(spoken, str):
+                matches = spoken == "[]" or spoken.startswith("no ")
+            elif isinstance(spoken, str) and not isinstance(true_v, str):
                 matches = true_v is not None and spoken == str(true_v)
             else:
                 matches = spoken is not None and spoken == true_v

@@ -54,6 +54,7 @@ class Effect(BaseModel):
         "inc_commit_demand",
         "record_ask",
         "record_confirm",
+        "note_confirm_accepted",
         "inc_confirm_reject",
         "note_assumed_asked",
         "note_clarify",

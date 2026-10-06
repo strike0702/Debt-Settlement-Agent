@@ -7,6 +7,8 @@ Callers: ``app.agent.nlu`` and ``app.agent.nlg``. Does not call the LLM.
 
 from __future__ import annotations
 
+from datetime import date
+
 from app.domain.actions import Intent
 
 # Meanings only — never interpolate spoken values or digits here.
@@ -112,11 +114,18 @@ def nlu_messages(
     utterance: str,
     last_agent_line: str,
     pending_readback: str | None,
+    *,
+    ref: date | None = None,
 ) -> list[dict[str, str]]:
-    """Build chat messages for one NLU turn (JSON-only reply)."""
+    """Build chat messages for one NLU turn (JSON-only reply).
+
+    ``ref`` is the call's reference date so a yearless "May 15" can resolve.
+    """
     pending = pending_readback or "(none)"
+    today = f"Today's date: {ref.isoformat()}\n" if ref is not None else ""
     user = (
-        f"Agent last said: {last_agent_line or '(opening)'}\n"
+        today
+        + f"Agent last said: {last_agent_line or '(opening)'}\n"
         f"Pending read-back field: {pending}\n"
         f"Rep utterance: {utterance}\n"
         "Reply with JSON only."

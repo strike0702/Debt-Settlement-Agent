@@ -347,6 +347,8 @@ def apply_effects(session: CallSession, effects: list[Effect]) -> None:
             else:
                 session.neg.last_confirm_key = (int(data["ask_bp"]),)
             session.neg.confirmed_bp = int(data["ask_bp"])
+        elif kind == "note_confirm_accepted":
+            session.neg.accepted_confirm_key = tuple(data["key"])
         elif kind == "inc_confirm_reject":
             session.neg.confirm_rejects += 1
         elif kind == "note_assumed_asked":

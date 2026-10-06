@@ -1008,7 +1008,7 @@ async def analyze(
     if llm is None:
         raise ValueError("llm is required when nlu_mode is not oracle")
 
-    messages = nlu_messages(utterance, last_agent_line, pending_readback)
+    messages = nlu_messages(utterance, last_agent_line, pending_readback, ref=ref)
     analysis: TurnAnalysis | None = None
     last_err: str | None = None
 

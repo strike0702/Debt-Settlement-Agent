@@ -118,7 +118,8 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
   - Identical CONFIRM: `reject` → ASK each ASSUMED once then NO_DEAL; other → soft retry then `confirm_unacked`
   - Unresolved CONTRADICTED after 2 CLARIFY → `ESCALATE(contradiction_unresolved)`
   - Ceiling ladder (ask above ceiling / off grid): at most `max_counters` COUNTERs, the last one at the ceiling; no same-bp re-offer — any non-accept once the ceiling is on the table → `NO_DEAL(max_counters)`
-  - CONFIRM wrap only on `stance == "accept"` (not `readback_response`); contradiction/tentative before wrap
+  - CONFIRM wrap only on `stance == "accept"` (not `readback_response`); contradiction/tentative before wrap. Exception: a READ_BACK that preempts a CONFIRM accept keeps `Phase.CONFIRM` and emits `note_confirm_accepted` (→ `NegotiationState.accepted_confirm_key`); the readback "confirm" then wraps (fingerprint unchanged) or re-confirms `confirmed_bp` as `terms_revised`
+  - Empty tiers speak as "no special payment tiers" (READ_BACK `template_override`, CLARIFY slot), never `str([])`
   - `wants_to_end` → NO_DEAL when not accepting
   - `_confirm_key` fingerprints all CreditorRules fields; `next_counter` → `None` when no legal bp
 - `draft_agreement(*, creditor, bp, offer_total, rows, assumed_fields, audit=None, call_id=None) -> Agreement`
@@ -214,7 +215,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 
 ### `app.llm.prompts`
 - `PLACEHOLDER_MEANINGS: dict[str, str]`
-- `nlu_messages(utterance, last_agent_line, pending_readback) -> list[dict]`
+- `nlu_messages(utterance, last_agent_line, pending_readback, *, ref=None) -> list[dict]` — `ref` adds a `Today's date:` line (`analyze` passes its `ref`)
 - `nlg_messages(intent, placeholder_ids, last_rep_line) -> list[dict]`
 
 ### `app.store.audit`
@@ -723,3 +724,12 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - Open issues (measured, not fixed here): `wants_to_end` precision 0.5 ("thanks" mid-call); `firm` precision 0.6 (LLM claims); hostility recall 0.4 (insults outside the regex list); no date term returned for h06/f05/t05/t12 (the NLU prompt has no reference date); STT misspellings and homophones fail verification; t10/f01/d04 return no terms.
 - Observed, not fixed: none outside the touched files.
 - Tests: 456 passed offline (+1 skipped live); `ruff check .` clean.
+
+### Cleanup (2026-10-06) — empty-tiers read-back, re-ladder after accept, NLU date
+
+- Empty tiers: READ_BACK spoke "So I have [] for the payment tiers" (23/100 seed-7 calls). Now "So there are no special payment tiers. Is that right?"; CLARIFY uses the same slot text. `sim/creditor.py` READ_BACK matches that copy against empty true tiers.
+- Phase 12's "identical CONFIRM after tiers READ_BACK" no longer reproduced as identical. Since Phase 14 it was worse: the rep says "Agreed" at 48% in the same turn that reveals the late fields, the tiers READ_BACK took priority and set DISCOVERY, and the readback "yes" fell into the ladder (ask 69% > confirmed 48%) → COUNTER 58% + a second CONFIRM in 23/100 calls. Fix in `app/agent/policy.py` (`_decide_clarify`, `_decide_confirm`, `NegotiationState.accepted_confirm_key`), `app/domain/actions.py` (`note_confirm_accepted`), `app/agent/orchestrator.py` (effect handler).
+- NLU date: `nlu_messages(..., ref=)` adds `Today's date:`. Corpus h06/f05/t05/t12 rerun ad hoc (demo, Groq): 4/4 dates correct. `docs/eval/nlu_corpus.md` not regenerated (the prompt change misses the cache for every line).
+- Eval `eval_20261006_000830_s7` (oracle/template, n=100, seed 7): thresholds PASS. `surplus_captured` 0.689 (was 0.557 on `eval_20261005_235945_s7`), `turns_to_outcome` 5.04 (was 5.48); validity / deal / no-deal / escalation rates unchanged at 1; 0 lines with `[]`; 0 CONFIRM → READ_BACK → COUNTER.
+- Tests: `tests/unit/test_policy.py` (+5), `tests/unit/test_nlu_repairs.py` (+2), `tests/e2e/test_policy_invariants.py::test_regression_s0007_000_tiers_readback_after_accept`. 464 passed offline (+1 skipped live); `ruff check .` clean.
+- Still open: non-empty tiers still read back as `str(list)` (digits in a text slot); not seen in the sim.

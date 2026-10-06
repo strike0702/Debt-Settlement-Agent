@@ -128,6 +128,39 @@ def test_llm_flag_survives_disclaimer_veto() -> None:
     assert out.asks_client_private_info is True
 
 
+def test_nlu_prompt_carries_reference_date() -> None:
+    """Phase 15 corpus h06/f05/t05/t12: no year context → no first_payment_date."""
+    from app.llm.prompts import nlu_messages
+
+    user = nlu_messages("First payment by April 30.", "", None, ref=_REF)[-1]["content"]
+    assert "Today's date: 2026-04-01" in user
+
+
+async def test_analyze_passes_ref_to_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.agent import nlu as nlu_mod
+    from app.llm.client import FakeLLM
+
+    seen: dict[str, object] = {}
+    real = nlu_mod.nlu_messages
+
+    def spy(*args: object, **kwargs: object) -> list[dict[str, str]]:
+        seen.update(kwargs)
+        return real(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(nlu_mod, "nlu_messages", spy)
+    llm = FakeLLM()
+    llm.enqueue("nlu", '{"terms": [], "stance": "info"}')
+    await analyze(
+        "First payment by April 30.",
+        "",
+        None,
+        llm=llm,
+        settings=Settings(nlu_mode="llm", llm_profile="offline"),
+        ref=_REF,
+    )
+    assert seen.get("ref") == _REF
+
+
 async def test_oracle_overlay_uses_flag_or_regex() -> None:
     """Oracle disposition under live NLU: LLM-free OR with the regex too."""
     from app.llm.client import FakeLLM

@@ -70,6 +70,8 @@ class NegotiationState:
     last_confirm_key: tuple[Any, ...] | None = None
     # Bp we last proposed in CONFIRM_SCHEDULE (may differ from ask_bp after counters).
     confirmed_bp: int | None = None
+    # Confirm key the rep accepted while a READ_BACK preempted the wrap.
+    accepted_confirm_key: tuple[Any, ...] | None = None
     confirm_rejects: int = 0
     assumed_asked: set[str] = field(default_factory=set)
     clarify_counts: dict[str, int] = field(default_factory=dict)
@@ -307,6 +309,9 @@ def _fact_for_value(fact_id: str, field: str, value: Any) -> Fact:
     )
 
 
+_NO_TIERS_TEXT = "no special payment tiers"
+
+
 def _spoken_value(
     fact_id: str,
     field: str,
@@ -319,6 +324,8 @@ def _spoken_value(
     if value is not None and FIELDS_BY_NAME[field].kind in _NUMERIC_KINDS:
         facts[fact_id] = _fact_for_value(fact_id, field, value)
         required.add(fact_id)
+    elif FIELDS_BY_NAME[field].kind == "tiers" and value is not None and not value:
+        text_slots[fact_id] = _NO_TIERS_TEXT
     else:
         text_slots[fact_id] = str(value)
 
@@ -902,15 +909,32 @@ def _decide_clarify(t: _Turn) -> Action | None:
         facts = {}
         slots = {"field_label": FIELDS_BY_NAME[fname].label}
         required = set()
-        _spoken_value("readback_value", fname, belief.get(fname).value, facts, slots, required)
+        value = belief.get(fname).value
+        _spoken_value("readback_value", fname, value, facts, slots, required)
+        effects = t.effects + [Effect(kind="set_pending_readback", data={"field": fname})]
+        # A READ_BACK mid-CONFIRM keeps the phase, and an accept it preempted is
+        # remembered so the readback "yes" wraps instead of reopening the ladder.
+        neg, a = t.neg, t.analysis
+        in_confirm = neg.phase == Phase.CONFIRM
+        same_pct = a.settlement_ask_pct is None or (
+            ask_pct_to_bp(a.settlement_ask_pct) == neg.confirmed_bp
+        )
+        if in_confirm and a.stance == "accept" and same_pct and neg.last_confirm_key:
+            effects.append(
+                Effect(kind="note_confirm_accepted", data={"key": list(neg.last_confirm_key)})
+            )
+        empty_tiers = FIELDS_BY_NAME[fname].kind == "tiers" and value is not None and not value
         return Action(
             intent=Intent.READ_BACK,
             facts=facts,
             text_slots=slots,
             required=required,
-            effects=t.effects + [Effect(kind="set_pending_readback", data={"field": fname})],
-            next_phase=Phase.DISCOVERY,
+            effects=effects,
+            next_phase=Phase.CONFIRM if in_confirm else Phase.DISCOVERY,
             reason=fname,
+            template_override=(
+                f"So there are {_NO_TIERS_TEXT}. Is that right?" if empty_tiers else None
+            ),
         )
     return None
 
@@ -931,11 +955,37 @@ def _decide_confirm(t: _Turn) -> Action | None:
 
     Not a wrap: ``readback_response``, a restated different % (a correction),
     a yes to a pending term alt, or a fingerprint that changed since CONFIRM.
+    Exception: a confirmed READ_BACK after an accept it preempted
+    (``accepted_confirm_key``) wraps if the fingerprint is unchanged, else
+    re-confirms the accepted bp under the revised terms (never re-ladders).
     """
     a, neg = t.analysis, t.neg
-    if neg.phase != Phase.CONFIRM or a.stance != "accept" or t.accepted_term_alt:
+    if neg.phase != Phase.CONFIRM or neg.confirmed_bp is None or neg.last_confirm_key is None:
         return None
-    if neg.confirmed_bp is None or neg.last_confirm_key is None:
+    if (
+        a.readback_response == "confirm"
+        and neg.accepted_confirm_key == neg.last_confirm_key
+        and a.settlement_ask_pct is None
+        and a.stance not in ("reject", "counter", "offer")
+    ):
+        if _confirm_key(t.belief, neg.confirmed_bp) == neg.last_confirm_key:
+            return _propose_wrap(t)
+        afford = t.afford
+        if (
+            afford is not None
+            and afford.max_bp is not None
+            and neg.confirmed_bp <= afford.max_bp
+            and neg.confirmed_bp in afford.feasible_bps
+        ):
+            return _confirm_action(
+                ask_bp=neg.confirmed_bp,
+                belief=t.belief,
+                confirm_facts=t.confirm_facts,
+                effects=t.effects,
+                required=_confirm_required(t.confirm_facts),
+                reason="terms_revised",
+            )
+    if a.stance != "accept" or t.accepted_term_alt:
         return None
     if (
         a.settlement_ask_pct is not None

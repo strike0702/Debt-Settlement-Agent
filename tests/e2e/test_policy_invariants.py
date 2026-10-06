@@ -43,6 +43,22 @@ async def test_regression_s0007_009_no_fix_flexible_counter_loop(tmp_path: Path)
     assert r["final_intent"] == Intent.NO_DEAL_WRAP.value
 
 
+async def test_regression_s0007_000_tiers_readback_after_accept(tmp_path: Path) -> None:
+    """Seed-7 n=100: 'Agreed' at 48%, tiers READ_BACK, then a 58% COUNTER + re-CONFIRM."""
+    sc = next(s for s in generate(100, 7) if s.id == "s0007_000_deal_flexible")
+    r = await run_one_scenario(
+        sc,
+        settings=_SETTINGS,
+        llm=make_client(_SETTINGS),
+        sim_phrasing="template",
+        audit_dir=tmp_path,
+    )
+    assert r["intents"][-3:] == ["CONFIRM_SCHEDULE", "READ_BACK", "PROPOSE_WRAP"]
+    assert r["intents"].count("CONFIRM_SCHEDULE") == 1
+    assert r["agreed_bp"] == 4800
+    assert not any("[]" in line for line in r["agent_lines"])
+
+
 async def _run_call(sc: Scenario, audit_dir: Path) -> list[str]:
     """Drive one call and return invariant violations (empty = pass)."""
     session = CallSession(scenario=sc.call)

@@ -6,6 +6,7 @@ from datetime import date
 
 from app.adapter.engine_adapter import Affordability
 from app.agent import policy as policy_mod
+from app.agent.nlg import render_action
 from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
 from app.agent.policy import (
     Intent,
@@ -407,6 +408,119 @@ def test_readback_uses_field_label_not_raw_name() -> None:
     assert action.text_slots.get("field_label") == "initial payment date"
     assert "first_payment_date" not in action.text_slots.get("field_label", "")
     assert "field" not in action.text_slots
+
+
+def test_readback_empty_tiers_speaks_natural_copy() -> None:
+    b = _belief(max_payments=8, min_payment_cents=10000, payment_structure="even")
+    b.observe("min_payment_tiers", [], "no tiered minimums", 2, verified=False, hedged=False)
+    action = decide(
+        b,
+        _neg(turn_idx=2, ask_bp=4500),
+        TurnAnalysis(stance="info"),
+        _afford(10000),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.READ_BACK
+    text = " ".join(render_action(action, date(2026, 3, 1)))
+    assert "[]" not in text
+    assert "no special payment tiers" in text
+
+
+def _tentative_tiers_in_confirm() -> tuple[BeliefState, tuple]:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    b.observe("min_payment_tiers", [], "no tiered minimums", 4, verified=False, hedged=False)
+    return b, _key(b, 4800)
+
+
+def test_readback_during_confirm_keeps_phase_and_notes_accept() -> None:
+    """Accept of the CONFIRM preempted by a tiers READ_BACK is remembered."""
+    b, key = _tentative_tiers_in_confirm()
+    action = decide(
+        b,
+        _neg(
+            turn_idx=4,
+            ask_bp=6900,
+            counters_offered=[4800],
+            confirmed_bp=4800,
+            last_confirm_key=key,
+            phase=Phase.CONFIRM,
+        ),
+        TurnAnalysis(stance="accept"),
+        _afford(10000),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.READ_BACK
+    assert action.next_phase == Phase.CONFIRM
+    noted = [e for e in action.effects if e.kind == "note_confirm_accepted"]
+    assert noted and tuple(noted[0].data["key"]) == key
+
+
+def test_readback_yes_after_accepted_confirm_wraps() -> None:
+    """Seed-7 eval: readback yes after 'Agreed' re-countered 58% over an accepted 48%."""
+    b, key = _tentative_tiers_in_confirm()
+    b.confirm_readback("min_payment_tiers", True)
+    action = decide(
+        b,
+        _neg(
+            turn_idx=5,
+            ask_bp=6900,
+            counters_offered=[4800],
+            confirmed_bp=4800,
+            last_confirm_key=key,
+            accepted_confirm_key=key,
+            phase=Phase.CONFIRM,
+        ),
+        TurnAnalysis(stance="info", readback_response="confirm"),
+        _afford(10000),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.PROPOSE_WRAP
+
+
+def test_readback_yes_after_accept_with_revised_terms_reconfirms() -> None:
+    """Seed-7 s0007_012: late reveal changed max_segments, then 'Agreed' → re-confirm 48%."""
+    b, key = _tentative_tiers_in_confirm()
+    b.observe("max_segments", 4, "4", 4, verified=True, hedged=False)
+    b.confirm_readback("min_payment_tiers", True)
+    action = decide(
+        b,
+        _neg(
+            turn_idx=5,
+            ask_bp=6900,
+            counters_offered=[4800],
+            confirmed_bp=4800,
+            last_confirm_key=key,
+            accepted_confirm_key=key,
+            phase=Phase.CONFIRM,
+        ),
+        TurnAnalysis(stance="info", readback_response="confirm"),
+        _afford(10000),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.CONFIRM_SCHEDULE
+    assert action.reason == "terms_revised"
+    assert any(e.kind == "record_confirm" and e.data["ask_bp"] == 4800 for e in action.effects)
+
+
+def test_readback_deny_after_accepted_confirm_does_not_wrap() -> None:
+    b, key = _tentative_tiers_in_confirm()
+    b.confirm_readback("min_payment_tiers", False)
+    action = decide(
+        b,
+        _neg(
+            turn_idx=5,
+            ask_bp=6900,
+            counters_offered=[4800],
+            confirmed_bp=4800,
+            last_confirm_key=key,
+            accepted_confirm_key=key,
+            phase=Phase.CONFIRM,
+        ),
+        TurnAnalysis(stance="info", readback_response="deny"),
+        _afford(10000),
+        settings=_SETTINGS,
+    )
+    assert action.intent != Intent.PROPOSE_WRAP
 
 
 def test_rule9_affordable_ask_counters_at_anchor() -> None:

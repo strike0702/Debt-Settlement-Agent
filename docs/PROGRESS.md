@@ -28,6 +28,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 18 | LLM audit log + replay CLI (ROADMAP) | not done |
 | 19 | Results-first README (ROADMAP) | done |
 | 20 | Correctness and honesty fixes (REVIEW_PLAN) | done |
+| 24a | A/B harness, ReAct and LLM-only arms (REVIEW_PLAN) | done |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -166,14 +167,30 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `check_thresholds(summary, thresholds=None) -> list[str]` (empty ⇒ pass); RHS may name another summary key (`counters_spoken_max: "<=max_counters"`); missing key fails closed
 
 ### `eval.run_eval`
-- CLI: `python -m eval.run_eval --scenarios N --seed S [--resume RUN_ID] [--profile] [--nlu oracle|llm] [--nlg llm|template] [--sim-phrasing llm|template] [--no-oracle-overlay]`
+- CLI: `python -m eval.run_eval --scenarios N --seed S [--resume RUN_ID] [--profile] [--nlu oracle|llm] [--nlg llm|template] [--sim-phrasing llm|template] [--no-oracle-overlay] [--agent policy|react|llm_only]`
+  - `--agent` (Phase 24a, default `policy`): LLM arms keep `--profile` under `--nlu oracle` (only policy is forced `offline`)
   - `--nlu oracle`: forces profile `offline` (FakeLLM), no network/keys; requires `--nlg template --sim-phrasing template`; rejects `--no-oracle-overlay`
   - `--nlu llm` (default): live NLU, sim disposition overlay on unless `--no-oracle-overlay`
 - `_build_settings(*, profile, nlg, nlu="llm", base=None) -> Settings`
-- `run_one_scenario(scenario, *, settings, llm, sim_phrasing, audit_dir, max_turns=None, oracle_overlay=True) -> dict` — per-call keys add `counters_spoken`, `max_counters`, `identical_consecutive_agent_moves`, `turns_to_outcome`, `hit_max_turns`, `final_reason`
+- `run_one_scenario(scenario, *, settings, llm, sim_phrasing, audit_dir, max_turns=None, oracle_overlay=True, agent="policy") -> dict` — Phase 24a adds `agent`, `transcript` (`[{role, text}]`), `llm_calls_per_turn` (non-sim attempts per agent turn), `turn_latency_ms`; `run.json` adds `agent`, `arm_metrics`; per-call keys also add `counters_spoken`, `max_counters`, `identical_consecutive_agent_moves`, `turns_to_outcome`, `hit_max_turns`, `final_reason`
 - Leak scan = client/firm private amounts ∪ engine-private (`true_max_bp`, every logged affordability `max_bp`, true-rules rescue lump/increment); engine-private values that were spoken as a PUBLIC fact are exempt
 - Writes `eval/results/<run_id>/<scenario_id>.json` per finish; resume skips `status=ok`, retries `skipped_quota`
 - `run.json`: models, call_share, seed, git sha, settings, `nlu`, `oracle_overlay`; exit 1 on threshold fail
+
+### `eval.agents` (Phase 24a, eval-only; never imported by `app/`)
+- `AgentName = Literal["policy", "react", "llm_only"]`; `AGENT_NAMES`
+- `class AgentUnderTest(Protocol)` — `session: CallSession`; `async start() -> Utterance`; `async on_creditor_text(text, timings=None, *, oracle=None) -> Utterance`; `async on_sentence_done(ids) -> Agreement | None`
+- `class PolicyAgent(session, *, llm, settings, audit)` — wraps `Orchestrator(..., auto_ack=True)` unchanged; `.orchestrator`
+- `make_agent(name, session, *, llm, settings, audit) -> AgentUnderTest` — `react` / `llm_only` imported lazily; LLM arms raise `ValueError` when `llm is None`
+- `eval.agents.base`: `AGENT_ROLE = "nlu"`, `AGENT_MAX_TOKENS = 1200`, `OBSERVE_TOOLS`, `TERMINAL_TOOLS`, `MOVE_DOCS`, `NEGOTIATION_RULES`, `MoveError`, `Move(tool, args, text)`, `parse_json_object(raw) -> dict`, `coerce_bp(value) -> int`; `class LLMArmAgent` — `guarded: bool`, `decide() -> (Action, str)` (subclass), `build_action(move) -> Action`, `tool_get_rules()`, `async tool_evaluate_offer(args)`, `context_block() -> str`, `fallback_action(reason)`, `last_turn_llm_calls`, `afford`
+- `eval.agents.react_agent`: `MAX_STEPS = 4`, `SYSTEM_PROMPT`, `class ReactAgent(LLMArmAgent)` (guarded)
+- `eval.agents.llm_only_agent`: `SYSTEM_PROMPT`, `class LLMOnlyAgent(LLMArmAgent)` (unguarded, one call, no retry)
+- `eval.agents.arm_metrics.arm_metrics(results) -> dict` — `turns`, `llm_calls_per_turn_{mean,p95,max}`, `turn_latency_ms_{p50,p95}`
+
+### `eval.judge_naturalness` (Phase 24a; not a gate)
+- CLI `python -m eval.judge_naturalness RUN_A RUN_B [--profile eval] [--limit N] [--seed 0] [--human-pairs 20] [--out DIR]`
+- `paired_results(run_a, run_b)`, `async judge_pair(llm, text_a, text_b) -> {a_first, b_first, verdict}`, `summarize(verdicts) -> dict` (Wilson CI over decisive pairs), `write_human_pairs(out_dir, pairs, *, n, seed, label_a, label_b)`, `async run_judge(run_a, run_b, *, llm, out_dir, limit=None, seed=0, human_pairs=20) -> dict`
+- Judge calls use role `sim`; a win needs both orders to agree, else tie
 
 ### `app.agent.nlg`
 - `SAFE_FALLBACK: str`; `TEMPLATES: dict[Intent, str]`
@@ -803,3 +820,25 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - Open issues: 6 s NLU timeout is below the observed Gemini NLU p95 (~7 s, eval profile), so live eval runs may fail over more often; production NLU still uses `chat_text`, so JSON mode is never sent for NLU (F16 last bullet, not in this phase's task list); PROGRESS "Open issues" list and leftover `.gitkeep` files not refreshed (P25).
 - Tests: 513 passed / 1 skipped under `-m "not slow"` (19.8 s); full `pytest -q` 516 passed / 1 skipped (88.7 s, 100 invariant seeds); `ruff check .` clean.
 
+
+### Phase 24a (2026-10-07) — A/B harness, ReAct and LLM-only arms (REVIEW_PLAN §2(c))
+
+- Files (new): `eval/agents/{__init__,protocol,base,react_agent,llm_only_agent,arm_metrics}.py`, `eval/agents/README.md` (handoff), `eval/judge_naturalness.py`, `tests/unit/{test_eval_agents,test_judge_naturalness}.py`, `tests/data/policy_arm_golden.json` (pre-24a runner output for seed-7 slots 1, 2, 35, 68, 75). Edited: `eval/run_eval.py` (`--agent`, per-call `agent` / `transcript` / `llm_calls_per_turn` / `turn_latency_ms`, `run.json["agent","arm_metrics"]`).
+- Approved, eval-only rule break: `react` / `llm_only` choose moves and write numbers, and they see client financials and `max_bp`. Every module docstring says so. Nothing in `app/` imports `eval.agents`.
+- Interfaces: see `eval.agents`, `eval.judge_naturalness` and `eval.run_eval` above.
+- Oracle CI eval `eval_20261006_204146_s7` (`--nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7`, default `--agent policy`): thresholds PASS. The metrics table is byte-identical to the pre-change baseline `eval_20261006_203103_s7`, `summary.json` minus latency is equal, and all 100 per-scenario JSONs match on every pre-24a key. Golden test: `test_policy_agent_output_identical_to_pre_24a_runner`.
+- Smoke on the eval profile (`--scenarios 2 --seed 7 --profile eval --nlg template --sim-phrasing template`, live NLU):
+  - policy `eval_20261006_204446_s7`: 2/2 ok; 1.58 LLM calls/turn; p50 turn 14.9 s.
+  - react `eval_20261006_204654_s7`: 1/2 ok (deal, valid). s001 was `skipped_quota` after every `nlu` route was exhausted (6 s timeouts plus 429s). 2.2 calls/turn, max 4; p50 30 s; 1 unverified figure.
+  - llm_only `eval_20261006_205053_s7`: 2/2 ok (deal valid; no-deal on s001). 3.25 calls/turn: 1 decision call plus failed or timed-out NLU attempts. p50 30 s; 1 unverified figure.
+  - Threshold misses at n=2 are empty denominators or the measured LLM-arm behaviour, so they do not indicate harness bugs.
+- Deviations:
+  - Agent role: calls route through role `nlu`. Adding `agent` needs `app/llm/client.py` (`Role`) and `app/config.py` (timeout) changes, which were out of scope.
+  - JSON tool-call protocol, because the client has no native function calling.
+  - Tools added beyond the plan's list so that every Action intent the sim needs is reachable: `ask`, `ask_settlement`, `read_back`, `clarify`, `propose_wrap`.
+  - `say(text)` maps to `ASK_SETTLEMENT` (`reason="say"`), because the sim reacts to intents, not text.
+  - Both LLM arms share the NLU front end. LLM-only is therefore "1 decision call + NLU", not literally 1 call when NLU is live.
+  - A failed LLM-arm wrap stays in WRAP with no agreement and is scored invalid. The orchestrator moves to END instead.
+  - The opening line is the policy's disclosed template for every arm.
+- Open issues: agent steps run under the 6 s NLU timeout and share NLU quota, so live A/B runs skip and fail over often. `coerce_bp` reads values ≤ 100 as percent. Rate the 20 human pairs once real A/B runs exist (24b).
+- Tests: `pytest -q` 534 passed / 1 skipped (incl. 100 invariant seeds); `ruff check .` clean.

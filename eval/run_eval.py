@@ -2,7 +2,8 @@
 
 CLI: ``python -m eval.run_eval --scenarios 12 --seed 7 [--resume RUN_ID]
 [--profile eval] [--nlu oracle|llm] [--nlg llm|template]
-[--sim-phrasing llm|template] [--no-oracle-overlay]``.
+[--sim-phrasing llm|template] [--no-oracle-overlay]
+[--agent policy|react|llm_only]``.
 
 Two layers:
 - ``--nlu oracle``: offline policy eval. Sim ground-truth ``TurnAnalysis``
@@ -10,6 +11,14 @@ Two layers:
   requires template NLG and template sim phrasing.
 - ``--nlu llm`` (default): live NLU. By default sim disposition flags are
   overlaid on the LLM result; ``--no-oracle-overlay`` turns that off.
+
+``--agent`` picks the A/B arm (``eval.agents``): ``policy`` (default; the
+production orchestrator, so CI output is unchanged), ``react`` or ``llm_only``
+(eval-only LLM arms). The LLM arms keep ``--profile`` even under ``--nlu
+oracle`` (their moves need a real LLM). Every arm gets the same leak scan,
+validator and metrics; per-call results add ``agent``, ``transcript``,
+``llm_calls_per_turn`` (non-sim LLM calls per agent turn) and
+``turn_latency_ms``, summarised in ``run.json["arm_metrics"]``.
 
 Writes ``eval/results/<run_id>/<scenario_id>.json`` as each finishes; resume
 skips completed ``status=ok`` files and retries ``skipped_quota``. ``run.json``
@@ -34,7 +43,6 @@ from app.adapter.engine_adapter import evaluate
 from app.adapter.validator import validate
 from app.agent.guards import rendered_guard
 from app.agent.numbers import extract_tokens
-from app.agent.orchestrator import Orchestrator
 from app.agent.session import CallSession
 from app.config import Settings, get_settings
 from app.domain.actions import Intent, Phase
@@ -43,6 +51,8 @@ from app.domain.facts import Fact
 from app.llm.call_audit import audit_llm_calls, llm_call_scope
 from app.llm.client import LLMUnavailable, make_client
 from app.store.audit import AuditLog
+from eval.agents import AGENT_NAMES, make_agent
+from eval.agents.arm_metrics import arm_metrics
 from eval.metrics import (
     aggregate,
     check_thresholds,
@@ -283,8 +293,9 @@ async def run_one_scenario(
     audit_dir: Path,
     max_turns: int | None = None,
     oracle_overlay: bool = True,
+    agent: str = "policy",
 ) -> dict[str, Any]:
-    """Run one full text call; return a serializable result dict.
+    """Run one full text call with arm ``agent``; return a serializable result dict.
 
     The sim's ground-truth ``TurnAnalysis`` is always passed under
     ``nlu_mode=oracle`` (it *is* the NLU); under live NLU it is passed only
@@ -295,18 +306,20 @@ async def run_one_scenario(
     audit_path = audit_dir / f"audit_{scenario.id}.db"
     audit = AuditLog(audit_path)
     session = CallSession(scenario=scenario.call)
-    orch = Orchestrator(
-        session,
-        llm=llm,
-        settings=settings,
-        audit=audit,
-        auto_ack=True,
-    )
+    orch = make_agent(agent, session, llm=llm, settings=settings, audit=audit)
     creditor = CreditorPolicy(scenario, phrasing=sim_phrasing, llm=llm)
+    # Agent-side LLM attempts (NLU, NLG, agent steps; not the sim) this turn.
+    turn_calls = [0]
+
+    def _count_call(meta: dict[str, Any]) -> Any:
+        if meta.get("role") != "sim":
+            turn_calls[0] += 1
+        return prior_hook(meta) if prior_hook is not None else None
+
     # Audit this scenario's LLM calls (sim included) into its own db; restore after.
     prior_hook = getattr(llm, "on_call", None)
     if llm is not None:
-        llm.on_call = audit_llm_calls(audit, then=prior_hook)
+        llm.on_call = audit_llm_calls(audit, then=_count_call)
     agent_lines: list[str] = []
     public_pairs: set[tuple[str, int | date]] = set()
     timings: list[dict[str, float]] = []
@@ -316,10 +329,17 @@ async def run_one_scenario(
     # (intent, spoken sentences) per agent turn, for identical-move detection.
     moves: list[tuple[str, tuple[str, ...]]] = []
     creditor_turns = 0
+    transcript: list[dict[str, str]] = []
+    llm_calls_per_turn: list[int] = []
+    turn_latency_ms: list[float | None] = []
 
     def _record(utt: Any) -> None:
         sentences = tuple(t for _, t in utt.sentences)
         agent_lines.extend(sentences)
+        transcript.extend({"role": "agent", "text": t} for t in sentences)
+        llm_calls_per_turn.append(turn_calls[0])
+        turn_calls[0] = 0
+        turn_latency_ms.append((utt.timings or {}).get("server_total_ms"))
         for fact in utt.action.facts.values():
             if fact.visibility == "PUBLIC" and isinstance(fact.value, (int, date)):
                 public_pairs.add((fact.kind, fact.value))
@@ -343,6 +363,8 @@ async def run_one_scenario(
                 action, agent_text=agent_lines[-1] if agent_lines else ""
             )
             creditor_turns += 1
+            transcript.append({"role": "creditor", "text": reply.text})
+            turn_calls[0] = 0
             utt = await orch.on_creditor_text(
                 reply.text, oracle=reply.analysis if pass_oracle else None
             )
@@ -463,6 +485,10 @@ async def run_one_scenario(
         "turns_to_outcome": creditor_turns,
         "hit_max_turns": hit_max_turns,
         "final_reason": action.reason,
+        "agent": agent,
+        "transcript": transcript,
+        "llm_calls_per_turn": llm_calls_per_turn,
+        "turn_latency_ms": turn_latency_ms,
         **belief,
     }
 
@@ -497,8 +523,10 @@ async def _async_main(args: argparse.Namespace) -> int:
     nlg: NlgMode = args.nlg
     sim_phrasing: PhrasingMode = args.sim_phrasing
     oracle_overlay: bool = args.oracle_overlay
-    # Oracle NLU is the offline policy layer: FakeLLM, no network.
-    profile = "offline" if nlu == "oracle" else args.profile
+    agent: str = args.agent
+    # Oracle NLU is the offline policy layer: FakeLLM, no network. The LLM arms
+    # still need a real model for their moves, so they keep --profile.
+    profile = "offline" if nlu == "oracle" and agent == "policy" else args.profile
 
     run_id = args.resume or _new_run_id(seed)
     run_dir = RESULTS_ROOT / run_id
@@ -521,7 +549,7 @@ async def _async_main(args: argparse.Namespace) -> int:
 
     print(
         f"run_id={run_id} scenarios={len(scenarios)} profile={profile} "
-        f"nlu={nlu} nlg={nlg} sim={sim_phrasing} oracle_overlay={oracle_overlay}"
+        f"nlu={nlu} nlg={nlg} sim={sim_phrasing} oracle_overlay={oracle_overlay} agent={agent}"
     )
 
     for i, sc in enumerate(scenarios, 1):
@@ -537,6 +565,7 @@ async def _async_main(args: argparse.Namespace) -> int:
             sim_phrasing=sim_phrasing,
             audit_dir=audit_dir,
             oracle_overlay=oracle_overlay,
+            agent=agent,
         )
         out_path.write_text(json.dumps(result, indent=2, default=str) + "\n", encoding="utf-8")
         print(f"         → {result.get('status')} phase={result.get('phase')}", flush=True)
@@ -559,6 +588,8 @@ async def _async_main(args: argparse.Namespace) -> int:
         "nlg": nlg,
         "sim_phrasing": sim_phrasing,
         "oracle_overlay": oracle_overlay,
+        "agent": agent,
+        "arm_metrics": arm_metrics(results),
         "settings": {
             "llm_profile": settings.llm_profile,
             "nlg_mode": settings.nlg_mode,
@@ -578,6 +609,7 @@ async def _async_main(args: argparse.Namespace) -> int:
         json.dumps(run_meta, indent=2, default=str) + "\n", encoding="utf-8"
     )
     write_summaries(run_dir, summary, run_meta=run_meta)
+    print(f"arm_metrics ({agent}): {json.dumps(run_meta['arm_metrics'])}")
 
     thresholds = load_thresholds()
     failures = check_thresholds(summary, thresholds)
@@ -628,6 +660,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_false",
         dest="oracle_overlay",
         help="live NLU only: do not overlay sim disposition flags on the LLM result",
+    )
+    p.add_argument(
+        "--agent",
+        choices=AGENT_NAMES,
+        default="policy",
+        help="A/B arm: policy (production, default) | react | llm_only (eval-only LLM arms)",
     )
     args = p.parse_args(argv)
     if args.nlu == "oracle":

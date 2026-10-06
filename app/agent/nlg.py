@@ -9,6 +9,12 @@ facts and run ``rendered_guard``. LLM never receives PRIVATE values or digits �
 only placeholder meanings from ``app.llm.prompts``. An optional ``trace_out``
 dict receives how the line was made (mode, template, guard verdicts, fallback)
 for the orchestrator's decision trace; it never changes what is spoken.
+
+Phase 24b (H3): ``render_acts`` speaks an action's optional ``ack`` and
+``answer`` acts as short leading sentences, each through the same two guards.
+A guard-failed act is dropped (audited), never replaced by ``SAFE_FALLBACK``,
+so the primary move is spoken unchanged. ``speak_action`` passes the last few
+public turns (``recent_turns``) to the LLM prompt instead of one rep line.
 """
 
 from __future__ import annotations
@@ -16,7 +22,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, Protocol
 
-from app.agent.guards import rendered_guard, template_guard
+from app.agent.guards import GuardResult, rendered_guard, template_guard
 from app.agent.nlg_bank import load_bank, pick_template
 from app.config import Settings, get_settings
 from app.domain.actions import Action, Intent
@@ -25,6 +31,9 @@ from app.llm.prompts import nlg_messages
 from app.store.audit import AuditLog
 
 SAFE_FALLBACK = "Let me check that figure and come back to it."
+# gpt-oss reasoning tokens share the completion budget; at 400 the template was
+# often empty (carry-over 21.7). The nlg routes also send reasoning_effort: low.
+NLG_MAX_TOKENS = 800
 
 # These intents' slots are already full sentences (``ask_text``, ``no_deal_reason``,
 # ``escalate_reason``). LLM rewrites wrap them in another sentence, producing
@@ -39,6 +48,7 @@ TEMPLATE_ONLY_INTENTS: frozenset[Intent] = frozenset(
         Intent.CLOSE,
         Intent.NO_DEAL_WRAP,
         Intent.ESCALATE,
+        Intent.ANSWER,
     }
 )
 
@@ -95,7 +105,37 @@ TEMPLATES: dict[Intent, str] = {
     Intent.ESCALATE: (
         "I need to involve someone from our side. {escalate_reason}"
     ),
+    # Only spoken as an attached act (``render_acts``); the slot is a talking point.
+    Intent.ANSWER: "{answer_text}",
 }
+
+
+# Acknowledgement templates keyed by the sorted ``ack_*`` ids present.
+ACK_TEMPLATES: dict[tuple[str, ...], str] = {
+    ("ack_max_payments",): "Got it, up to {ack_max_payments} payments.",
+    ("ack_min_payment",): "Got it, a {ack_min_payment} minimum payment.",
+    ("ack_first_payment_date",): "Got it, starting {ack_first_payment_date}.",
+    ("ack_max_payments", "ack_min_payment"): (
+        "Got it, {ack_max_payments} payments at a {ack_min_payment} minimum."
+    ),
+    ("ack_first_payment_date", "ack_max_payments"): (
+        "Got it, {ack_max_payments} payments starting {ack_first_payment_date}."
+    ),
+    ("ack_first_payment_date", "ack_min_payment"): (
+        "Got it, a {ack_min_payment} minimum starting {ack_first_payment_date}."
+    ),
+    ("ack_first_payment_date", "ack_max_payments", "ack_min_payment"): (
+        "Got it, {ack_max_payments} payments at a {ack_min_payment} minimum, "
+        "starting {ack_first_payment_date}."
+    ),
+}
+ANSWER_TEMPLATE = TEMPLATES[Intent.ANSWER]
+ACK_BANK_INTENT = "ACK"
+
+
+def answer_bank_intent(topic: str) -> str:
+    """Bank intent key for one question topic's talking-point variants."""
+    return f"ANSWER:{topic}"
 
 
 class _TextLLM(Protocol):
@@ -253,6 +293,83 @@ def render_action(
     )
 
 
+def render_acts(
+    action: Action,
+    ref_date: date,
+    *,
+    nlg_mode: str = "template",
+    bank_path: str | None = None,
+    creditor_numbers: set[tuple[str, int | date]] | None = None,
+    private_blocklist: set[tuple[str, int | date]] | None = None,
+    audit: AuditLog | None = None,
+    call_id: str | None = None,
+    blocked_out: list[dict[str, Any]] | None = None,
+    turn: int = 0,
+) -> list[str]:
+    """Sentences for ``action.ack`` then ``action.answer`` (empty when neither is set).
+
+    Bank / llm modes take a guard-checked bank variant when one exists (no LLM
+    call either way); otherwise ``ACK_TEMPLATES`` / the talking point verbatim.
+    Each act runs ``template_guard`` + ``rendered_guard``; a failing act is
+    dropped and audited as ``act_dropped``.
+    """
+    use_bank = nlg_mode in ("bank", "llm")
+    bank = (load_bank(bank_path) if bank_path else load_bank()) if use_bank else {}
+    acts: list[tuple[str, Action, str]] = []
+    if action.ack:
+        ids = tuple(sorted(action.ack))
+        sub = Action(
+            intent=action.intent,
+            facts=dict(action.ack),
+            required=set(ids),
+            next_phase=action.next_phase,
+        )
+        template = (
+            pick_template(sub, call_id=call_id, turn=turn, bank=bank, intent_key=ACK_BANK_INTENT)
+            if use_bank
+            else None
+        ) or ACK_TEMPLATES.get(ids)
+        if template is not None:
+            acts.append(("ack", sub, template))
+    if action.answer is not None:
+        bare = Action(intent=Intent.ANSWER, next_phase=action.next_phase)
+        picked = (
+            pick_template(
+                bare,
+                call_id=call_id,
+                turn=turn,
+                bank=bank,
+                intent_key=answer_bank_intent(action.answer.topic),
+            )
+            if use_bank
+            else None
+        )
+        if picked is not None:
+            acts.append(("answer", bare, picked))
+        else:
+            sub = bare.model_copy(update={"text_slots": {"answer_text": action.answer.text}})
+            acts.append(("answer", sub, ANSWER_TEMPLATE))
+
+    out: list[str] = []
+    for kind, sub, template in acts:
+        spoken = _render_filled(
+            template,
+            sub,
+            ref_date,
+            creditor_numbers=creditor_numbers,
+            private_blocklist=private_blocklist,
+            audit=audit,
+            call_id=call_id,
+            blocked_out=blocked_out,
+        )
+        if spoken == [SAFE_FALLBACK]:
+            if audit is not None and call_id is not None:
+                audit.append(call_id, "nlg", "act_dropped", {"act": kind})
+            continue
+        out.extend(spoken)
+    return out
+
+
 async def speak_action(
     action: Action,
     ref_date: date,
@@ -267,6 +384,7 @@ async def speak_action(
     blocked_out: list[dict[str, Any]] | None = None,
     turn: int = 0,
     trace_out: dict[str, Any] | None = None,
+    recent_turns: list[tuple[str, str]] | None = None,
 ) -> list[str]:
     """Bank or LLM template → template_guard → fill → rendered_guard.
 
@@ -275,6 +393,9 @@ async def speak_action(
     guard-rejected template after one retry, falls back to ``TEMPLATES``.
     ``LLMUnavailable`` propagates (the orchestrator falls back and audits it).
     ``TEMPLATE_ONLY_INTENTS`` and ``template_override`` always win.
+    ``recent_turns`` (``(role, text)``, oldest first, public lines only) is the
+    LLM's conversation context; without it, ``last_rep_line`` alone is sent.
+    An empty LLM template (reasoning used the whole budget) counts as rejected.
     """
     cfg = settings or get_settings()
     allowed = _allowed_ids(action)
@@ -297,7 +418,9 @@ async def speak_action(
             fallback_reason = "bank_miss"
     elif use_llm and cfg.nlg_mode == "llm" and llm is not None:
         placeholder_ids = sorted(allowed)
-        messages = nlg_messages(action.intent, placeholder_ids, last_rep_line)
+        messages = nlg_messages(
+            action.intent, placeholder_ids, last_rep_line, recent_turns=recent_turns
+        )
         candidate: str | None = None
         for attempt in range(2):
             try:
@@ -314,7 +437,7 @@ async def speak_action(
                             ),
                         },
                     ]
-                text = (await llm.chat_text("nlg", msgs, 400)).strip()
+                text = (await llm.chat_text("nlg", msgs, NLG_MAX_TOKENS)).strip()
 
                 # Strip accidental fences
                 if text.startswith("```"):
@@ -322,7 +445,13 @@ async def speak_action(
                     text = "\n".join(
                         ln for ln in lines if not ln.strip().startswith("```")
                     ).strip()
-                tg = template_guard(text, allowed, required)
+                # An empty template passes template_guard when nothing is required
+                # and would then speak SAFE_FALLBACK; treat it as a rejection.
+                tg = (
+                    template_guard(text, allowed, required)
+                    if text
+                    else GuardResult(ok=False, reason="empty")
+                )
                 if tg.ok:
                     candidate = text
                     break
@@ -342,7 +471,7 @@ async def speak_action(
                 # Not swallowed: the orchestrator falls back to TEMPLATES and audits
                 # ``llm_unavailable``. Any other exception is a bug and propagates.
                 raise
-        if candidate is not None:
+        if candidate:
             tg = template_guard(candidate, allowed, required)
             if tg.ok:
                 template = candidate

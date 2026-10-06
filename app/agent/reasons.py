@@ -59,6 +59,11 @@ REASON_TEXT: dict[str, str] = {
         "Counter at {counter_pct} ({offer_total}): the next step of the concession ladder, "
         "which anchors below the ask and never goes past what the client can afford."
     ),
+    # Display variant (not a reason code): the engine returned no offer total.
+    "counter_no_total": (
+        "Counter at {counter_pct}: the next step of the concession ladder, "
+        "which anchors below the ask and never goes past what the client can afford."
+    ),
     "confirm": (
         "Confirm at {settlement_pct}: the engine finds this schedule feasible for the client, "
         "so the agent reads the terms back for a yes."
@@ -192,6 +197,8 @@ class _Fill(string.Formatter):
 def reason_text(action: Action, ref: date) -> str:
     """One plain-English sentence for ``action.reason``, filled from PUBLIC facts only."""
     key = reason_key(action.intent, action.reason)
+    if key == "counter" and "offer_total" not in action.facts:
+        key = "counter_no_total"
     template = REASON_TEXT.get(key)
     if template is None:
         return _GENERIC.format(intent=action.intent.value.replace("_", " ").lower())

@@ -62,10 +62,11 @@ from app.llm.call_audit import llm_call_scope
 from app.llm.client import strip_json_fences
 from app.store.audit import AuditLog
 
-# Phase 24a routes agent calls through the ``nlu`` role: a dedicated ``agent``
-# role needs ``app/llm/client.py`` (Role literal) and ``app/config.py`` (timeout)
-# edits, which are out of scope here. Recorded for 24b.
-AGENT_ROLE = "nlu"
+# Dedicated client role (Phase 24b): its own eval route and
+# ``Settings.llm_timeout_agent_s``, so agent steps neither run under the 6 s NLU
+# timeout nor share the NLU route's quota. Profiles without an ``agent`` route
+# fall back to ``nlu``.
+AGENT_ROLE = "agent"
 # gpt-oss reasoning tokens share the completion budget (same reason as NLU).
 AGENT_MAX_TOKENS = 1200
 
@@ -111,16 +112,19 @@ _FALLBACK_TEXT: dict[Intent, str] = {
 }
 SAY_FALLBACK = "Could you tell me more about what you can accept?"
 
-# Tool reference shared by both arms' prompts. bp = basis points (4500 = 45%).
+# Tool reference shared by both arms' prompts. A bp argument is asked for as a
+# "N%" string (carry-over 24a.4): ``coerce_bp`` still reads a bare number ≤ 100 as
+# percent, so the explicit form is the only way to say 1% unambiguously.
 MOVE_DOCS = """\
-Moves (each one is what you SAY this turn; exactly one per turn):
+Moves (each one is what you SAY this turn; exactly one per turn).
+Every bp argument is a percent string such as "45%" (not a bare number).
 - ask(field): ask the creditor for one rule. field is one of max_payments,
   min_payment_cents, payment_structure, first_payment_date, max_segments,
   max_token_pays, min_payment_tiers.
 - ask_settlement(): ask what settlement percentage they want.
 - read_back(field): read back a term you are unsure of (TENTATIVE) to confirm it.
 - clarify(field): ask which of two conflicting values (CONTRADICTED) is right.
-- propose_counter(bp): counter-offer a settlement percentage (integer basis points).
+- propose_counter(bp): counter-offer a settlement percentage, e.g. "45%".
 - propose_terms(field, value): ask for a non-price change when their ask is
   unaffordable. field is first_payment_date (value "YYYY-MM-DD"),
   min_payment_cents (integer cents) or max_payments (integer).
@@ -207,19 +211,25 @@ def parse_json_object(raw: str) -> dict[str, Any]:
 
 
 def coerce_bp(value: Any) -> int:
-    """Basis points from an LLM arg: ``4500``, ``"45%"``, or ``45`` (percent, ≤100)."""
+    """Basis points from an LLM arg: ``"45%"`` (the prompted form), ``4500``, or ``45``.
+
+    A bare number ≤ 100 is read as percent (a common LLM unit slip), so 1% must
+    be written ``"1%"``; the prompts ask for the ``"N%"`` form for that reason.
+    """
     if isinstance(value, bool) or value is None:
         raise MoveError(f"bp must be a number, got {value!r}")
+    explicit_pct = isinstance(value, str) and value.strip().endswith("%")
     try:
         if isinstance(value, str):
             s = value.strip()
-            bp = parse_pct(s) if s.endswith("%") else int(float(s))
+            bp = parse_pct(s) if explicit_pct else int(float(s))
         else:
             bp = int(value)
     except (ValueError, ArithmeticError) as e:
         raise MoveError(f"bad bp {value!r}") from e
-    # Small values are almost always a percent, not a basis-point figure.
-    if 0 < bp <= 100:
+    # A small bare number is almost always a percent, not a basis-point figure.
+    # Never re-scale an explicit "N%" (that turned "1%" into 100%).
+    if not explicit_pct and 0 < bp <= 100:
         bp *= 100
     if not 1 <= bp <= 10000:
         raise MoveError(f"bp out of range: {value!r}")

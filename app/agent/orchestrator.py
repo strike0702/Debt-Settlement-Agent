@@ -12,8 +12,10 @@ Every ``Utterance`` carries a ``TurnTrace`` (``app.schemas.events``) assembled
 from what the turn already computed — NLU terms and drops, belief changes,
 affordability, the decision with its ``reasons`` sentence, NLG template and
 guard verdicts, timings — never by re-reading the audit log.
-Does not own policy rules or LLM prompts — those live in ``policy`` / ``nlu`` /
-``nlg``.
+With ``Settings.nlg_h3`` (Phase 24b) the decided move gets optional ack /
+answer acts (``app.agent.acts``) spoken before it, and LLM NLG sees the last
+three public turns. Does not own policy rules or LLM prompts — those live in
+``policy`` / ``acts`` / ``nlu`` / ``nlg``.
 """
 
 from __future__ import annotations
@@ -38,7 +40,9 @@ from app.adapter.engine_adapter import (
     evaluate,
 )
 from app.adapter.validator import validate
-from app.agent.nlg import SAFE_FALLBACK, render_action, speak_action
+from app.agent.acts import attach_acts
+from app.agent.guards import _cross_match
+from app.agent.nlg import SAFE_FALLBACK, render_action, render_acts, speak_action
 from app.agent.nlu import VerifiedAnalysis, analyze, try_resolve_cents_clarify
 from app.agent.nlu_types import TurnAnalysis
 from app.agent.numbers import extract_tokens
@@ -66,6 +70,7 @@ from app.domain.facts import Fact
 from app.domain.scenario import CallScenario
 from app.llm.call_audit import llm_call_scope
 from app.llm.client import LLMUnavailable, QueueWait, queue_wait_scope
+from app.llm.prompts import NLG_CONTEXT_TURNS
 from app.schemas.events import (
     Affordability as TraceAffordability,
 )
@@ -771,17 +776,28 @@ class Orchestrator:
                 accepted_term_alt=accepted_term_alt,
             )
             action = await self._enrich_action(action)
+            if self.settings.nlg_h3:
+                # Presentation only: the move, its facts and effects are unchanged.
+                action = attach_acts(
+                    action,
+                    verified,
+                    belief_changes,
+                    creditor_numbers=session.creditor_numbers,
+                    private_blocklist=session.private_blocklist,
+                )
             timings["policy_ms"] = _ms_since(t_pol)
-            self._audit(
-                "policy",
-                "decide",
-                {
-                    "intent": action.intent.value,
-                    "reason": action.reason,
-                    "next_phase": action.next_phase.value,
-                    "policy_ms": timings["policy_ms"],
-                },
-            )
+            decide_payload: dict[str, Any] = {
+                "intent": action.intent.value,
+                "reason": action.reason,
+                "next_phase": action.next_phase.value,
+                "policy_ms": timings["policy_ms"],
+            }
+            if action.ack or action.answer is not None:
+                decide_payload["acts"] = {
+                    "ack": sorted(action.ack),
+                    "answer": action.answer.topic if action.answer else None,
+                }
+            self._audit("policy", "decide", decide_payload)
 
             t_nlg = time.perf_counter()
             sentences = await self._speak(action, last_rep_line=working)
@@ -1055,7 +1071,52 @@ class Orchestrator:
             result.agreement = agreement
         return result
 
+    def _recent_public_turns(self) -> list[tuple[str, str]]:
+        """Last ``NLG_CONTEXT_TURNS`` turns as ``(role, text)``, public lines only.
+
+        Unspoken agent lines (barge-in) are skipped, and any line carrying a
+        figure on the private blocklist is dropped, so the NLG prompt never sees
+        a PRIVATE value even by coincidence.
+        """
+        session = self.session
+        turns: list[tuple[str, list[str]]] = []
+        for t in session.history:
+            if t.role == "agent" and not t.spoken:
+                continue
+            if any(
+                _cross_match(tok.kind, tok.value, session.private_blocklist)
+                for tok in extract_tokens(t.text, ref=self._ref)
+            ):
+                continue
+            if turns and turns[-1][0] == t.role:
+                turns[-1][1].append(t.text)
+            else:
+                turns.append((t.role, [t.text]))
+        return [(role, " ".join(lines)) for role, lines in turns[-NLG_CONTEXT_TURNS:]]
+
     async def _speak(self, action: Action, *, last_rep_line: str) -> list[str]:
+        move = await self._speak_move(action, last_rep_line=last_rep_line)
+        if not (action.ack or action.answer):
+            return move
+        return self._speak_acts(action) + move
+
+    def _speak_acts(self, action: Action) -> list[str]:
+        """H3 ack / answer sentences (no LLM call); blocks append to ``last_blocked``."""
+        session = self.session
+        return render_acts(
+            action,
+            self._ref,
+            nlg_mode=self.settings.nlg_mode,
+            bank_path=self.settings.nlg_bank_path,
+            creditor_numbers=session.creditor_numbers,
+            private_blocklist=session.private_blocklist,
+            audit=self.audit,
+            call_id=session.call_id,
+            blocked_out=session.last_blocked,
+            turn=session.neg.turn_idx,
+        )
+
+    async def _speak_move(self, action: Action, *, last_rep_line: str) -> list[str]:
         session = self.session
         session.last_blocked = []
         blocked_out = session.last_blocked
@@ -1088,6 +1149,7 @@ class Orchestrator:
                 blocked_out=blocked_out,
                 turn=session.neg.turn_idx,
                 trace_out=trace_out,
+                recent_turns=self._recent_public_turns() if last_rep_line else None,
             )
         except LLMUnavailable:
             self._audit("nlg", "llm_unavailable", {"fallback": SAFE_FALLBACK})

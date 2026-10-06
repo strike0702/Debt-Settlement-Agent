@@ -4,7 +4,9 @@
 failure, then drops bad quotes / out-of-range values and sets ``verified`` from
 ``numbers.extract_tokens`` matches. ``repair_*`` helpers then fix stance
 (accept phrase, dominant short ack, never accept on injection) and OR each LLM
-side-channel flag with a regex cue. ``NLU_MODE=oracle`` skips the LLM and uses
+side-channel flag with a regex cue. ``repair_question`` keeps the Phase 24b
+off-script question flag only with a question cue and never on a private-info
+ask (that one is refused, not answered). ``NLU_MODE=oracle`` skips the LLM and uses
 a caller-supplied ``TurnAnalysis`` (sim/tests). Rejected terms are audited and
 also kept on ``VerifiedAnalysis.dropped`` for the decision trace. Does not
 update belief — that is the orchestrator's job via ``BeliefState.observe``.
@@ -24,6 +26,7 @@ from app.agent.numbers import extract_tokens
 from app.agent.policy import ask_pct_to_bp
 from app.config import Settings, get_settings
 from app.domain.fields import FIELD_REGISTRY, FIELDS_BY_NAME
+from app.domain.nlu_types import QUESTION_TOPICS
 from app.llm.client import LLMUnavailable, strip_json_fences
 from app.llm.prompts import nlu_messages
 from app.store.audit import AuditLog
@@ -86,6 +89,9 @@ class VerifiedAnalysis(BaseModel):
     cents_ambiguity_bare: int | None = None
     cents_ambiguity_field: str | None = None
     tiers_ambiguous: bool = False
+    # Off-script question (Phase 24b); answered by ``app.agent.acts``, not policy.
+    asks_question: bool = False
+    question_topic: str | None = None
 
     def to_turn_analysis(self) -> TurnAnalysis:
         """Drop verified flags for ``policy.decide``."""
@@ -110,6 +116,8 @@ class VerifiedAnalysis(BaseModel):
             asks_for_schedule=self.asks_for_schedule,
             firm=self.firm,
             tiers_ambiguous=self.tiers_ambiguous,
+            asks_question=self.asks_question,
+            question_topic=self.question_topic,  # type: ignore[arg-type]
         )
 
 
@@ -454,6 +462,10 @@ def coerce_analysis_payload(data: dict[str, Any]) -> dict[str, Any]:
             out["ask_quote"] = ask.get("quote")
 
     out["terms"] = terms
+    # An off-list topic must not fail validation of the whole analysis.
+    topic = out.get("question_topic")
+    if topic is not None and topic not in QUESTION_TOPICS:
+        out["question_topic"] = "other"
     return out
 
 
@@ -813,6 +825,89 @@ def repair_firm(firm: bool, utterance: str) -> bool:
     return _flag_or_regex(firm, _FIRM_RE, utterance)
 
 
+# A question needs a "?" or an interrogative opener; a statement is never answered.
+_QUESTION_CUE_RE = re.compile(
+    r"\?|^\s*(?:why|who|when|what|how|where|can you|could you|will you)\b",
+    re.IGNORECASE,
+)
+# Topic cues, checked in order. A cue alone also flags the question (LLM miss).
+_QUESTION_TOPIC_RES: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "why_not_higher",
+        re.compile(
+            r"\bwhy\b[^?.]*\b(?:higher|more|so low|better|low ?ball)\b"
+            r"|\b(?:can't|cannot|won't) you (?:go|do|offer) (?:any )?(?:higher|more|better)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "who_approves",
+        re.compile(
+            r"\bwho\b[^?.]*\b(?:approv\w*|signs?|sign off|decides?|authori[sz]\w*)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "next_steps",
+        re.compile(
+            r"\b(?:next steps?|what happens (?:next|now|after)|what now|what comes next)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "timeline",
+        re.compile(
+            r"\b(?:how long|how soon|by when|time ?line|time ?frame"
+            r"|when (?:will|would|do|does|can) (?:i|we|you) (?:hear|get|know))\b",
+            re.IGNORECASE,
+        ),
+    ),
+)
+
+
+# An "other" question about terms or figures is on-script: the move answers it.
+_ON_SCRIPT_RE = re.compile(
+    r"\b(?:percent\w*|settle\w*|payments?|schedule|minimum|balance|installments?"
+    r"|offer|dates?|amount|counter|total|tiers?)\b|[$%\d]",
+    re.IGNORECASE,
+)
+
+
+def _question_topic_cue(utterance: str) -> str | None:
+    for topic, pattern in _QUESTION_TOPIC_RES:
+        if pattern.search(utterance):
+            return topic
+    return None
+
+
+def repair_question(
+    asks_question: bool,
+    topic: str | None,
+    utterance: str,
+    *,
+    asks_private: bool,
+) -> tuple[bool, str | None]:
+    """``(asks_question, question_topic)`` after deterministic checks.
+
+    A private-info ask is never a question to answer (policy refuses it first).
+    An LLM flag stands only with a question cue; a topic regex cue flags on its
+    own. Topic: the regex cue beats an LLM ``other``; unknown topics → ``other``.
+    An ``other`` question that mentions terms or figures is on-script (the move
+    answers it), so it is dropped.
+    """
+    if asks_private:
+        return False, None
+    cue = _question_topic_cue(utterance)
+    claimed = asks_question and _QUESTION_CUE_RE.search(utterance) is not None
+    if not claimed and cue is None:
+        return False, None
+    if topic not in QUESTION_TOPICS or topic == "other":
+        topic = cue or "other"
+    if topic == "other" and _ON_SCRIPT_RE.search(utterance):
+        return False, None
+    return True, topic
+
+
 def repair_revises_terms(utterance: str) -> bool:
     """True when the utterance cues a post-proposal term change."""
     return _REVISION_RE.search(utterance) is not None
@@ -1056,6 +1151,12 @@ def post_verify(
         or tiers_ambiguous
     )
     dispositions = _repair_dispositions(analysis, utterance, has_terms=has_terms)
+    asks_question, question_topic = repair_question(
+        analysis.asks_question,
+        analysis.question_topic,
+        utterance,
+        asks_private=dispositions["asks_client_private_info"],
+    )
     if analysis.readback_response and dispositions["readback_response"] is None:
         _log(
             "nlu_rejected_readback",
@@ -1073,6 +1174,8 @@ def post_verify(
         cents_ambiguity_bare=cents_ambiguity_bare,
         cents_ambiguity_field=cents_ambiguity_field,
         tiers_ambiguous=tiers_ambiguous,
+        asks_question=asks_question,
+        question_topic=question_topic,
     )
 
 

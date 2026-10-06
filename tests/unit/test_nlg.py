@@ -6,6 +6,7 @@ from datetime import date
 
 import pytest
 
+from app.agent.acts import ANSWER_POINTS
 from app.agent.nlg import SAFE_FALLBACK, TEMPLATES, render_action
 from app.agent.policy import Action, Intent, Phase, opening_action
 from app.domain.facts import Fact
@@ -149,6 +150,12 @@ def _sample_action(intent: Intent) -> Action:
                 "escalate_reason": "This needs client approval for extra funds."
             },
             next_phase=Phase.ESCALATE,
+        )
+    if intent == Intent.ANSWER:
+        return Action(
+            intent=intent,
+            text_slots={"answer_text": ANSWER_POINTS["next_steps"]},
+            next_phase=Phase.NEGOTIATE,
         )
     raise AssertionError(intent)
 

@@ -1,7 +1,10 @@
 """Short NLU / NLG prompt builders for the role-based LLM client.
 
 NLU: field units + last agent line + rep utterance → JSON only.
-NLG: intent instruction + placeholder meanings (never values or digits).
+NLG: intent instruction + placeholder meanings (never values or digits), plus
+up to the last 3 public turns as context (spoken lines only; the caller drops
+any line that carries a private figure). ``act_messages`` builds the offline
+bank prompt for the H3 ack / answer acts.
 Callers: ``app.agent.nlu`` and ``app.agent.nlg``. Does not call the LLM.
 """
 
@@ -30,7 +33,14 @@ PLACEHOLDER_MEANINGS: dict[str, str] = {
     "alt_max_payments": "higher maximum payment count we propose",
     "no_deal_reason": "brief reason we cannot settle",
     "escalate_reason": "brief reason we need a specialist",
+    "answer_text": "policy talking point answering the rep's question",
+    "ack_max_payments": "maximum number of payments the rep just stated",
+    "ack_min_payment": "minimum payment amount the rep just stated",
+    "ack_first_payment_date": "first payment date the rep just stated",
 }
+
+# How many recent public turns the NLG prompt sees (REVIEW_PLAN §2(c), H3).
+NLG_CONTEXT_TURNS = 3
 
 _INTENT_INSTRUCTION: dict[Intent, str] = {
     Intent.OPENING: "Introduce yourself as the caller and ask the rep for settlement terms.",
@@ -68,6 +78,7 @@ _INTENT_INSTRUCTION: dict[Intent, str] = {
     ),
     Intent.NO_DEAL_WRAP: "Politely end using {no_deal_reason}.",
     Intent.ESCALATE: "Say a specialist must join. Include {escalate_reason}.",
+    Intent.ANSWER: "Output exactly {answer_text} and nothing else.",
 }
 
 _NLU_SYSTEM = """\
@@ -84,7 +95,9 @@ Reply with JSON only in this exact shape (no other top-level keys):
   "hostility":0.0,
   "wants_to_end":false,
   "asks_for_schedule":false,
-  "firm":false
+  "firm":false,
+  "asks_question":false,
+  "question_topic":null
 }
 Field names for terms[].field (only these):
 max_payments, min_payment_cents, payment_structure, first_payment_date,
@@ -109,6 +122,11 @@ Use reject when they refuse terms or say a schedule does not work.
 Set wants_to_end=true for thanks, thank you, goodbye, bye, that's all, or similar closings.
 Set asks_for_schedule=true when the rep asks for payment dates or amounts per payment.
 firm=true only when the rep says the number is final, their floor, or they cannot go lower.
+asks_question=true only for an off-script process question the terms do not answer:
+why the offer is not higher, next steps, who approves, or how long things take.
+Not for questions about terms, percentages, schedules, or the client's finances.
+question_topic: why_not_higher | next_steps | who_approves | timeline | other
+(null when asks_question is false).
 Omit unknown fields; use [] / null when nothing extracted.
 """
 
@@ -139,12 +157,25 @@ def nlu_messages(
     ]
 
 
+def format_recent_turns(recent_turns: list[tuple[str, str]]) -> str:
+    """``Rep: …`` / ``Agent: …`` lines for the last ``NLG_CONTEXT_TURNS`` turns."""
+    names = {"creditor": "Rep", "agent": "Agent"}
+    tail = recent_turns[-NLG_CONTEXT_TURNS:]
+    return "\n".join(f"{names.get(role, role)}: {text}" for role, text in tail)
+
+
 def nlg_messages(
     intent: Intent,
     placeholder_ids: list[str],
     last_rep_line: str,
+    *,
+    recent_turns: list[tuple[str, str]] | None = None,
 ) -> list[dict[str, str]]:
-    """Build chat messages for one NLG template (placeholders, no values)."""
+    """Build chat messages for one NLG template (placeholders, no values).
+
+    With ``recent_turns`` the prompt carries the last few public turns
+    (oldest first) instead of only the rep's last line.
+    """
     instruction = _INTENT_INSTRUCTION.get(intent, "Respond briefly and politely.")
     lines = []
     for pid in placeholder_ids:
@@ -159,12 +190,56 @@ def nlg_messages(
         "Never say agree, commit, or deal. "
         "Output only the template text."
     )
+    if recent_turns:
+        context = f"Recent conversation:\n{format_recent_turns(recent_turns)}\n"
+    else:
+        context = f"Rep last said: {last_rep_line or '(none)'}\n"
     user = (
-        f"Rep last said: {last_rep_line or '(none)'}\n"
-        f"Intent: {intent.value}\n"
+        context
+        + f"Intent: {intent.value}\n"
         f"Instruction: {instruction}\n"
         f"Placeholders:\n{ph}"
     )
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
+
+
+def act_messages(
+    kind: str,
+    placeholder_ids: list[str],
+    *,
+    talking_point: str | None = None,
+) -> list[dict[str, str]]:
+    """Offline bank prompt for an H3 act: ``ack`` (placeholders) or ``answer`` (paraphrase).
+
+    Used only by ``scripts/build_template_bank.py``; the talking point is
+    policy text and number-free.
+    """
+    system = (
+        "You write short spoken lines for a debt-settlement agent. "
+        "Never write digits, number words, $, or %. "
+        "Never say agree, commit, or deal. Output only the line."
+    )
+    if kind == "ack":
+        lines = "\n".join(
+            f"- {{{pid}}}: {PLACEHOLDER_MEANINGS.get(pid, 'a spoken fact')}"
+            for pid in placeholder_ids
+        )
+        user = (
+            "Write one short acknowledgement sentence (under 15 words) that echoes "
+            "the terms the rep just gave, using every placeholder exactly once, "
+            "before the agent's next question. Example: "
+            "Got it, {ack_max_payments} payments at a {ack_min_payment} minimum.\n"
+            f"Placeholders:\n{lines}"
+        )
+    else:
+        user = (
+            "Rephrase this answer to the rep's question in one or two short sentences "
+            "with the same meaning. Add no new facts or promises.\n"
+            f"Answer: {talking_point}"
+        )
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": user},

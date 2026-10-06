@@ -791,7 +791,8 @@
         "PROPOSE_WRAP",
         "CLOSE",
         "NO_DEAL_WRAP",
-        "ESCALATE"
+        "ESCALATE",
+        "ANSWER"
       ],
       "title": "Intent",
       "type": "string"

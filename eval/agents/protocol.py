@@ -8,8 +8,11 @@ returns an ``app.agent.orchestrator.Utterance`` (``.action``, ``.sentences``,
 the leak / unverified / validator scans work unchanged for every arm.
 
 ``PolicyAgent`` (arm A) wraps the production ``Orchestrator`` without changing
-it; ``--agent policy`` output is byte-identical to the pre-24a runner. The LLM
-arms live in ``react_agent`` / ``llm_only_agent`` and are eval-only.
+it; ``--agent policy`` output is byte-identical to the pre-24a runner.
+``--agent policy_h3`` (arm B, Phase 24b) is the same orchestrator with
+``Settings.nlg_h3`` on (ack / answer acts, 3-turn NLG context); the moves are
+identical, only the words change. The LLM arms live in ``react_agent`` /
+``llm_only_agent`` and are eval-only.
 """
 
 from __future__ import annotations
@@ -23,7 +26,7 @@ from app.agent.session import CallSession
 from app.config import Settings
 from app.store.audit import AuditLog
 
-AgentName = Literal["policy", "react", "llm_only"]
+AgentName = Literal["policy", "policy_h3", "react", "llm_only"]
 AGENT_NAMES: tuple[str, ...] = get_args(AgentName)
 
 
@@ -97,9 +100,14 @@ def make_agent(
     settings: Settings,
     audit: AuditLog | None,
 ) -> AgentUnderTest:
-    """Build the arm named ``name`` (``policy`` | ``react`` | ``llm_only``)."""
+    """Build the arm named ``name`` (``policy`` | ``policy_h3`` | ``react`` | ``llm_only``)."""
     if name == "policy":
         return PolicyAgent(session, llm=llm, settings=settings, audit=audit)
+    if name == "policy_h3":
+        h3 = settings.model_copy(update={"nlg_h3": True})
+        agent = PolicyAgent(session, llm=llm, settings=h3, audit=audit)
+        agent.name = "policy_h3"
+        return agent
     # Imported lazily so the CI policy path never loads the LLM arms.
     if name == "react":
         from eval.agents.react_agent import ReactAgent

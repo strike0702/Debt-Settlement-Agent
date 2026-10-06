@@ -15,9 +15,15 @@
    the offer total spoken as a per-payment amount). Duplicates are dropped;
    at most ``--per-key`` are kept.
 
+``--acts`` (Phase 24b) builds only the H3 act keys and merges them into the
+existing bank: ``ACK`` for every ``ACK_TEMPLATES`` id set (prompt
+``app.llm.prompts.act_messages``, same acceptance checks) and
+``ANSWER:<topic>`` paraphrases of each ``ANSWER_POINTS`` talking point (no
+placeholders; the default talking point is always kept as the first entry).
+
 The live call never sees this script; it only reads the JSON
 (``app.agent.nlg_bank``). Usage: ``uv run python scripts/build_template_bank.py
-[--profile demo] [--per-key 8] [--seeds 20]``.
+[--profile demo] [--per-key 8] [--seeds 20] [--acts]``.
 """
 
 from __future__ import annotations
@@ -36,13 +42,19 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import app.agent.orchestrator as orch_mod  # noqa: E402
+from app.agent.acts import ANSWER_POINTS  # noqa: E402
 from app.agent.guards import rendered_guard, template_guard  # noqa: E402
-from app.agent.nlg import TEMPLATE_ONLY_INTENTS  # noqa: E402
+from app.agent.nlg import (  # noqa: E402
+    ACK_BANK_INTENT,
+    ACK_TEMPLATES,
+    TEMPLATE_ONLY_INTENTS,
+    answer_bank_intent,
+)
 from app.agent.nlg_bank import BankKey, action_placeholder_ids, bank_key  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.domain.actions import Action, Intent  # noqa: E402
 from app.llm.client import FakeLLM, make_client  # noqa: E402
-from app.llm.prompts import nlg_messages  # noqa: E402
+from app.llm.prompts import act_messages, nlg_messages  # noqa: E402
 
 OUT_PATH = ROOT / "config" / "nlg_bank.json"
 # Offline, so latency does not matter: gpt-oss reasoning tokens count against
@@ -191,13 +203,83 @@ async def generate(
     return entries, {**stats, **{f"model:{m}": n for m, n in models.items()}}
 
 
+# Paraphrases that add a promise or a time claim the talking point never made.
+_ANSWER_EXTRA_RE = re.compile(
+    r"\b(?:guarantee|promise|today|tomorrow|week|hours?|days?|soon|shortly|approved)\b",
+    re.IGNORECASE,
+)
+
+
+async def generate_acts(*, profile: str, per_key: int) -> list[dict[str, Any]]:
+    """Bank entries for the H3 ``ACK`` / ``ANSWER:<topic>`` keys."""
+    settings = get_settings().model_copy(update={"llm_profile": profile, "llm_cache": False})
+    llm = make_client(settings)
+    entries: list[dict[str, Any]] = []
+    jobs: list[tuple[str, tuple[str, ...], list[dict[str, str]], str | None]] = [
+        (ACK_BANK_INTENT, ids, act_messages("ack", list(ids)), ACK_TEMPLATES[ids])
+        for ids in ACK_TEMPLATES
+    ] + [
+        (answer_bank_intent(topic), (), act_messages("answer", [], talking_point=text), text)
+        for topic, text in ANSWER_POINTS.items()
+    ]
+    try:
+        for intent_key, ids, base, default in jobs:
+            kept = [default] if default and template_ok(default, ids) else []
+            for k in range(per_key * 2):
+                if len(kept) >= per_key:
+                    break
+                msgs = [
+                    *base,
+                    {"role": "user", "content": f"Variant {k + 1}: vary the wording."},
+                ]
+                reply = await llm.chat_text("nlg", msgs, _MAX_TOKENS)
+                for text in candidates(reply):
+                    if intent_key.startswith("ANSWER:") and (
+                        _ANSWER_EXTRA_RE.search(text) and not _ANSWER_EXTRA_RE.search(default or "")
+                    ):
+                        continue
+                    if template_ok(text, ids) and text not in kept and len(kept) < per_key:
+                        kept.append(text)
+            print(f"{intent_key:<24} {','.join(ids) or '-':<60} kept {len(kept)}")
+            entries.append(
+                {
+                    "intent": intent_key,
+                    "placeholders": list(ids),
+                    "required": sorted(bank_required(ids)),
+                    "templates": kept,
+                }
+            )
+    finally:
+        await llm.aclose()
+    return entries
+
+
+def merge_act_entries(bank: dict[str, Any], acts: list[dict[str, Any]]) -> dict[str, Any]:
+    """Replace every ``ACK`` / ``ANSWER:*`` entry in ``bank`` with ``acts``; keep the rest."""
+    kept = [
+        e
+        for e in bank.get("entries", [])
+        if e["intent"] != ACK_BANK_INTENT and not e["intent"].startswith("ANSWER:")
+    ]
+    return {**bank, "entries": kept + acts, "acts_generated": date.today().isoformat()}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--profile", default="demo")
     ap.add_argument("--per-key", type=int, default=8)
     ap.add_argument("--seeds", type=int, default=20, help="sim seeds for key collection")
     ap.add_argument("--out", type=Path, default=OUT_PATH)
+    ap.add_argument("--acts", action="store_true", help="only (re)build the H3 act keys")
     args = ap.parse_args(argv)
+
+    if args.acts:
+        bank = json.loads(args.out.read_text(encoding="utf-8")) if args.out.exists() else {}
+        acts = asyncio.run(generate_acts(profile=args.profile, per_key=args.per_key))
+        args.out.write_text(
+            json.dumps(merge_act_entries(bank, acts), indent=2) + "\n", encoding="utf-8"
+        )
+        return 0
 
     keys = asyncio.run(collect_keys(args.seeds))
     entries, stats = asyncio.run(generate(keys, profile=args.profile, per_key=args.per_key))

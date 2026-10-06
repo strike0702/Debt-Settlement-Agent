@@ -1,0 +1,6 @@
+{
+    "allowedCommands": [
+        "Bash(herdr agent:*)",
+        "Bash(herdr agent prompt:*)"
+    ]
+}

@@ -1,0 +1,32 @@
+# Mirrors the hosted demo at debt-settlement-agent-ggor.onrender.com.
+# Secrets (API keys) stay in the Render dashboard; none are required for offline CI.
+services:
+  - type: web
+    name: debt-settlement-agent
+    runtime: python
+    plan: free
+    buildCommand: pip install uv && uv sync
+    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: LLM_PROFILE
+        value: demo
+      - key: NLG_MODE
+        value: llm
+      - key: NLU_MODE
+        value: llm
+      - key: LLM_CACHE
+        value: "true"
+      - key: DB_PATH
+        value: /opt/render/project/src/debt_settlement_agent.db
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: CEREBRAS_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false

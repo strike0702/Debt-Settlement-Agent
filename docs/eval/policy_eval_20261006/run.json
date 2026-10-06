@@ -1,0 +1,51 @@
+{
+  "run_id": "eval_20261006_004050_s7",
+  "seed": 7,
+  "n_scenarios": 100,
+  "git_sha": "27520f389454001687585f2db2cf84cd9cf2e009",
+  "profile": "offline",
+  "nlu": "oracle",
+  "nlg": "template",
+  "sim_phrasing": "template",
+  "oracle_overlay": true,
+  "settings": {
+    "llm_profile": "offline",
+    "nlg_mode": "template",
+    "nlu_mode": "oracle",
+    "max_turns": 24,
+    "max_counters": 4,
+    "anchor_ratio": 0.7,
+    "concession_factor": 0.5,
+    "hostility_threshold": 0.8,
+    "llm_cache": false
+  },
+  "models": {
+    "nlu": [
+      "fake"
+    ],
+    "nlg": [
+      "fake"
+    ],
+    "sim": [
+      "fake"
+    ],
+    "stt": [
+      "fake"
+    ]
+  },
+  "call_counts": {},
+  "call_share": {},
+  "thresholds": {
+    "unverified_figures_spoken": 0,
+    "sensitive_leaks": 0,
+    "agreement_valid": 1.0,
+    "escalation_correct": ">=0.9",
+    "no_deal_correct": ">=0.9",
+    "deal_rate_given_zopa": ">=0.75",
+    "rule_extraction_accuracy": ">=0.5",
+    "false_known_rate": "<=0.25",
+    "counters_spoken_max": "<=max_counters"
+  },
+  "thresholds_passed": true,
+  "threshold_failures": []
+}

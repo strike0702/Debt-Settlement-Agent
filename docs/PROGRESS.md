@@ -20,6 +20,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 10.1 | Demo UX + non-price recovery | done |
 | 11 | README and final eval | done |
 | 12 | Honest offline policy eval (ROADMAP) | done |
+| 13 | CI + frozen evidence (ROADMAP) | done |
 | 14 | `decide()` bugs, bounded extract, invariants (ROADMAP) | done |
 | 15 | NLU and safety corpus, flag fixes | done |
 
@@ -750,3 +751,13 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - Deviation: tiered deal samples can fail deal classification and resample, so seed-7 deal scenarios are not guaranteed identical to earlier runs; the Phase 14 and cleanup regressions still pass.
 - Tests: 501 passed offline (+1 skipped live); `ruff check .` clean.
 - Not done (by request): per-tier quote verification; tiers stay unverified → always read back. Live NLU on tier phrasing not measured (no corpus lines with tiers).
+
+### Phase 13 (2026-10-06) — CI + frozen evidence
+
+- Files: `.github/workflows/ci.yml`, `docs/eval/README.md`, `docs/eval/policy_eval_20261006/` (`summary.md` / `summary.json` / `run.json` + 5 transcripts), `README.md` (CI badge only), `render.yaml` (optional, mirrors hosted demo).
+- CI on push/PR (no secrets): `uv sync --group dev` → `ruff check .` → `pytest -q -m "not slow"` → `python -m eval.run_eval --nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7` (job fails on any threshold miss).
+- Freeze `policy_eval_20261006` from `eval_20261006_004050_s7` (thresholds PASS; `counters_spoken_max` 4; identical consecutive moves 0). Transcripts: pressuring × deal / rescue / no_fix (`s0007_002`, `s0007_035`, `s0007_068`) plus former 10-counter cases `s0007_075_no_fix_flexible` (n=100) and `s0007_009_no_fix_flexible` (n=12 regression). Pack ≈12 KB.
+- Red-path check: scratch branch with broken counter cap (re-offer ceiling) failed CI eval gate; branch deleted after verify.
+- Deviations: none. `render.yaml` installs `uv` in `buildCommand` (Render image has no uv by default).
+- Observed, not fixed: none in touched files.
+- Tests: same suite; CI path skips `@pytest.mark.slow` invariants (run locally with `DSA_INVARIANT_SEEDS` as needed).

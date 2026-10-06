@@ -1,5 +1,7 @@
 # Debt Settlement Agent
 
+[![CI](https://github.com/strike0702/Debt-Settlement-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/strike0702/Debt-Settlement-Agent/actions/workflows/ci.yml)
+
 A conversational agent that negotiates debt settlements. Same policy and engine whether you type or talk.
 
 **Live demo:** [debt-settlement-agent-ggor.onrender.com](https://debt-settlement-agent-ggor.onrender.com/)

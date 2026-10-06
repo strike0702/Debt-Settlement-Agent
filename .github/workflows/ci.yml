@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sync deps
+        run: uv sync --group dev
+
+      - name: Ruff
+        run: uv run ruff check .
+
+      - name: Pytest (skip slow)
+        run: uv run pytest -q -m "not slow"
+
+      - name: Offline oracle policy eval
+        run: >
+          uv run python -m eval.run_eval
+          --nlu oracle
+          --nlg template
+          --sim-phrasing template
+          --scenarios 100
+          --seed 7

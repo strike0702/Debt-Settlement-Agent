@@ -1,0 +1,83 @@
+{
+  "n_scenarios": 100,
+  "n_completed": 100,
+  "n_skipped_quota": 0,
+  "n_error": 0,
+  "agreement_valid": 1.0,
+  "agreement_valid_n": 23,
+  "agreement_valid_ci95": [
+    0.8568788745827374,
+    1.0
+  ],
+  "deal_rate_given_zopa": 1.0,
+  "deal_rate_given_zopa_n": 23,
+  "deal_rate_given_zopa_ci95": [
+    0.8568788745827374,
+    1.0
+  ],
+  "no_deal_correct": 1.0,
+  "no_deal_correct_n": 22,
+  "no_deal_correct_ci95": [
+    0.8513404742740388,
+    1.0
+  ],
+  "escalation_correct": 1.0,
+  "escalation_correct_n": 55,
+  "escalation_correct_ci95": [
+    0.9347128562105721,
+    0.9999999999999999
+  ],
+  "unverified_figures_spoken": 0,
+  "sensitive_leaks": 0,
+  "guard_blocks": 0,
+  "rule_extraction_accuracy": 0.67,
+  "rule_extraction_accuracy_n": 700,
+  "rule_extraction_accuracy_ci95": [
+    0.6343210895224741,
+    0.7038231747551703
+  ],
+  "false_known_rate": 0.0,
+  "false_known_rate_n": 469,
+  "false_known_rate_ci95": [
+    0.0,
+    0.008124496660192335
+  ],
+  "readback_count": 0.23,
+  "turns_to_proposal": 3.9565217391304346,
+  "surplus_captured": 0.6891727001910068,
+  "surplus_n": 23,
+  "counters_spoken_max": 4,
+  "counters_spoken_mean": 0.95,
+  "max_counters": 4,
+  "identical_consecutive_agent_moves": 0,
+  "turns_to_outcome": 5.12,
+  "stuck_calls": 0,
+  "stuck_rate": 0.0,
+  "stuck_rate_n": 100,
+  "stuck_rate_ci95": [
+    0.0,
+    0.03699480747600191
+  ],
+  "latency": {
+    "nlu_ms": {
+      "p50": 0.04137499490752816,
+      "p95": 0.22238506935536861,
+      "n": 612
+    },
+    "policy_ms": {
+      "p50": 0.025021028704941273,
+      "p95": 0.7678249676246194,
+      "n": 612
+    },
+    "nlg_ms": {
+      "p50": 0.05545851308852434,
+      "p95": 0.17963140853680667,
+      "n": 612
+    },
+    "server_total_ms": {
+      "p50": 0.7870830013416708,
+      "p95": 312.6993496785871,
+      "n": 612
+    }
+  }
+}

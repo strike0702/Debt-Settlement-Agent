@@ -99,7 +99,7 @@ flowchart LR
 - **NLU + verification.** LLM JSON, then quote / number / range checks and a few regex repairs.
 - **Belief.** The working picture of the creditor's rules. Tentative values get read back before they count as known.
 - **Policy.** Pure functions. Belief + verified analysis + affordability curve → an `Action`.
-- **Feasibility engine.** Vendored `feasibility/`. For a client, rules, and a percentage: can we fund it, and what is the schedule? When nothing fits it also computes private rescue options (a lump or a draft bump). Policy gets a yes/no on whether rescue stays inside a guardrail. The amount is never spoken.
+- **Feasibility engine.** `feasibility/` — settlement math I built for an earlier project and brought into this one. For a client, rules, and a percentage: can we fund it, and what is the schedule? When nothing fits it also computes private rescue options (a lump or a draft bump). Policy gets a yes/no on whether rescue stays inside a guardrail. The amount is never spoken.
 - **NLG + guards.** Template, fill, check, speak or fall back.
 - **TTS.** `speechSynthesis` in the browser. Not a telephony stack.
 - **Audit log.** Belief changes, guard blocks, escalations, NLU analyses, each `decide()` intent. Append-only SQLite (WAL; triggers reject UPDATE/DELETE). Successful LLM HTTP calls are not written today.
@@ -223,7 +223,7 @@ Python 3.12, FastAPI, Pydantic v2, SQLite (audit + optional LLM cache). pytest, 
 
 ```text
 app/          Orchestrator, policy, NLU/NLG, guards, voice WebSocket, UI
-feasibility/  Settlement math (vendored, read-only except bug fixes)
+feasibility/  Settlement math (from an earlier project of mine; part of this repo)
 eval/         Offline eval runner, metrics, NLU corpus scorer
 sim/          Creditor simulator (must not import app.agent)
 tests/        Unit, e2e, engine, NLU corpus

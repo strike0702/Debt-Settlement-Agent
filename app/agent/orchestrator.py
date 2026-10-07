@@ -86,7 +86,12 @@ from app.schemas.events import (
     TurnTrace,
 )
 from app.store.audit import AuditLog
-from feasibility.models import CreditorRules, add_months, end_of_month
+from feasibility.models import (
+    CreditorRules,
+    add_months,
+    default_first_payment_date,
+    end_of_month,
+)
 
 
 @dataclass
@@ -1298,6 +1303,21 @@ class Orchestrator:
         for tok in extract_tokens(text, ref=self._ref):
             self.session.creditor_numbers.add(tok.as_pair())
 
+    def _engine_first_payment_date(self) -> date:
+        """Belief's first payment date, or the engine default when it is unset.
+
+        ``first_payment_date`` is not a required engine field, so ``build_rules``
+        succeeds while it is UNKNOWN (a denied read-back clears the value). The
+        engine then plans from the same EOM default the belief starts with as
+        ASSUMED; the fallback is audited.
+        """
+        fpd = self.session.belief.get("first_payment_date").value
+        if isinstance(fpd, date):
+            return fpd
+        default = default_first_payment_date(self.session.scenario.client)
+        self._audit("engine", "first_payment_date_default", {"value": default.isoformat()})
+        return default
+
     async def _eval_bp(self, bp: int) -> EvalSummary | None:
         """Evaluate schedule at ``bp`` under current belief; None if needs info."""
         session = self.session
@@ -1305,8 +1325,7 @@ class Orchestrator:
             rules = build_rules(session.belief, session.scenario)
         except NeedsInfo:
             return None
-        fpd = session.belief.get("first_payment_date").value
-        assert isinstance(fpd, date)
+        fpd = self._engine_first_payment_date()
         summary = await asyncio.to_thread(
             evaluate,
             session.scenario,
@@ -1333,8 +1352,7 @@ class Orchestrator:
             )
             return None, False, None
 
-        fpd = session.belief.get("first_payment_date").value
-        assert isinstance(fpd, date)
+        fpd = self._engine_first_payment_date()
 
         afford = await asyncio.to_thread(affordability, session.scenario, rules, fpd)
         session.last_max_bp = afford.max_bp
@@ -1519,8 +1537,7 @@ class Orchestrator:
         except NeedsInfo as e:
             self._audit("orchestrator", "wrap_needs_info", {"fields": e.fields})
             return None
-        fpd = session.belief.get("first_payment_date").value
-        assert isinstance(fpd, date)
+        fpd = self._engine_first_payment_date()
         violations = validate(
             summary.rows,
             session.scenario.client,

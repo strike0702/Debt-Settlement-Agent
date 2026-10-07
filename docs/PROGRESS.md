@@ -1024,7 +1024,7 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - Tests: `pytest -q` 615 passed / 2 skipped (incl. slow, 173 s); `ruff check .` clean; web: typecheck, lint, 46 Vitest tests, build all green.
 - Open issues: see the DEFERRED lines in the phase-23b report.
 
-### Phase 24b (WIP, paused 2026-10-07) — H3 conversational NLG + A/B (REVIEW_PLAN §2(c))
+### Phase 24b (WIP, paused 2026-10-07, quota) — H3 conversational NLG + A/B (REVIEW_PLAN §2(c))
 
 Paused on the orchestrator's instruction (usage limit). Interface entries above already describe the new code.
 
@@ -1050,17 +1050,16 @@ Paused on the orchestrator's instruction (usage limit). Interface entries above 
 - Task 6: demo default decision (`NLG_H3=1` in `.env.example` / `render.yaml` only if B passes the rule).
 - Final: full `pytest -q`, oracle CI eval again, PROGRESS final handoff (replace this WIP section), commit `phase 24b: <summary>`.
 
-**A/B state (results are git-ignored; they live only in this worktree under `eval/results/`):**
-- A `ab1007_A_policy` (`--agent policy --nlg template`): 12/48 ok.
-- B `ab1007_B_policy_h3` (`--agent policy_h3 --nlg bank`): 10/48 ok (restarted once after the `repair_question` fix; all 10 are post-fix).
-- C `ab1007_C_react`, D `ab1007_D_llm_only`: not started (an early 4-way attempt was deleted).
+**A/B state at second pause (2026-10-07 16:50 IST; results are git-ignored, they live only in this worktree under `eval/results/`):**
+- A `ab1007_A_policy`: **48/48 ok**. B `ab1007_B_policy_h3`: **48/48 ok**.
+- C `ab1007_C_react`: 9 ok, 4 `skipped_quota` (13 attempted). D `ab1007_D_llm_only`: 13 ok, 3 `skipped_quota` (16 attempted). Both stopped by hand: Gemini free tier hit its **per-day** cap (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, `retryDelay` 45671 s ≈ 12.7 h from 16:49 IST), Groq's daily token cap was already spent, and Cerebras / OpenRouter time out under load, Mistral 429s, so every scenario was skipping. `--resume` re-runs `skipped_quota` / `error` files.
+- Fixed during this resume: `Orchestrator._engine_first_payment_date()` — a denied first-payment-date read-back leaves the field UNKNOWN (`value=None`), `build_rules` does not require it, and the old `assert isinstance(fpd, date)` (3 sites: `_eval_bp`, `_engine_context`, wrap validation) crashed the turn (A/B `s0007_025/028/037`, contradictory persona, both arms). Now falls back to the engine's EOM default (the same value the belief starts with as ASSUMED), audited `engine/first_payment_date_default`. Test `test_denied_first_payment_readback_falls_back_to_engine_default`. Oracle CI eval after the fix: PASS, metrics table identical to `docs/eval/policy_eval_20261006/summary.md`.
+- Preliminary A vs B (offline `eval.ab_report`, 48 common scenarios): B fails the pre-registered rule on leaks (1: `s0007_006`, a **policy** ACCEPT echoing an LLM-sim "100% balance" that equals the true ceiling; no H3 act spoke a private figure) and on `agreement_valid` (0.71; A is 0.75 too: live-NLU extraction errors, e.g. `s0007_015` fails identically in both). So the demo default stays A whatever the judges say. Draft preamble: `docs/eval/ab_20261007/notes.md` (includes the [24a.3] limitation).
 
 **Resume commands** (A and B together, then C and D together; each pair uses the half-rate providers file):
 ```bash
 P="--scenarios 48 --seed 7 --profile eval --nlu llm --sim-phrasing llm --no-oracle-overlay --providers docs/eval/ab_20261007/providers_split2.yaml"
-uv run python -m eval.run_eval $=P --agent policy    --nlg template --resume ab1007_A_policy &
-uv run python -m eval.run_eval $=P --agent policy_h3 --nlg bank     --resume ab1007_B_policy_h3 &
-# after both finish:
+# A and B are complete. Remaining (after the Gemini / Groq daily reset):
 uv run python -m eval.run_eval $=P --agent react     --nlg template --resume ab1007_C_react &
 uv run python -m eval.run_eval $=P --agent llm_only  --nlg template --resume ab1007_D_llm_only &
 # judges (RUN_A = the arm being rated):
@@ -1073,7 +1072,7 @@ uv run python -m eval.ab_report --arm A=eval/results/ab1007_A_policy --arm B=eva
   --judge B:A=<judge dir> --judge C:A=<judge dir> --judge C:B=<judge dir> \
   --out docs/eval/ab_20261007 --decision <decision.md> --notes <notes.md>
 ```
-(`$=P` is zsh word-splitting; in bash use `$P`.)
+(`$=P` is zsh word-splitting; in bash use `$P`. A plain `$P` in zsh passes one argument and argparse rejects it.)
 
 **Gotchas:**
 - Never run more than two arms at once: each process paces its own keys, so 4 processes oversubscribed Gemini (15 rpm/key real limit) and cascaded to `skipped_quota`. Two processes need `providers_split2.yaml` (all rpm/tpm halved).
@@ -1081,4 +1080,4 @@ uv run python -m eval.ab_report --arm A=eval/results/ab1007_A_policy --arm B=eva
 - `GROQ_API_KEY_1`'s org hit its daily token cap (TPD 200k) during the aborted 4-way run; the react arm's `agent` route starts on Groq, so it will lean on Cerebras/Gemini until that resets.
 - Live NLU sometimes reads a stray number as the settlement ask (seen: "10%" from "10 payments" context), and LLM sim phrasing loops on restated amounts; both affect every arm equally (not 24b scope).
 
-**Checks at pause:** `uv run ruff check .` clean; `uv run pytest -q -m "not slow"` 668 passed / 2 skipped (green). Full `pytest -q` (incl. slow) was 670 passed / 2 skipped before the last `repair_question` tweak.
+**Checks at second pause:** `uv run ruff check .` clean; full `uv run pytest -q` 672 passed / 2 skipped; oracle CI eval PASS (`eval_20261007_104338_s7`).

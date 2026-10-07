@@ -40,7 +40,8 @@ export type Intent =
   | "PROPOSE_WRAP"
   | "CLOSE"
   | "NO_DEAL_WRAP"
-  | "ESCALATE";
+  | "ESCALATE"
+  | "ANSWER";
 export type Phase = "OPENING" | "DISCOVERY" | "NEGOTIATE" | "CONFIRM" | "WRAP" | "ESCALATE" | "END";
 export type ClientEvent = StartEvent | EndEvent | TextEvent | SentenceDoneEvent | BargeInEvent | TimingEvent;
 export type View = "rep" | "operator";

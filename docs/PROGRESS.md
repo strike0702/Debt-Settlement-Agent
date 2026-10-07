@@ -1024,7 +1024,7 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - Tests: `pytest -q` 615 passed / 2 skipped (incl. slow, 173 s); `ruff check .` clean; web: typecheck, lint, 46 Vitest tests, build all green.
 - Open issues: see the DEFERRED lines in the phase-23b report.
 
-### Phase 24b (WIP, paused 2026-10-07, quota) — H3 conversational NLG + A/B (REVIEW_PLAN §2(c))
+### Phase 24b (WIP, paused 2026-10-07, quota; C resumes 2026-10-08) — H3 conversational NLG + A/B (REVIEW_PLAN §2(c))
 
 Paused on the orchestrator's instruction (usage limit). Interface entries above already describe the new code.
 
@@ -1044,11 +1044,17 @@ Paused on the orchestrator's instruction (usage limit). Interface entries above 
   - [27.2] `_build_settings` passes `api_key_pool` (+ cooldown, bank path, nlg_h3, timeouts) (`test_build_settings_keeps_explicit_key_pool`).
   - [27.4] 429 cooldown parsed from body (Groq "try again in", Gemini `retryDelay`), per-day quota ≥ 3600 s (`test_quota_429_cooldown_from_error_body`, `test_daily_quota_moves_on_instead_of_retrying_each_minute`).
 
-**Left:**
-- Task 4: finish the A/B runs (A, B), then run C (react) and D (llm_only), then judges B vs A, C vs A, C vs B.
-- Task 5: `docs/eval/ab_20261007/summary.md` via `eval.ab_report` + decision paragraph + the [24a.3] limitation note.
-- Task 6: demo default decision (`NLG_H3=1` in `.env.example` / `render.yaml` only if B passes the rule).
-- Final: full `pytest -q`, oracle CI eval again, PROGRESS final handoff (replace this WIP section), commit `phase 24b: <summary>`.
+**User decisions (2026-10-07, via orchestrator):**
+1. Arm D (`llm_only`) is **dropped** at its partial 13/48 (REVIEW_PLAN cut order allows it). Do not resume it; report it as partial in the summary.
+2. Arm C (`react`) resumes **2026-10-08** after the daily quota reset, to 48/48; then the three judges and `summary.md`.
+3. The pre-registered adoption rule stays **exactly as written** (no restating relative to A). The summary says B fails as registered and notes that A also misses `agreement_valid = 1` under live NLU.
+4. The orchestrator merges the current code (through this commit) into main on 2026-10-07; work continues on `phase-24b` in this worktree.
+
+**Left (2026-10-08):**
+- Task 4: resume C to 48/48 (one process; command below), then judges B vs A, C vs A, C vs B.
+- Task 5: `docs/eval/ab_20261007/summary.md` via `eval.ab_report` with arms A, B, C (D left out of the common-scenario table so it does not shrink n to its 13; give D's partial numbers in a separate labelled paragraph, e.g. from a separate `ab_report --arm A=... --arm D=...` run over their common scenarios). Notes preamble `docs/eval/ab_20261007/notes.md` + a decision paragraph: B fails the rule as registered (leaks, `agreement_valid`; naturalness from the judge), A also misses `agreement_valid = 1` under live NLU, D dropped as partial; keep the [24a.3] limitation note.
+- Task 6: decided — **A stays the demo default** (B fails the rule; `Settings.nlg_h3` already defaults to False, no config change). Record it in the summary and the handoff.
+- Final: full `pytest -q`, `ruff check .`, oracle CI eval, replace this WIP section with the final Phase 24b handoff (Action fields, `Intent.ANSWER`, NLU fields, A/B commands, carry-overs incl. the first-payment-date fix), commit `phase 24b: <summary>`.
 
 **A/B state at second pause (2026-10-07 16:50 IST; results are git-ignored, they live only in this worktree under `eval/results/`):**
 - A `ab1007_A_policy`: **48/48 ok**. B `ab1007_B_policy_h3`: **48/48 ok**.
@@ -1056,21 +1062,20 @@ Paused on the orchestrator's instruction (usage limit). Interface entries above 
 - Fixed during this resume: `Orchestrator._engine_first_payment_date()` — a denied first-payment-date read-back leaves the field UNKNOWN (`value=None`), `build_rules` does not require it, and the old `assert isinstance(fpd, date)` (3 sites: `_eval_bp`, `_engine_context`, wrap validation) crashed the turn (A/B `s0007_025/028/037`, contradictory persona, both arms). Now falls back to the engine's EOM default (the same value the belief starts with as ASSUMED), audited `engine/first_payment_date_default`. Test `test_denied_first_payment_readback_falls_back_to_engine_default`. Oracle CI eval after the fix: PASS, metrics table identical to `docs/eval/policy_eval_20261006/summary.md`.
 - Preliminary A vs B (offline `eval.ab_report`, 48 common scenarios): B fails the pre-registered rule on leaks (1: `s0007_006`, a **policy** ACCEPT echoing an LLM-sim "100% balance" that equals the true ceiling; no H3 act spoke a private figure) and on `agreement_valid` (0.71; A is 0.75 too: live-NLU extraction errors, e.g. `s0007_015` fails identically in both). So the demo default stays A whatever the judges say. Draft preamble: `docs/eval/ab_20261007/notes.md` (includes the [24a.3] limitation).
 
-**Resume commands** (A and B together, then C and D together; each pair uses the half-rate providers file):
+**Resume commands** (2026-10-08; C only, a single process, so the full-rate providers file would also do; keep `providers_split2.yaml` for identical conditions):
 ```bash
 P="--scenarios 48 --seed 7 --profile eval --nlu llm --sim-phrasing llm --no-oracle-overlay --providers docs/eval/ab_20261007/providers_split2.yaml"
-# A and B are complete. Remaining (after the Gemini / Groq daily reset):
-uv run python -m eval.run_eval $=P --agent react     --nlg template --resume ab1007_C_react &
-uv run python -m eval.run_eval $=P --agent llm_only  --nlg template --resume ab1007_D_llm_only &
-# judges (RUN_A = the arm being rated):
+# A and B are complete (48/48); D is dropped (13/48, do not resume).
+uv run python -m eval.run_eval $=P --agent react --nlg template --resume ab1007_C_react
+# judges (RUN_A = the arm being rated), after C finishes:
 uv run python -m eval.judge_naturalness eval/results/ab1007_B_policy_h3 eval/results/ab1007_A_policy --profile eval
 uv run python -m eval.judge_naturalness eval/results/ab1007_C_react eval/results/ab1007_A_policy --profile eval
 uv run python -m eval.judge_naturalness eval/results/ab1007_C_react eval/results/ab1007_B_policy_h3 --profile eval
-# report:
+# report (A, B, C; D reported separately as partial):
 uv run python -m eval.ab_report --arm A=eval/results/ab1007_A_policy --arm B=eval/results/ab1007_B_policy_h3 \
-  --arm C=eval/results/ab1007_C_react --arm D=eval/results/ab1007_D_llm_only \
+  --arm C=eval/results/ab1007_C_react \
   --judge B:A=<judge dir> --judge C:A=<judge dir> --judge C:B=<judge dir> \
-  --out docs/eval/ab_20261007 --decision <decision.md> --notes <notes.md>
+  --out docs/eval/ab_20261007 --decision <decision.md> --notes docs/eval/ab_20261007/notes.md
 ```
 (`$=P` is zsh word-splitting; in bash use `$P`. A plain `$P` in zsh passes one argument and argparse rejects it.)
 

@@ -4,8 +4,9 @@ Serves the Vite build in ``web/dist`` at ``/`` (SPA fallback: unknown non-API
 paths get ``index.html`` with ``Cache-Control: no-cache``; hashed files under
 ``/assets`` are cached for a year). Mounts ``/ws/call/{call_id}``, and exposes
 ``GET /healthz`` (keep-warm), ``GET /metrics/summary``, ``/scenarios``
-(+ ``/{id}`` operator brief and ``/{id}/rep_card``), and ``/calls*`` (``?view=rep``
-drops private audit rows). LLM + audit are created once in lifespan and shared
+(+ ``/{id}`` operator brief, ``/{id}/rep_card``, and ``/{id}/rep``: the
+creditor's own account and rules for the rep lens), and ``/calls*``
+(``?view=rep`` drops private audit rows). LLM + audit are created once in lifespan and shared
 across sockets; the LLM's ``on_call`` hook appends every LLM / STT call to the
 audit log (``app.llm.call_audit``). This module builds no UI: ``npm run build``
 in ``web/`` does.
@@ -30,6 +31,7 @@ from app.domain.scenario import (
     details_from_scenario,
     list_scenario_metas,
     load_rep_card,
+    rep_account,
     rep_card_suggestions,
     scenario_details,
     scenario_from_payload,
@@ -163,6 +165,14 @@ def create_app(
         except (ValueError, FileNotFoundError) as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
         return {"id": scenario_id, "markdown": body}
+
+    @application.get("/scenarios/{scenario_id}/rep")
+    async def get_rep_account(scenario_id: str) -> dict[str, Any]:
+        """Rep lens: the creditor's own account and settlement rules (no client data)."""
+        try:
+            return rep_account(scenario_id)
+        except (ValueError, FileNotFoundError) as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
 
     @application.get("/scenarios/{scenario_id}")
     async def get_scenario(scenario_id: str) -> dict[str, Any]:

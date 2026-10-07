@@ -4,7 +4,7 @@
  * events.ts is generated from the Pydantic models and must not be edited; the
  * aliases here name the narrower shapes the UI relies on (term fields, tier
  * pairs, stances) and the HTTP payloads that are not WS events (`/scenarios`,
- * `/scenarios/{id}`, `/scenarios/{id}/rep_card`).
+ * `/scenarios/{id}`, `/scenarios/{id}/rep`, `/scenarios/{id}/rep_card`).
  */
 import type { BeliefTerm, TurnTraceEvent } from "./events";
 
@@ -58,4 +58,22 @@ export interface ScenarioBrief extends Omit<ScenarioMeta, "suggested"> {
     upcoming_ledger: LedgerEntry[];
   };
   firm: { program_fee_bp: number; program_fee_cents: number; bank_fee_cents: number };
+}
+
+/**
+ * `GET /scenarios/{id}/rep`: the creditor's own account and settlement rules, parsed
+ * from the rep card. Rep-safe (no client or firm data). A rule the card does not state,
+ * or states in a form the server cannot parse, is `null`.
+ */
+export interface RepAccount {
+  id: string;
+  creditor: { name: string | null; outstanding_balance_cents: number | null; original_balance_cents: number | null };
+  rules: {
+    max_payments: number | null;
+    min_payment_cents: number | null;
+    structure: "even" | "balloon" | "flexible" | null;
+    opening_ask_bp: number | null;
+    floor_bp: number | null;
+    first_payment: string | null;
+  };
 }

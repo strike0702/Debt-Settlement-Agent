@@ -23,14 +23,14 @@
         "field_label"
       ],
       "templates": [
-        "Could you confirm whether {field_label} is {clarify_old} or {clarify_new}?",
-        "Please let me know if {field_label} should be {clarify_old} or {clarify_new}.",
-        "Kindly tell me whether {field_label} equals {clarify_old} or {clarify_new}.",
-        "Would you mind confirming if {field_label} is {clarify_old} or {clarify_new}?",
-        "Could you clarify whether {field_label} should be {clarify_old} or {clarify_new}?",
-        "Please advise if {field_label} is {clarify_old} or {clarify_new}.",
-        "May I ask if {field_label} is {clarify_old} or {clarify_new}?",
-        "Could you help me determine whether {field_label} is {clarify_old} or {clarify_new}?"
+        "Could you confirm whether the {field_label} is {clarify_old} or {clarify_new}?",
+        "Sorry, should the {field_label} be {clarify_old} or {clarify_new}?",
+        "Just so I have it right, is the {field_label} {clarify_old} or {clarify_new}?",
+        "Would you mind confirming if the {field_label} is {clarify_old} or {clarify_new}?",
+        "Could you clarify whether the {field_label} should be {clarify_old} or {clarify_new}?",
+        "Which is it for the {field_label}, {clarify_old} or {clarify_new}?",
+        "May I ask if the {field_label} is {clarify_old} or {clarify_new}?",
+        "I want to get this right: is the {field_label} {clarify_old} or {clarify_new}?"
       ]
     },
     {
@@ -112,13 +112,13 @@
         "offer_total"
       ],
       "templates": [
-        "We can propose {counter_pct} of the balance, which equals {offer_total}.",
+        "We can propose {counter_pct} of the balance, which comes to {offer_total}.",
         "We propose {counter_pct} of the balance, totaling {offer_total}.",
         "Could we settle for {counter_pct} of the balance, amounting to {offer_total}?",
-        "How about {counter_pct} of the balance, which equals {offer_total}?",
+        "How about {counter_pct} of the balance, which comes to {offer_total}?",
         "We suggest {counter_pct} of the balance, totaling {offer_total}.",
         "Would {counter_pct} of the balance, or {offer_total}, be acceptable?",
-        "Please consider {counter_pct} of the balance, amounting to {offer_total}.",
+        "Could you consider {counter_pct} of the balance, amounting to {offer_total}?",
         "We can offer {counter_pct} of the balance, which totals {offer_total}."
       ]
     },
@@ -133,14 +133,14 @@
         "readback_value"
       ],
       "templates": [
-        "Please confirm the tentative {field_label} as {readback_value}.",
-        "Could you verify the tentative {field_label} is {readback_value}?",
-        "Kindly acknowledge the tentative {field_label} set at {readback_value}.",
-        "Please validate the tentative {field_label} with {readback_value}.",
-        "May I confirm the tentative {field_label} equals {readback_value}?",
-        "Please check that the tentative {field_label} matches {readback_value}.",
-        "Could you confirm the tentative {field_label} is {readback_value}?",
-        "Please verify the tentative {field_label} as {readback_value}."
+        "Just to confirm, the {field_label} is {readback_value}?",
+        "So that's {readback_value} for the {field_label}, right?",
+        "Just to confirm, that's {readback_value} for the {field_label}?",
+        "So the {field_label} is {readback_value}, is that right?",
+        "Let me make sure I have it: {readback_value} for the {field_label}?",
+        "I have {readback_value} for the {field_label}. Is that right?",
+        "Okay, so {readback_value} for the {field_label}, correct?",
+        "And the {field_label} is {readback_value}, did I get that right?"
       ]
     },
     {
@@ -354,5 +354,6 @@
     }
   ],
   "acts_generated": "2026-10-07",
-  "acts_reviewed": "2 awkward ACK variants removed by hand"
+  "acts_reviewed": "2 awkward ACK variants removed by hand",
+  "readback_reviewed": "Phase 33: READ_BACK and CLARIFY hand-written; COUNTER 'equals' wording replaced"
 }

@@ -4,9 +4,10 @@
  * events.ts is generated from the Pydantic models and must not be edited; the
  * aliases here name the narrower shapes the UI relies on (term fields, tier
  * pairs, stances) and the HTTP payloads that are not WS events (`/scenarios`,
- * `/scenarios/{id}`, `/scenarios/{id}/rep`, `/scenarios/{id}/rep_card`).
+ * `/scenarios/{id}`, `/scenarios/{id}/rep`, `/scenarios/{id}/rep_card`,
+ * `POST /scenarios/preview{,/rep}`, `GET /calls/{id}/operator`).
  */
-import type { BeliefTerm, TurnTraceEvent } from "./events";
+import type { AgreementEvent, AuditEvent, BeliefTerm, EvalEvent, TurnTraceEvent } from "./events";
 
 export type * from "./events";
 
@@ -34,6 +35,8 @@ export interface ScenarioMeta {
   description: string;
   expected: "deal" | "no_deal" | "escalate" | "counter" | string;
   suggested: string[];
+  /** Set on a visitor's own test case (Phase 36): played by hand, never autoplayed. */
+  custom?: boolean;
 }
 
 export interface LedgerEntry {
@@ -78,4 +81,26 @@ export interface RepAccount {
     floor_bp: number | null;
     first_payment: string | null;
   };
+}
+
+/** `POST /scenarios/preview/rep`: a custom case's rep account plus its rep card's suggested replies. */
+export interface RepPreview extends RepAccount {
+  suggested: string[];
+}
+
+/** `POST /scenarios/preview` 400 body: every problem with its field path. */
+export interface PreviewErrors {
+  detail: { message: string; errors: { path: string; message: string }[] } | string;
+}
+
+/**
+ * `GET /calls/{id}/operator`: the Debt negotiator detail the server kept for a call,
+ * whatever view it streamed (frames exactly as the operator stream carries them).
+ */
+export interface OperatorDetail {
+  call_id: string;
+  traces: TurnTraceEvent[];
+  audit: AuditEvent[];
+  eval: EvalEvent | null;
+  agreement: AgreementEvent | null;
 }

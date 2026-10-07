@@ -89,7 +89,7 @@ export function Conversation({
                 </select>
               </label>
             )}
-            <span className="inline-flex items-center gap-2 text-sm text-muted" aria-live="polite">
+            <span className="inline-flex items-center gap-2 text-sm whitespace-nowrap text-muted" aria-live="polite">
               <span className={cn("h-2 w-2 rounded-full", MIC_DOT[mic])} aria-hidden />
               {MIC_LABEL[mic]}
             </span>

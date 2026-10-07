@@ -11,8 +11,10 @@ import pytest
 
 from app.agent.reasons import (
     PUBLIC_PLACEHOLDERS,
+    REASON_SHORT,
     REASON_TEXT,
     reason_key,
+    reason_short,
     reason_text,
 )
 from app.domain.actions import Action, Intent, Phase
@@ -127,11 +129,67 @@ def test_counter_without_offer_total_omits_the_amount() -> None:
         reason="bp=4900",
     )
     text = reason_text(bare, date(2026, 3, 1))
-    assert text.startswith("Counter at 49%:") and "that value" not in text
+    assert text.startswith("We offer 49%.") and "that value" not in text
     total = Fact(
         id="offer_total", kind="money", value=123_400, visibility="PUBLIC", source="engine"
     )
     full = bare.model_copy(update={"facts": {"counter_pct": pct, "offer_total": total}})
-    assert reason_text(full, date(2026, 3, 1)).startswith("Counter at 49% ($1,234")
+    assert reason_text(full, date(2026, 3, 1)).startswith("We offer 49% ($1,234")
     # Display variant only: the reason code is unchanged.
     assert reason_key(Intent.COUNTER, "bp=4900") == "counter"
+
+
+# Phase 36 rewrote the sentences for newcomers. Text only: these are the placeholders
+# each key had before the rewrite, so no fact was added, dropped or swapped.
+_PLACEHOLDERS_BEFORE: dict[str, set[str]] = {
+    "ask_field": {"field_label"},
+    "read_back": {"field_label"},
+    "clarify_field": {"field_label"},
+    "counter": {"counter_pct", "offer_total"},
+    "counter_no_total": {"counter_pct"},
+    "alt_first_payment_date": {"alt_first_payment_date"},
+    "alt_min_payment_cents": {"alt_min_payment_cents"},
+    "alt_max_payments": {"alt_max_payments"},
+    **{
+        k: {"settlement_pct"}
+        for k in (
+            "confirm",
+            "ask_within_offer",
+            "rep_firm",
+            "counters_exhausted",
+            "no_lower_counter",
+            "ladder_stalled",
+            "gap_small",
+            "terms_revised",
+        )
+    },
+}
+
+
+def test_rewrite_kept_every_key_and_placeholder() -> None:
+    fmt = string.Formatter()
+    for key, text in REASON_TEXT.items():
+        names = {n for _, n, _, _ in fmt.parse(text) if n}
+        assert names == _PLACEHOLDERS_BEFORE.get(key, set()), key
+    assert len(REASON_TEXT) == 45
+
+
+_JARGON = ("ladder", "read back", "read-back", "wrap", "hedged", "engine", "policy", "feasible")
+
+
+def test_sentences_are_plain_full_sentences() -> None:
+    for key, text in REASON_TEXT.items():
+        assert text[0].isupper() and text.endswith("."), key
+        assert not any(j in text.lower() for j in _JARGON), (key, text)
+
+
+def test_short_forms_cover_every_reason_and_carry_no_numbers() -> None:
+    assert set(REASON_SHORT) == set(REASON_TEXT)
+    for key, text in REASON_SHORT.items():
+        assert text[0].isupper() and text.endswith("."), key
+        assert len(text) <= 60, (key, len(text))
+        assert not re.search(r"[0-9{}]", text), key
+        assert not any(j in text.lower() for j in _JARGON), (key, text)
+    assert reason_short(Intent.COUNTER, "bp=4900") == REASON_SHORT["counter"]
+    assert reason_short(Intent.ASK, "max_payments") == REASON_SHORT["ask_field"]
+    assert reason_short(Intent.CLOSE, "brand_new_code") is None

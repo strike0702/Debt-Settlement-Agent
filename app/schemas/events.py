@@ -91,6 +91,9 @@ class Decide(_Model):
     reason: str | None
     reason_key: str
     reason_text: str
+    # The same reason in a few number-free words, for collapsed trace rows. Added
+    # by the WS layer at emit time (Phase 36); absent on older frames.
+    reason_short: str | None = None
 
 
 class GuardResult(_Model):

@@ -33,14 +33,15 @@ export function ClientLedger({ brief, lens }: { brief: ScenarioBrief; lens: Lens
             <p className="text-sm text-muted">No ledger entries.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm num">
+              {/* Phones: 12 px type so all five columns fit a 390 px screen without scrolling. */}
+              <table className="w-full text-xs num sm:text-sm">
                 <caption className="sr-only">Client dedicated-account ledger with running balance</caption>
                 <thead className="text-left text-muted">
                   <tr className="align-bottom">
-                    <th className="py-1.5 pr-2 pl-1 font-medium">Date</th>
-                    <th className="py-1.5 pr-2 font-medium">Description</th>
-                    <th className="py-1.5 pr-2 text-right font-medium">Credit</th>
-                    <th className="py-1.5 pr-2 text-right font-medium">Debit</th>
+                    <th className="py-1.5 pr-1.5 sm:pr-2 pl-1 font-medium">Date</th>
+                    <th className="py-1.5 pr-1.5 sm:pr-2 font-medium">Description</th>
+                    <th className="py-1.5 pr-1.5 sm:pr-2 text-right font-medium">Credit</th>
+                    <th className="py-1.5 pr-1.5 sm:pr-2 text-right font-medium">Debit</th>
                     <th className="py-1.5 pr-1 text-right font-medium">Running balance</th>
                   </tr>
                 </thead>
@@ -50,8 +51,8 @@ export function ClientLedger({ brief, lens }: { brief: ScenarioBrief; lens: Lens
                     <LedgerLine key={`p-${i}`} row={r} />
                   ))}
                   <tr className="border-t border-border bg-surface-2 align-top" data-testid="ledger-as-of">
-                    <td className="py-1.5 pr-2 pl-1 whitespace-nowrap">{isoDate(brief.client.as_of_date)}</td>
-                    <td className="py-1.5 pr-2 font-medium" colSpan={3}>
+                    <td className="py-1.5 pr-1.5 sm:pr-2 pl-1 whitespace-nowrap">{isoDate(brief.client.as_of_date)}</td>
+                    <td className="py-1.5 pr-1.5 sm:pr-2 font-medium" colSpan={3}>
                       Balance today (as of)
                     </td>
                     <td className="py-1.5 pr-1 text-right font-medium">{money(brief.client.sda_balance_cents)}</td>
@@ -74,7 +75,7 @@ export function ClientLedger({ brief, lens }: { brief: ScenarioBrief; lens: Lens
 function Section({ label }: { label: string }) {
   return (
     <tr className="border-t border-border">
-      <th scope="rowgroup" colSpan={5} className="pt-2.5 pb-1 pl-1 text-left text-xs font-medium tracking-wide text-muted uppercase">
+      <th scope="rowgroup" colSpan={5} className="pt-2.5 pb-1 pl-1 text-left text-xs font-semibold text-muted">
         {label}
       </th>
     </tr>
@@ -84,10 +85,10 @@ function Section({ label }: { label: string }) {
 function LedgerLine({ row }: { row: ReturnType<typeof ledgerRows>[number] }) {
   return (
     <tr className="border-t border-border align-top" data-scheduled={row.scheduled}>
-      <td className="py-1.5 pr-2 pl-1 whitespace-nowrap">{isoDate(row.date)}</td>
-      <td className="py-1.5 pr-2">{row.description}</td>
-      <td className="py-1.5 pr-2 text-right">{row.credit == null ? "" : money(row.credit)}</td>
-      <td className="py-1.5 pr-2 text-right">{row.debit == null ? "" : money(row.debit)}</td>
+      <td className="py-1.5 pr-1.5 sm:pr-2 pl-1 whitespace-nowrap">{isoDate(row.date)}</td>
+      <td className="py-1.5 pr-1.5 sm:pr-2">{row.description}</td>
+      <td className="py-1.5 pr-1.5 sm:pr-2 text-right">{row.credit == null ? "" : money(row.credit)}</td>
+      <td className="py-1.5 pr-1.5 sm:pr-2 text-right">{row.debit == null ? "" : money(row.debit)}</td>
       <td className="py-1.5 pr-1 text-right">{money(row.balance)}</td>
     </tr>
   );

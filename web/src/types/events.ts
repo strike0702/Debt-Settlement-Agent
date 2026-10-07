@@ -213,6 +213,7 @@ export interface Decide {
   intent: Intent;
   reason: string | null;
   reason_key: string;
+  reason_short?: string | null;
   reason_text: string;
 }
 /**

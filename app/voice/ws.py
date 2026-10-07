@@ -5,7 +5,8 @@ Client events: ``start``, ``end``, binary WAV, ``text``, ``sentence_done``,
 ``transcript``, ``say``, ``belief``, ``eval``, ``blocked``, ``escalate``,
 ``latency``, ``audit``, ``phase``, ``agreement``, ``stt_error``, ``error``,
 ``turn_done``, ``turn_trace`` (one per agent turn, operator only; it gains
-``needs_info`` when the engine did not run), ``autoplay_done``. Their
+``needs_info`` when the engine did not run, and ``decide.reason_short``),
+``autoplay_done``. Their
 Pydantic models live in ``app.schemas.events``. Speaks through
 ``Orchestrator``; STT via ``app.voice.stt``, run inside
 ``llm_call_scope(call_id)`` so the STT call is audited.
@@ -16,6 +17,13 @@ balances, rescue data or private audit rows. ``start`` with
 ``"autoplay": true`` runs ``app.autoplay`` (sim creditor, no LLM) over the same
 events; client text / audio is refused while it runs. An NLU or STT
 ``LLMUnavailable`` answers ``error`` + ``turn_done`` and keeps the socket open.
+
+Whatever the socket's view, every ``turn_trace`` / ``audit`` / ``eval`` /
+``agreement`` frame is also kept, as the operator stream would see it, in a
+bounded in-memory store per call (``operator_detail``, served by
+``GET /calls/{id}/operator``), so the Debt negotiator view can show the
+decision trace of a call that streams the Creditor rep view. The store never
+feeds the rep socket.
 
 A reader task feeds an ``asyncio.Queue`` and each event (except ``start``)
 runs as its own task, so ``text`` / ``barge_in`` / ``sentence_done`` are
@@ -29,7 +37,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections import deque
+from collections import OrderedDict, deque
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -41,6 +49,7 @@ from app.adapter.engine_adapter import EvalSummary
 from app.agent.nlu_types import TurnAnalysis
 from app.agent.orchestrator import Orchestrator, Utterance
 from app.agent.policy import Agreement, Intent
+from app.agent.reasons import reason_short
 from app.agent.session import CallSession
 from app.autoplay import clamp_pause_ms, new_autoplay_call, run_autoplay
 from app.config import Settings, get_settings
@@ -173,14 +182,65 @@ def _phase_payload(session: CallSession, intent: str | None = None) -> dict[str,
     }
 
 
-class _ViewSocket:
-    """The accepted socket, with every outgoing frame filtered for ``view``."""
+# Debt negotiator detail per call (Phase 36). Operator data, like the rest of a
+# call's in-memory state: kept whatever view the socket streams, oldest call
+# evicted first, lost on restart (the UI then says the trace is gone).
+_DETAIL_KINDS = frozenset({"turn_trace", "audit", "eval", "agreement"})
+_DETAIL_MAX_CALLS = 256
+_DETAIL: OrderedDict[str, dict[str, Any]] = OrderedDict()
 
-    def __init__(self, ws: WebSocket, view: View) -> None:
+
+def _reset_operator_detail(call_id: str) -> None:
+    """Start an empty record for ``call_id`` (a new ``start`` replaces the old one)."""
+    _DETAIL.pop(call_id, None)
+    _DETAIL[call_id] = {"traces": {}, "audit": {}, "eval": None, "agreement": None}
+    while len(_DETAIL) > _DETAIL_MAX_CALLS:
+        _DETAIL.popitem(last=False)
+
+
+def _record_operator_detail(call_id: str, payload: dict[str, Any]) -> None:
+    if payload.get("type") not in _DETAIL_KINDS or call_id not in _DETAIL:
+        return
+    out = redact_for_view(payload, "operator")
+    if out is None:
+        return
+    detail = _DETAIL[call_id]
+    kind = out["type"]
+    if kind == "turn_trace":
+        detail["traces"][out["turn"]] = out
+    elif kind == "audit":
+        detail["audit"][out["id"]] = out
+    else:
+        detail[kind] = out
+
+
+def operator_detail(call_id: str) -> dict[str, Any] | None:
+    """``{call_id, traces, audit, eval, agreement}`` as the operator stream saw them, or None."""
+    detail = _DETAIL.get(call_id)
+    if detail is None:
+        return None
+    return {
+        "call_id": call_id,
+        "traces": [detail["traces"][t] for t in sorted(detail["traces"])],
+        "audit": list(detail["audit"].values()),
+        "eval": detail["eval"],
+        "agreement": detail["agreement"],
+    }
+
+
+class _ViewSocket:
+    """The accepted socket, with every outgoing frame filtered for ``view``.
+
+    Also records the operator detail of each frame for ``call_id`` (see above).
+    """
+
+    def __init__(self, ws: WebSocket, view: View, call_id: str = "") -> None:
         self.ws = ws
         self.view = view
+        self.call_id = call_id
 
     async def send_json(self, payload: dict[str, Any]) -> None:
+        _record_operator_detail(self.call_id, payload)
         out = redact_for_view(payload, self.view)
         if out is not None:
             await self.ws.send_json(out)
@@ -346,6 +406,8 @@ async def _emit_utterance(
         trace["timings"] = {k: v for k, v in timings.items() if isinstance(v, (int, float))}
         if trace.get("affordability") is None and trace.get("creditor_text") is not None:
             trace["needs_info"] = _missing_engine_fields(session)
+        decide = trace["decide"]
+        decide["reason_short"] = reason_short(decide["intent"], decide["reason"])
         await _send(ws, {"type": "turn_trace", **trace})
     # Auto-ack calls (autoplay) commit on emit, so the agreement belongs to this turn.
     if orch.auto_ack and utt.agreement is not None:
@@ -595,6 +657,7 @@ class _CallConnection:
         except _StartError as e:
             await self._send_one({"type": "error", "message": str(e)})
             return
+        _reset_operator_detail(self.call_id)
         if autoplay:
             await self._start_autoplay(data, scenario, str(scenario_id), rebased_as_of)
             return
@@ -801,7 +864,7 @@ async def call_socket(websocket: WebSocket, call_id: str, view: str = "operator"
         return
 
     conn = _CallConnection(
-        _ViewSocket(websocket, view),
+        _ViewSocket(websocket, view, call_id),
         call_id,
         audit=_audit,
         llm=_llm,

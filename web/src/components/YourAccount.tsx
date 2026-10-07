@@ -1,6 +1,7 @@
 /**
  * "Your account": the creditor's own side of the call, for the human playing
- * the rep (`GET /scenarios/{id}/rep`).
+ * the rep (`GET /scenarios/{id}/rep`, or `POST /scenarios/preview/rep` with a
+ * custom case's JSON since Phase 36; that endpoint reads only the creditor side).
  *
  * Creditor lens only; it takes the slot the operator's ScenarioBrief uses. It
  * shows the creditor's balances and their settlement rules from the rep card,
@@ -8,6 +9,7 @@
  */
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { useRepAccount } from "@/hooks/useScenarios";
+import type { ScenarioSource } from "@/lib/customCases";
 import { money, moneyShort, pct } from "@/lib/format";
 import type { RepAccount } from "@/types/protocol";
 
@@ -39,8 +41,8 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function YourAccount({ scenarioId }: { scenarioId: string }) {
-  const state = useRepAccount(scenarioId);
+export function YourAccount({ source }: { source: ScenarioSource }) {
+  const state = useRepAccount(source);
   return (
     <Card aria-label="Your account">
       <CardHeader title="Your account" aside={<span className="text-sm text-muted">You are the creditor</span>} />
@@ -48,7 +50,7 @@ export function YourAccount({ scenarioId }: { scenarioId: string }) {
         {state.status === "loading" && <p className="m-0 text-sm text-muted">Loading your account…</p>}
         {state.status === "error" && (
           <p role="alert" className="m-0 text-sm text-muted">
-            Could not load your account ({state.message}).
+            Could not load your account ({state.message}). Pick the case again to retry.
           </p>
         )}
         {state.status === "ready" && <AccountBody account={state.account} />}

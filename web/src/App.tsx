@@ -5,14 +5,22 @@
  * Two views (user-facing names; the lens values stay `operator` / `creditor`):
  * "Debt negotiator" shows the decision trace, the operator brief and the
  * client's ledger; "Creditor rep" shows only the conversation, "Your account"
- * (the rep's own balances and rules from `/scenarios/{id}/rep`) and the
- * agreed terms. Live (default): scenario cards from `/scenarios`. "Start call" opens
- * `/ws/call/{id}?view=…` and the visitor plays the creditor rep by typing,
- * clicking a suggested reply, or speaking; "Watch a call" starts the same
- * socket in autoplay (the server's sim creditor plays the rep). The socket's
- * view is fixed per call: switching to the Creditor rep view mid-call re-filters
- * on the client, and switching back cannot restore what a rep stream never
- * carried (including the whole decision trace), so App says so.
+ * (the rep's own balances and rules) and the agreed terms. Live (default):
+ * scenario cards from `/scenarios`. "Start call" opens `/ws/call/{id}?view=…`
+ * and the visitor plays the creditor rep by typing, clicking a suggested
+ * reply, or speaking; "Watch a call" starts the same socket in autoplay (the
+ * server's sim creditor plays the rep).
+ *
+ * The socket's view is fixed per call. Switching to the Creditor rep view
+ * mid-call re-filters on the client. Switching to the Debt negotiator view
+ * during or after a call that streams the rep view backfills the decision
+ * trace, ladder, latency and audit from `GET /calls/{id}/operator` and
+ * refetches on every `turn_done` (Phase 36), so the trace is there whichever
+ * view the call was started in.
+ *
+ * Custom test cases (Phase 36): "Add a test case" opens `CaseEditor`; saved
+ * cases join the cards, persist in `localStorage` and start with
+ * `start.scenario_payload` (played by hand: autoplay is curated-only).
  *
  * `?fixture=1` replays `fixtures/call_easy_deal.json` with no backend
  * (`&speed=4` to speed up).
@@ -20,6 +28,7 @@
 import { Download, PhoneCall, PhoneOff } from "lucide-react";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { CaseEditor } from "@/components/CaseEditor";
 import { ClientLedger } from "@/components/ClientLedger";
 import { Conversation } from "@/components/Conversation";
 import { ScenarioBrief } from "@/components/ScenarioBrief";
@@ -29,10 +38,22 @@ import { Card } from "@/components/ui/card";
 import { easyDeal, FIXTURE_SCENARIOS } from "@/fixtures";
 import { useCall } from "@/hooks/useCall";
 import { useFixtureReplay } from "@/hooks/useFixtureReplay";
-import { useScenarioBrief, useScenarios } from "@/hooks/useScenarios";
+import { useOperatorDetail } from "@/hooks/useOperatorDetail";
+import { useScenarioBrief, useScenarios, useScenarioTemplate } from "@/hooks/useScenarios";
 import { useTheme } from "@/hooks/useTheme";
 import { useVoice } from "@/hooks/useVoice";
-import { type CallEvent, type CallState, foldCall, isCallOver } from "@/lib/callState";
+import { type CallEvent, type CallState, foldCall, isCallOver, withOperatorDetail } from "@/lib/callState";
+import {
+  type CustomCase,
+  customMeta,
+  isCustomId,
+  loadCases,
+  metaOf,
+  nextKey,
+  saveCases,
+  type ScenarioSource,
+  serverId,
+} from "@/lib/customCases";
 import { type Lens, viewFor } from "@/lib/lens";
 import { micEventFor, micReducer, type MicState } from "@/lib/mic";
 import { toRepView } from "@/lib/repView";
@@ -71,18 +92,23 @@ export default function App() {
   return fixture ? <FixtureApp speed={speed} /> : <LiveApp />;
 }
 
-/** Shown in the trace column when the call streams the Creditor rep view (no traces). */
-export const REP_STREAM_NOTE =
-  "This call streams the Creditor rep view, which carries no decision trace. Start the next call in the Debt negotiator view to see each move and the engine's curve.";
+/** Trace column note when the server no longer holds a rep-view call's operator detail. */
+export const TRACE_GONE_NOTE =
+  "The server no longer has this call's decision trace (it keeps recent calls in memory only). Start a new call to see each move.";
+
+/** Why "Watch a call" is off for a custom case. */
+export const CUSTOM_WATCH_REASON =
+  "The simulated rep only knows the built-in cases. Press Start call to play the rep yourself.";
 
 /**
  * The decision-trace and state slots for AppShell (lazy: they pull in Recharts).
- * The Creditor rep view has no trace column.
+ * The Creditor rep view has no trace column. `context` (brief and ledger, or
+ * "Your account") sits under the agreement and schedule.
  */
 function columns(
   state: CallState,
   lens: Lens,
-  brief?: ReactNode,
+  context?: ReactNode,
   traceNote?: string,
 ): { trace: ReactNode; state: ReactNode } {
   return {
@@ -93,18 +119,19 @@ function columns(
         </Suspense>
       ) : null,
     state: (
-      <div className="flex flex-col gap-4">
-        {brief}
-        <Suspense fallback={<Loading />}>
-          <StatePanel state={state} lens={lens} />
-        </Suspense>
-      </div>
+      <Suspense fallback={<Loading />}>
+        <StatePanel state={state} lens={lens} context={context} />
+      </Suspense>
     ),
   };
 }
 
 function Notice({ children }: { children: ReactNode }) {
-  return <p className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-muted">{children}</p>;
+  return (
+    <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-muted">
+      {children}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------- fixture mode
@@ -130,7 +157,6 @@ function FixtureApp({ speed }: { speed: number }) {
       onWatch={replay.start}
       watchLabel={replay.playing || replay.done ? "Replay the call" : "Watch a call"}
       playing={replay.playing || replay.done}
-      phase={state.phase}
       lens={lens}
       onLens={setLens}
       theme={theme}
@@ -154,21 +180,53 @@ function FixtureApp({ speed }: { speed: number }) {
 // ---------------------------------------------------------------- live mode
 
 const OUTCOME: Record<string, string> = {
-  deal: "Autoplay finished: deal drafted.",
-  no_deal: "Autoplay finished: no deal.",
-  escalate: "Autoplay finished: escalated to a human.",
-  incomplete: "Autoplay stopped before the call finished.",
+  deal: "The simulated call ended with a deal drafted.",
+  no_deal: "The simulated call ended with no deal.",
+  escalate: "The simulated call was handed off to a person.",
+  incomplete: "The simulated call stopped before it finished.",
 };
+
+type EditorState = { mode: "add" } | { mode: "edit"; key: string };
 
 function LiveApp() {
   const [lens, setLens] = useState<Lens>("operator");
   const [theme, toggleTheme] = useTheme();
-  const { scenarios, error: catalogError } = useScenarios(null);
+  const { scenarios: catalog, error: catalogError } = useScenarios(null);
   const [selected, setSelected] = useState("easy_deal");
   const call = useCall();
 
+  // ------------------------------------------------ custom test cases
+  const [cases, setCases] = useState<CustomCase[]>(() => loadCases());
+  const [storageOk, setStorageOk] = useState(true);
+  const [editor, setEditor] = useState<EditorState | null>(null);
+  const [removed, setRemoved] = useState<{ item: CustomCase; index: number } | null>(null);
+  const template = useScenarioTemplate(editor !== null);
+  const updateCases = (next: CustomCase[]) => {
+    setCases(next);
+    setStorageOk(saveCases(next));
+  };
+  const scenarios = useMemo(() => [...cases.map(customMeta), ...catalog], [cases, catalog]);
+  const custom = isCustomId(selected) ? (cases.find((c) => c.key === selected) ?? null) : null;
+  const source = useMemo<ScenarioSource | null>(
+    () =>
+      custom
+        ? { kind: "custom", key: custom.key, version: custom.version, payload: custom.payload }
+        : catalog.some((s) => s.id === selected)
+          ? { kind: "catalog", id: selected }
+          : null,
+    [custom, catalog, selected],
+  );
+
+  // ------------------------------------------------ call state (+ operator backfill)
+  const repStream = call.view === "rep" && call.lastCallId != null && call.events.length > 0;
+  const backfillId = lens === "operator" && repStream ? call.lastCallId : null;
+  const tick = useMemo(() => call.events.filter((e) => e.type === "turn_done" || e.type === "autoplay_done").length, [call.events]);
+  const detail = useOperatorDetail(backfillId, tick);
   const events = useMemo(() => eventsForLens(call.events, lens), [call.events, lens]);
-  const state = useMemo(() => foldCall(events), [events]);
+  const state = useMemo(() => {
+    const folded = foldCall(events);
+    return detail.status === "ready" ? withOperatorDetail(folded, detail.detail) : folded;
+  }, [events, detail]);
   const stateRef = useRef(state);
   useLayoutEffect(() => {
     stateRef.current = state;
@@ -202,16 +260,19 @@ function LiveApp() {
   const { start } = call;
   const startCall = useCallback(
     (autoplay: boolean) => {
+      if (custom && autoplay) return;
       engine.reset(autoplay);
       if (autoplay) void engine.stopMic();
-      start(selected, { view: viewFor(lens), autoplay });
+      if (custom) start(serverId(custom.payload), { view: viewFor(lens), payload: custom.payload });
+      else start(selected, { view: viewFor(lens), autoplay });
     },
-    [start, engine, selected, lens],
+    [start, engine, selected, lens, custom],
   );
 
   const scenario = scenarios.find((s) => s.id === selected) ?? null;
-  const brief = useScenarioBrief(selected, lens, scenarios.length > 0);
+  const brief = useScenarioBrief(source, lens, source !== null);
   const inCall = call.status === "connecting" || call.status === "live" || call.status === "ending";
+  const callRunning = inCall && !over;
   const repLines = state.messages.filter((m) => m.role === "creditor").length;
   // Debt negotiator: the private brief and client ledger. Creditor rep: the rep's own account and rules (rep-safe).
   const side =
@@ -222,20 +283,61 @@ function LiveApp() {
             <ClientLedger brief={brief} lens={lens} />
           </>
         )
-      : scenarios.length > 0 && <YourAccount scenarioId={selected} />;
-  const repStream = call.view === "rep" && call.events.length > 0;
-  const cols = columns(state, lens, side || null, repStream ? REP_STREAM_NOTE : undefined);
+      : source && <YourAccount source={source} />;
+  const traceNote = backfillId && detail.status === "gone" ? TRACE_GONE_NOTE : undefined;
+  const cols = columns(state, lens, side || null, traceNote);
 
-  const notices: string[] = [];
-  if (catalogError) notices.push(catalogError);
-  if (lens === "operator" && repStream) {
-    notices.push(
-      "This call streams the Creditor rep view, so the decision trace and private detail are not available for it. Debt negotiator detail starts with the next call.",
+  const saveCase = (payload: Record<string, unknown>, suggested: string[]) => {
+    const meta = metaOf(payload);
+    if (editor?.mode === "edit") {
+      updateCases(cases.map((c) => (c.key === editor.key ? { ...c, ...meta, payload, suggested, version: c.version + 1 } : c)));
+      setSelected(editor.key);
+    } else {
+      const key = nextKey(cases);
+      updateCases([{ key, payload, suggested, version: 1, ...meta }, ...cases]);
+      if (!callRunning) setSelected(key);
+    }
+    setRemoved(null);
+    setEditor(null);
+  };
+  const removeCase = (key: string) => {
+    const index = cases.findIndex((c) => c.key === key);
+    if (index < 0) return;
+    updateCases(cases.filter((c) => c.key !== key));
+    setRemoved({ item: cases[index]!, index });
+    if (editor?.mode === "edit" && editor.key === key) setEditor(null);
+    if (selected === key) setSelected(catalog[0]?.id ?? "easy_deal");
+  };
+  const undoRemove = () => {
+    if (!removed) return;
+    const next = [...cases];
+    next.splice(Math.min(removed.index, next.length), 0, removed.item);
+    updateCases(next);
+    setRemoved(null);
+  };
+  const editing = editor?.mode === "edit" ? cases.find((c) => c.key === editor.key) : undefined;
+  const editorText =
+    editor?.mode === "edit" ? (editing ? JSON.stringify(editing.payload, null, 2) : null) : template;
+
+  const notices: { key: string; body: ReactNode }[] = [];
+  const note = (key: string, body: ReactNode) => notices.push({ key, body });
+  if (catalogError) note("catalog", catalogError);
+  if (removed) {
+    note(
+      "removed",
+      <>
+        <span>Removed “{removed.item.title}”.</span>
+        <Button size="sm" variant="ghost" className="text-accent" onClick={undoRemove}>
+          Undo
+        </Button>
+      </>,
     );
   }
-  if (state.autoplay) notices.push(OUTCOME[state.autoplay.outcome] ?? "Autoplay finished.");
+  if (!storageOk) note("storage", "This browser is not saving custom test cases, so they will be gone after a reload.");
+  if (custom && !callRunning) note("custom", "This is your own test case. The simulated rep only knows the built-in cases, so press Start call and play the rep yourself.");
+  if (state.autoplay) note("outcome", OUTCOME[state.autoplay.outcome] ?? "The simulated call finished.");
   const lastError = state.errors.at(-1);
-  if (lastError) notices.push(lastError);
+  if (lastError) note("error", lastError);
 
   return (
     <AppShell
@@ -246,14 +348,32 @@ function LiveApp() {
         if (!inCall || over) setSelected(id);
       }}
       onWatch={() => startCall(true)}
-      watchDisabled={!scenario || call.status === "connecting"}
+      watchDisabled={!scenario || call.status === "connecting" || custom !== null}
+      watchDisabledReason={custom ? CUSTOM_WATCH_REASON : undefined}
       watchLabel={call.autoplay && call.events.length > 0 ? "Watch again" : "Watch a call"}
       playing={call.autoplay && call.events.length > 0}
-      phase={state.phase}
       lens={lens}
       onLens={setLens}
       theme={theme}
       onTheme={toggleTheme}
+      onAddCase={() => setEditor({ mode: "add" })}
+      onEditCase={callRunning ? undefined : (id) => setEditor({ mode: "edit", key: id })}
+      onRemoveCase={callRunning ? undefined : removeCase}
+      editor={
+        editor &&
+        (editorText == null ? (
+          <Loading />
+        ) : (
+          <CaseEditor
+            key={editor.mode === "edit" ? `${editor.key}@${editing?.version}` : "add"}
+            mode={editor.mode}
+            initialText={editorText}
+            templateText={template}
+            onSave={saveCase}
+            onCancel={() => setEditor(null)}
+          />
+        ))
+      }
       actions={
         <>
           {call.lastCallId && (
@@ -265,7 +385,7 @@ function LiveApp() {
               <Download className="h-4 w-4" aria-hidden /> Download log
             </a>
           )}
-          {inCall && !over ? (
+          {callRunning ? (
             <Button onClick={call.end} disabled={call.status === "ending"}>
               <PhoneOff className="h-4 w-4" aria-hidden /> End call
             </Button>
@@ -276,7 +396,15 @@ function LiveApp() {
           )}
         </>
       }
-      notice={notices.length > 0 ? <div className="flex flex-col gap-2">{notices.map((n) => <Notice key={n}>{n}</Notice>)}</div> : null}
+      notice={
+        notices.length > 0 ? (
+          <div className="flex flex-col gap-2" aria-live="polite">
+            {notices.map((n) => (
+              <Notice key={n.key}>{n.body}</Notice>
+            ))}
+          </div>
+        ) : null
+      }
       conversation={
         <Conversation
           messages={state.messages}
@@ -285,8 +413,12 @@ function LiveApp() {
           nextSuggested={live ? repLines : undefined}
           onSend={live ? (t) => send(t, scenario?.suggested.includes(t) ? "suggested" : "typed") : undefined}
           onMicToggle={live ? voice.toggleMic : undefined}
-          emptyHint="Press “Start call” to play the creditor rep yourself (type, click a suggested reply, or use the mic), or “Watch a call” to let the simulated rep play it."
-          idleHint={call.autoplay && inCall && !over ? "The simulated rep is playing this call" : "Start a call to reply as the rep"}
+          emptyHint={
+            custom
+              ? "Press “Start call” to play the creditor rep on your test case: type, click a suggested reply, or use the mic."
+              : "Press “Start call” to play the creditor rep yourself (type, click a suggested reply, or use the mic), or “Watch a call” to let the simulated rep play it."
+          }
+          idleHint={call.autoplay && callRunning ? "The simulated rep is playing this call" : "Start a call to reply as the rep"}
           interim={voice.snapshot.interim}
           notice={voice.snapshot.notice}
           onDismissNotice={() => engine.dismissNotice()}

@@ -29,7 +29,7 @@ term back to you ("Just to confirm ..."), answer "Correct." (or "No") first.
 - Sure. We can take up to eight monthly payments, at least one hundred dollars each, all the same amount.
 - Correct.
 - We are looking for forty-five percent of the balance.
-- Thirty-two is too low. I could do forty-two percent.
+- That is too low. I could do forty-two percent.
 - Forty percent is my floor. I can't go lower than that.
 - Yes, that works for us.
 - No, that's everything. Thanks.

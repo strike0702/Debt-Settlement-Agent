@@ -39,6 +39,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 27 | Provider API key pool (user request) | done |
 | 28 | Filler false-accept veto (user request) | done (veto failed the corpus gate, reverted) |
 | 29 | Hermetic tests ignore .env (CI fix, user request) | done |
+| 33 | Natural read-back copy in NLG bank, figure-free card replies (user request) | done |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -229,6 +230,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `parse_bank(data) -> dict[BankKey, list[str]]`; `load_bank(path=DEFAULT_BANK_PATH)` (lru_cache; missing file → `{}`)
 - `pick_template(action, *, call_id, turn, bank, intent_key=None) -> str | None` (Phase 24b `intent_key`: `ACK` / `ANSWER:<topic>`) — candidates passing `template_guard` with the action's ids; index `sha256(f"{call_id}:{turn}") mod n`
 - `config/nlg_bank.json`: `{generated, profile, per_key, stats, entries: [{intent, placeholders, required, templates}]}`; built by `scripts/build_template_bank.py`; Phase 24b adds `ACK` (7 id sets) and `ANSWER:<topic>` (5, no placeholders, talking point always first) via `--acts` (merge; other entries kept)
+- Phase 33: `READ_BACK` (8) and `CLARIFY` (8) templates are hand-written, not LLM output; COUNTER "which equals" → "which comes to". Top-level `readback_reviewed` records it. Re-running `scripts/build_template_bank.py` without `--acts` would overwrite them; re-apply by hand. `tests/unit/test_nlg_bank.py` bans `kindly / tentative / validate / acknowledge / equals / set at` and requires every READ_BACK variant to be a confirmation question.
 
 ### `app.agent.nlu`
 - `repair_stance(stance, utterance, *, has_terms=False) -> str` — injection never accepts → reject phrase → accept phrase → dominant short ack with no number/term
@@ -1182,3 +1184,24 @@ uv run python -m eval.ab_report --arm A=eval/results/ab1007_A_policy --arm B=eva
 - Deviations: none.
 - Open issues: the guard is lexical. Conditional or question forms ("let me check if that works", "is that agreed?") still force accept, and `_REJECT_STANCE_RE` has no negation guard ("that's not too low" → reject). Neither is in scope here.
 - Checks: `uv run ruff check .` clean. `uv run pytest -q` 748 passed / 2 skipped / 5 xfailed. `uv run pytest -q -m "not slow"` with `.env` moved aside (then restored): 745 passed / 2 skipped / 3 deselected / 5 xfailed. Oracle eval `eval_20261007_163923_s7` thresholds PASS. Its metrics table is identical to `docs/eval/policy_eval_20261006/summary.md` (latency excluded).
+
+### Phase 33 (read-back copy) (2026-10-07) — natural read-back copy in NLG bank, figure-free card replies (user request)
+
+- Problems: (a) `fixtures/scenarios/easy_deal/rep_card.md` suggested "Thirty-two is too low. I could do forty-two percent." but the agent now counters 31%. (b) The bank (`NLG_MODE=bank`, demo default) READ_BACK lines from Phase 21 read like a form ("Kindly acknowledge the tentative … set at …").
+- Files: `config/nlg_bank.json` (READ_BACK 8 and CLARIFY 8 rewritten by hand; COUNTER: two "which equals" → "which comes to", "Please consider … amounting to {offer_total}." → "Could you consider … amounting to {offer_total}?"; new top-level `readback_reviewed` note; keys, placeholder ids, `required` and variant counts unchanged), `fixtures/scenarios/easy_deal/rep_card.md` (line 32 → "That is too low. I could do forty-two percent."), `tests/unit/test_nlg_bank.py` (+2 tests), `tests/unit/test_rep_card_replies.py` (new). No `app/`, policy, threshold or scenario-figure changes.
+- Other cards checked: no other suggested reply quotes an agent figure. counter_ladder "That's far too low. I could come down to seventy percent." and rescue_escalate "Forty-five is firm." name only the creditor's own figures.
+- READ_BACK before → after (5 of 8, same positions):
+
+  | before (Phase 21, LLM) | after (Phase 33, hand-written) |
+  |---|---|
+  | Please confirm the tentative {field_label} as {readback_value}. | Just to confirm, the {field_label} is {readback_value}? |
+  | Could you verify the tentative {field_label} is {readback_value}? | So that's {readback_value} for the {field_label}, right? |
+  | Kindly acknowledge the tentative {field_label} set at {readback_value}. | Just to confirm, that's {readback_value} for the {field_label}? |
+  | Please validate the tentative {field_label} with {readback_value}. | So the {field_label} is {readback_value}, is that right? |
+  | May I confirm the tentative {field_label} equals {readback_value}? | Let me make sure I have it: {readback_value} for the {field_label}? |
+
+  The other three: "I have {readback_value} for the {field_label}. Is that right?", "Okay, so {readback_value} for the {field_label}, correct?", "And the {field_label} is {readback_value}, did I get that right?".
+- Tests: `test_bank_has_no_stiff_phrasing` (no bank entry matches `kindly|tentative|validate|acknowledge|equals|set at`, case-insensitive, word-bounded); `test_read_back_entries_are_confirmation_questions` (8 variants, each ends in "?" and opens with a confirmation lead-in); `test_rep_card_replies.py`: `test_easy_deal_replies_never_quote_the_agents_counter` (runs easy_deal autoplay offline, collects every COUNTER `counter_pct` — today `{3100}` — and asserts no suggested reply contains its spelled word), `test_rejection_replies_name_no_figure_before_too_low` (every card: no number word before "too low"; this is the one that failed on the old easy_deal line), `test_pct_word`. Every bank entry still passes `template_guard` (existing test).
+- Deviations: CLARIFY was also rewritten (it had "Kindly … equals", "Please advise", "help me determine"), and every CLARIFY variant now says "the {field_label}". Today no live CLARIFY action matches this bank key (the cents-ambiguity CLARIFY also carries `bare_amount` and a `template_override`), so the change is not audible yet. ACK, ANSWER, REFUSE_* and CONFIRM_SCHEDULE were judged natural and left alone.
+- Open issues: `scripts/build_template_bank.py` would regenerate READ_BACK / CLARIFY / COUNTER from the LLM and lose the hand edits (the stiff-word test would catch it). `app/llm/prompts.py:53` still describes READ_BACK to the LLM NLG as "Confirm the tentative {field_label} using {readback_value}." (out of scope: `app/`).
+- Checks: `uv run ruff check .` clean. `uv run pytest -q` 753 passed / 2 skipped / 5 xfailed. `uv run pytest -q -m "not slow"` with `.env` moved aside (then restored): 750 passed / 2 skipped / 3 deselected / 5 xfailed. Oracle eval `eval_20261007_170230_s7` thresholds PASS; its metrics table is identical to `docs/eval/policy_eval_20261006/summary.md` (latency excluded).

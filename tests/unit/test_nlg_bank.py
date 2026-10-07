@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date
 from pathlib import Path
 
@@ -138,3 +139,27 @@ async def test_bank_mode_full_call_zero_llm_calls(tmp_path: Path) -> None:
         any(prefix and line.startswith(prefix) for prefix in bank_texts)
         for line in result["agent_lines"]
     ), "at least one line came from the bank"
+
+
+# Phase 33: the bank is the demo voice, so its copy must sound spoken, not form-like.
+_STIFF = re.compile(r"\b(kindly|tentative|validate|acknowledge|equals|set at)\b", re.IGNORECASE)
+
+
+def test_bank_has_no_stiff_phrasing() -> None:
+    stiff = [
+        (e["intent"], t)
+        for e in _bank_json()["entries"]
+        for t in e["templates"]
+        if _STIFF.search(t)
+    ]
+    assert stiff == []
+
+
+def test_read_back_entries_are_confirmation_questions() -> None:
+    entries = [e for e in _bank_json()["entries"] if e["intent"] == "READ_BACK"]
+    assert entries
+    for entry in entries:
+        assert len(entry["templates"]) == 8, "same variant count as Phase 21"
+        for t in entry["templates"]:
+            assert t.rstrip().endswith("?"), t
+            assert t.startswith(("Just to confirm", "So ", "And ", "Let me", "I have", "Okay")), t

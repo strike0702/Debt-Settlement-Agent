@@ -27,6 +27,7 @@ npm run lint
 
 - Live (default): scenario cards come from `/scenarios`. **Watch a call** opens `/ws/call/{id}?view=…` with the Phase 22 autoplay start (`autoplay: true, autoplay_pause_ms: 1200`); the server's sim creditor plays the rep with template phrasing, so it needs no keys. **Start call** opens the same socket for you to play the rep by typing, clicking a suggested reply (from the scenario's rep card), or using the mic.
 - The socket's view is fixed per call: `?view=rep` in the creditor's eye, `operator` otherwise. Switching to the creditor's eye mid-call re-filters on the client (`toRepView`); switching back to operator during a rep call shows a notice, because a rep stream never carried the private data.
+- In the creditor's eye the state column opens with **Your account** (`GET /scenarios/{id}/rep`): the rep's creditor name, outstanding and original balance, and their settlement rules from the rep card. It carries no client or firm data; the operator's scenario brief stays operator-only.
 - **Download log** fetches `/calls/{id}/export?view=rep|operator` for the last call (it survives the end of the call); the rep export drops private audit rows.
 - `?fixture=1` replays `src/fixtures/call_easy_deal.json` with no backend (`&speed=4` to play faster).
 - Node: CI and Render use Node 24 (Vitest and jsdom need ≥ 22.22 or ≥ 24.15).
@@ -63,7 +64,7 @@ src/
   hooks/
     useCall.ts             one call socket: start / autoplay / text / WAV / end, raw frames + subscribers
     useVoice.ts            React wrapper over VoiceEngine (mic state, notices, STT mode)
-    useScenarios.ts        /scenarios catalog; /scenarios/{id} brief (operator lens only)
+    useScenarios.ts        /scenarios catalog; /scenarios/{id} brief (operator lens only); /scenarios/{id}/rep account
     useFixtureReplay.ts    timed replay of frames
     useTheme.ts            light/dark toggle (persisted; applied pre-paint in index.html)
   components/
@@ -74,6 +75,7 @@ src/
     StatePanel.tsx         agreement, ladder chart, schedule, belief table, latency, audit
     PrivateLock.tsx        lock panel (creditor lens) and lock tag (operator lens)
     ScenarioBrief.tsx      operator brief: creditor, client finances, firm fees (PRIVATE)
+    YourAccount.tsx        creditor's eye: the rep's own account and settlement rules
     ui/                    button, card, badge, segmented (shadcn-style)
 scripts/gen-fixture.mjs    regenerates the fixture from its hand-written turn specs
 scripts/gen-types.mjs      events.schema.json → src/types/events.ts (json-schema-to-typescript)

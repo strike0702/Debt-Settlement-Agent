@@ -2,7 +2,9 @@
  * Top-level wiring: picks the event source, folds it into state, and connects
  * the conversation controls to the call socket and the voice engine.
  *
- * Live (default): scenario cards from `/scenarios`; "Start call" opens
+ * Live (default): scenario cards from `/scenarios`; the state column opens
+ * with the operator's brief, or in the creditor's eye with "Your account"
+ * (the rep's own balances and rules from `/scenarios/{id}/rep`). "Start call" opens
  * `/ws/call/{id}?view=…` and the visitor plays the creditor rep by typing,
  * clicking a suggested reply, or speaking; "Watch a call" starts the same
  * socket in autoplay (the server's sim creditor plays the rep). The socket's
@@ -18,6 +20,7 @@ import { lazy, type ReactNode, Suspense, useCallback, useEffect, useLayoutEffect
 import { AppShell } from "@/components/AppShell";
 import { Conversation } from "@/components/Conversation";
 import { ScenarioBrief } from "@/components/ScenarioBrief";
+import { YourAccount } from "@/components/YourAccount";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { easyDeal, FIXTURE_SCENARIOS } from "@/fixtures";
@@ -194,7 +197,12 @@ function LiveApp() {
   const brief = useScenarioBrief(selected, lens, scenarios.length > 0);
   const inCall = call.status === "connecting" || call.status === "live" || call.status === "ending";
   const repLines = state.messages.filter((m) => m.role === "creditor").length;
-  const cols = columns(state, lens, brief && lens === "operator" ? <ScenarioBrief brief={brief} lens={lens} /> : null);
+  // Operator: the private brief. Creditor's eye: the rep's own account and rules (rep-safe).
+  const side =
+    lens === "operator"
+      ? brief && <ScenarioBrief brief={brief} lens={lens} />
+      : scenarios.length > 0 && <YourAccount scenarioId={selected} />;
+  const cols = columns(state, lens, side || null);
 
   const notices: string[] = [];
   if (catalogError) notices.push(catalogError);

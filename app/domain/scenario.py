@@ -6,11 +6,15 @@ creditor offer amounts, and firm fee settings. Loaders read ``client.json``,
 Optional ``rebase_to`` shifts every client date by whole months so demos do
 not go stale relative to ``date.today()``. ``scenario_details`` builds the
 operator-only brief (includes PRIVATE client finances; never sent to NLG).
+``rep_account`` is the opposite: the creditor's own account and rules, parsed
+from ``rep_card.md`` only, for the human playing the rep (no client data).
 """
 
 from __future__ import annotations
 
 import json
+import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
@@ -286,6 +290,106 @@ def rep_card_suggestions(markdown: str) -> list[str]:
         if inside and line.startswith("- "):
             out.append(line[2:].strip())
     return out
+
+
+# Rep card table rows → typed values. A label not listed here is skipped (never guessed);
+# a listed label whose value does not parse comes back as ``None``.
+_MONEY_RE = re.compile(r"^\$(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{2}))?(?![\d,.])")
+_PCT_RE = re.compile(r"^(\d+(?:\.\d+)?)%")
+_COUNT_RE = re.compile(r"^(\d+)(?![\d.,%])")
+_STRUCTURES = ("even", "balloon", "flexible")
+_RowParser = Callable[[str], int | str | None]
+
+
+def _money_cents(text: str) -> int | None:
+    m = _MONEY_RE.match(text)
+    if not m:
+        return None
+    return int(m.group(1).replace(",", "")) * 100 + int(m.group(2) or 0)
+
+
+def _pct_bp(text: str) -> int | None:
+    m = _PCT_RE.match(text)
+    if not m:
+        return None
+    bp = Decimal(m.group(1)) * 100
+    return int(bp) if bp == bp.to_integral_value() else None
+
+
+def _count(text: str) -> int | None:
+    m = _COUNT_RE.match(text)
+    return int(m.group(1)) if m else None
+
+
+def _structure(text: str) -> str | None:
+    m = re.match(r"[a-z]+", text.lower())
+    return m.group(0) if m and m.group(0) in _STRUCTURES else None
+
+
+def _free_text(text: str) -> str | None:
+    return text or None
+
+
+_ACCOUNT_ROWS: dict[str, tuple[str, _RowParser]] = {
+    "creditor": ("name", _free_text),
+    "outstanding balance": ("outstanding_balance_cents", _money_cents),
+    "original balance": ("original_balance_cents", _money_cents),
+}
+_RULE_ROWS: dict[str, tuple[str, _RowParser]] = {
+    "max payments": ("max_payments", _count),
+    "minimum payment": ("min_payment_cents", _money_cents),
+    "structure": ("structure", _structure),
+    "opening ask": ("opening_ask_bp", _pct_bp),
+    "floor": ("floor_bp", _pct_bp),
+    "first payment": ("first_payment", _free_text),
+}
+
+
+def _table_rows(markdown: str, heading: str) -> list[tuple[str, str]]:
+    """``(label, value)`` cells of the first two-column table under ``## heading``."""
+    out: list[tuple[str, str]] = []
+    inside = False
+    for line in markdown.splitlines():
+        if line.startswith("## "):
+            inside = line[3:].strip().lower() == heading
+            continue
+        if not inside or not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) != 2 or set(cells[1]) <= set("-: "):
+            continue  # separator row or a malformed row
+        out.append((cells[0].lower(), cells[1]))
+    return out
+
+
+def _parse_rows(
+    markdown: str, heading: str, rows: dict[str, tuple[str, _RowParser]]
+) -> dict[str, Any]:
+    parsed: dict[str, Any] = {key: None for key, _ in rows.values()}
+    for label, value in _table_rows(markdown, heading):
+        if label in rows:
+            key, parse = rows[label]
+            parsed[key] = parse(value)
+    return parsed
+
+
+def rep_account_from_card(markdown: str) -> dict[str, Any]:
+    """Rep-safe view of a rep card: the creditor's own account and settlement rules.
+
+    Reads only the ``## Creditor account`` and ``## Your settlement rules`` tables.
+    Money is integer cents, percentages basis points; a known row that does not
+    parse is ``None``, an unknown row is dropped. Holds no client or firm data.
+    """
+    return {
+        "creditor": _parse_rows(markdown, "creditor account", _ACCOUNT_ROWS),
+        "rules": _parse_rows(markdown, "your settlement rules", _RULE_ROWS),
+    }
+
+
+def rep_account(scenario_id: str, *, root: Path | None = None) -> dict[str, Any]:
+    """``rep_account_from_card`` for a catalog scenario; raises like ``resolve_scenario_dir``."""
+    folder = resolve_scenario_dir(scenario_id, root=root)
+    return {"id": folder.name, **rep_account_from_card(load_rep_card(folder.name, root=root))}
 
 
 def details_from_scenario(

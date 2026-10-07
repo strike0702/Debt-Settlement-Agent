@@ -287,12 +287,14 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 
 ### `app.domain.scenario` (Phase 23b addition)
 - `rep_card_suggestions(markdown) -> list[str]` — `- ` bullets under the rep card's `## Suggested replies` heading, in order. Every curated `fixtures/scenarios/*/rep_card.md` has that section (digit-free lines).
+- Phase 34: `rep_account_from_card(markdown) -> {creditor: {name, outstanding_balance_cents, original_balance_cents}, rules: {max_payments, min_payment_cents, structure, opening_ask_bp, floor_bp, first_payment}}` — rep-safe, from the `## Creditor account` / `## Your settlement rules` tables only; known row that does not parse → `None`, unknown row dropped. `rep_account(scenario_id, *, root=None) -> {id, creditor, rules}` (raises like `resolve_scenario_dir`). `GET /scenarios/{id}/rep` returns it (404 unknown/invalid id).
 
 ### `web/` (Phase 23b; see `web/README.md`)
 - `npm run gen:types` → `web/src/types/events.ts` from `events.schema.json` (CI diff-checks it); hand-written aliases in `web/src/types/protocol.ts`.
 - `useCall(makeSocket?, makeId?)` → `{events, status, callId, lastCallId, view, autoplay, start(scenarioId, {view, autoplay}), end(), sendText(text, source?), sendJson, sendWav, addLocal, subscribe}`; autoplay start sends `autoplay_pause_ms: 1200`.
 - `useVoice(io, deps?, sttMode?)` over `VoiceEngine` (`web/src/lib/voice/engine.ts`); `VoiceIO = {sendJson, sendWav, sendRepText, currentTurn, onTtsOnset?}`.
 - `reduceCall` accepts a client-local `{type:"tts_onset", turn, ms}` → `turn_trace.timings.tts_onset_ms`.
+- Phase 34: `useRepAccount(id) -> RepAccountState` (`loading` | `error{message}` | `ready{account}`) in `hooks/useScenarios.ts`; `RepAccount` in `types/protocol.ts`; `<YourAccount scenarioId>` and `ruleLines(rules) -> string[]` in `components/YourAccount.tsx`.
 
 ### `app.cli`
 - `python -m app.cli [fixtures/demo]` — type as rep; auto-acks; prints lines, belief, timings, verdict
@@ -1209,3 +1211,13 @@ uv run python -m eval.ab_report --arm A=eval/results/ab1007_A_policy --arm B=eva
 ### Keep-warm enabled (2026-10-07, owner decision)
 
 - `.github/workflows/keepwarm.yml`: the 10-minute `schedule` is now on (plus `workflow_dispatch`). `test_keepwarm_workflow_pings_healthz_every_ten_minutes` replaces the manual-only test. Supersedes the Phase 25 note that the schedule ships commented out.
+
+### Phase 34 (rep account card) (2026-10-08) — rep view shows the creditor's account and rules (user request)
+
+- Problem: in the creditor's eye the state column showed nothing about the rep's own case. `ScenarioBrief` is operator-only (it mixes creditor facts with the client's private finances), so the human playing the rep never saw their creditor name, balances, or settlement rules, though all of it is in `fixtures/scenarios/*/rep_card.md`.
+- Backend: `app/domain/scenario.py` `rep_account_from_card` / `rep_account` parse the two rep-card tables into integer cents / basis points (`$1,250.00` → 125000, `45% of balance` → 4500, `40% (do not go below)` → 4000, `flexible (not even, not balloon)` → `flexible`). Labels are matched exactly (case-insensitive); unknown labels (e.g. a "Secret ceiling" row) are dropped, malformed values (`eight`, `$1,00`, `$1,600.5`, `42.255%`, `weekly`) are `null`. `first_payment` is kept as the card's free text (late_start_date). `app/main.py`: `GET /scenarios/{id}/rep` → `{id, creditor, rules}`.
+- Frontend: `web/src/components/YourAccount.tsx` ("Your account" card: creditor, outstanding and original balance, then rules as a list: "Up to 8 payments", "At least $100 each", "Even payments", "Opening ask 45%", "Floor 40% — don't go below"; loading and error states). `App.tsx` puts it in the brief's slot when the lens is the creditor's eye; the operator lens is unchanged and the private brief is still only fetched there. `PrivateLock` stays on `ScenarioBrief`.
+- Tests: `tests/unit/test_rep_account.py` (every curated card parses and agrees with `offer.json` and `sim.json`; easy_deal exact values; template card; malformed/unknown rows; tables outside their heading ignored; per-scenario privacy scan of the endpoint JSON with `leaked_private_values` over the client blocklist + client dates + firm fees, plus a key-name scan for client/firm keys, with a sanity check that the same scan flags the operator brief; 404 for unknown and traversal ids). Web: `YourAccount.test.tsx` (mocked fetch: rep endpoint only, values, loading, error, `ruleLines`), `App.test.tsx` (creditor's eye shows "Your account", no new brief fetch after the switch).
+- Deviations: rule keys are always present and `null` when the card does not state them (balloon_structure, late_start_date, no_space and rescue_escalate have no Floor row), rather than omitted. Structure is normalised to the engine's `even|balloon|flexible`; the card's parenthetical is dropped.
+- Open issues: balloon_structure's `sim.json` floor (3500) is not on its rep card, so the human rep never sees a floor there (fixture content, out of scope). The card is not shown for a custom (pasted) test case: those have no catalog id; the template's `rep_card` text parses, but no endpoint serves it.
+- Checks: `uv run ruff check .` clean. `uv run pytest -q` 771 passed / 2 skipped / 5 xfailed. `uv run pytest -q -m "not slow"` with `.env` moved aside (then restored): 768 passed / 2 skipped / 3 deselected / 5 xfailed. Oracle eval `eval_20261007_182924_s7` thresholds PASS. Web as CI: `npm ci && npm run gen:types && git diff --exit-code src/types/events.ts && npm run typecheck && npm run lint && npm test && npm run build` all green (51 tests). Not checked in Chrome.

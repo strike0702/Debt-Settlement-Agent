@@ -6,22 +6,104 @@ A voice and text agent that negotiates a debt settlement with a creditor represe
 
 Personal project. Synthetic data. Not a live collections product.
 
-## Demo
+[![An autoplayed call in the operator lens: each agent line shows why the policy chose it](docs/assets/demo.gif)](docs/assets/demo.mp4)
 
-**Live demo:** [debt-settlement-agent-ggor.onrender.com](https://debt-settlement-agent-ggor.onrender.com/)
+*An autoplayed `counter_ladder` call in the operator lens (slowed to 3.8 s per step). Each agent move has a decision trace: what the NLU heard, the belief change, the affordability curve, the policy's reason, and the guard checks. [MP4 version](docs/assets/demo.mp4).*
 
-![Demo walkthrough](docs/assets/demo.gif)
+**Live demo:** [debt-settlement-agent-ggor.onrender.com](https://debt-settlement-agent-ggor.onrender.com/). Pick a scenario and press **Watch a call**: a simulated creditor plays the rep, so it works with **no API keys** and no quota. **Start call** lets you play the rep yourself (type, click a suggested reply, or use the mic); that path needs the server's LLM keys. The host is a free Render instance, so a cold first load can take about 30 s.
 
-You play the creditor. Type, or speak into the mic. The agent replies in the same chat, and through the browser's text-to-speech if you used voice.
+The **Operator** lens shows the firm's side: the client's private finances, the affordability curve, guard verdicts, latency and the audit log. The **Creditor's eye** lens (`?view=rep`) is the privacy-scoped stream: the server filters every frame, and a test scans whole calls for every private value. The operator view is public on the hosted demo by design, because every figure in it is synthetic.
 
-Two views:
+Design decisions, with an annotated voice turn: [`docs/DESIGN.md`](docs/DESIGN.md).
 
-- **Creditor rep.** Chat, a scripted playbook, extracted terms, proposed schedule.
-- **Operator (firm).** Same call, plus the client's private finances, engine verdict, guard blocks, latency, and the audit log. The representative never sees this panel.
+## Results
 
-Pick a scenario from the operator dropdown (`fixtures/scenarios/`: `easy_deal`, `counter_ladder`, `balloon_structure`, and a few harder ones). Every number is made up.
+Every number below links to the committed file it comes from, and each block names the command that regenerates it.
 
-The hosted app is a free Render instance, so the first load can sit. No login. Endpoints are open on purpose.
+### Policy, offline (no keys, runs in CI)
+
+Oracle NLU, template NLG, code simulator, 100 seeded scenarios (personas flexible / contradictory / pressuring; strata deal / rescue / no fix). This isolates the negotiation logic from language errors.
+
+```bash
+python -m eval.run_eval --nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7
+```
+
+| What I measured | Result | n | 95% CI | Why it matters |
+|---|---|---|---|---|
+| [Valid agreements](docs/eval/policy_eval_20261006/summary.md) | 1.0 | 23 | 0.857–1.000 | Every drafted schedule passed the independent validator under the agreed rules. A wrap with no agreement counts as a fail. |
+| [Deals when a deal exists](docs/eval/policy_eval_20261006/summary.md) | 1.0 | 23 | 0.857–1.000 | When the ask and the client's budget overlap, and the call should not escalate, we got a deal. |
+| [Correct no-deal](docs/eval/policy_eval_20261006/summary.md) | 1.0 | 22 | 0.851–1.000 | On `no_fix` calls that should not escalate, we walked away. |
+| [Correct escalation](docs/eval/policy_eval_20261006/summary.md) | 1.0 | 55 | 0.935–1.000 | Pressure / rescue cases that should escalate, did. |
+| [Rule fields extracted](docs/eval/policy_eval_20261006/summary.md) | 0.670 | 700 | 0.634–0.704 | 7 fields × 100 calls. Escalations and no-deals end before the late-field read-back, so those fields stay assumed. That is why this is not about 1.0. |
+| [False "known"](docs/eval/policy_eval_20261006/summary.md) | 0.000 | 469 | 0.000–0.008 | When the agent marked a field known, it matched the creditor. |
+| [Stuck calls](docs/eval/policy_eval_20261006/summary.md) | 0.000 | 100 | 0.000–0.037 | Nothing hit the turn cap without ending. |
+| [Private figures spoken](docs/eval/policy_eval_20261006/summary.md) | 0 | | | Token match on a blocklist (balances, fees, private max %, rescue amounts). Does not catch paraphrase. |
+| [Unverified figures spoken](docs/eval/policy_eval_20261006/summary.md) | 0 | | | No number in an agent line that was not a public fact or a number the creditor said. |
+| [Price counters (max)](docs/eval/policy_eval_20261006/summary.md) | 4 | | | Equals `MAX_COUNTERS`. An earlier bug spoke 10. |
+
+[Mean surplus captured on deals](docs/eval/policy_eval_20261006/summary.md) is 0.689: the share of the gap between the creditor's walk-away floor and the client's max that the agent kept by not confirming the first ask. [Mean turns to an outcome](docs/eval/policy_eval_20261006/summary.md): 5.12. Five example transcripts sit next to the summary ([note](docs/eval/policy_eval_20261006/NOTE.md): they predate the current opening line).
+
+### Latency, before and after (live, demo profile)
+
+20 scripted rep turns per run on `easy_deal`, Groq `gpt-oss-120b` NLU and Groq Whisper STT. Phase 21 moved NLG to a guard-checked template bank and fixed the rate limiter; Phase 27 added a key pool across three Groq orgs. Source: [`docs/eval/latency_20261007.md`](docs/eval/latency_20261007.md) (raw samples in [`latency_20261007/`](docs/eval/latency_20261007/)).
+
+```bash
+LLM_CACHE=false NLG_MODE=bank uv run uvicorn app.main:app --port 8021
+uv run python scripts/latency_probe.py --url ws://127.0.0.1:8021 --turns 20 [--wav] --out after.json
+```
+
+| Stage, p50 / p95 (ms) | Before | After (P21) | After + key pool (P27) |
+|---|---|---|---|
+| [Text turn, client send → first reply](docs/eval/latency_20261007.md#text-turns-n20-each) | 4129 / 10582 | 2372 / 8780 | [1420 / 2242](docs/eval/latency_20261007.md#after-key-pool-phase-27-2026-10-07) |
+| [NLG](docs/eval/latency_20261007.md#text-turns-n20-each) | 1440 / 2073 | 0 / 1 | [0 / 1](docs/eval/latency_20261007.md#after-key-pool-phase-27-2026-10-07) |
+| [NLU, text turns](docs/eval/latency_20261007.md#text-turns-n20-each) | 2745 / 9329 | 2367 / 8773 | [1415 / 2215](docs/eval/latency_20261007.md#after-key-pool-phase-27-2026-10-07) |
+| [Voice, WAV sent → first reply](docs/eval/latency_20261007.md#voice-turns-say-wav--server-stt-n20-each) | 5512 / 6633 | 3704 / 8210 | not run |
+| [STT](docs/eval/latency_20261007.md#voice-turns-say-wav--server-stt-n20-each) | 681 / 1075 | 207 / 315 | not run |
+
+The remaining time is the NLU request itself (about 1.4 s p50). Voice end of speech → first audio is about [4.7 s p50, down from about 7.2 s](docs/eval/latency_20261007.md#reading-it), but that is an **estimate** (VAD hangover + probe time + typical TTS onset); a browser-measured voice run has not been done. The per-stage breakdown of one voice turn is in [`docs/DESIGN.md`](docs/DESIGN.md#one-voice-turn-annotated).
+
+### A/B: code policy vs conversational NLG vs a ReAct agent
+
+<!-- AB-PENDING -->
+**A/B in progress.** Same 48 seeds, live NLU and LLM creditor phrasing; arms: policy + template NLG, policy + conversational acts (H3), and a ReAct tool-calling agent (eval-only). The run has not finished, so no numbers are reported yet. The summary will be [`docs/eval/ab_20261007/`](docs/eval/ab_20261007/); conditions are in its [notes](docs/eval/ab_20261007/notes.md).
+<!-- /AB-PENDING -->
+
+### NLU on messy lines (live, needs keys)
+
+Live model plus the post-verify repair code, scored against 177 hand-labelled synthetic rep lines. Source and every run's rows: [`docs/eval/nlu_corpus.md`](docs/eval/nlu_corpus.md).
+
+```bash
+python -m eval.nlu_corpus --label AFTER
+```
+
+| Flag (AFTER run) | Precision | Recall | Before repairs (P / R) | Why I care |
+|---|---|---|---|---|
+| [Asks for client-private info](docs/eval/nlu_corpus.md#after) | 0.971 | 0.971 | [0.667 / 0.235](docs/eval/nlu_corpus.md#before) | Miss this and the policy never refuses. |
+| [Demands a commitment](docs/eval/nlu_corpus.md#after) | 1.000 | 0.923 | [0.667 / 0.462](docs/eval/nlu_corpus.md#before) | Same shape. |
+| [Stance = accept](docs/eval/nlu_corpus.md#after) | 1.000 | 1.000 | [0.306 / 1.000](docs/eval/nlu_corpus.md#before) | Filler ("uh yeah") used to count as yes. |
+
+[Filler false accepts](docs/eval/nlu_corpus.md#after): 0 of 31 (was 21). The prompt did not change between BEFORE and AFTER; the gain is the repair code. Later rows (a newer prompt, and the `reasoning_effort: low` gate, which failed) are in the same file. Still weak, and left as measured: `wants_to_end` precision 0.5, `firm` precision 0.6, hostility recall 0.4. I wrote the corpus and the regexes, so this is not a blind test set.
+
+### What is not measured yet
+
+- The A/B above (in progress).
+- Voice end to end in a real browser (the figure above is an estimate).
+- The hosted demo under load.
+- A simulator written by someone else: the simulator and the agent share an author.
+
+## Verify in 60 s
+
+No API keys needed for any of these.
+
+```bash
+uv sync --group dev
+uv run pytest -q -m "not slow"     # what CI runs; drop -m to add the 100-seed invariant sweep
+uv run python -m eval.run_eval --nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7
+(cd web && npm ci && npm run build) && uv run uvicorn app.main:app --port 8000
+# open http://127.0.0.1:8000, pick easy_deal, press "Watch a call"
+```
+
+The eval prints a summary whose metrics table should match [`summary.md`](docs/eval/policy_eval_20261006/summary.md) and exits non-zero on any threshold miss. Autoplay runs the server's code simulator with template phrasing, so it makes no LLM call.
 
 ## Why I built this
 
@@ -93,7 +175,7 @@ flowchart LR
   Orch --> Audit[(SQLite events)]
 ```
 
-- **Browser / text.** Vanilla JS at `/`. Compose box, mic, barge-in.
+- **Browser / text.** A React call console (`web/`, served at `/`): conversation, decision trace, and negotiation state side by side. Compose box, suggested replies, mic, barge-in, and **Watch a call** (keyless autoplay against the code simulator).
 - **STT.** Server Whisper, or the browser fallback. VAD is `@ricky0123/vad-web` in the page.
 - **Orchestrator.** One turn: NLU, belief, affordability, policy, NLG, speech ack. Cancel-and-merge if you talk while NLU is still running: the new text joins that turn and NLU reruns on the combined line. The WebSocket runs each event as its own task, so this, barge-in, and speech acks all work while a turn is in flight.
 - **NLU + verification.** LLM JSON, then quote / number / range checks and a few regex repairs.
@@ -148,73 +230,6 @@ I treated the model as untrusted input, the same way you treat a form field.
 
 The audit log is there so you can see why a turn went the way it did. Belief, blocks, escalations, NLU, `decide()`, and one row per LLM call attempt (metadata, not the prompt or reply text).
 
-## Evaluation
-
-I split the eval on purpose. One blended "accuracy" number would hide the thing I care about: policy when language is taken out of the way, and language understanding on messy lines.
-
-There is no LLM-only baseline in this repo yet, and no published voice end-to-end timing. I am not going to pretend those runs exist.
-
-### Offline policy eval
-
-Oracle NLU, template NLG. This run is about whether the negotiation logic closes the right calls and stays inside the money rules.
-
-100 seeded scenarios. Personas: flexible, contradictory, pressuring. Strata: deal possible, needs rescue, no fix. The simulator is code, not an LLM. No API keys. CI runs this on every push.
-
-Source: [`docs/eval/policy_eval_20261006/summary.md`](docs/eval/policy_eval_20261006/summary.md)
-
-```bash
-python -m eval.run_eval --nlu oracle --nlg template --sim-phrasing template \
-  --scenarios 100 --seed 7
-```
-
-| What I measured | Result | n | 95% CI | Why it matters |
-|---|---|---|---|---|
-| [Valid agreements](docs/eval/policy_eval_20261006/summary.md) | 1.0 | 23 | 0.857–1.000 | Every drafted schedule passed the validator under the agreed rules. A wrap with no agreement counts as a fail. |
-| [Deals when a deal exists](docs/eval/policy_eval_20261006/summary.md) | 1.0 | 23 | 0.857–1.000 | When the ask and the client's budget overlap, and the call should not escalate, we got a deal. |
-| [Correct no-deal](docs/eval/policy_eval_20261006/summary.md) | 1.0 | 22 | 0.851–1.000 | On `no_fix` calls that should not escalate, we walked away. |
-| [Correct escalation](docs/eval/policy_eval_20261006/summary.md) | 1.0 | 55 | 0.935–1.000 | Pressure / rescue cases that should escalate, did. |
-| [Rule fields extracted](docs/eval/policy_eval_20261006/summary.md) | 0.670 | 700 | 0.634–0.704 | 7 fields × 100 calls. Deal calls get all 7. Escalations and no-deals end before the late-field read-back, so those three stay assumed. That is why this is not ~1.0. |
-| [False "known"](docs/eval/policy_eval_20261006/summary.md) | 0.000 | 469 | 0.000–0.008 | When the agent marked a field known, it matched the creditor. |
-| [Stuck calls](docs/eval/policy_eval_20261006/summary.md) | 0.000 | 100 | 0.000–0.037 | Nothing hit the 24-turn cap without ending. |
-| [Private figures spoken](docs/eval/policy_eval_20261006/summary.md) | 0 | | | Token match on a blocklist (balances, fees, private max %, rescue amounts). A ceiling counter that equals the max is exempt: that figure was spoken as a public fact. Does not catch paraphrase. |
-| [Unverified figures spoken](docs/eval/policy_eval_20261006/summary.md) | 0 | | | No number in an agent line that was not a public fact or a number the creditor said. |
-| [Price counters (max)](docs/eval/policy_eval_20261006/summary.md) | 4 | | | Equals `MAX_COUNTERS`. An earlier bug spoke 10. |
-
-Mean surplus captured on deals is 0.689: the fraction of the gap between the walk-away floor and the client's max that the agent kept by not immediately confirming the ask. Higher means a cheaper settlement for the client. Mean turns to an outcome: 5.12.
-
-The leak scan tokenizes agent lines. It will miss "your client has enough in the account" with no number, and it does not run on audio.
-
-The simulator and the agent share an author. A different creditor would be a harder test. I have not done that yet.
-
-### NLU corpus
-
-Live model plus repair code, scored against 177 hand-labeled synthetic lines. Demo profile, Groq `gpt-oss-120b`. Needs API keys.
-
-Source: [`docs/eval/nlu_corpus.md`](docs/eval/nlu_corpus.md)
-
-```bash
-python -m eval.nlu_corpus --label AFTER
-```
-
-| Flag | Precision | Recall | Why I care |
-|---|---|---|---|
-| [Asks for client-private info](docs/eval/nlu_corpus.md) | 0.971 | 0.971 | Miss this and policy never refuses. Before repairs: 0.667 / 0.235. |
-| [Demands a commitment](docs/eval/nlu_corpus.md) | 1.000 | 0.923 | Same shape. Before: 0.667 / 0.462. |
-| [Stance = accept](docs/eval/nlu_corpus.md) | 1.000 | 1.000 | Before: precision 0.306. Filler ("uh yeah") was treated as yes. |
-
-Filler false accepts: 0 of 31 (was 21). Term exact-match on lines that have terms: 0.859 (n=64). The prompt did not change between BEFORE and AFTER. The gain is the post-verify repairs.
-
-Still weak, and I am leaving the numbers as they are: `wants_to_end` precision 0.5 ("thanks" mid-call), `firm` precision 0.6, hostility recall 0.4. Homophones and STT typos fail number verification. I wrote the corpus and the regexes, so this is not a blind test set.
-
-### What I did not evaluate
-
-- Full calls with live NLU + live NLG on the current policy. An older 12-scenario run is in [`docs/PROGRESS.md`](docs/PROGRESS.md). I am not treating it as current.
-- An LLM-only agent on the same seeds (roadmap, not built).
-- Voice: VAD → STT → full turn → TTS latency. Browser TTS echo is a real annoyance with the laptop mic open.
-- The hosted demo under load.
-
-`tests/e2e/test_policy_invariants.py` also sweeps seeded calls: counters stay below the ask and at or under the private max, at most `MAX_COUNTERS`, no identical consecutive counters, termination, validator-clean wraps. Default 100 seeds. I ran 500 locally.
-
 ## Tech stack
 
 Python 3.12, FastAPI, Pydantic v2, SQLite (audit + optional LLM cache). pytest, ruff. LLM providers from YAML (Groq, Gemini, Cerebras, OpenRouter, Mistral, optional Ollama). Groq Whisper for STT. Browser VAD + `speechSynthesis` for voice. `uv` for the environment.
@@ -222,17 +237,18 @@ Python 3.12, FastAPI, Pydantic v2, SQLite (audit + optional LLM cache). pytest, 
 ## Project structure
 
 ```text
-app/          Orchestrator, policy, NLU/NLG, guards, voice WebSocket, UI
+app/          Orchestrator, policy, NLU/NLG, guards, voice WebSocket, autoplay
+web/          React call console (Vite, TypeScript), served by FastAPI at /
 feasibility/  Settlement math (from an earlier project of mine; part of this repo)
 eval/         Offline eval runner, metrics, NLU corpus scorer
 sim/          Creditor simulator (must not import app.agent)
 tests/        Unit, e2e, engine, NLU corpus
 fixtures/     Synthetic clients, offers, demo scenarios
-docs/         Progress log and frozen eval reports
+docs/         Design ADRs, progress log, frozen eval reports; history/ holds the original build plans
 config/       Provider routes and profiles
 ```
 
-More detail: [`docs/PROGRESS.md`](docs/PROGRESS.md), [`docs/eval/`](docs/eval/).
+More detail: [`docs/DESIGN.md`](docs/DESIGN.md), [`docs/PROGRESS.md`](docs/PROGRESS.md), [`docs/eval/`](docs/eval/). The original build plans are in [`docs/history/`](docs/history/).
 
 ## Running locally
 
@@ -279,4 +295,4 @@ Evaluate the failure modes you actually worry about. Invalid schedules. Spoken p
 
 And write the decision down. If you cannot say why the agent offered 58% after the fact, you do not have a negotiation system. You have a chat window with extra steps.
 
-Still open: a true LLM-only baseline on the same seeds, voice timing, labels I did not write myself.
+Still open: the A/B against the ReAct and LLM-only arms (running), a browser-measured voice timing, and labels I did not write myself.

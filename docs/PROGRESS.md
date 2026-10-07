@@ -33,8 +33,11 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 23a | Web call console: scaffold and components (REVIEW_PLAN) | done |
 | 23b | Web call console: wire-up and cutover (REVIEW_PLAN) | done (voice call not run by hand, see handoff) |
 | 24a | A/B harness, ReAct and LLM-only arms (REVIEW_PLAN) | done |
-| 24b | H3 conversational NLG + the A/B run (REVIEW_PLAN) | WIP (paused) |
+| 24b | H3 conversational NLG + the A/B run (REVIEW_PLAN) | code merged; A/B WIP (arm C resumes 2026-10-08, D dropped) |
+| 25 | Recruiter packaging (REVIEW_PLAN) | done (hosted-demo check pending a deploy; A/B placeholders pending 24b) |
+| 26 | Carry-over cleanup | done |
 | 27 | Provider API key pool (user request) | done |
+| 28 | Filler false-accept veto | in progress (parallel worktree) |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -339,7 +342,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `llm_call_scope(call_id) -> ContextManager[None]` — set by `Orchestrator` public turn methods (`start`, `on_creditor_text`, `on_sentence_done`, `on_barge_in`, `on_rep_end`), by `ws.py` around STT, and by `eval.run_eval.run_one_scenario` around the whole call (sim included)
 - `audit_llm_calls(audit, *, then=None) -> OnCallHook` — appends `actor="llm"`, type `llm_call` / `llm_call_failed`, payload = meta; no row when `LLM_CALL_ID` is unset; chains `then`
 
-## Deviations from PLAN.md
+## Deviations from PLAN.md (`docs/history/PLAN.md`)
 
 - Ruff `extend-exclude = ["feasibility"]` so vendored engine stays untouched (UP035 on `shapes.py` otherwise).
 - Synthetic fixtures under `fixtures/engine/{even_ok,rescue_gap,balloon_ok,tier_ok,gap_curve}` replace take-home `cases/`; engine tests re-pointed; rescue expected amounts match `rescue_gap` (lump 17500, incr 4375 × 5 drafts).
@@ -367,8 +370,14 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 
 ## Open issues
 
-- Mistral chat blocked until Experiment setup (`limit-req-minute=0`); routed last so demo/eval still work via Groq/Gemini.
-- Local Ollama NLU (`qwen3.5:9b`): ~185 s p95; full 12-scenario local run finishes but quality fails thresholds (`escalation_correct=0`, all scenarios END).
+Refreshed 2026-10-07 (Phase 25). Older phase handoffs keep their own lists; this is the current set.
+
+- Phase 24b A/B: arm C (ReAct) resumes 2026-10-08; then judges and `docs/eval/ab_20261007/summary.md`. README and `docs/DESIGN.md` hold `<!-- AB-PENDING -->` placeholders until then.
+- Hosted demo: not re-verified after the 23b/25 changes (needs a deploy, user step). Keep-warm workflow ships with the schedule commented out; the owner enables it.
+- Voice: no browser-measured end-of-speech → first-audio run; the 4.7 s p50 figure is an estimate.
+- NLU: LLM-side filler false accepts (f23, f30) under the newer prompt (Phase 28 in progress); `wants_to_end` / `firm` precision and hostility recall still weak (`docs/eval/nlu_corpus.md`).
+- Native tool calling for the eval ReAct arm (JSON tool-call protocol in use; deferred in Phase 26).
+- Mistral free tier often 429s (`limit-req-minute=0`); routed last. Local Ollama NLU too slow for the gates.
 
 ## Code-review remediation (2026-10-01)
 
@@ -1119,6 +1128,23 @@ uv run python -m eval.ab_report --arm A=eval/results/ab1007_A_policy --arm B=eva
   - P20 also changes non-`json_mode` providers (Mistral, OpenRouter): NLU now gets the extra "Reply with JSON only" system line there. Cache keys are unchanged (they hash the caller's messages).
 - Open issues: the P21 LLM-side false accepts (needs a live corpus run); P23b live verification of the reworded cards; P24a tools path.
 - Checks: `uv run ruff check .` clean; `uv run pytest -q` 692 passed / 2 skipped; oracle eval `eval_20261007_145210_s7` thresholds PASS, metrics table identical to `docs/eval/policy_eval_20261006/summary.md`; web: typecheck, lint, 47 Vitest tests, build green.
+
+### Phase 25 (2026-10-07) — recruiter packaging (REVIEW_PLAN F3, F9, F19)
+
+- Files added: `docs/DESIGN.md` (5 ADRs, each ≤ 200 words, + an annotated voice-turn `sequenceDiagram` with the P21 AFTER voice p50s), `docs/assets/demo.mp4` (0.6 MB), `.github/workflows/keepwarm.yml`, `docs/eval/policy_eval_20261006/NOTE.md`, `tests/unit/test_docs.py`. Moved: `docs/{PLAN,PHASES,ROADMAP}.md` → `docs/history/`. Replaced: `docs/assets/demo.gif` (29 MB, 2026-10-02 UI → 1.9 MB, 1200 px, 12 fps, palette). Removed: `config/.gitkeep`, `eval/.gitkeep`. Changed: `README.md`, `docs/eval/README.md`, `docs/assets/README.md`, `CLAUDE.md` (paths only), `docs/PROGRESS.md` (status 20–28, Open issues).
+- README: hero GIF (links the MP4), keyless "Watch a call" note, then **Results** (policy eval, latency Before / P21 / P27 key-pool table, A/B placeholder, NLU AFTER rows with BEFORE alongside), each number linked to its `docs/eval/` file and each block with its command; "Verify in 60 s" (fast pytest, oracle eval, local autoplay). The rest of the old README follows unchanged except the UI bullet (React console), project structure, and the closing "still open" line.
+- Media: headless Chrome (`--headless=new`, CDP `Page.startScreencast`, 1440×900, light) over a local server, `counter_ladder` autoplay, operator lens; frames concatenated by their screencast timestamps → H.264 MP4 (25.6 s) → GIF via `palettegen`/`paletteuse`. README media total 2.5 MB.
+- Keep-warm: only `workflow_dispatch` is active; the 10-minute `schedule` is commented out with a note that the owner enables it (orchestrator rule: pushing must not ping Render). `/healthz` already existed (Phase 22).
+- A/B: README Results and ADR 1 carry `<!-- AB-PENDING -->` … `<!-- /AB-PENDING -->` blocks ("A/B in progress"). No preliminary 24b numbers are used anywhere; ADR 1 cites only the committed policy eval.
+- Checks: `/healthz` locally 200 in < 3 ms warm; autoplay locally: counter_ladder deal in 5 turns (both at the default 1.2 s pause and at 3.8 s). Oracle eval `eval_20261007_155510_s7`: thresholds PASS, metrics table identical to `docs/eval/policy_eval_20261006/summary.md`. `uv run pytest -q` 702 passed / 2 skipped; `uv run ruff check .` clean.
+- Carry-over:
+  - [20.5] Frozen transcripts keep the old opening (pack not regenerated, so summary and transcripts stay one run); dated `NOTE.md` added and linked from `docs/eval/README.md` and README. Test: `test_frozen_transcripts_with_old_opening_carry_a_note`.
+  - [20.6] Open issues list refreshed (above); `.gitkeep` removed from `config/` and `eval/`. Test: `test_no_gitkeep_in_non_empty_dirs`.
+  - [22.2] README and ADR 3 say the operator view is public by design (synthetic data) and the rep view is the privacy-scoped stream. Test: `test_operator_view_is_documented_as_public_by_design`.
+  - [23b.4/26.3] Live check (Chrome, local server :8025, demo profile, live Groq NLU, `?view=rep`, easy_deal, the card's 7 suggested replies clicked in order with `Correct.` for the read-back): **deal**. 7 creditor turns, 8 agent turns: READ_BACK(payment_structure) → ASK_SETTLEMENT → COUNTER 31% → COUNTER 36% → CONFIRM_SCHEDULE(rep_firm, 40%) → PROPOSE_WRAP(confirmed) → CLOSE(thanks_accept). 158 frames, none with `affordability` / `max_bp` / fee / balance / `additional_funds` keys. Card drift noted: the suggestion "Thirty-two is too low" answers a 31% counter.
+- Link check: `test_relative_links_and_anchors_resolve` checks every relative link and GitHub heading anchor in README, DESIGN and the eval/assets READMEs; `test_readme_media_within_size_budget` caps README media at 5 MB; `test_keepwarm_workflow_is_manual_only`; `test_ab_pending_markers_are_paired`.
+- Deviations: the recording raised the autoplay pause to 3.8 s in the page's start message (the UI has no setting for it) so the run lasts 20–30 s; stated in the README caption and `docs/assets/README.md`. Text inside `docs/history/*` (old phase prompts naming `docs/PLAN.md`) is left as historical record; only live references were fixed. The hosted-demo acceptance item ("responds within 3 s warm and autoplay completes there") is **pending a deploy** (user step); not called per orchestrator rule.
+- Open issues: hosted demo check after deploy; enable the keep-warm schedule; A/B refresh of the AB-PENDING blocks; browser-measured voice latency; easy_deal card line "Thirty-two" vs the 31% counter; the easy_deal CONFIRM offered "2 payments totaling $500" though the rep allows 8 (engine shape choice; not investigated); read-back copy "Please confirm the tentative payment structure as even." reads awkwardly.
 
 ### Phase 29 (hermetic tests) (2026-10-07) — tests ignore `.env` (fix CI)
 

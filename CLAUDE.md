@@ -5,7 +5,7 @@ Voice agent that negotiates debt settlements. Code-based policy decides every mo
 
 ## Before doing anything in a new session
 1. Read `docs/PROGRESS.md` (phase status, interfaces built so far, deviations, open issues).
-2. Read only the `docs/PLAN.md` sections your phase prompt names. Do not read the whole plan unless needed.
+2. Read only the `docs/history/PLAN.md` sections your phase prompt names. Do not read the whole plan unless needed.
 3. Read existing code only when you need an interface not recorded in `docs/PROGRESS.md`.
 
 ## Ground rules
@@ -29,5 +29,5 @@ Voice agent that negotiates debt settlements. Code-based policy decides every mo
 
 ## End of every phase
 1. Run the phase's acceptance check, plus `uv run pytest -q` and `uv run ruff check .`. All green.
-2. Update `docs/PROGRESS.md`: mark the phase done, list the files added, record the public interfaces (signatures) later phases need, and record any deviation from PLAN.md and open issues.
+2. Update `docs/PROGRESS.md`: mark the phase done, list the files added, record the public interfaces (signatures) later phases need, and record any deviation from docs/history/PLAN.md and open issues.
 3. Commit with message `phase N: <summary>`.

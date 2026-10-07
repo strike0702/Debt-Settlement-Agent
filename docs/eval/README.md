@@ -16,6 +16,8 @@ python -m eval.run_eval --nlu oracle --nlg template --sim-phrasing template \
 Latest freeze: [`policy_eval_20261006/`](policy_eval_20261006/) — `summary.md`,
 `summary.json`, `run.json`, and five transcripts (pressuring × deal / rescue /
 no_fix, plus two former 10-counter no_fix cases capped at `max_counters`).
+The transcripts predate the Phase 20 opening line; see
+[`policy_eval_20261006/NOTE.md`](policy_eval_20261006/NOTE.md).
 
 CI runs the same command on every push and PR.
 
@@ -28,3 +30,14 @@ Live disposition / term scoring on `tests/nlu_corpus.jsonl`. See
 ```bash
 python -m eval.nlu_corpus --label BEFORE|AFTER
 ```
+
+## Latency
+
+Live demo-profile probe, BEFORE / AFTER Phase 21 plus the Phase 27 key pool:
+[`latency_20261007.md`](latency_20261007.md), raw samples in
+[`latency_20261007/`](latency_20261007/). Commands are at the end of the report.
+
+## A/B (Phase 24b)
+
+[`ab_20261007/`](ab_20261007/): conditions and reading notes. The run is still
+in progress; `summary.md` lands there when it finishes.

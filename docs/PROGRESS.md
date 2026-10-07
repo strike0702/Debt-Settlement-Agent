@@ -1205,3 +1205,7 @@ uv run python -m eval.ab_report --arm A=eval/results/ab1007_A_policy --arm B=eva
 - Deviations: CLARIFY was also rewritten (it had "Kindly … equals", "Please advise", "help me determine"), and every CLARIFY variant now says "the {field_label}". Today no live CLARIFY action matches this bank key (the cents-ambiguity CLARIFY also carries `bare_amount` and a `template_override`), so the change is not audible yet. ACK, ANSWER, REFUSE_* and CONFIRM_SCHEDULE were judged natural and left alone.
 - Open issues: `scripts/build_template_bank.py` would regenerate READ_BACK / CLARIFY / COUNTER from the LLM and lose the hand edits (the stiff-word test would catch it). `app/llm/prompts.py:53` still describes READ_BACK to the LLM NLG as "Confirm the tentative {field_label} using {readback_value}." (out of scope: `app/`).
 - Checks: `uv run ruff check .` clean. `uv run pytest -q` 753 passed / 2 skipped / 5 xfailed. `uv run pytest -q -m "not slow"` with `.env` moved aside (then restored): 750 passed / 2 skipped / 3 deselected / 5 xfailed. Oracle eval `eval_20261007_170230_s7` thresholds PASS; its metrics table is identical to `docs/eval/policy_eval_20261006/summary.md` (latency excluded).
+
+### Keep-warm enabled (2026-10-07, owner decision)
+
+- `.github/workflows/keepwarm.yml`: the 10-minute `schedule` is now on (plus `workflow_dispatch`). `test_keepwarm_workflow_pings_healthz_every_ten_minutes` replaces the manual-only test. Supersedes the Phase 25 note that the schedule ships commented out.

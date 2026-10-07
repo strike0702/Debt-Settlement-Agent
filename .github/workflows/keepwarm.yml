@@ -1,14 +1,14 @@
 # Keep the hosted demo (Render free tier) warm so the first click does not wait
 # for a cold start. Pings GET /healthz, which touches no LLM, engine or database.
 #
-# The schedule is OFF on purpose: pushing this file must not start pinging the
-# live service. The repo owner enables it by uncommenting the `schedule` block.
+# The schedule was enabled by the repo owner on 2026-10-07. Pings every 10 minutes
+# (best effort; GitHub may delay scheduled runs). Run it by hand via workflow_dispatch.
 name: keep-warm
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: "*/10 * * * *"   # every 10 minutes (owner enables this)
+  schedule:
+    - cron: "*/10 * * * *" # every 10 minutes
 
 permissions: {}
 

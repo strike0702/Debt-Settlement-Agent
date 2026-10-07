@@ -107,12 +107,12 @@ def test_frozen_transcripts_with_old_opening_carry_a_note() -> None:
             assert "opening" in note.read_text(encoding="utf-8")
 
 
-def test_keepwarm_workflow_is_manual_only() -> None:
-    # Pushing the workflow must not start pinging the live service; the owner
-    # enables the schedule by hand.
+def test_keepwarm_workflow_pings_healthz_every_ten_minutes() -> None:
+    # The owner enabled the schedule on 2026-10-07; it must stay a cheap /healthz
+    # ping (no LLM, engine or DB) and keep a manual trigger.
     wf = yaml.safe_load((ROOT / ".github/workflows/keepwarm.yml").read_text(encoding="utf-8"))
     triggers = wf.get("on", wf.get(True))
-    assert set(triggers) == {"workflow_dispatch"}
+    assert set(triggers) == {"workflow_dispatch", "schedule"}
+    assert triggers["schedule"] == [{"cron": "*/10 * * * *"}]
     text = (ROOT / ".github/workflows/keepwarm.yml").read_text(encoding="utf-8")
-    assert '#   - cron: "*/10 * * * *"' in text
     assert "/healthz" in text

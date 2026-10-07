@@ -796,17 +796,48 @@ def _ack_dominant(utterance: str) -> bool:
     return acks > 0 and acks > content
 
 
+# Negators that cancel an accept phrase later in the same clause ("I'm not sure
+# that works", "nothing has been agreed"). ``n't`` forms also match without the
+# apostrophe (STT drops it) and with a curly one.
+_ACCEPT_NEGATOR_RE = re.compile(
+    r"\b(?:not|no|never|nothing|nobody|neither|nor|hardly|unsure|cannot"
+    r"|\w+n['\u2019]t"
+    r"|(?:do|does|did|is|are|was|were|ca|wo|would|could|should|has|have|had|ai)nt)\b",
+    re.IGNORECASE,
+)
+# Idioms that start with a negator but affirm ("No problem, that works").
+_NEGATOR_IDIOM_RE = re.compile(
+    r"\b(?:no (?:problem|problems|worries|doubt)|not a problem)\b", re.IGNORECASE
+)
+# Clause boundaries: sentence / clause punctuation, or a contrastive conjunction.
+_CLAUSE_BREAK_RE = re.compile(r"[.;,:!?]|\b(?:but|though|although|however)\b", re.IGNORECASE)
+
+
+def _has_unnegated_accept_phrase(utterance: str) -> bool:
+    """True when some accept phrase has no negator earlier in its own clause.
+
+    Only the text before the match counts, so a negator after the phrase or in
+    a later clause ("That works, nothing else to add.") does not cancel it.
+    """
+    for m in _ACCEPT_STANCE_RE.finditer(utterance):
+        clause = _CLAUSE_BREAK_RE.split(utterance[: m.start()])[-1]
+        if not _ACCEPT_NEGATOR_RE.search(_NEGATOR_IDIOM_RE.sub(" ", clause)):
+            return True
+    return False
+
+
 def repair_stance(stance: str, utterance: str, *, has_terms: bool = False) -> str:
     """Override LLM stance when the utterance clearly accepts or rejects.
 
-    Order: injection (never accept) → reject phrase → accept phrase → short
-    acknowledgement that dominates the line and carries no number or term.
+    Order: injection (never accept) → reject phrase → un-negated accept phrase →
+    short acknowledgement that dominates the line and carries no number or term.
+    A negated accept phrase never forces anything; it falls through to the LLM.
     """
     if _INJECTION_RE.search(utterance):
         return "other" if stance == "accept" else stance
     if _REJECT_STANCE_RE.search(utterance):
         return "reject"
-    if _ACCEPT_STANCE_RE.search(utterance):
+    if _has_unnegated_accept_phrase(utterance):
         return "accept"
     if not has_terms and _ack_dominant(utterance):
         return "accept"

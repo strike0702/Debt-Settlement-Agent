@@ -247,7 +247,6 @@ async def test_veto_ignores_negated_agreement_cue(utterance: str) -> None:
     assert await _llm_stance(utterance, _COUNTER_LINE, reply) == "counter"
 
 
-@_VETO_XFAIL
 def test_negated_accept_phrase_does_not_force_accept() -> None:
     assert repair_stance("stall", "I'm not sure that works.") == "stall"
 
@@ -289,3 +288,66 @@ def test_oracle_accept_with_terms_is_kept() -> None:
     )
     out = post_verify(analysis, "fine whatever just make it eight payments", ref=_REF)
     assert out.stance == "accept"
+
+
+# --- Phase 31: negation guard for the forced-accept phrase rule -------------
+# A negator earlier in the same clause cancels an accept-phrase match; the line
+# then falls through to the ack rule and finally the LLM's own stance.
+
+
+@pytest.mark.parametrize(
+    ("utterance", "llm_stance"),
+    [
+        ("I'm not sure that works.", "stall"),
+        ("Nothing has been agreed yet.", "stall"),
+        ("I don't think that schedule works for us.", "reject"),
+        ("Nobody has agreed to anything.", "info"),
+        ("We never agreed to that.", "reject"),
+        ("We can't say we agree with that.", "counter"),
+        ("That hardly sounds good to me.", "reject"),
+        ("I'm unsure that sounds good.", "stall"),
+        ("We do not accept that.", "reject"),
+        ("Neither option, nor that schedule works.", "reject"),
+        ("It won't be agreed today.", "stall"),
+        ("dont think that works", "stall"),
+        ("I don’t think that works.", "stall"),
+        ("No way we agree to that.", "reject"),
+    ],
+)
+def test_negated_accept_phrases_keep_llm_stance(utterance: str, llm_stance: str) -> None:
+    assert repair_stance(llm_stance, utterance) == llm_stance
+
+
+@pytest.mark.parametrize(
+    "utterance",
+    [
+        "Agreed.",
+        "We agree to that.",
+        "That works.",
+        "Sounds good.",
+        "We accept.",
+        "We can accept that.",
+        "The schedule works.",
+        "The payment schedule works for us.",
+        "Yes, that works.",
+        "Agreed, eight payments.",
+        "No problem, that works for us.",
+        "No problem that works for us.",
+        "No worries, sounds good.",
+        "That works, nothing else to add.",
+        "Sounds good, no changes needed.",
+        "I'm not sure about the date, but that works.",
+        "Not ideal. That works though.",
+    ],
+)
+def test_plain_accept_phrases_force_accept(utterance: str) -> None:
+    assert repair_stance("stall", utterance) == "accept"
+
+
+def test_negation_guard_never_forces_reject() -> None:
+    assert repair_stance("accept", "I'm not sure that works.") == "accept"
+    assert repair_stance("info", "Nothing has been agreed yet.") == "info"
+
+
+def test_negated_phrase_falls_through_to_unnegated_later_phrase() -> None:
+    assert repair_stance("stall", "Not sure that works... actually, sounds good.") == "accept"

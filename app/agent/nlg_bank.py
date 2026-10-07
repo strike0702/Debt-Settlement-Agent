@@ -6,7 +6,9 @@ and only those passing ``template_guard`` were kept. At runtime ``pick_template`
 returns one of them for an ``Action`` with no LLM call, chosen deterministically
 from ``(call_id, turn)`` so a replayed call speaks the same words.
 
-This module only loads and picks. ``app.agent.nlg.speak_action`` still runs
+Phase 24b adds act keys: ``ACK`` (placeholders = the ``ack_*`` ids present)
+and ``ANSWER:<topic>`` (no placeholders; number-free paraphrases of the
+policy talking point). This module only loads and picks. ``app.agent.nlg.speak_action`` still runs
 ``template_guard`` (against the live action's ids) and ``rendered_guard`` on the
 filled text, and falls back to ``TEMPLATES`` when no entry matches.
 """
@@ -64,14 +66,16 @@ def pick_template(
     call_id: str | None,
     turn: int,
     bank: dict[BankKey, list[str]],
+    intent_key: str | None = None,
 ) -> str | None:
     """Deterministic bank template for ``action``, or ``None`` when nothing fits.
 
     Only entries that pass ``template_guard`` with this action's ids are
     candidates; the index is ``sha256(call_id:turn) mod len(candidates)``.
+    ``intent_key`` overrides the bank intent (H3 acts: ``ACK``, ``ANSWER:<topic>``).
     """
     allowed = action_placeholder_ids(action)
-    templates = bank.get(bank_key(action.intent.value, allowed), [])
+    templates = bank.get(bank_key(intent_key or action.intent.value, allowed), [])
     ok = [t for t in templates if template_guard(t, allowed, action.required).ok]
     if not ok:
         return None

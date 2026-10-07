@@ -23,15 +23,15 @@ Prompt design (``SYSTEM_PROMPT`` below, built to give this arm its best shot):
   creditor or tool figures), and the playbook the policy encodes (learn rules,
   read back TENTATIVE, clarify CONTRADICTED, ask, counter in steps ≤4, term
   changes when unaffordable, confirm before wrap, no-deal / escalate rules);
-- ``MOVE_DOCS``: every move with argument units (bp = basis points);
+- ``MOVE_DOCS``: every move with argument units (bp as a ``"45%"`` string);
 - the ReAct protocol: think in ``thought``, check feasibility with
   ``evaluate_offer`` before quoting a schedule, one JSON object per step, and
   ``text`` must be the exact words to say (empty for observations).
 The user message is the context block (finances, ceiling, belief, negotiation,
 transcript) plus this turn's scratchpad and the steps left.
 
-Routing: role ``nlu`` (see ``base.AGENT_ROLE``; a dedicated ``agent`` role is
-deferred to 24b). Called only via ``eval.agents.make_agent("react", ...)``.
+Routing: role ``agent`` (see ``base.AGENT_ROLE``). Called only via
+``eval.agents.make_agent("react", ...)``.
 """
 
 from __future__ import annotations

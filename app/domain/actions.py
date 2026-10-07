@@ -1,8 +1,14 @@
-"""Shared agent Action types (intent, phase, effects).
+"""Shared agent Action types (intent, phase, effects, extra spoken acts).
 
 ``sim/`` must not import ``app.agent``, but the creditor simulator needs the
 agent's ``Action`` (intent + PUBLIC facts). Policy and NLG keep using these
 types from here; ``app.agent.policy`` re-exports for existing callers.
+
+Phase 24b (H3) adds two optional acts that ride on the primary move without
+replacing it: ``ack`` (creditor-sourced PUBLIC facts echoed back) and
+``answer`` (a number-free talking point for an off-script question). Both are
+built by ``app.agent.acts`` after ``decide()``; the sim reacts only to
+``intent`` and ``facts``, so the acts never change its reply.
 """
 
 from __future__ import annotations
@@ -41,6 +47,9 @@ class Intent(StrEnum):
     CLOSE = "CLOSE"
     NO_DEAL_WRAP = "NO_DEAL_WRAP"
     ESCALATE = "ESCALATE"
+    # Off-script question answer. Only ever an attached act (``Action.answer``);
+    # ``decide()`` never returns it as the primary move.
+    ANSWER = "ANSWER"
 
 
 class Effect(BaseModel):
@@ -68,6 +77,14 @@ class Effect(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict)
 
 
+class AnswerAct(BaseModel):
+    """Policy-supplied, number-free reply to an off-script question."""
+
+    topic: str
+    # Full sentence from ``app.agent.acts.ANSWER_POINTS``; never digits.
+    text: str
+
+
 class Action(BaseModel):
     """Next agent move: intent, PUBLIC facts, text slots, and deferred effects."""
 
@@ -82,3 +99,7 @@ class Action(BaseModel):
     reason: str | None = None
     # When set, NLG uses this template instead of ``TEMPLATES[intent]``.
     template_override: str | None = None
+    # H3 acts, spoken before the move: ack facts (``ack_*`` ids, PUBLIC,
+    # source="creditor") and an answer. Empty / None = plain one-act turn.
+    ack: dict[str, Fact] = Field(default_factory=dict)
+    answer: AnswerAct | None = None

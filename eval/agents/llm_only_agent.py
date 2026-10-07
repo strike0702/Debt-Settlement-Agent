@@ -18,7 +18,7 @@ Prompt design: the same ``NEGOTIATION_RULES`` and ``MOVE_DOCS`` as the ReAct
 arm (goal, privacy, numbers, playbook, move units) plus the single-reply JSON
 contract; the context block shows the ceiling and the feasible percentages, so
 the model has what ``evaluate_offer`` would tell it about price, but not the
-schedule figures. Routing: role ``nlu`` (see ``base.AGENT_ROLE``). Called only
+schedule figures. Routing: role ``agent`` (see ``base.AGENT_ROLE``). Called only
 via ``eval.agents.make_agent("llm_only", ...)``.
 """
 

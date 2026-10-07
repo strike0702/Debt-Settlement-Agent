@@ -1,9 +1,9 @@
 """Sequential eval runner: scenarios → per-scenario JSON → metrics + thresholds.
 
 CLI: ``python -m eval.run_eval --scenarios 12 --seed 7 [--resume RUN_ID]
-[--profile eval] [--nlu oracle|llm] [--nlg llm|template]
+[--profile eval] [--nlu oracle|llm] [--nlg llm|bank|template]
 [--sim-phrasing llm|template] [--no-oracle-overlay]
-[--agent policy|react|llm_only]``.
+[--agent policy|policy_h3|react|llm_only] [--providers PATH]``.
 
 Two layers:
 - ``--nlu oracle``: offline policy eval. Sim ground-truth ``TurnAnalysis``
@@ -13,12 +13,16 @@ Two layers:
   overlaid on the LLM result; ``--no-oracle-overlay`` turns that off.
 
 ``--agent`` picks the A/B arm (``eval.agents``): ``policy`` (default; the
-production orchestrator, so CI output is unchanged), ``react`` or ``llm_only``
-(eval-only LLM arms). The LLM arms keep ``--profile`` even under ``--nlu
-oracle`` (their moves need a real LLM). Every arm gets the same leak scan,
-validator and metrics; per-call results add ``agent``, ``transcript``,
+production orchestrator, so CI output is unchanged), ``policy_h3`` (same
+policy, H3 ack / answer acts), ``react`` or ``llm_only`` (eval-only LLM
+arms). The LLM arms keep ``--profile`` even under ``--nlu oracle`` (their
+moves need a real LLM). Every arm gets the same leak scan, validator and
+metrics; per-call results add ``agent``, ``transcript``,
 ``llm_calls_per_turn`` (non-sim LLM calls per agent turn) and
 ``turn_latency_ms``, summarised in ``run.json["arm_metrics"]``.
+
+``--providers`` swaps ``config/providers.yaml`` for this run only (e.g. split
+per-key rpm when several arms run at once: each process paces its own keys).
 
 Writes ``eval/results/<run_id>/<scenario_id>.json`` as each finishes; resume
 skips completed ``status=ok`` files and retries ``skipped_quota``. ``run.json``
@@ -64,7 +68,7 @@ from sim.creditor import CreditorPolicy, PhrasingMode
 from sim.scenarios import Scenario, TrueRules, generate, to_creditor_rules
 
 RESULTS_ROOT = Path(__file__).resolve().parent / "results"
-NlgMode = Literal["llm", "template"]
+NlgMode = Literal["llm", "bank", "template"]
 NluMode = Literal["llm", "oracle"]
 _TERMINAL_INTENTS = (Intent.PROPOSE_WRAP, Intent.NO_DEAL_WRAP, Intent.ESCALATE)
 
@@ -266,12 +270,21 @@ def _build_settings(
         gemini_api_key=src.gemini_api_key,
         openrouter_api_key=src.openrouter_api_key,
         cerebras_api_key=src.cerebras_api_key,
+        # Suffixed key pools (GROQ_API_KEY_2, ...) and an explicit base pool.
+        api_key_pool=src.api_key_pool,
+        llm_key_cooldown_s=src.llm_key_cooldown_s,
         llm_profile=profile,
         # Eval must not mix cache hits into call_share / latency.
         llm_cache=False,
         llm_cache_path=src.llm_cache_path,
         nlg_mode=nlg,
+        nlg_bank_path=src.nlg_bank_path,
+        nlg_h3=src.nlg_h3,
         nlu_mode=nlu,
+        llm_timeout_nlu_s=src.llm_timeout_nlu_s,
+        llm_timeout_nlg_s=src.llm_timeout_nlg_s,
+        llm_timeout_sim_s=src.llm_timeout_sim_s,
+        llm_timeout_agent_s=src.llm_timeout_agent_s,
         db_path=src.db_path,
         hostility_threshold=src.hostility_threshold,
         max_turns=src.max_turns,
@@ -493,14 +506,16 @@ async def run_one_scenario(
     }
 
 
-def _route_models(settings: Settings) -> dict[str, list[str]]:
+_DEFAULT_PROVIDERS = Path(__file__).resolve().parents[1] / "config" / "providers.yaml"
+
+
+def _route_models(settings: Settings, path: Path = _DEFAULT_PROVIDERS) -> dict[str, list[str]]:
     import yaml
 
-    path = Path(__file__).resolve().parents[1] / "config" / "providers.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     profile = data["profiles"].get(settings.llm_profile, {})
     out: dict[str, list[str]] = {}
-    for role in ("nlu", "nlg", "sim", "stt"):
+    for role in ("nlu", "nlg", "sim", "stt", "agent"):
         specs = profile.get(role) or profile.get("all") or []
         out[role] = list(specs)
     return out
@@ -526,7 +541,8 @@ async def _async_main(args: argparse.Namespace) -> int:
     agent: str = args.agent
     # Oracle NLU is the offline policy layer: FakeLLM, no network. The LLM arms
     # still need a real model for their moves, so they keep --profile.
-    profile = "offline" if nlu == "oracle" and agent == "policy" else args.profile
+    policy_arm = agent in ("policy", "policy_h3")
+    profile = "offline" if nlu == "oracle" and policy_arm else args.profile
 
     run_id = args.resume or _new_run_id(seed)
     run_dir = RESULTS_ROOT / run_id
@@ -544,7 +560,8 @@ async def _async_main(args: argparse.Namespace) -> int:
         model = meta.get("model", "?")
         call_counts[f"{provider}/{model}"] += 1
 
-    llm = make_client(settings, on_call=on_call)
+    providers = Path(args.providers) if args.providers else _DEFAULT_PROVIDERS
+    llm = make_client(settings, on_call=on_call, providers_path=providers)
     scenarios = generate(n, seed)
 
     print(
@@ -593,6 +610,7 @@ async def _async_main(args: argparse.Namespace) -> int:
         "settings": {
             "llm_profile": settings.llm_profile,
             "nlg_mode": settings.nlg_mode,
+            "nlg_h3": agent == "policy_h3" or settings.nlg_h3,
             "nlu_mode": settings.nlu_mode,
             "max_turns": settings.max_turns,
             "max_counters": settings.max_counters,
@@ -601,7 +619,8 @@ async def _async_main(args: argparse.Namespace) -> int:
             "hostility_threshold": settings.hostility_threshold,
             "llm_cache": settings.llm_cache,
         },
-        "models": _route_models(settings),
+        "models": _route_models(settings, providers),
+        "providers": str(providers),
         "call_counts": dict(call_counts),
         "call_share": call_share,
     }
@@ -639,9 +658,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--profile", type=str, default="eval")
     p.add_argument(
         "--nlg",
-        choices=("llm", "template"),
+        choices=("llm", "bank", "template"),
         default="template",
-        help="NLG mode (default template = cheap smoke; use llm for live phrasing)",
+        help="NLG mode (default template = cheap smoke; bank = demo; llm = live phrasing)",
     )
     p.add_argument(
         "--sim-phrasing",
@@ -665,12 +684,22 @@ def main(argv: list[str] | None = None) -> int:
         "--agent",
         choices=AGENT_NAMES,
         default="policy",
-        help="A/B arm: policy (production, default) | react | llm_only (eval-only LLM arms)",
+        help=(
+            "A/B arm: policy (production, default) | policy_h3 (policy + H3 acts) "
+            "| react | llm_only (eval-only LLM arms)"
+        ),
+    )
+    p.add_argument(
+        "--providers",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="providers.yaml for this run (default config/providers.yaml)",
     )
     args = p.parse_args(argv)
     if args.nlu == "oracle":
-        if args.nlg != "template" or args.sim_phrasing != "template":
-            p.error("--nlu oracle requires --nlg template --sim-phrasing template")
+        if args.nlg == "llm" or args.sim_phrasing != "template":
+            p.error("--nlu oracle requires --nlg template|bank --sim-phrasing template")
         if not args.oracle_overlay:
             p.error("--no-oracle-overlay applies to --nlu llm only")
     return asyncio.run(_async_main(args))

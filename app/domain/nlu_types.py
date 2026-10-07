@@ -11,6 +11,16 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+# Off-script question topics (Phase 24b). Anything else the rep asks is "other".
+QuestionTopic = Literal["why_not_higher", "next_steps", "who_approves", "timeline", "other"]
+QUESTION_TOPICS: tuple[str, ...] = (
+    "why_not_higher",
+    "next_steps",
+    "who_approves",
+    "timeline",
+    "other",
+)
+
 
 class ExtractedTerm(BaseModel):
     field: Literal[
@@ -44,3 +54,7 @@ class TurnAnalysis(BaseModel):
     firm: bool = False
     # Tiers phrased as "first N payments": dropped by NLU, policy asks to rephrase.
     tiers_ambiguous: bool = False
+    # Off-script process question (not a term, price, schedule or private ask).
+    # NLU-sourced only; ``decide()`` ignores it, ``app.agent.acts`` answers it.
+    asks_question: bool = False
+    question_topic: QuestionTopic | None = None

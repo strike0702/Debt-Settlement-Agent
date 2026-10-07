@@ -344,9 +344,7 @@ async def test_deadline_covers_5xx_backoff_and_key_switches(tmp_path: Path) -> N
             return _rate_limited("30")
         return httpx.Response(503, json={"error": {"message": "busy"}})
 
-    client, metas, seen = _client(
-        tmp_path, _settings(pool, llm_timeout_nlu_s=0.4), primary
-    )
+    client, metas, seen = _client(tmp_path, _settings(pool, llm_timeout_nlu_s=0.4), primary)
     t0 = time.perf_counter()
     assert (await client.chat_json("nlu", _MSG, _Tiny)).ok
     elapsed = time.perf_counter() - t0
@@ -406,9 +404,7 @@ async def test_no_key_value_in_audit_log_or_errors(
 async def test_cache_key_does_not_depend_on_serving_key(tmp_path: Path) -> None:
     pool = {"GROQ_API_KEY_1": K1, "GROQ_API_KEY_2": K2}
     settings = _settings(pool, llm_cache=True, llm_cache_path=str(tmp_path / "c.db"))
-    client, metas, seen = _client(
-        tmp_path, settings, lambda r: httpx.Response(200, json=_ok())
-    )
+    client, metas, seen = _client(tmp_path, settings, lambda r: httpx.Response(200, json=_ok()))
     await client.chat_json("nlu", _MSG, _Tiny)
     await client.chat_json("nlu", _MSG, _Tiny)  # cursor is on key 2 now
     await client.aclose()
@@ -430,3 +426,120 @@ def test_shipped_demo_nlu_fallback_fits_role_timeout() -> None:
     # Fallback must be a fast target, not Gemini (p50 11.4 s > 6 s timeout).
     assert demo_nlu[1].provider == "cerebras"
     assert data["providers"]["groq"]["tpm"] == 8000
+
+
+# --- carry-over 27.4: daily-quota cooldown parsed from the error body ----------
+
+
+def _quota(body: dict[str, Any], retry_after: str | None = None) -> httpx.Response:
+    headers = {"retry-after": retry_after} if retry_after is not None else {}
+    return httpx.Response(429, headers=headers, json=body)
+
+
+@pytest.mark.parametrize(
+    ("body", "retry_after", "low", "high"),
+    [
+        # Groq tokens-per-day: trust its rolling-window delay.
+        (
+            {
+                "error": {
+                    "message": "Rate limit reached on tokens per day (TPD): "
+                    "Limit 200000, Used 199990. Please try again in 7m12.5s."
+                }
+            },
+            None,
+            430.0,
+            433.0,
+        ),
+        # Gemini per-day quota: the short retryDelay is not the reset time.
+        (
+            {
+                "error": {
+                    "message": "Quota exceeded for GenerateRequestsPerDayPerProjectPerModel",
+                    "details": [{"retryDelay": "35s"}],
+                }
+            },
+            None,
+            3590.0,
+            3601.0,
+        ),
+        # Per-day text, no delay anywhere: long floor.
+        ({"error": {"message": "requests per day limit reached"}}, None, 3590.0, 3601.0),
+        # Per-minute Gemini quota: its retryDelay is used.
+        ({"error": {"message": "quota", "details": [{"retryDelay": "20s"}]}}, None, 18.0, 20.5),
+        # A header still wins when it is longer than the body delay.
+        ({"error": {"message": "Please try again in 2s."}}, "30", 28.0, 30.5),
+    ],
+)
+async def test_quota_429_cooldown_from_error_body(
+    tmp_path: Path, body: dict[str, Any], retry_after: str | None, low: float, high: float
+) -> None:
+    pool = {"GROQ_API_KEY_1": K1, "GROQ_API_KEY_2": K2}
+
+    def primary(request: httpx.Request) -> httpx.Response:
+        if _bearer(request) == K1:
+            return _quota(body, retry_after)
+        return httpx.Response(200, json=_ok())
+
+    client, _, seen = _client(tmp_path, _settings(pool, llm_key_cooldown_s=60.0), primary)
+    await client.chat_json("nlu", _MSG, _Tiny)
+    await client.aclose()
+    key1 = client._keys["primary"][0]
+    assert low < client._cooling_s(key1, "m") <= high
+    # The call moved to the other key instead of waiting.
+    assert seen["primary"] == [K1, K2]
+
+
+async def test_daily_quota_moves_on_instead_of_retrying_each_minute(tmp_path: Path) -> None:
+    """All keys on a per-day quota: fail over to the next route, no 60 s retry loop."""
+    pool = {"GROQ_API_KEY_1": K1}
+
+    def primary(request: httpx.Request) -> httpx.Response:
+        return _quota({"error": {"message": "limit: requests per day"}})
+
+    client, _, seen = _client(tmp_path, _settings(pool, llm_key_cooldown_s=0.05), primary)
+    await client.chat_json("nlu", _MSG, _Tiny)
+    await asyncio.sleep(0.1)  # longer than the default cooldown
+    await client.chat_json("nlu", _MSG, _Tiny)
+    await client.aclose()
+    assert seen["primary"] == [K1]  # cooled for the day, not re-hit
+    assert len(seen["backup"]) == 2
+
+
+# --- carry-over 24a.1: dedicated ``agent`` role --------------------------------
+
+
+def test_agent_role_timeout_and_nlu_fallback_route(tmp_path: Path) -> None:
+    client, _, _ = _client(tmp_path, _settings({}, llm_timeout_agent_s=17.0), lambda r: None)
+    assert client._timeout_for("agent") == 17.0
+    # The test profile has no agent route → the nlu route.
+    assert [t.spec for t in client._route("agent")] == [t.spec for t in client._route("nlu")]
+
+
+def test_shipped_eval_profile_has_free_tier_agent_route() -> None:
+    import yaml
+
+    data = yaml.safe_load(Path("config/providers.yaml").read_text(encoding="utf-8"))
+    route = [parse_route_entry(e) for e in data["profiles"]["eval"]["agent"]]
+    assert route, "eval profile needs an agent route"
+    assert all(t.provider in {"groq", "cerebras", "gemini", "openrouter"} for t in route)
+    assert route[0].spec != parse_route_entry(data["profiles"]["eval"]["nlu"][0]).spec
+    assert "agent" not in data["profiles"]["demo"]
+    assert Settings(api_key_pool={}).llm_timeout_agent_s >= 15.0
+
+
+def test_shipped_groq_nlg_routes_use_low_reasoning_effort() -> None:
+    """Carry-over 21.7: reasoning tokens must not use up the NLG template budget."""
+    import yaml
+
+    from app.agent.nlg import NLG_MAX_TOKENS
+
+    data = yaml.safe_load(Path("config/providers.yaml").read_text(encoding="utf-8"))
+    for profile in ("demo", "eval"):
+        groq = [
+            t
+            for t in (parse_route_entry(e) for e in data["profiles"][profile]["nlg"])
+            if t.provider == "groq"
+        ]
+        assert groq and all(t.params.get("reasoning_effort") == "low" for t in groq), profile
+    assert NLG_MAX_TOKENS >= 800

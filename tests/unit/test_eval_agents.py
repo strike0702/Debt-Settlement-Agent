@@ -22,7 +22,7 @@ from app.domain.belief import TermStatus
 from app.llm.client import FakeLLM
 from eval.agents import AGENT_NAMES, PolicyAgent, make_agent
 from eval.agents.arm_metrics import arm_metrics
-from eval.agents.base import Move, MoveError, coerce_bp, parse_json_object
+from eval.agents.base import AGENT_ROLE, MOVE_DOCS, Move, MoveError, coerce_bp, parse_json_object
 from eval.agents.llm_only_agent import LLMOnlyAgent
 from eval.agents.react_agent import MAX_STEPS, ReactAgent
 from eval.run_eval import _build_settings, main, run_one_scenario
@@ -67,7 +67,7 @@ def _evaluate_at_ask(messages: list[dict[str, Any]]) -> str:
 
 def _script(llm: FakeLLM, replies: list[str | Callable[..., str]]) -> None:
     for r in replies:
-        llm.enqueue("nlu", r)
+        llm.enqueue(AGENT_ROLE, r)
 
 
 async def _run(agent: str, llm: FakeLLM, i: int = 0, tmp: Path | None = None) -> dict[str, Any]:
@@ -102,11 +102,15 @@ async def test_policy_agent_output_identical_to_pre_24a_runner(tmp_path: Path) -
 
 
 def test_make_agent_names_and_policy_adapter() -> None:
-    assert AGENT_NAMES == ("policy", "react", "llm_only")
+    assert AGENT_NAMES == ("policy", "policy_h3", "react", "llm_only")
     session = CallSession(scenario=slot(0).call)
     agent = make_agent("policy", session, llm=None, settings=_oracle_settings(), audit=None)
     assert isinstance(agent, PolicyAgent)
     assert agent.orchestrator.session is session
+    h3 = make_agent("policy_h3", session, llm=None, settings=_oracle_settings(), audit=None)
+    assert isinstance(h3, PolicyAgent) and h3.name == "policy_h3"
+    assert h3.orchestrator.settings.nlg_h3 is True
+    assert agent.orchestrator.settings.nlg_h3 is False
     with pytest.raises(ValueError):
         make_agent("nope", session, llm=None, settings=_oracle_settings(), audit=None)
     with pytest.raises(ValueError):
@@ -205,8 +209,8 @@ async def _ready_agent(cls: type = ReactAgent) -> Any:
     session = CallSession(scenario=slot(0).call)
     agent = cls(session, llm=llm, settings=_oracle_settings(), audit=None)
     reply = await CreditorPolicy(slot(0)).respond((await agent.start()).action)
-    llm.enqueue("nlu", json.dumps({"tool": "say", "args": {"text": "Thanks."}}))
-    llm.enqueue("nlu", json.dumps({"text": "Thanks.", "move": {"tool": "say"}}))
+    llm.enqueue(AGENT_ROLE, json.dumps({"tool": "say", "args": {"text": "Thanks."}}))
+    llm.enqueue(AGENT_ROLE, json.dumps({"text": "Thanks.", "move": {"tool": "say"}}))
     await agent.on_creditor_text(reply.text, oracle=reply.analysis)
     return agent
 
@@ -321,7 +325,7 @@ async def test_llm_only_bad_reply_falls_back_without_retry() -> None:
     session = CallSession(scenario=slot(0).call)
     agent = LLMOnlyAgent(session, llm=llm, settings=_oracle_settings(), audit=None)
     reply = await CreditorPolicy(slot(0)).respond((await agent.start()).action)
-    llm.enqueue("nlu", "I think we should counter at 40%")
+    llm.enqueue(AGENT_ROLE, "I think we should counter at 40%")
     utt = await agent.on_creditor_text(reply.text, oracle=reply.analysis)
     assert agent.last_turn_llm_calls == 1
     assert utt.action.reason == "invalid_reply"
@@ -370,3 +374,63 @@ def test_arm_metrics_summary() -> None:
     assert out["llm_calls_per_turn_mean"] == 2.0
     assert out["llm_calls_per_turn_max"] == 4.0
     assert out["turn_latency_ms_p50"] == 2.0
+
+
+def test_agent_steps_use_dedicated_agent_role() -> None:
+    """Carry-over 24a.1: agent calls no longer share the NLU role / timeout."""
+    assert AGENT_ROLE == "agent"
+
+
+def test_coerce_bp_percent_form_is_prompted_and_unambiguous() -> None:
+    """Carry-over 24a.4: prompts ask for "N%"; that form is exact even for 1%."""
+    assert '"45%"' in MOVE_DOCS
+    assert coerce_bp("1%") == 100
+    assert coerce_bp("45%") == 4500
+    assert coerce_bp("45.5%") == 4550
+    assert coerce_bp(4500) == 4500
+    # Documented heuristic: a bare number ≤ 100 is percent, so bare 1 is 1%, not 1 bp.
+    assert coerce_bp(1) == 100
+
+
+def test_build_settings_keeps_explicit_key_pool() -> None:
+    """Carry-over 27.2: a pool set on ``base`` survives the eval settings rebuild."""
+    from pydantic import SecretStr
+
+    from app.config import Settings
+    from eval.run_eval import _build_settings
+
+    base = Settings(api_key_pool={"GROQ_API_KEY_1": SecretStr("sk-one")}, llm_key_cooldown_s=7.0)
+    built = _build_settings(profile="eval", nlg="bank", base=base)
+    assert built.api_keys("GROQ_API_KEY")[-1] == (1, "sk-one")
+    assert built.llm_key_cooldown_s == 7.0 and built.nlg_mode == "bank"
+
+
+def test_cli_policy_h3_bank_and_providers_flags(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    async def fake_main(args: Any) -> int:
+        seen.update(vars(args))
+        return 0
+
+    monkeypatch.setattr("eval.run_eval._async_main", fake_main)
+    argv = ["--agent", "policy_h3", "--nlg", "bank", "--providers", "x.yaml"]
+    assert main(argv) == 0
+    assert (seen["agent"], seen["nlg"], seen["providers"]) == ("policy_h3", "bank", "x.yaml")
+    # Bank NLG needs no LLM, so the offline oracle layer accepts it.
+    assert main(["--nlu", "oracle", "--nlg", "bank", "--sim-phrasing", "template"]) == 0
+    with pytest.raises(SystemExit):
+        main(["--nlu", "oracle", "--nlg", "llm", "--sim-phrasing", "template"])
+
+
+def test_split_providers_file_halves_every_rate() -> None:
+    import yaml
+
+    base = yaml.safe_load(Path("config/providers.yaml").read_text(encoding="utf-8"))
+    split = yaml.safe_load(
+        Path("docs/eval/ab_20261007/providers_split2.yaml").read_text(encoding="utf-8")
+    )
+    assert split["profiles"] == base["profiles"]
+    for name, cfg in base["providers"].items():
+        for key in ("rpm", "tpm"):
+            if cfg.get(key):
+                assert split["providers"][name][key] == max(1, cfg[key] // 2), (name, key)

@@ -34,8 +34,9 @@ def test_every_bank_entry_passes_template_guard() -> None:
     data = _bank_json()
     assert data["entries"], "bank is empty"
     for entry in data["entries"]:
-        intent = Intent(entry["intent"])
-        assert intent not in TEMPLATE_ONLY_INTENTS
+        # H3 act keys (Phase 24b) are not intents: ``ACK`` / ``ANSWER:<topic>``.
+        if entry["intent"] != "ACK" and not entry["intent"].startswith("ANSWER:"):
+            assert Intent(entry["intent"]) not in TEMPLATE_ONLY_INTENTS
         allowed, required = set(entry["placeholders"]), set(entry["required"])
         assert required <= allowed
         assert entry["templates"], entry

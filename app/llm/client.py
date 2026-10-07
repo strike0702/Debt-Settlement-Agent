@@ -1,7 +1,9 @@
 """Role-based OpenAI-compatible LLM client with provider failover.
 
-Callers ask for a role (``nlu`` / ``nlg`` / ``sim`` / ``stt``), never a model
-name. Routing comes from ``config/providers.yaml`` profiles; a route entry is
+Callers ask for a role (``nlu`` / ``nlg`` / ``sim`` / ``stt`` / ``agent``), never
+a model name. ``agent`` is the eval-only A/B arms' move role (``eval/agents``);
+a profile without an ``agent`` route falls back to its ``nlu`` route.
+Routing comes from ``config/providers.yaml`` profiles; a route entry is
 either ``provider/model`` or ``{target: provider/model, params: {...},
 timeout_s: N}`` (params go into the request body and the response-cache key;
 ``timeout_s`` overrides the role timeout for that target only).
@@ -12,7 +14,9 @@ the pool. Buckets are keyed ``(provider, key suffix, model)``: an rpm bucket
 (burst ``min(rpm, 5)``, refill ``rpm/60``/s, optional ``min_interval_s``) and,
 when the provider sets ``tpm``, a tokens-per-minute budget (charged with a
 prompt estimate, reconciled from ``usage``). A 429 / quota error cools that key
-for that model (Retry-After, else ``Settings.llm_key_cooldown_s``) and the same
+for that model (Retry-After, a delay parsed from the error body — Groq "try
+again in", Gemini ``retryDelay`` — at least ``DAILY_QUOTA_COOLDOWN_S`` for a
+per-day quota without a provider delay, else ``Settings.llm_key_cooldown_s``) and the same
 target is retried at once on the next key; only when every key is cooling does
 the target wait out a short cooldown or fail over. 401/403 disables the key for
 the process (logged once). Gemini free-tier quota often arrives as HTTP 400 —
@@ -61,7 +65,16 @@ from pydantic import BaseModel
 
 from app.config import Settings, get_settings
 
-Role = Literal["nlu", "nlg", "sim", "stt"]
+Role = Literal["nlu", "nlg", "sim", "stt", "agent"]
+
+# A per-day quota does not reset in a minute: cool the key long enough that the
+# call moves to other keys / targets instead of re-hitting it every minute.
+DAILY_QUOTA_COOLDOWN_S = 3600.0
+_PER_DAY_RE = re.compile(r"per[ _-]?day|perday|\((?:TPD|RPD)\)", re.IGNORECASE)
+_TRY_AGAIN_RE = re.compile(
+    r"try again in\s+(?:(\d+)h)?\s*(?:(\d+)m(?!s))?\s*(?:([\d.]+)s)?", re.IGNORECASE
+)
+_RETRY_DELAY_RE = re.compile(r"retryDelay['\"]?\s*[:=]\s*['\"]?([\d.]+)s", re.IGNORECASE)
 T = TypeVar("T", bound=BaseModel)
 _log = logging.getLogger(__name__)
 
@@ -762,6 +775,37 @@ class LLMClient:
         except (TypeError, ValueError):
             return None
 
+    @staticmethod
+    def _error_body(err: APIStatusError) -> str:
+        try:
+            return str(err.body) if err.body is not None else str(err)
+        except Exception:
+            return str(err)
+
+    def _quota_cooldown_s(self, err: APIStatusError) -> float | None:
+        """Cooldown for a 429 / quota error: header, body delay, or a per-day floor.
+
+        Groq's "try again in 7m12s" is trusted as is (rolling window). A per-day
+        quota with no Groq delay (Gemini's ``retryDelay`` is often seconds even
+        then) cools for at least ``DAILY_QUOTA_COOLDOWN_S``. None → default.
+        """
+        header = self._retry_after_seconds(err)
+        body = self._error_body(err)
+        groq: float | None = None
+        m = _TRY_AGAIN_RE.search(body)
+        if m and any(m.groups()):
+            h, mins, secs = m.groups()
+            groq = int(h or 0) * 3600 + int(mins or 0) * 60 + float(secs or 0)
+        gemini: float | None = None
+        m = _RETRY_DELAY_RE.search(body)
+        if m:
+            gemini = float(m.group(1))
+        found = [x for x in (header, groq, gemini) if x is not None and x > 0]
+        best = max(found) if found else None
+        if _PER_DAY_RE.search(body) and groq is None:
+            return max(best or 0.0, DAILY_QUOTA_COOLDOWN_S)
+        return best
+
     def _is_gemini_quota_400(self, provider: str, err: APIStatusError) -> bool:
         cfg = self._providers.get(provider)
         if not cfg or not cfg.quota_as_400:
@@ -1011,7 +1055,7 @@ class LLMClient:
                         where = f"{provider}/{model} {key.label}"
                         quota400 = self._is_gemini_quota_400(provider, e)
                         if status == 429 or quota400:
-                            self._cool(key, model, self._retry_after_seconds(e))
+                            self._cool(key, model, self._quota_cooldown_s(e))
                             if budget is not None:
                                 budget.reconcile(cost, 0)  # rejected: not billed
                             what = "gemini quota (400→429)" if quota400 else "429 rate limited"

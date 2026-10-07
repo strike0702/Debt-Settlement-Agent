@@ -112,3 +112,26 @@ async def test_every_reason_code_in_100_seed_oracle_eval_has_text(tmp_path: Path
     assert len(seen) > 10
     missing = sorted((i, r) for i, r in seen if reason_key(Intent(i), r) not in REASON_TEXT)
     assert missing == []
+
+
+def test_counter_without_offer_total_omits_the_amount() -> None:
+    """Carry-over 22.5: no "(that value)" when the engine gave no offer total."""
+    from app.domain.actions import Action, Phase
+    from app.domain.facts import Fact
+
+    pct = Fact(id="counter_pct", kind="pct", value=4900, visibility="PUBLIC", source="engine")
+    bare = Action(
+        intent=Intent.COUNTER,
+        facts={"counter_pct": pct},
+        next_phase=Phase.NEGOTIATE,
+        reason="bp=4900",
+    )
+    text = reason_text(bare, date(2026, 3, 1))
+    assert text.startswith("Counter at 49%:") and "that value" not in text
+    total = Fact(
+        id="offer_total", kind="money", value=123_400, visibility="PUBLIC", source="engine"
+    )
+    full = bare.model_copy(update={"facts": {"counter_pct": pct, "offer_total": total}})
+    assert reason_text(full, date(2026, 3, 1)).startswith("Counter at 49% ($1,234")
+    # Display variant only: the reason code is unchanged.
+    assert reason_key(Intent.COUNTER, "bp=4900") == "counter"

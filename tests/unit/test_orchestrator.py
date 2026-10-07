@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -1015,3 +1016,36 @@ async def test_balloon_fifty_dollar_min_accepts_later_start_above_eight_percent(
     assert isinstance(spoken_bp, int)
     assert spoken_bp > 800
     audit.close()
+
+
+@pytest.mark.asyncio
+async def test_denied_first_payment_readback_falls_back_to_engine_default(
+    tmp_path: Path,
+) -> None:
+    """A denied date read-back leaves the field UNKNOWN; the engine must not crash.
+
+    Seen in the Phase 24b A/B (``s0007_025``): ``build_rules`` succeeds without
+    ``first_payment_date``, and the old ``assert isinstance(fpd, date)`` fired.
+    """
+    from feasibility.models import default_first_payment_date
+
+    orch, session, audit = _orch(tmp_path)
+    belief = session.belief
+    belief.observe("max_payments", 6, "six", 1, verified=True, hedged=False)
+    belief.observe("min_payment_cents", 2500, "$25", 1, verified=True, hedged=False)
+    belief.observe("payment_structure", "even", "even", 1, verified=True, hedged=False)
+    belief.observe(
+        "first_payment_date", date(2026, 3, 31), "March 31", 1, verified=True, hedged=True
+    )
+    belief.confirm_readback("first_payment_date", yes=False)
+    assert belief.get("first_payment_date").value is None
+
+    summary = await orch._eval_bp(4500)
+
+    assert summary is not None
+    expected = default_first_payment_date(session.scenario.client)
+    events = [
+        e for e in audit.for_call(session.call_id)
+        if e["type"] == "first_payment_date_default"
+    ]
+    assert events and events[0]["payload"]["value"] == expected.isoformat()

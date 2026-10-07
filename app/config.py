@@ -92,6 +92,8 @@ class Settings(BaseSettings):
     # llm | bank | template. bank = guard-checked templates from nlg_bank_path, no LLM.
     nlg_mode: str = "llm"
     nlg_bank_path: str = "config/nlg_bank.json"
+    # H3 conversational NLG (Phase 24b): ack / answer acts before the decided move.
+    nlg_h3: bool = False
     nlu_mode: str = "llm"
     # Per-request LLM timeouts (s). A timeout fails over to the next route target.
     llm_timeout_nlu_s: float = 6.0
@@ -99,6 +101,8 @@ class Settings(BaseSettings):
     llm_timeout_stt_s: float = 8.0
     # Sim phrasing is eval-only and not on the voice path; looser bound.
     llm_timeout_sim_s: float = 15.0
+    # Eval-only A/B agent arms (eval/agents): multi-step tool calls, not on the voice path.
+    llm_timeout_agent_s: float = 20.0
 
     db_path: str = "debt_settlement_agent.db"
 

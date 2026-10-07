@@ -169,6 +169,190 @@
         "I\u2019m sorry, but I\u2019m not able to provide that information.",
         "I\u2019m sorry, but I\u2019m unable to provide that information."
       ]
+    },
+    {
+      "intent": "ACK",
+      "placeholders": [
+        "ack_max_payments"
+      ],
+      "required": [
+        "ack_max_payments"
+      ],
+      "templates": [
+        "Got it, up to {ack_max_payments} payments.",
+        "Got it, {ack_max_payments} payments overall.",
+        "Understood, {ack_max_payments} payments as discussed.",
+        "Got it, {ack_max_payments} payments in total.",
+        "Understood, {ack_max_payments} payments as outlined.",
+        "Understood, maximum of {ack_max_payments} payments."
+      ]
+    },
+    {
+      "intent": "ACK",
+      "placeholders": [
+        "ack_min_payment"
+      ],
+      "required": [
+        "ack_min_payment"
+      ],
+      "templates": [
+        "Got it, a {ack_min_payment} minimum payment.",
+        "Understood, {ack_min_payment} is the minimum payment.",
+        "Got it, {ack_min_payment} minimum payment.",
+        "Got it, {ack_min_payment} is the minimum payment.",
+        "Got it, minimum payment of {ack_min_payment}.",
+        "Noted, {ack_min_payment} minimum payment."
+      ]
+    },
+    {
+      "intent": "ACK",
+      "placeholders": [
+        "ack_first_payment_date"
+      ],
+      "required": [
+        "ack_first_payment_date"
+      ],
+      "templates": [
+        "Got it, starting {ack_first_payment_date}.",
+        "Got it, payment starts on {ack_first_payment_date}."
+      ]
+    },
+    {
+      "intent": "ACK",
+      "placeholders": [
+        "ack_max_payments",
+        "ack_min_payment"
+      ],
+      "required": [
+        "ack_max_payments",
+        "ack_min_payment"
+      ],
+      "templates": [
+        "Got it, {ack_max_payments} payments at a {ack_min_payment} minimum.",
+        "Understood, {ack_max_payments} payments with a {ack_min_payment} minimum.",
+        "Understood, {ack_max_payments} installments with a {ack_min_payment} minimum.",
+        "Understood, {ack_max_payments} installments with a minimum of {ack_min_payment} each.",
+        "Understood, {ack_max_payments} payments with a minimum of {ack_min_payment}.",
+        "Understood, {ack_max_payments} payments with a minimum of {ack_min_payment} each."
+      ]
+    },
+    {
+      "intent": "ACK",
+      "placeholders": [
+        "ack_first_payment_date",
+        "ack_max_payments"
+      ],
+      "required": [
+        "ack_first_payment_date",
+        "ack_max_payments"
+      ],
+      "templates": [
+        "Got it, {ack_max_payments} payments starting {ack_first_payment_date}.",
+        "Understood, {ack_max_payments} payments starting on {ack_first_payment_date}.",
+        "Understood, {ack_max_payments} payments starting {ack_first_payment_date}.",
+        "Understood, {ack_max_payments} payments beginning {ack_first_payment_date}.",
+        "Got it, {ack_max_payments} payments beginning {ack_first_payment_date}."
+      ]
+    },
+    {
+      "intent": "ACK",
+      "placeholders": [
+        "ack_first_payment_date",
+        "ack_min_payment"
+      ],
+      "required": [
+        "ack_first_payment_date",
+        "ack_min_payment"
+      ],
+      "templates": [
+        "Got it, a {ack_min_payment} minimum starting {ack_first_payment_date}."
+      ]
+    },
+    {
+      "intent": "ACK",
+      "placeholders": [
+        "ack_first_payment_date",
+        "ack_max_payments",
+        "ack_min_payment"
+      ],
+      "required": [
+        "ack_first_payment_date",
+        "ack_max_payments",
+        "ack_min_payment"
+      ],
+      "templates": [
+        "Got it, {ack_max_payments} payments at a {ack_min_payment} minimum, starting {ack_first_payment_date}.",
+        "Got it, {ack_max_payments} payments starting {ack_first_payment_date} with {ack_min_payment} minimum.",
+        "Understood, {ack_max_payments} installments starting {ack_first_payment_date} with a minimum of {ack_min_payment} each.",
+        "Understood, {ack_max_payments} payments starting {ack_first_payment_date} with {ack_min_payment} minimum."
+      ]
+    },
+    {
+      "intent": "ANSWER:why_not_higher",
+      "placeholders": [],
+      "required": [],
+      "templates": [
+        "Our offer reflects what the client's settlement program can fund, so we keep it at a level the client can actually pay.",
+        "We set the offer based on what the settlement plan can cover, ensuring it stays within what the client can afford.",
+        "We base the offer on what the settlement program can cover, keeping it within the client\u2019s actual payment capacity.",
+        "We set the offer based on what the settlement program can cover, keeping it within what the client can afford.",
+        "The offer matches what the settlement program can cover, so it stays within what the client can afford.",
+        "We set the offer based on what the settlement program can cover, ensuring it stays within what the client can afford."
+      ]
+    },
+    {
+      "intent": "ANSWER:next_steps",
+      "placeholders": [],
+      "required": [],
+      "templates": [
+        "Next, I send the proposed terms to the client for review, and we follow up with you once they decide.",
+        "I forward the terms to the client for review, and we\u2019ll touch base with you once they\u2019ve made a decision.",
+        "I forward the terms to the client for review, and I\u2019ll touch base with you after they make a decision.",
+        "I forward the terms to the client for review, and we\u2019ll touch base with you after they make a choice.",
+        "I forward the terms to the client for review, and will update you after they decide.",
+        "I forward the terms to the client for review and will update you once they make a decision."
+      ]
+    },
+    {
+      "intent": "ANSWER:who_approves",
+      "placeholders": [],
+      "required": [],
+      "templates": [
+        "The client makes the final decision; I can propose terms on the call, but only the client can approve them.",
+        "The client decides at the end; I can suggest terms during the call, but only the client has the authority to approve them.",
+        "The client decides; I suggest terms during the call, but only the client may approve them.",
+        "The client decides at the end; I can suggest terms during our call, but only the client can approve them.",
+        "The client makes the final call; I can suggest terms on the call, but only the client can give the final nod.",
+        "The client makes the final decision; I can suggest terms during the call, but only the client can give the final approval."
+      ]
+    },
+    {
+      "intent": "ANSWER:timeline",
+      "placeholders": [],
+      "required": [],
+      "templates": [
+        "The client reviews the proposal after this call, and we follow up with you as soon as they decide.",
+        "After this call, the client will look over the proposal, and we\u2019ll get back to you once they make a choice.",
+        "The client will review the proposal after this conversation, and we\u2019ll contact you once they have made a choice.",
+        "After this call the client will review the proposal, and we will contact you once they have made a choice.",
+        "After this call the client will review the proposal, and we\u2019ll contact you once they\u2019ve made a decision.",
+        "The client will review the proposal after this call, and we\u2019ll reach out once they\u2019ve made a decision."
+      ]
+    },
+    {
+      "intent": "ANSWER:other",
+      "placeholders": [],
+      "required": [],
+      "templates": [
+        "That is a fair question; I will note it so our team can follow up with you.",
+        "You raise a good point; I'll record it for the team to address.",
+        "That's a good question. I'll record it so our team can get back to you.",
+        "I hear your question; I'll record it so our team can follow up with you.",
+        "I hear your question; I'll note it and have our team follow up.",
+        "That's a good point; I'll make a note so our team can get back to you."
+      ]
     }
-  ]
+  ],
+  "acts_generated": "2026-10-07",
+  "acts_reviewed": "2 awkward ACK variants removed by hand"
 }

@@ -33,6 +33,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 23a | Web call console: scaffold and components (REVIEW_PLAN) | done |
 | 23b | Web call console: wire-up and cutover (REVIEW_PLAN) | done (voice call not run by hand, see handoff) |
 | 24a | A/B harness, ReAct and LLM-only arms (REVIEW_PLAN) | done |
+| 24b | H3 conversational NLG + the A/B run (REVIEW_PLAN) | WIP (paused) |
 | 27 | Provider API key pool (user request) | done |
 
 ## Environment facts
@@ -46,6 +47,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 
 ### `app.config`
 - `class Settings(BaseSettings)` — fields: `groq_api_key`, `mistral_api_key`, `gemini_api_key`, `openrouter_api_key`, `cerebras_api_key` (`str | None`); `llm_profile` (`str`, default `"demo"`); `llm_timeout_nlu_s` / `llm_timeout_nlg_s` / `llm_timeout_stt_s` / `llm_timeout_sim_s` (`float`, 6 / 4 / 8 / 15); `llm_cache` (`bool`); `llm_cache_path` (`str`); `nlg_mode` (`llm` | `bank` | `template`) / `nlu_mode` (`str`); `nlg_bank_path` (`str`, `config/nlg_bank.json`); `db_path` (`str`); `hostility_threshold` (`float`); `max_turns` / `max_counters` (`int`); `anchor_ratio` / `concession_factor` (`float`); `firm_name` / `opening_disclosure` (`str`).
+- Phase 24b: `nlg_h3: bool = False` (ack / answer acts + 3-turn NLG context); `llm_timeout_agent_s: float = 20.0` (eval A/B agent role).
 - `get_settings() -> Settings`
 
 ### `app.domain.units`
@@ -114,10 +116,12 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 
 ### `app.domain.actions`
 - `Phase`, `Intent` (StrEnums); `Effect`, `Action` — shared with sim (sim must not import `app.agent`)
+- Phase 24b: `Intent.ANSWER` (only ever an attached act, never `decide()`'s move); `class AnswerAct(topic: str, text: str)`; `Action.ack: dict[str, Fact]` (ids `ack_max_payments` count, `ack_min_payment` money, `ack_first_payment_date` date; PUBLIC, `source="creditor"`) and `Action.answer: AnswerAct | None`. The sim ignores both.
 - Re-exported from `app.agent.policy` for existing callers
 
 ### `app.domain.nlu_types`
 - `ExtractedTerm`, `TurnAnalysis` — shared with sim/oracle; re-exported from `app.agent.nlu_types`
+- Phase 24b: `QuestionTopic = Literal["why_not_higher","next_steps","who_approves","timeline","other"]`, `QUESTION_TOPICS`; `TurnAnalysis.asks_question: bool = False`, `question_topic: QuestionTopic | None = None` (NLU-sourced; `decide()` ignores them; the oracle overlay does not touch them)
 
 ### `app.agent.nlu_types`
 - Re-exports `ExtractedTerm`, `TurnAnalysis` from `app.domain.nlu_types`
@@ -138,6 +142,12 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
   - `_confirm_key` fingerprints all CreditorRules fields; `next_counter` → `None` when no legal bp
 - `draft_agreement(*, creditor, bp, offer_total, rows, assumed_fields, audit=None, call_id=None) -> Agreement`
 - `opening_action(*, settings=None, firm_name=None, opening_disclosure=None) -> Action`
+
+### `app.agent.acts` (Phase 24b)
+- `ANSWER_POINTS: dict[str, str]` — number-free talking point per topic; `ACK_FIELDS` (field → (fact id, kind)); `NO_ACK_INTENTS`, `NO_ANSWER_INTENTS`
+- `ack_facts(belief_changes, creditor_numbers, private_blocklist) -> dict[str, Fact]` — terms that became KNOWN or changed this turn, value creditor-said (`_cross_match`), never colliding with the private blocklist
+- `answer_act(action, analysis) -> AnswerAct | None` — None on a private-info ask, for `NO_ANSWER_INTENTS`, and for redundant (topic, move) pairs
+- `attach_acts(action, analysis, belief_changes, *, creditor_numbers, private_blocklist) -> Action` — copy with `ack` / `answer`; intent, facts, effects, reason unchanged
 
 ### `sim.personas`
 - `PersonaName = Literal["flexible", "contradictory", "pressuring"]`
@@ -173,7 +183,8 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `check_thresholds(summary, thresholds=None) -> list[str]` (empty ⇒ pass); RHS may name another summary key (`counters_spoken_max: "<=max_counters"`); missing key fails closed
 
 ### `eval.run_eval`
-- CLI: `python -m eval.run_eval --scenarios N --seed S [--resume RUN_ID] [--profile] [--nlu oracle|llm] [--nlg llm|template] [--sim-phrasing llm|template] [--no-oracle-overlay] [--agent policy|react|llm_only]`
+- CLI: `python -m eval.run_eval --scenarios N --seed S [--resume RUN_ID] [--profile] [--nlu oracle|llm] [--nlg llm|bank|template] [--sim-phrasing llm|template] [--no-oracle-overlay] [--agent policy|policy_h3|react|llm_only] [--providers PATH]`
+  - Phase 24b: `--nlg bank`; `--providers` swaps `config/providers.yaml` for one run (`run.json["providers"]`); `--nlu oracle` accepts `--nlg template|bank`; `policy_h3` is offline under `--nlu oracle` like `policy`; `_build_settings` now carries `api_key_pool`, `llm_key_cooldown_s`, `nlg_bank_path`, `nlg_h3` and the role timeouts from `base`
   - `--agent` (Phase 24a, default `policy`): LLM arms keep `--profile` under `--nlu oracle` (only policy is forced `offline`)
   - `--nlu oracle`: forces profile `offline` (FakeLLM), no network/keys; requires `--nlg template --sim-phrasing template`; rejects `--no-oracle-overlay`
   - `--nlu llm` (default): live NLU, sim disposition overlay on unless `--no-oracle-overlay`
@@ -184,14 +195,18 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `run.json`: models, call_share, seed, git sha, settings, `nlu`, `oracle_overlay`; exit 1 on threshold fail
 
 ### `eval.agents` (Phase 24a, eval-only; never imported by `app/`)
-- `AgentName = Literal["policy", "react", "llm_only"]`; `AGENT_NAMES`
+- `AgentName = Literal["policy", "policy_h3", "react", "llm_only"]`; `AGENT_NAMES` (Phase 24b `policy_h3` = `PolicyAgent` with `nlg_h3=True`, `.name == "policy_h3"`)
 - `class AgentUnderTest(Protocol)` — `session: CallSession`; `async start() -> Utterance`; `async on_creditor_text(text, timings=None, *, oracle=None) -> Utterance`; `async on_sentence_done(ids) -> Agreement | None`
 - `class PolicyAgent(session, *, llm, settings, audit)` — wraps `Orchestrator(..., auto_ack=True)` unchanged; `.orchestrator`
 - `make_agent(name, session, *, llm, settings, audit) -> AgentUnderTest` — `react` / `llm_only` imported lazily; LLM arms raise `ValueError` when `llm is None`
-- `eval.agents.base`: `AGENT_ROLE = "nlu"`, `AGENT_MAX_TOKENS = 1200`, `OBSERVE_TOOLS`, `TERMINAL_TOOLS`, `MOVE_DOCS`, `NEGOTIATION_RULES`, `MoveError`, `Move(tool, args, text)`, `parse_json_object(raw) -> dict`, `coerce_bp(value) -> int`; `class LLMArmAgent` — `guarded: bool`, `decide() -> (Action, str)` (subclass), `build_action(move) -> Action`, `tool_get_rules()`, `async tool_evaluate_offer(args)`, `context_block() -> str`, `fallback_action(reason)`, `last_turn_llm_calls`, `afford`
+- `eval.agents.base`: `AGENT_ROLE = "agent"` (Phase 24b), `AGENT_MAX_TOKENS = 1200`, `OBSERVE_TOOLS`, `TERMINAL_TOOLS`, `MOVE_DOCS`, `NEGOTIATION_RULES`, `MoveError`, `Move(tool, args, text)`, `parse_json_object(raw) -> dict`, `coerce_bp(value) -> int`; `class LLMArmAgent` — `guarded: bool`, `decide() -> (Action, str)` (subclass), `build_action(move) -> Action`, `tool_get_rules()`, `async tool_evaluate_offer(args)`, `context_block() -> str`, `fallback_action(reason)`, `last_turn_llm_calls`, `afford`
 - `eval.agents.react_agent`: `MAX_STEPS = 4`, `SYSTEM_PROMPT`, `class ReactAgent(LLMArmAgent)` (guarded)
 - `eval.agents.llm_only_agent`: `SYSTEM_PROMPT`, `class LLMOnlyAgent(LLMArmAgent)` (unguarded, one call, no retry)
 - `eval.agents.arm_metrics.arm_metrics(results) -> dict` — `turns`, `llm_calls_per_turn_{mean,p95,max}`, `turn_latency_ms_{p50,p95}`
+
+### `eval.ab_report` (Phase 24b; not a gate)
+- CLI `python -m eval.ab_report --arm NAME=RUN_DIR ... --judge X:Y=JUDGE_DIR ... --out DIR [--decision FILE] [--notes FILE]` (first arm = baseline A) → `summary.md` / `summary.json`
+- `common_ids(arms)`, `outcome(r)`, `pick_transcripts(results) -> (representative, worst)`, `arm_row(results)`, `adoption_checks(row, base, win_rate) -> dict[str, bool]` (fails closed), `build_report(arm_dirs, judges, *, decision="", notes="") -> (md, data)`
 
 ### `eval.judge_naturalness` (Phase 24a; not a gate)
 - CLI `python -m eval.judge_naturalness RUN_A RUN_B [--profile eval] [--limit N] [--seed 0] [--human-pairs 20] [--out DIR]`
@@ -202,13 +217,14 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `SAFE_FALLBACK: str`; `TEMPLATES: dict[Intent, str]`
 - `render_action(action, ref_date, *, creditor_numbers=None, private_blocklist=None, audit=None, call_id=None) -> list[str]` — deterministic template path
 - Phase 22: `render_action(..., trace_out=None)` / `speak_action(..., trace_out=None)` — optional dict filled with `mode`, `source` (`default`|`override`|`bank`|`llm`), `template`, `guards` (`[{stage, ok, reason, offending}]`), `fallback_used`, `fallback_reason` (`safe_fallback`|`bank_miss`|`llm_template_rejected`|`llm_unavailable`); never changes the spoken text
+- Phase 24b: `ACK_TEMPLATES: dict[tuple[ids], str]` (7 id sets), `ANSWER_TEMPLATE = TEMPLATES[Intent.ANSWER] = "{answer_text}"`, `ACK_BANK_INTENT = "ACK"`, `answer_bank_intent(topic) -> "ANSWER:<topic>"`, `NLG_MAX_TOKENS = 800`; `render_acts(action, ref_date, *, nlg_mode="template", bank_path=None, creditor_numbers=None, private_blocklist=None, audit=None, call_id=None, blocked_out=None, turn=0) -> list[str]` — ack then answer, each through `template_guard` + `rendered_guard`; bank/llm modes use bank variants (never an LLM call); a failing act is dropped and audited `nlg/act_dropped`. `speak_action(..., recent_turns=None)`; an empty LLM template counts as rejected (falls back to `TEMPLATES`, `fallback_reason=llm_template_rejected`)
 - `async speak_action(action, ref_date, *, llm=None, settings=None, last_rep_line="", creditor_numbers=None, private_blocklist=None, audit=None, call_id=None, blocked_out=None, turn=0) -> list[str]` — `nlg_mode=bank`: bank template (no LLM); `llm`: LLM template → template_guard (1 retry); both fall back to `TEMPLATES` → fill → rendered_guard; raises `LLMUnavailable` (Phase 20; orchestrator `_speak` falls back and audits `llm_unavailable`)
 
 ### `app.agent.nlg_bank` (Phase 21)
 - `BankKey = tuple[str, tuple[str, ...]]`; `bank_key(intent, placeholder_ids) -> BankKey`; `action_placeholder_ids(action) -> set[str]`
 - `parse_bank(data) -> dict[BankKey, list[str]]`; `load_bank(path=DEFAULT_BANK_PATH)` (lru_cache; missing file → `{}`)
-- `pick_template(action, *, call_id, turn, bank) -> str | None` — candidates passing `template_guard` with the action's ids; index `sha256(f"{call_id}:{turn}") mod n`
-- `config/nlg_bank.json`: `{generated, profile, per_key, stats, entries: [{intent, placeholders, required, templates}]}`; built by `scripts/build_template_bank.py`
+- `pick_template(action, *, call_id, turn, bank, intent_key=None) -> str | None` (Phase 24b `intent_key`: `ACK` / `ANSWER:<topic>`) — candidates passing `template_guard` with the action's ids; index `sha256(f"{call_id}:{turn}") mod n`
+- `config/nlg_bank.json`: `{generated, profile, per_key, stats, entries: [{intent, placeholders, required, templates}]}`; built by `scripts/build_template_bank.py`; Phase 24b adds `ACK` (7 id sets) and `ANSWER:<topic>` (5, no placeholders, talking point always first) via `--acts` (merge; other entries kept)
 
 ### `app.agent.nlu`
 - `repair_stance(stance, utterance, *, has_terms=False) -> str` — injection never accepts → reject phrase → accept phrase → dominant short ack with no number/term
@@ -222,6 +238,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `post_verify(analysis, utterance, *, ref=None, audit=None, call_id=None) -> VerifiedAnalysis`
 - Phase 22: `class DroppedTerm` — `field`, `value`, `reason` (audit event minus `nlu_`: `rejected_quote`, `rejected_tiers`, `tiers_ambiguous`, `cents_ambiguity`, `rejected_range`, `rejected_date`, `rejected_bare_year`, `rejected_ask_value`), `quote`; `VerifiedAnalysis.dropped: list[DroppedTerm]` (trace only; policy never reads it)
 - `async analyze(utterance, last_agent_line, pending_readback, *, llm=None, settings=None, oracle=None, audit=None, call_id=None, ref=None) -> VerifiedAnalysis`
+- Phase 24b: `repair_question(asks_question, topic, utterance, *, asks_private) -> (bool, str | None)` — never on a private ask; LLM flag needs `?` or an interrogative opener; topic regex cues flag alone and beat an LLM `other`; an `other` question mentioning terms / figures is dropped (on-script). `VerifiedAnalysis.asks_question` / `question_topic`; `coerce_analysis_payload` maps an off-list topic to `other`
 - `NLU_MODE=oracle` requires `oracle=TurnAnalysis` (skips LLM); re-raises `LLMUnavailable` for eval `skipped_quota`
 
 ### `app.agent.session`
@@ -238,11 +255,12 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
   - `pop_drained() -> list[Utterance]` — turns run by the post-NLU drain inside `on_sentence_done` (Phase 21; the WS emits them)
   - `async on_sentence_done(ids) -> Agreement | None` — commits effects when all pending sentences acked; drafts agreement on `PROPOSE_WRAP` after validator pass
   - `async on_barge_in(spoken_ids) -> None` — drops pending effects; keeps belief
+  - Phase 24b: with `settings.nlg_h3`, `attach_acts` runs after `decide` / `_enrich_action` (audit `policy/decide` gains `acts{ack, answer}`); `_speak` = `render_acts` sentences + the move's sentences; `_recent_public_turns()` feeds `speak_action(recent_turns=)` (spoken lines only, a line with any private-blocklist figure dropped)
 
 ### `app.agent.reasons` (Phase 22)
 - `REASON_TEXT: dict[str, str]` — one sentence per reason key; `{placeholders}` only from `PUBLIC_PLACEHOLDERS` (`counter_pct`, `settlement_pct`, `offer_total`, `num_payments`, `first_payment_date`, `alt_first_payment_date`, `alt_min_payment_cents`, `alt_max_payments`, `field_label`)
 - `reason_key(intent, reason) -> str` — `bp=N` → `counter` / `confirm`; field-name reasons → `ask_field` / `read_back` / `clarify_field`; `None` → `opening` / `ask_settlement` / `confirm` / `counter`; literals unchanged
-- `reason_text(action, ref) -> str` — fills from PUBLIC facts + field label; a missing value reads "that value"; an unknown key gives "The policy chose <intent>."
+- `reason_text(action, ref) -> str` — fills from PUBLIC facts + field label; a missing value reads "that value"; an unknown key gives "The policy chose <intent>." Phase 24b: a COUNTER without `offer_total` uses display key `counter_no_total` (reason code unchanged)
 
 ### `app.schemas.events` (Phase 22)
 - Pydantic models (`extra="forbid"`) for every server event: `TranscriptEvent`, `SayEvent`, `BeliefEvent`, `EvalEvent`, `BlockedEvent`, `EscalateEvent`, `LatencyEvent`, `AuditEvent` (`private: bool`), `PhaseEvent`, `AgreementEvent`, `SttErrorEvent`, `ErrorEvent`, `TurnDoneEvent`, `TurnTraceEvent`, `AutoplayDoneEvent`; client: `StartEvent`, `EndEvent`, `TextEvent`, `SentenceDoneEvent`, `BargeInEvent`, `TimingEvent`
@@ -293,7 +311,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 ### `app.llm.prompts`
 - `PLACEHOLDER_MEANINGS: dict[str, str]`
 - `nlu_messages(utterance, last_agent_line, pending_readback, *, ref=None) -> list[dict]` — `ref` adds a `Today's date:` line (`analyze` passes its `ref`)
-- `nlg_messages(intent, placeholder_ids, last_rep_line) -> list[dict]`
+- `nlg_messages(intent, placeholder_ids, last_rep_line, *, recent_turns=None) -> list[dict]` — Phase 24b: `recent_turns` (`(role, text)`, oldest first) → "Recent conversation:" block of the last `NLG_CONTEXT_TURNS = 3` turns; `format_recent_turns(turns)`; `act_messages(kind, placeholder_ids, *, talking_point=None)` (bank builder only). NLU prompt asks for `asks_question` / `question_topic`
 
 ### `app.store.audit`
 - `class AuditLog` — `__init__(path)`; `append(call_id, actor, event_type, payload=None) -> int`; `for_call(call_id) -> list[dict]`; `close()`
@@ -309,7 +327,8 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
   - `async transcribe(wav_bytes, prompt=None) -> str`
   - `async aclose()`
 - `make_client(settings=None, **kwargs) -> LLMClient | FakeLLM` — offline profile returns `FakeLLM`
-- Roles: `nlu` | `nlg` | `sim` | `stt`. Routing from `config/providers.yaml` profiles (`demo`/`eval`/`local`/`offline`).
+- Roles: `nlu` | `nlg` | `sim` | `stt` | `agent` (Phase 24b; eval A/B arms; a profile without an `agent` route uses its `nlu` route). Routing from `config/providers.yaml` profiles (`demo`/`eval`/`local`/`offline`).
+- Phase 24b: 429 cooldown = max(Retry-After, body delay: Groq "try again in XmYs" / Gemini `retryDelay`); a per-day quota without a Groq delay cools ≥ `DAILY_QUOTA_COOLDOWN_S = 3600`.
 - `on_call` meta (one per finished attempt, success or failure): `{role, provider, model, latency_ms, prompt_tokens, completion_tokens, cache_hit, failover_from, error, queue_ms}`; `error` is `None` on success; `queue_ms` (Phase 21) = limiter wait + short-429 Retry-After sleeps.
 - Phase 21: `class QueueWait` (`.ms`); `queue_wait_scope() -> ContextManager[QueueWait]` sums `queue_ms` of calls inside it. `@dataclass(frozen) RouteTarget(provider, model, params={}, timeout_s=None)` (`.spec`); `parse_route_entry(raw: str | Mapping) -> RouteTarget` (ValueError on unknown keys / bad timeout). Buckets keyed `(provider, model)`, burst `min(rpm, 5)`, refill `rpm/60`/s, start full. Limiter wait + request share the per-attempt timeout. `LLMClient.on_call` is a settable property (propagates to the offline FakeLLM it built).
 - Per-request timeout `Settings.llm_timeout_<role>_s` (or the route's `timeout_s`); timeout / `APIConnectionError` / HTTP errors fail over; any other exception propagates (no failover).
@@ -1004,3 +1023,66 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - Oracle eval `eval_20261006_224448_s7` (`--nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7`): thresholds PASS.
 - Tests: `pytest -q` 615 passed / 2 skipped (incl. slow, 173 s); `ruff check .` clean; web: typecheck, lint, 46 Vitest tests, build all green.
 - Open issues: see the DEFERRED lines in the phase-23b report.
+
+### Phase 24b (WIP, paused 2026-10-07, quota; C resumes 2026-10-08) — H3 conversational NLG + A/B (REVIEW_PLAN §2(c))
+
+Paused on the orchestrator's instruction (usage limit). Interface entries above already describe the new code.
+
+**Done (code + tests):**
+- Task 1 ack act: `Action.ack` (PUBLIC `ack_*` facts, `source="creditor"`), built by new `app/agent/acts.py` (`ack_facts` / `attach_acts`) only for terms that became KNOWN or changed this turn, creditor-said, never colliding with the private blocklist; skipped before READ_BACK / CLARIFY / refusals / endings. Rendered by `nlg.render_acts` as a leading sentence ("Got it, 8 payments at a $100 minimum."); same two guards; a failing act is dropped (audit `nlg/act_dropped`), never SAFE_FALLBACK.
+- Task 2 ANSWER: `Intent.ANSWER` (attached act only), `AnswerAct`, `ANSWER_POINTS` (5 number-free talking points). NLU fields `asks_question` / `question_topic` (prompt, coercion, `repair_question`: never on a private ask; an "other" question mentioning terms/figures is dropped — seen live). Private asks still REFUSE_PRIVATE first.
+- Task 3: NLG prompt gets the last 3 public turns (`Orchestrator._recent_public_turns`, drops unspoken lines and any line with a private figure). Bank: `scripts/build_template_bank.py --acts` merged 7 `ACK` + 5 `ANSWER:<topic>` entries into `config/nlg_bank.json` (demo profile, reviewed by hand; 3 awkward ACK variants removed).
+- `Settings.nlg_h3` (default False) gates acts in the orchestrator; eval arm `--agent policy_h3`; `--nlg bank`; `--providers PATH`; new `eval/ab_report.py` (common-scenario table, adoption rule, transcripts) with tests.
+- `web/src/types/events.schema.json` regenerated (only change: `ANSWER` in the Intent enum).
+- Policy unchanged: `test_h3_moves_identical_to_plain_policy_on_seed7` (same intents / reasons / outcome with acts on). Oracle CI eval `eval_20261006_224236_s7` (default agent): thresholds PASS, metrics table identical to `docs/eval/policy_eval_20261006/summary.md`.
+- Carry-over (all done, each with a test):
+  - [24a.1] client role `agent`, `Settings.llm_timeout_agent_s=20`, eval-profile `agent` route (groq → cerebras → gemini), `AGENT_ROLE="agent"` (`test_agent_role_timeout_and_nlu_fallback_route`, `test_shipped_eval_profile_has_free_tier_agent_route`, `test_agent_steps_use_dedicated_agent_role`).
+  - [24a.3] not code: the "sim reacts to intents, not text" limitation must be stated in the A/B summary (still to write).
+  - [24a.4] prompts ask for `"N%"`; **bug fixed**: `coerce_bp("1%")` returned 10000 (re-scaled after percent parse) (`test_coerce_bp_percent_form_is_prompted_and_unambiguous`).
+  - [21.7] `NLG_MAX_TOKENS=800`, `reasoning_effort: low` on Groq nlg routes; an empty LLM template falls back to `TEMPLATES` (`test_empty_llm_template_falls_back_to_default_template`, `test_shipped_groq_nlg_routes_use_low_reasoning_effort`).
+  - [22.5] `counter_no_total` display text (`test_counter_without_offer_total_omits_the_amount`).
+  - [27.2] `_build_settings` passes `api_key_pool` (+ cooldown, bank path, nlg_h3, timeouts) (`test_build_settings_keeps_explicit_key_pool`).
+  - [27.4] 429 cooldown parsed from body (Groq "try again in", Gemini `retryDelay`), per-day quota ≥ 3600 s (`test_quota_429_cooldown_from_error_body`, `test_daily_quota_moves_on_instead_of_retrying_each_minute`).
+
+**User decisions (2026-10-07, via orchestrator):**
+1. Arm D (`llm_only`) is **dropped** at its partial 13/48 (REVIEW_PLAN cut order allows it). Do not resume it; report it as partial in the summary.
+2. Arm C (`react`) resumes **2026-10-08** after the daily quota reset, to 48/48; then the three judges and `summary.md`.
+3. The pre-registered adoption rule stays **exactly as written** (no restating relative to A). The summary says B fails as registered and notes that A also misses `agreement_valid = 1` under live NLU.
+4. The orchestrator merges the current code (through this commit) into main on 2026-10-07; work continues on `phase-24b` in this worktree.
+
+**Left (2026-10-08):**
+- Task 4: resume C to 48/48 (one process; command below), then judges B vs A, C vs A, C vs B.
+- Task 5: `docs/eval/ab_20261007/summary.md` via `eval.ab_report` with arms A, B, C (D left out of the common-scenario table so it does not shrink n to its 13; give D's partial numbers in a separate labelled paragraph, e.g. from a separate `ab_report --arm A=... --arm D=...` run over their common scenarios). Notes preamble `docs/eval/ab_20261007/notes.md` + a decision paragraph: B fails the rule as registered (leaks, `agreement_valid`; naturalness from the judge), A also misses `agreement_valid = 1` under live NLU, D dropped as partial; keep the [24a.3] limitation note.
+- Task 6: decided — **A stays the demo default** (B fails the rule; `Settings.nlg_h3` already defaults to False, no config change). Record it in the summary and the handoff.
+- Final: full `pytest -q`, `ruff check .`, oracle CI eval, replace this WIP section with the final Phase 24b handoff (Action fields, `Intent.ANSWER`, NLU fields, A/B commands, carry-overs incl. the first-payment-date fix), commit `phase 24b: <summary>`.
+
+**A/B state at second pause (2026-10-07 16:50 IST; results are git-ignored, they live only in this worktree under `eval/results/`):**
+- A `ab1007_A_policy`: **48/48 ok**. B `ab1007_B_policy_h3`: **48/48 ok**.
+- C `ab1007_C_react`: 9 ok, 4 `skipped_quota` (13 attempted). D `ab1007_D_llm_only`: 13 ok, 3 `skipped_quota` (16 attempted). Both stopped by hand: Gemini free tier hit its **per-day** cap (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, `retryDelay` 45671 s ≈ 12.7 h from 16:49 IST), Groq's daily token cap was already spent, and Cerebras / OpenRouter time out under load, Mistral 429s, so every scenario was skipping. `--resume` re-runs `skipped_quota` / `error` files.
+- Fixed during this resume: `Orchestrator._engine_first_payment_date()` — a denied first-payment-date read-back leaves the field UNKNOWN (`value=None`), `build_rules` does not require it, and the old `assert isinstance(fpd, date)` (3 sites: `_eval_bp`, `_engine_context`, wrap validation) crashed the turn (A/B `s0007_025/028/037`, contradictory persona, both arms). Now falls back to the engine's EOM default (the same value the belief starts with as ASSUMED), audited `engine/first_payment_date_default`. Test `test_denied_first_payment_readback_falls_back_to_engine_default`. Oracle CI eval after the fix: PASS, metrics table identical to `docs/eval/policy_eval_20261006/summary.md`.
+- Preliminary A vs B (offline `eval.ab_report`, 48 common scenarios): B fails the pre-registered rule on leaks (1: `s0007_006`, a **policy** ACCEPT echoing an LLM-sim "100% balance" that equals the true ceiling; no H3 act spoke a private figure) and on `agreement_valid` (0.71; A is 0.75 too: live-NLU extraction errors, e.g. `s0007_015` fails identically in both). So the demo default stays A whatever the judges say. Draft preamble: `docs/eval/ab_20261007/notes.md` (includes the [24a.3] limitation).
+
+**Resume commands** (2026-10-08; C only, a single process, so the full-rate providers file would also do; keep `providers_split2.yaml` for identical conditions):
+```bash
+P="--scenarios 48 --seed 7 --profile eval --nlu llm --sim-phrasing llm --no-oracle-overlay --providers docs/eval/ab_20261007/providers_split2.yaml"
+# A and B are complete (48/48); D is dropped (13/48, do not resume).
+uv run python -m eval.run_eval $=P --agent react --nlg template --resume ab1007_C_react
+# judges (RUN_A = the arm being rated), after C finishes:
+uv run python -m eval.judge_naturalness eval/results/ab1007_B_policy_h3 eval/results/ab1007_A_policy --profile eval
+uv run python -m eval.judge_naturalness eval/results/ab1007_C_react eval/results/ab1007_A_policy --profile eval
+uv run python -m eval.judge_naturalness eval/results/ab1007_C_react eval/results/ab1007_B_policy_h3 --profile eval
+# report (A, B, C; D reported separately as partial):
+uv run python -m eval.ab_report --arm A=eval/results/ab1007_A_policy --arm B=eval/results/ab1007_B_policy_h3 \
+  --arm C=eval/results/ab1007_C_react \
+  --judge B:A=<judge dir> --judge C:A=<judge dir> --judge C:B=<judge dir> \
+  --out docs/eval/ab_20261007 --decision <decision.md> --notes docs/eval/ab_20261007/notes.md
+```
+(`$=P` is zsh word-splitting; in bash use `$P`. A plain `$P` in zsh passes one argument and argparse rejects it.)
+
+**Gotchas:**
+- Never run more than two arms at once: each process paces its own keys, so 4 processes oversubscribed Gemini (15 rpm/key real limit) and cascaded to `skipped_quota`. Two processes need `providers_split2.yaml` (all rpm/tpm halved).
+- `generate(24, 7)` is **not** a prefix of `generate(48, 7)`; if quota forces fewer scenarios, keep n=48 with `--resume` and let `ab_report` compare the scenarios every arm completed (it does that by design).
+- `GROQ_API_KEY_1`'s org hit its daily token cap (TPD 200k) during the aborted 4-way run; the react arm's `agent` route starts on Groq, so it will lean on Cerebras/Gemini until that resets.
+- Live NLU sometimes reads a stray number as the settlement ask (seen: "10%" from "10 payments" context), and LLM sim phrasing loops on restated amounts; both affect every arm equally (not 24b scope).
+
+**Checks at second pause:** `uv run ruff check .` clean; full `uv run pytest -q` 672 passed / 2 skipped; oracle CI eval PASS (`eval_20261007_104338_s7`).

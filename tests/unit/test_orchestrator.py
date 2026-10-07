@@ -1049,3 +1049,35 @@ async def test_denied_first_payment_readback_falls_back_to_engine_default(
         if e["type"] == "first_payment_date_default"
     ]
     assert events and events[0]["payload"]["value"] == expected.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_nlu_llm_unavailable_rolls_back_turn(tmp_path: Path) -> None:
+    """[P22] A turn whose NLU raises LLMUnavailable leaves no creditor line or turn bump."""
+    from app.llm.client import FakeLLM, LLMUnavailable
+
+    scenario = load_scenario("fixtures/demo")
+    session = CallSession(scenario=scenario)
+    llm = FakeLLM()  # empty nlu queue → LLMUnavailable
+    orch = Orchestrator(
+        session,
+        llm=llm,
+        settings=_settings(nlu_mode="llm"),
+        audit=AuditLog(tmp_path / "audit.db"),
+        auto_ack=True,
+    )
+    await orch.start()
+    turn0, hist0 = session.neg.turn_idx, len(session.history)
+    with pytest.raises(LLMUnavailable):
+        await orch.on_creditor_text("We can take eight payments of some amount.")
+    assert session.neg.turn_idx == turn0
+    assert len(session.history) == hist0
+
+    llm.enqueue(
+        "nlu",
+        '{"terms": [{"field": "max_payments", "value": 8, "quote": "eight",'
+        ' "hedged": false}], "stance": "info"}',
+    )
+    await orch.on_creditor_text("Up to eight payments.")
+    assert session.neg.turn_idx == turn0 + 1
+    assert [t.text for t in session.history if t.role == "creditor"] == ["Up to eight payments."]

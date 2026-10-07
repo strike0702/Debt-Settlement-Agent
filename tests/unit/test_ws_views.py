@@ -118,3 +118,25 @@ def test_rep_http_export_and_events_leak_no_private_value(tmp_path: Path) -> Non
     assert leaked_private_values([*frames, *rep_events], private, ref=ref) == []
     assert rep["view"] == "rep" and len(rep["events"]) < len(op["events"])
     assert {e["actor"] for e in rep["events"]}.isdisjoint({"engine", "agent", "llm"})
+
+
+def test_rep_audit_filter_is_an_allow_list() -> None:
+    """[P22] An audit event nobody has reviewed stays off the rep stream."""
+    from app.voice.views import is_private_audit
+
+    assert not is_private_audit("creditor", "utterance")
+    assert not is_private_audit("policy", "decide")
+    for actor, event in [
+        ("engine", "affordability"),
+        ("agent", "agreement_drafted"),
+        ("llm", "call"),
+        ("nlg", "blocked"),
+        ("nlu", "llm_unavailable"),
+        ("orchestrator", "effects_committed"),
+        ("orchestrator", "barge_in"),
+        # Future events, unknown actors: private by default.
+        ("nlu", "some_new_event"),
+        ("policy", "debug_dump"),
+        ("newcomer", "utterance"),
+    ]:
+        assert is_private_audit(actor, event), (actor, event)

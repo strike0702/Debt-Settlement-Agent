@@ -798,6 +798,13 @@ def test_shipped_providers_yaml_parses() -> None:
     assert eval_nlu[0].provider == "gemini" and eval_nlu[0].timeout_s == 20.0
 
 
+def test_shipped_cerebras_limits_match_free_tier_docs() -> None:
+    """[P27] Cerebras free tier for gpt-oss-120b is 5 RPM / 30K uncached TPM (docs)."""
+    client = LLMClient(_settings(llm_profile="offline"), skip_health_check=True)
+    cfg = client._providers["cerebras"]
+    assert (cfg.rpm, cfg.tpm) == (5, 30000)
+
+
 @pytest.mark.asyncio
 async def test_short_429_retry_sleep_counts_as_queue(tmp_path: Path) -> None:
     """A Retry-After sleep is rate-limit wait: it shows up in queue_ms, not hidden."""
@@ -819,3 +826,34 @@ async def test_short_429_retry_sleep_counts_as_queue(tmp_path: Path) -> None:
     await client.aclose()
     assert len(metas) == 1 and metas[0]["error"] is None
     assert metas[0]["queue_ms"] >= 190
+
+
+@pytest.mark.asyncio
+async def test_nlu_chat_text_sends_json_mode(tmp_path: Path) -> None:
+    """P20/F16: production NLU (chat_text) asks json_mode providers for a JSON object."""
+    import json as _json
+
+    from app.agent.nlu import analyze
+
+    path = _write_yaml(tmp_path, _PROVIDERS_YAML)
+    reply = '{"stance": "other", "terms": []}'
+    client, seen = _client(
+        path,
+        {
+            "primary": lambda r: httpx.Response(200, json=_ok_body(reply)),
+            "backup": lambda r: httpx.Response(200, json=_ok_body(reply)),
+        },
+        _settings(),
+    )
+    await client.chat_text("nlg", [{"role": "user", "content": "hi"}], 50)
+    await analyze(
+        "We could do forty percent.",
+        "What can you do?",
+        None,
+        llm=client,
+        settings=_settings(nlu_mode="llm"),
+    )
+    await client.aclose()
+    plain, nlu = (_json.loads(r.content) for r in seen["primary"])
+    assert "response_format" not in plain
+    assert nlu["response_format"] == {"type": "json_object"}

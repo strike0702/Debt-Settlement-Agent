@@ -175,3 +175,9 @@
 {"id": "e08", "tags": ["end"], "text": "I'm ending this call.", "stance": "other", "wants_to_end": true}
 {"id": "e09", "tags": ["end_neg"], "text": "Not done yet, one more thing about the dates.", "stance": "other"}
 {"id": "e10", "tags": ["end_neg"], "text": "Thanks for holding, I'm back with the numbers.", "stance": "other"}
+{"id": "k01", "tags": ["ask_neg"], "text": "We require even payments to settle your 100% balance immediately.", "stance": "info", "terms": {"payment_structure": "even"}}
+{"id": "k02", "tags": ["ask_neg"], "text": "Let me know how you would like to proceed with the 10% balance.", "stance": "other"}
+{"id": "k03", "tags": ["ask_neg"], "text": "Your 0% interest rate is 100% negotiable.", "stance": "other"}
+{"id": "k04", "tags": ["ask_neg"], "text": "Your 100% balance is due immediately.", "stance": "other"}
+{"id": "k05", "tags": ["ask_neg"], "text": "You must remit the 50% installment now.", "stance": "other"}
+{"id": "k06", "tags": ["ask"], "text": "We can settle for 80% of the balance.", "stance": "counter", "ask_pct": 80}

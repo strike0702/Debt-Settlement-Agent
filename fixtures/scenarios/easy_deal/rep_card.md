@@ -23,9 +23,11 @@ Do not ask for the client's income, SDA balance, or draft amount.
 
 ## Suggested replies
 
-Click one in the console, or say it in your own words.
+Click one in the console, or say it in your own words. When the agent reads a
+term back to you ("Just to confirm ..."), answer "Correct." (or "No") first.
 
 - Sure. We can take up to eight monthly payments, at least one hundred dollars each, all the same amount.
+- Correct.
 - We are looking for forty-five percent of the balance.
 - Thirty-two is too low. I could do forty-two percent.
 - Forty percent is my floor. I can't go lower than that.

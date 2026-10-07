@@ -89,7 +89,10 @@ providers:
   cerebras:
     base_url: "https://api.cerebras.ai/v1"
     key_env: CEREBRAS_API_KEY
-    rpm: 4
+    # Free tier, gpt-oss-120b (inference-docs.cerebras.ai/support/rate-limits,
+    # checked 2026-10-07): 5 RPM, 30K uncached TPM, 1M tokens/day.
+    rpm: 5
+    tpm: 30000
     json_mode: true
   ollama:
     base_url: "http://localhost:11434/v1"

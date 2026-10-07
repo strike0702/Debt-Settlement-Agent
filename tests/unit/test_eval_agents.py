@@ -37,7 +37,7 @@ _NEW_KEYS = {"agent", "transcript", "llm_calls_per_turn", "turn_latency_ms", "ti
 class ScriptedLLM(FakeLLM):
     """FakeLLM whose queued replies may be ``callable(messages) -> str``."""
 
-    async def chat_text(self, role: Any, messages: Any, max_tokens: int) -> str:
+    async def chat_text(self, role: Any, messages: Any, max_tokens: int, **kw: Any) -> str:
         raw = await self._take(role)
         return raw(messages) if callable(raw) else str(raw)
 

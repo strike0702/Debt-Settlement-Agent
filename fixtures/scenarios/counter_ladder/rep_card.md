@@ -22,9 +22,11 @@ You are the **creditor collections rep**. Start high; you can concede toward the
 
 ## Suggested replies
 
-Click one in the console, or say it in your own words.
+Click one in the console, or say it in your own words. When the agent reads a
+term back to you ("Just to confirm ..."), answer "Correct." (or "No") first.
 
 - We can take up to eight monthly payments, at least one hundred dollars each, all the same amount.
+- Correct.
 - We need ninety-five percent of the balance.
 - That's far too low. I could come down to seventy percent.
 - Fifty percent. That's close to my limit.

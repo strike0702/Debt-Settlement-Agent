@@ -88,6 +88,26 @@ def test_scenarios_carry_rep_card_suggestions(tmp_path: Path) -> None:
         assert not any(ch.isdigit() for line in row["suggested"] for ch in line), row["id"]
 
 
+def test_rep_card_suggestions_answer_read_backs(tmp_path: Path) -> None:
+    """[P23b] every card offers a reply that confirms a pending read-back.
+
+    The confirm line takes the deterministic fast path, and with no read-back
+    pending it is not a bare acknowledgement, so it cannot be read as an accept.
+    """
+    from app.agent.nlu import repair_stance, try_fast_readback
+
+    with _client(tmp_path, _fake_dist(tmp_path)) as c:
+        rows = c.get("/scenarios").json()
+    for row in rows:
+        confirms = [
+            ln for ln in row["suggested"]
+            if (fast := try_fast_readback(ln, "max_payments")) is not None
+            and fast.readback_response == "confirm"
+        ]
+        assert confirms, row["id"]
+        assert all(repair_stance("other", ln) != "accept" for ln in confirms), row["id"]
+
+
 def test_rep_card_suggestions_parses_only_its_section() -> None:
     md = (
         "# Card\n\n## Rules\n\n- not me\n\n## Suggested replies\n\nIntro.\n\n"

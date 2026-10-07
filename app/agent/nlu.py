@@ -44,6 +44,8 @@ class _LLM(Protocol):
         role: str,
         messages: list[dict[str, Any]],
         max_tokens: int,
+        *,
+        json_mode: bool = False,
     ) -> str: ...
 
 
@@ -578,6 +580,28 @@ def _ask_matches(pct: float, quote: str | None, *, ref: date) -> bool:
     return False
 
 
+# A percent that names something other than the settlement share: "the 100%
+# balance", "0% interest", "100% negotiable", "the 50% installment". Live NLU
+# read these as the ask (A/B s0007_006), and the policy then accepted aloud.
+# "N% of the balance" and "settle at N%" are real asks and stay.
+_PCT_SIGN_RE = re.compile(r"%|\bpercent\b")
+_NON_ASK_AFTER_PCT_RE = re.compile(
+    r"\s+(?:balance|interest|installments?|payments?|down|negotiable|clear|mandatory"
+    r"|deviation|flexibility|balloon|understanding|rate)\b"
+)
+
+
+def _pct_names_non_ask(quote: str, utterance: str) -> bool:
+    """True when the quoted percent is directly followed by a non-ask noun."""
+    low, q = utterance.lower(), quote.lower().strip()
+    idx = low.find(q)
+    span = low[idx:] if idx >= 0 else q
+    m = _PCT_SIGN_RE.search(span)
+    if m is None or (idx >= 0 and m.start() > len(q)):
+        return False
+    return _NON_ASK_AFTER_PCT_RE.match(span, m.end()) is not None
+
+
 def _value_matches_utterance_span(
     field: str, value: Any, quote: str, utterance: str, *, ref: date
 ) -> bool:
@@ -639,6 +663,9 @@ _INJECTION_RE = re.compile(
     r"|\bset stance\b"
     r"|\boutput stance\b"
     r"|\blabel every\b"
+    # Forged prompt markup / NLU JSON in the line (corpus i06).
+    r"|</?\s*utterance\s*>"
+    r"|\"stance\"\s*:"
     r")",
     re.IGNORECASE,
 )
@@ -1127,7 +1154,9 @@ def post_verify(
             )
             ask_pct = None
             ask_quote = None
-        elif not _ask_matches(ask_pct, ask_quote, ref=ref_d):
+        elif not _ask_matches(ask_pct, ask_quote, ref=ref_d) or _pct_names_non_ask(
+            ask_quote, utterance
+        ):
             _drop(
                 "nlu_rejected_ask_value",
                 "settlement_ask_pct",
@@ -1249,7 +1278,7 @@ async def analyze(
                         ),
                     },
                 ]
-            text = await llm.chat_text("nlu", msgs, _NLU_MAX_TOKENS)
+            text = await llm.chat_text("nlu", msgs, _NLU_MAX_TOKENS, json_mode=True)
             analysis = _parse_analysis(text)
             break
         except LLMUnavailable:

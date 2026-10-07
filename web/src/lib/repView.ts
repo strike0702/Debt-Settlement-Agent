@@ -1,10 +1,11 @@
 /**
- * Client-side mirror of the server's rep ("creditor's eye") stream filter,
+ * Client-side mirror of the server's rep ("Creditor rep" view) stream filter,
  * `redact_for_view` in app/voice/views.py.
  *
  * Live rep calls are filtered by the server. This exists for fixture mode
- * (which replays an operator recording) and for switching to the creditor's
- * eye in the middle of an operator call. Components also refuse to render
+ * (which replays an operator recording) and for switching to the Creditor
+ * rep view in the middle of a Debt negotiator call. The rep stream carries no
+ * decision trace, so `turn_trace` is dropped. Components also refuse to render
  * private fields in the creditor lens, so a leak needs both layers to fail.
  */
 import type { CallEvent } from "@/lib/callState";
@@ -35,10 +36,8 @@ export function toRepView(ev: CallEvent): CallEvent | null {
       const { offending: _private, ...rest } = ev;
       return rest;
     }
-    case "turn_trace": {
-      const { affordability: _private, ...rest } = ev;
-      return { ...rest, nlg: { ...rest.nlg, guards: rest.nlg.guards.map((g) => ({ ...g, offending: null })) } };
-    }
+    case "turn_trace":
+      return null;
     case "audit":
       return ev.private ? null : ev;
     default:

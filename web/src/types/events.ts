@@ -175,6 +175,7 @@ export interface TurnTraceEvent {
   creditor_text: string | null;
   decide: Decide;
   dropped: DroppedTerm[];
+  needs_info?: string[] | null;
   nlg: NlgTrace;
   spoken: SpokenSentence[];
   stance: ("offer" | "counter" | "accept" | "reject" | "stall" | "info" | "question" | "other") | null;

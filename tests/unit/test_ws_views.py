@@ -60,8 +60,9 @@ def test_rep_view_scripted_call_leaks_no_private_value(tmp_path: Path) -> None:
     private = _scenario_private(session)
     assert len(private) > 5
     assert leaked_private_values(frames, private, ref=session.scenario.client.as_of_date) == []
+    # Phase 35: the decision trace is the negotiator's tool; the rep stream has none.
+    assert not any(f["type"] == "turn_trace" for f in frames)
     for f in frames:
-        assert f["type"] != "turn_trace" or "affordability" not in f
         assert f["type"] != "eval" or not {"max_bp", "program_fee_cents", "additional_funds"} & set(
             f
         )
@@ -77,6 +78,9 @@ def test_rep_view_autoplay_leaks_no_private_value(tmp_path: Path, scenario_id: s
         frames = _autoplay(ws, scenario_id)
     session = _SESSIONS[-1]
     private = _scenario_private(session)
+    # Every ledger amount the negotiator's ledger table shows is in the scan.
+    assert {("money", e.amount_cents) for e in session.scenario.client.ledger} <= private
+    assert not any(f["type"] == "turn_trace" for f in frames)
     assert leaked_private_values(frames, private, ref=session.scenario.client.as_of_date) == []
 
 
@@ -140,3 +144,26 @@ def test_rep_audit_filter_is_an_allow_list() -> None:
         ("newcomer", "utterance"),
     ]:
         assert is_private_audit(actor, event), (actor, event)
+
+
+_STALL = {"type": "text", "text": "Let me pull up the account.", "oracle": {"stance": "stall"}}
+
+
+def test_operator_trace_says_why_the_engine_did_not_run(tmp_path: Path) -> None:
+    """[P35] Turns before the rules are known carry ``needs_info``; later turns the curve."""
+    from tests.wsutil import _RULES, ack_all, turn
+
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/ni-1") as ws:
+        ws.send_json({"type": "start", "scenario_id": "easy_deal"})
+        frames = turn(ws)
+        frames += ack_all(ws, frames)
+        for msg in (_STALL, _RULES):
+            ws.send_json(msg)
+            batch = turn(ws)
+            frames += batch + ack_all(ws, batch)
+    traces = {f["turn"]: f for f in frames if f["type"] == "turn_trace"}
+    assert "needs_info" not in traces[0] or traces[0]["needs_info"] is None  # opening line
+    assert traces[1]["affordability"] is None
+    assert traces[1]["needs_info"] == ["max_payments", "min_payment_cents", "payment_structure"]
+    assert traces[2]["affordability"] and traces[2]["affordability"]["curve"]
+    assert traces[2].get("needs_info") is None

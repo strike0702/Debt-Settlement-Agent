@@ -439,6 +439,17 @@ def details_from_scenario(
                 }
                 for e in upcoming
             ],
+            # Whole dedicated-account ledger for the operator's ledger table;
+            # ``scheduled`` = after as-of (not yet in sda_balance_cents).
+            "ledger": [
+                {
+                    "date": e.date.isoformat(),
+                    "amount_cents": e.amount_cents,
+                    "type": e.type,
+                    "scheduled": e.date > c.as_of_date,
+                }
+                for e in sorted(c.ledger, key=lambda e: e.date)
+            ],
         },
         "firm": {
             "program_fee_bp": fee_bp,

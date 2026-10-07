@@ -56,6 +56,8 @@ export interface ScenarioBrief extends Omit<ScenarioMeta, "suggested"> {
     upcoming_deposits_cents: number;
     upcoming_withdrawals_cents: number;
     upcoming_ledger: LedgerEntry[];
+    /** The whole dedicated-account ledger, oldest first; `scheduled` = after `as_of_date`. */
+    ledger: (LedgerEntry & { scheduled: boolean })[];
   };
   firm: { program_fee_bp: number; program_fee_cents: number; bank_fee_cents: number };
 }

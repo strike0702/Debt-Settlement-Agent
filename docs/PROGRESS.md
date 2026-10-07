@@ -1119,3 +1119,17 @@ uv run python -m eval.ab_report --arm A=eval/results/ab1007_A_policy --arm B=eva
   - P20 also changes non-`json_mode` providers (Mistral, OpenRouter): NLU now gets the extra "Reply with JSON only" system line there. Cache keys are unchanged (they hash the caller's messages).
 - Open issues: the P21 LLM-side false accepts (needs a live corpus run); P23b live verification of the reworded cards; P24a tools path.
 - Checks: `uv run ruff check .` clean; `uv run pytest -q` 692 passed / 2 skipped; oracle eval `eval_20261007_145210_s7` thresholds PASS, metrics table identical to `docs/eval/policy_eval_20261006/summary.md`; web: typecheck, lint, 47 Vitest tests, build green.
+
+### Phase 29 (hermetic tests) (2026-10-07) — tests ignore `.env` (fix CI)
+
+- Cause: `app.config.Settings` reads `.env` (`env_file=".env"`) and the process env. The developer `.env` sets `OPENING_DISCLOSURE="You are speaking with an automated agent authorized to discuss settlement options."`, and `tests/data/policy_arm_golden.json` was recorded with it. CI has no `.env`, so it uses the code default ("I am authorized to discuss settlement options for this account.") and `test_policy_agent_output_identical_to_pre_24a_runner` failed on main. Every local gate (pytest, oracle eval) ran with the `.env` present, which hid the failure.
+- Files: `tests/conftest.py` (autouse fixture), `tests/unit/test_hermetic_settings.py` (new), `tests/data/policy_arm_golden.json` (re-recorded with code defaults; the diff is only the 5 disclosure lines). No `app/`, `eval/`, `config/` or `.github/` changes.
+- Interfaces:
+  - `tests/conftest.py::_hermetic_settings` (autouse): sets `Settings.model_config["env_file"] = None` (monkeypatched), unsets every env var `Settings` would read, and clears `get_settings` before and after each test. The var list comes from `settings_env_vars()`: env names whose upper case matches a `Settings.model_fields` name, plus `app.config._POOL_VAR_RE` (`*_KEY` / `*_KEY_<n>`) pool vars. Nothing is hardcoded, so a new Settings field is covered on its own.
+  - `tests.conftest.settings_env_vars() -> set[str]`.
+  - Exempt: tests marked `@pytest.mark.live` or under `tests/live/`. They keep reading the real `.env` and keys and still opt in with `DSA_LIVE=1`.
+  - A test that wants a non-default setting must pass it explicitly (`Settings(x=...)`) or call `monkeypatch.setenv` inside the test. Neither the shell env nor `.env` reaches it.
+- Regression: `test_dotenv_in_cwd_is_ignored` writes a `.env` (disclosure, firm, NLG mode, max turns, pool and declared keys) into the cwd and asserts `Settings()` and `get_settings()` give code defaults. `test_dotenv_fixture_is_not_vacuous` shows the same file is read when passed explicitly. `test_no_settings_env_vars_reach_tests` checks that no override var survives into a test.
+- Deviations: none.
+- Open issues: `eval.run_eval` and the app still read `.env` at runtime (intended). The oracle CI eval output does not include the disclosure line in its metrics, so it was never affected.
+- Checks: `uv run pytest -q -m "not slow"` 692 passed / 2 skipped / 3 deselected both **with** the local `.env` and with it moved away (`mv .env .env.bak`, then restored). Full `uv run pytest -q` 695 passed / 2 skipped. `uv run ruff check .` clean. Oracle eval `eval_20261007_155728_s7` thresholds PASS.

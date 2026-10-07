@@ -2,7 +2,8 @@
  * One live call over `/ws/call/{id}?view=rep|operator`.
  *
  * Opens a socket per call (the view is fixed when it connects), sends `start`
- * (plain or autoplay), and collects every frame. It does not fold state or
+ * (plain or autoplay; with `payload`, a custom test case as `scenario_payload`,
+ * which the server only plays by hand), and collects every frame. It does not fold state or
  * filter privacy: App folds `events` with `reduceCall` after `eventsForLens`,
  * and the rep view is filtered by the server. Raw frames also go to
  * `subscribe` listeners (the voice engine). `lastCallId` survives the end of
@@ -21,6 +22,8 @@ export const AUTOPLAY_PAUSE_MS = 1200;
 export interface StartOptions {
   view: View;
   autoplay?: boolean;
+  /** A custom test case's JSON (`start.scenario_payload`); the server refuses autoplay on it. */
+  payload?: Record<string, unknown>;
 }
 
 export interface UseCall {
@@ -93,13 +96,15 @@ export function useCall(
       setCallId(id);
       setLastCallId(id);
       setView(opts.view);
-      setAutoplay(Boolean(opts.autoplay));
+      setAutoplay(Boolean(opts.autoplay) && !opts.payload);
       // Handlers check identity so a late frame from a replaced socket cannot touch the new call.
       ws.onopen = () => {
         if (sock.current !== ws) return;
-        const msg: ClientEvent = opts.autoplay
-          ? { type: "start", scenario_id: scenarioId, autoplay: true, autoplay_pause_ms: AUTOPLAY_PAUSE_MS }
-          : { type: "start", scenario_id: scenarioId };
+        const msg: ClientEvent = opts.payload
+          ? { type: "start", scenario_id: scenarioId, scenario_payload: opts.payload }
+          : opts.autoplay
+            ? { type: "start", scenario_id: scenarioId, autoplay: true, autoplay_pause_ms: AUTOPLAY_PAUSE_MS }
+            : { type: "start", scenario_id: scenarioId };
         ws.send(JSON.stringify(msg));
         setStatus("live");
       };

@@ -5,10 +5,13 @@ paths get ``index.html`` with ``Cache-Control: no-cache``; hashed files under
 ``/assets`` are cached for a year). Mounts ``/ws/call/{call_id}``, and exposes
 ``GET /healthz`` (keep-warm), ``GET /metrics/summary``, ``/scenarios``
 (+ ``/{id}`` operator brief, ``/{id}/rep_card``, and ``/{id}/rep``: the
-creditor's own account and rules for the rep lens), and ``/calls*``
-(``?view=rep`` drops private audit rows). LLM + audit are created once in lifespan and shared
-across sockets; the LLM's ``on_call`` hook appends every LLM / STT call to the
-audit log (``app.llm.call_audit``). This module builds no UI: ``npm run build``
+creditor's own account and rules for the rep lens; ``/template`` and
+``POST /preview`` + ``/preview/rep`` for custom test cases pasted in the UI),
+and ``/calls*`` (``?view=rep`` drops private audit rows; ``/{id}/operator`` is
+the in-memory decision trace of a call, whatever view it streamed). LLM +
+audit are created once in lifespan and shared across sockets; the LLM's
+``on_call`` hook appends every LLM / STT call to the audit log
+(``app.llm.call_audit``). This module builds no UI: ``npm run build``
 in ``web/`` does.
 """
 
@@ -32,9 +35,11 @@ from app.domain.scenario import (
     list_scenario_metas,
     load_rep_card,
     rep_account,
+    rep_account_from_payload,
     rep_card_suggestions,
     scenario_details,
     scenario_from_payload,
+    scenario_payload_errors,
 )
 from app.llm.call_audit import audit_llm_calls
 from app.llm.client import make_client
@@ -144,11 +149,21 @@ def create_app(
 
     @application.post("/scenarios/preview")
     async def preview_scenario(payload: dict[str, Any]) -> dict[str, Any]:
-        """Validate a custom test-case JSON and return the operator brief shape."""
-        try:
-            sc = scenario_from_payload(payload, rebase_to=date.today())
-        except (ValueError, TypeError, KeyError) as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
+        """Validate a custom test case and return its operator brief.
+
+        400 ``detail = {message, errors: [{path, message}]}`` lists every problem
+        with its field path so the editor can show them next to the JSON.
+        """
+        errors = scenario_payload_errors(payload)
+        if not errors:
+            try:
+                sc = scenario_from_payload(payload, rebase_to=date.today())
+            except (ValueError, TypeError, KeyError) as e:
+                errors = [{"path": "", "message": f"The engine rejected this case: {e}"}]
+        if errors:
+            raise HTTPException(
+                status_code=400, detail={"message": errors[0]["message"], "errors": errors}
+            )
         meta = payload.get("meta") or {}
         return details_from_scenario(
             sc,
@@ -156,6 +171,11 @@ def create_app(
             description=str(meta.get("description") or ""),
             expected=str(meta.get("expected") or "deal"),
         )
+
+    @application.post("/scenarios/preview/rep")
+    async def preview_scenario_rep(payload: dict[str, Any]) -> dict[str, Any]:
+        """Rep lens "Your account" for a custom case: reads only ``offer`` and ``rep_card``."""
+        return rep_account_from_payload(payload)
 
     @application.get("/scenarios/{scenario_id}/rep_card")
     async def get_rep_card(scenario_id: str) -> dict[str, str]:
@@ -195,6 +215,19 @@ def create_app(
         """Audit rows for one call; ``view=rep`` drops private rows."""
         log: AuditLog = request.app.state.audit
         return _rows_for_view(log.for_call(call_id), _check_view(view))
+
+    @application.get("/calls/{call_id}/operator")
+    async def get_call_operator_detail(call_id: str) -> dict[str, Any]:
+        """Debt negotiator detail of a call (traces, private audit, eval, agreement).
+
+        Kept in memory per call whatever view the call streamed, so the UI can
+        show the decision trace for a call started in the Creditor rep view.
+        Same access model as ``/calls/{id}/events`` (operator by default).
+        """
+        detail = voice_ws.operator_detail(call_id)
+        if detail is None:
+            raise HTTPException(status_code=404, detail="no detail for this call in memory")
+        return detail
 
     @application.get("/calls/{call_id}/export")
     async def export_call(call_id: str, request: Request, view: str = "operator") -> JSONResponse:

@@ -28,11 +28,13 @@ describe("DecisionTrace", () => {
     expect(c.getByText(/Ours 32%/)).toBeInTheDocument();
     // 5. policy reason in plain English plus the code
     expect(c.getByText("Counter at 32%: the first offer anchors at 70% of their ask.")).toBeInTheDocument();
-    expect(c.getByText("COUNTER · bp=3200")).toBeInTheDocument();
+    expect(c.getByText("COUNTER", { selector: "code" })).toBeInTheDocument();
+    expect(c.getByText("bp=3200", { selector: "code" })).toBeInTheDocument();
+    expect(c.getByText("Counteroffer")).toBeInTheDocument();
     // 6. template placeholders highlighted, guards passed
     const slots = card.querySelectorAll("[data-placeholder]");
     expect([...slots].map((s) => s.textContent)).toEqual(["{counter_pct}", "{offer_total}"]);
-    expect(c.getByText(/rendered passed/)).toBeInTheDocument();
+    expect(c.getByText(/Final line check passed/)).toBeInTheDocument();
     // 7. spoken line
     expect(c.getByText("We can propose 32% of the balance, which is $400.00. Would that work?")).toBeInTheDocument();
   });
@@ -43,7 +45,7 @@ describe("DecisionTrace", () => {
     const card = screen.getByRole("article", { name: "Turn 1" });
     const struck = card.querySelector("s");
     expect(struck).toHaveTextContent("First payment Nov 1, 2026");
-    expect(within(card).getByText("dropped: quote not in utterance")).toBeInTheDocument();
+    expect(within(card).getByText("Dropped: quote not in utterance")).toBeInTheDocument();
     for (const q of ["up to eight monthly payments", "at least one hundred dollars each", "all the same amount"]) {
       expect(within(card).getByText(q, { selector: "mark" })).toBeInTheDocument();
     }
@@ -53,8 +55,8 @@ describe("DecisionTrace", () => {
     const { traces } = fullCall("operator");
     render(<DecisionTrace traces={traces} lens="operator" />);
     const c = within(screen.getByRole("article", { name: "Turn 3" }));
-    expect(c.getByText(/rendered blocked: number not from facts/)).toBeInTheDocument();
-    expect(c.getByText(/template fallback spoken/)).toBeInTheDocument();
+    expect(c.getByText(/Final line check blocked: number not from facts/)).toBeInTheDocument();
+    expect(c.getByText(/Template fallback spoken/)).toBeInTheDocument();
   });
 
   it("explains itself when there are no turns yet", () => {
@@ -72,15 +74,17 @@ describe("DecisionTrace", () => {
     expect(document.body.textContent).not.toContain("52%");
   });
 
-  it("says what the rep did in plain English in step 1 (Phase 35)", () => {
+  it("says what the rep did in plain English in step 1 (Phase 35, sentence case in 36)", () => {
     const { traces } = fullCall("operator");
     render(<DecisionTrace traces={traces} lens="operator" />);
     expect(document.body.textContent).not.toContain("rep stance");
     const turn2 = within(screen.getByRole("article", { name: "Turn 2" }));
-    expect(turn2.getByRole("heading", { name: "Creditor rep said · made an offer" })).toBeInTheDocument();
+    expect(turn2.getByRole("heading", { name: "Creditor rep said" })).toBeInTheDocument();
+    expect(turn2.getByTestId("rep-stance")).toHaveTextContent(/^Made an offer$/);
     // The opening has no rep line, so no stance phrase.
     const turn0 = within(screen.getByRole("article", { name: "Turn 0" }));
     expect(turn0.getByRole("heading", { name: "Creditor rep said" })).toBeInTheDocument();
+    expect(turn0.queryByTestId("rep-stance")).not.toBeInTheDocument();
   });
 
   it("explains a turn with no engine run instead of a bare message (Phase 35)", () => {
@@ -98,9 +102,9 @@ describe("DecisionTrace", () => {
     expect(engineNote({ creditor_text: "hi" })).toBe("No engine run this turn.");
   });
 
-  it("shows the caller's note when there are no traces (rep-stream call)", () => {
-    render(<DecisionTrace traces={[]} lens="operator" note="This call streams the Creditor rep view." />);
-    expect(screen.getByText("This call streams the Creditor rep view.")).toBeInTheDocument();
+  it("shows the caller's note when there are no traces", () => {
+    render(<DecisionTrace traces={[]} lens="operator" note="The server no longer has this call." />);
+    expect(screen.getByText("The server no longer has this call.")).toBeInTheDocument();
     expect(screen.queryByText(/Each agent turn appears here/)).not.toBeInTheDocument();
   });
 });

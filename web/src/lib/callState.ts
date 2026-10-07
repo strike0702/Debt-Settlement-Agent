@@ -18,6 +18,7 @@ import type {
   EvalEvent,
   Intent,
   LatencyEvent,
+  OperatorDetail,
   Phase,
   ServerEvent,
   TurnTraceEvent,
@@ -166,6 +167,25 @@ export function reduceCall(state: CallState, ev: CallEvent): CallState {
 
 export function foldCall(events: readonly CallEvent[]): CallState {
   return events.reduce(reduceCall, initialCallState);
+}
+
+/**
+ * Lay the server's Debt negotiator detail (`GET /calls/{id}/operator`) over a
+ * call folded from a rep stream (Phase 36): its traces (with any local TTS
+ * onsets), the full audit log with privacy flags, and the eval and agreement
+ * with their fee columns. Everything else (conversation, belief, phase) stays
+ * from the live stream, which is always at least as new.
+ */
+export function withOperatorDetail(state: CallState, detail: OperatorDetail): CallState {
+  const traces = detail.traces.map((t) => withOnset(t, state.ttsOnset[t.turn]));
+  const known = new Set(detail.audit.map((a) => a.id));
+  return {
+    ...state,
+    traces,
+    audit: [...detail.audit, ...state.audit.filter((a) => !known.has(a.id))],
+    evaluation: detail.eval ?? state.evaluation,
+    agreement: detail.agreement ?? state.agreement,
+  };
 }
 
 export interface LadderPoint {

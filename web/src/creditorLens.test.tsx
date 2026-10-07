@@ -25,7 +25,6 @@ function renderConsole(lens: Lens) {
       onWatch={() => {}}
       watchLabel="Watch a call"
       playing={false}
-      phase={state.phase}
       lens={lens}
       onLens={() => {}}
       theme="light"

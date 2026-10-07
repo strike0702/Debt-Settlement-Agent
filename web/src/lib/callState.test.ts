@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { easyDeal } from "@/fixtures";
-import { foldCall, ladderPoints } from "@/lib/callState";
+import { foldCall, ladderPoints, withOperatorDetail } from "@/lib/callState";
 import { micReducer } from "@/lib/mic";
 import { splitByQuotes, splitTemplate } from "@/lib/highlight";
 import { money, ordinal, pct, termValue } from "@/lib/format";
-import { micFromEvents } from "@/App";
+import { eventsForLens, micFromEvents } from "@/App";
+import type { AuditEvent, TurnTraceEvent } from "@/types/protocol";
 
 const events = easyDeal.frames.map((f) => f.ev);
 
@@ -75,5 +76,24 @@ describe("formatting and highlighting", () => {
   });
   it("splits template placeholders", () => {
     expect(splitTemplate("Pay {offer_total} now").filter((s) => s.hit).map((s) => s.text)).toEqual(["{offer_total}"]);
+  });
+});
+
+describe("withOperatorDetail (Phase 36)", () => {
+  it("restores the trace, private audit and fee columns over a rep-stream fold", () => {
+    const op = foldCall(events);
+    const rep = foldCall([...eventsForLens(events, "creditor"), { type: "tts_onset", turn: 2, ms: 120 }]);
+    expect(rep.traces).toEqual([]);
+    const traces = events.filter((e): e is TurnTraceEvent => e.type === "turn_trace");
+    const audit = events.filter((e): e is AuditEvent => e.type === "audit");
+    const merged = withOperatorDetail(rep, { call_id: "c", traces, audit, eval: op.evaluation, agreement: op.agreement });
+    expect(merged.traces.map((t) => t.turn)).toEqual(op.traces.map((t) => t.turn));
+    expect(merged.traces.find((t) => t.turn === 2)?.timings.tts_onset_ms).toBe(120);
+    expect(merged.audit.length).toBe(op.audit.length);
+    expect(merged.audit.some((a) => a.private)).toBe(true);
+    expect(merged.evaluation).toEqual(op.evaluation);
+    expect(merged.agreement).toEqual(op.agreement);
+    // The live stream keeps the conversation.
+    expect(merged.messages).toEqual(rep.messages);
   });
 });

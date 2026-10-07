@@ -32,7 +32,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe("YourAccount", () => {
   it("fetches the rep endpoint and shows the account and rules", async () => {
     const fetchMock = mockFetch(() => new Response(JSON.stringify(EASY_DEAL), { status: 200 }));
-    render(<YourAccount scenarioId="easy_deal" />);
+    render(<YourAccount source={{ kind: "catalog", id: "easy_deal" }} />);
     expect(screen.getByText("Loading your account…")).toBeInTheDocument();
     expect(await screen.findByText("NorthPeak Collections")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith("/scenarios/easy_deal/rep");
@@ -53,8 +53,22 @@ describe("YourAccount", () => {
 
   it("shows an error when the endpoint fails", async () => {
     mockFetch(() => new Response("{}", { status: 404 }));
-    render(<YourAccount scenarioId="nope" />);
+    render(<YourAccount source={{ kind: "catalog", id: "nope" }} />);
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not load your account (Error: HTTP 404)");
+  });
+
+  it("posts a custom case to the rep-safe preview endpoint (Phase 36)", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+      new Response(JSON.stringify({ ...EASY_DEAL, id: "custom", suggested: [] }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const payload = { offer: { creditor: "NorthPeak Collections" }, client: { draft_amount_cents: 1 } };
+    render(<YourAccount source={{ kind: "custom", key: "custom:1", version: 1, payload }} />);
+    expect(await screen.findByText("Up to 8 payments")).toBeInTheDocument();
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("/scenarios/preview/rep");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual(payload);
   });
 
   it("leaves out rules the card does not state and keeps free-text ones", () => {

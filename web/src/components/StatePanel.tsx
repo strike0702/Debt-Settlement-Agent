@@ -1,11 +1,14 @@
 /**
  * Right column: the state of the negotiation after the latest turn.
  *
- * Debt negotiator view: ladder chart (ask vs our offers, private ceiling),
- * proposed schedule, belief table, per-turn latency waterfall, agreement, and
- * a collapsible audit log. Creditor rep view (Phase 35): only the agreed terms
- * (agreement, schedule without private columns, terms heard); the ladder,
- * latency and audit are the negotiator's tools and are not shown.
+ * Order (Phase 36, both views): the outcome first ("Agreement drafted" once
+ * agreed, then "Proposed schedule"), then `context` (App's scenario brief and
+ * client ledger in the Debt negotiator view, "Your account" in the Creditor
+ * rep view), then the working detail. Debt negotiator view adds the ladder
+ * chart (ask vs our offers, private ceiling), the belief table, the per-turn
+ * latency waterfall and a collapsible audit log. Creditor rep view (Phase 35):
+ * only the agreed terms (agreement, schedule without private columns, terms
+ * heard); the ladder, latency and audit are the negotiator's tools.
  */
 import {
   Bar,
@@ -20,13 +23,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { PrivateLock, PrivateTag } from "@/components/PrivateLock";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import type { CallState } from "@/lib/callState";
 import { ladderPoints } from "@/lib/callState";
 import { fieldLabel, isoDate, money, ms, pct, termValue } from "@/lib/format";
+import { STATUS_LABEL } from "@/lib/labels";
 import { waterfall } from "@/lib/latency";
 import type { Lens } from "@/lib/lens";
 import type { AuditEvent, BeliefTerm, ScheduleRow, TurnTraceEvent } from "@/types/protocol";
@@ -40,13 +44,13 @@ const TOOLTIP_STYLE = {
 };
 const AXIS_TICK = { fill: "var(--muted)", fontSize: 12 };
 
-export function StatePanel({ state, lens }: { state: CallState; lens: Lens }) {
+export function StatePanel({ state, lens, context }: { state: CallState; lens: Lens; context?: ReactNode }) {
   const latestCeiling = lens === "operator" ? (state.traces.at(-1)?.affordability?.max_bp ?? null) : null;
   return (
     <div className="flex flex-col gap-4">
       {state.agreement && (
         <Card className="border-good">
-          <CardHeader title="Agreement drafted" aside={<Badge tone="good">pending client approval</Badge>} />
+          <CardHeader title="Agreement drafted" aside={<Badge tone="good">Pending client approval</Badge>} />
           <CardBody>
             <p className="text-lg num">
               <strong>{pct(state.agreement.bp)}</strong> of the balance,{" "}
@@ -55,8 +59,9 @@ export function StatePanel({ state, lens }: { state: CallState; lens: Lens }) {
           </CardBody>
         </Card>
       )}
-      {lens === "operator" && <LadderCard traces={state.traces} ceiling={latestCeiling} lens={lens} />}
       <ScheduleCard rows={state.evaluation?.rows ?? null} lens={lens} programFee={lens === "operator" ? state.evaluation?.program_fee_cents ?? null : null} />
+      {context}
+      {lens === "operator" && <LadderCard traces={state.traces} ceiling={latestCeiling} lens={lens} />}
       <BeliefCard terms={state.belief} lens={lens} />
       {lens === "operator" && <LatencyCard traces={state.traces} />}
       {lens === "operator" && <AuditCard rows={state.audit} lens={lens} />}
@@ -113,7 +118,7 @@ function ScheduleCard({ rows, lens, programFee }: { rows: ScheduleRow[] | null; 
       <CardHeader title="Proposed schedule" />
       <CardBody>
         {!rows || rows.length === 0 ? (
-          <p className="text-sm text-muted">No schedule yet.</p>
+          <p className="text-sm text-muted">No schedule yet. It appears once the agent has terms the client can afford.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm num">
@@ -154,7 +159,7 @@ function ScheduleCard({ rows, lens, programFee }: { rows: ScheduleRow[] | null; 
                   {op && (
                     <td className="py-1.5 pr-3 text-right" colSpan={3}>
                       <span className="inline-flex items-center gap-2">
-                        fees {money(programFee)} <PrivateTag />
+                        Fees {money(programFee)} <PrivateTag />
                       </span>
                     </td>
                   )}
@@ -163,7 +168,7 @@ function ScheduleCard({ rows, lens, programFee }: { rows: ScheduleRow[] | null; 
             </table>
           </div>
         )}
-        {!op && rows && rows.length > 0 && <PrivateLock className="mt-3" what="Fees and the client's savings balance" />}
+        {!op && rows && rows.length > 0 && <PrivateLock className="mt-3" what="The fee and savings detail" />}
       </CardBody>
     </Card>
   );
@@ -183,7 +188,7 @@ function BeliefCard({ terms, lens }: { terms: BeliefTerm[]; lens: Lens }) {
       <CardHeader title="Terms we've heard" />
       <CardBody>
         {terms.length === 0 ? (
-          <p className="text-sm text-muted">Nothing heard yet.</p>
+          <p className="text-sm text-muted">Nothing heard yet. Terms appear as the rep states them.</p>
         ) : (
           <table className="w-full text-sm">
             <tbody>
@@ -193,9 +198,9 @@ function BeliefCard({ terms, lens }: { terms: BeliefTerm[]; lens: Lens }) {
                   <td className="py-1.5 pr-3 num">{termValue(t.field, t.value)}</td>
                   <td className="py-1.5 text-right">
                     {lens === "operator" ? (
-                      <Badge tone={STATUS_TONE[t.status]}>{t.status.toLowerCase()}</Badge>
+                      <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
                     ) : (
-                      t.status === "ASSUMED" && <span className="text-xs text-muted">default</span>
+                      t.status === "ASSUMED" && <span className="text-xs text-muted">Default</span>
                     )}
                   </td>
                 </tr>

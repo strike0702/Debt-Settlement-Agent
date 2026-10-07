@@ -27,7 +27,9 @@ npm run lint
 
 - Live (default): scenario cards come from `/scenarios`. **Watch a call** opens `/ws/call/{id}?view=…` with the Phase 22 autoplay start (`autoplay: true, autoplay_pause_ms: 1200`); the server's sim creditor plays the rep with template phrasing, so it needs no keys. **Start call** opens the same socket for you to play the rep by typing, clicking a suggested reply (from the scenario's rep card), or using the mic.
 - Two views, named for people outside the industry (Phase 35): **Debt negotiator** (lens `operator`, socket `?view=operator`) and **Creditor rep** (lens `creditor`, socket `?view=rep`). A one-line subtitle under the toggle says what each shows.
-- The socket's view is fixed per call. Switching to the Creditor rep view mid-call re-filters on the client (`toRepView`); switching back to the Debt negotiator view during a rep call shows a notice, and the Decision trace column says the call carries no trace, because a rep stream never carried it.
+- The socket's view is fixed per call. Switching to the Creditor rep view mid-call re-filters on the client (`toRepView`). Switching to the Debt negotiator view during or after a call that streams the rep view backfills the decision trace, ladder, latency, audit log and fee columns from `GET /calls/{id}/operator` (kept in server memory per call, Phase 36) and refetches on every `turn_done`.
+- Custom test cases (Phase 36): **Add a test case** (next to "Pick a scenario") opens an inline JSON editor pre-filled from `GET /scenarios/template`, checked as you type by `POST /scenarios/preview` (errors listed with their field path, click to jump). Saved cases join the cards first, marked "Custom", with edit and remove (undo); they persist in `localStorage` (`dsa-custom-cases`). A call on one sends `start.scenario_payload`; autoplay is curated-only, so you play the rep. The Creditor rep view's "Your account" for a custom case comes from `POST /scenarios/preview/rep` (reads only `offer` and `rep_card`).
+- Copy rule (Phase 36): sentence case for every heading, badge, status and label; protocol codes become words in one place, `src/lib/labels.ts`. `src/sentenceCase.test.tsx` scans the rendered components.
 - The Debt negotiator view's state column has the scenario brief and **Client deposits and credits**: the client's dedicated-account ledger (Date, Description, Credit, Debit, Running balance) anchored at the balance on the as-of date, past rows above it and scheduled rows below. PRIVATE: it comes from the operator brief only.
 - The Decision trace (Debt negotiator view only) says why a turn has no engine curve: the opening line, the rep's rules still missing (`needs_info`, e.g. "Waiting for: max payments, minimum payment"), or a clarifying question. Step 1 reads "Creditor rep said · made an offer" (plain-English stance).
 - The Creditor rep view shows the conversation, **Your account** and the agreed terms (agreement, public schedule, terms heard); no decision trace, ladder, latency or audit log. Its state column opens with **Your account** (`GET /scenarios/{id}/rep`): the rep's creditor name, outstanding and original balance, and their settlement rules from the rep card. It carries no client or firm data; the scenario brief and ledger stay in the Debt negotiator view.
@@ -66,22 +68,26 @@ src/
     lens.ts                Lens ("operator" | "creditor") → server view ("operator" | "rep"); shown as "Debt negotiator" | "Creditor rep"
     ledger.ts              client ledger → table rows with running balance (cents)
     stance.ts              NLU stance → plain English ("made an offer", "pushed back", …)
+    labels.ts              codes → sentence-case words (intent, belief status, guard stage, expected outcome)
+    customCases.ts         custom test cases: localStorage, ScenarioSource, JSON parse errors, path → cursor
   hooks/
     useCall.ts             one call socket: start / autoplay / text / WAV / end, raw frames + subscribers
     useVoice.ts            React wrapper over VoiceEngine (mic state, notices, STT mode)
-    useScenarios.ts        /scenarios catalog; /scenarios/{id} brief + ledger (Debt negotiator view only); /scenarios/{id}/rep account
+    useScenarios.ts        /scenarios catalog; brief + ledger (Debt negotiator view only) and rep account, curated or custom; template
+    useOperatorDetail.ts   /calls/{id}/operator backfill for a call streamed in the Creditor rep view
     useFixtureReplay.ts    timed replay of frames
     useTheme.ts            light/dark toggle (persisted; applied pre-paint in index.html)
   components/
-    AppShell.tsx           header, lens + theme toggles, scenario cards, 3-column grid
+    AppShell.tsx           header, lens + theme toggles, scenario cards (+ custom), 3-column grid
     Conversation.tsx       bubbles, mic state, suggested replies, text box
     DecisionTrace.tsx      turn cards (the hero), 7 steps per turn; Debt negotiator view only
     CurveSparkline.tsx     feasibility curve 1–100% with ask, ours, dashed private ceiling
-    StatePanel.tsx         agreement, ladder chart, schedule, belief table, latency, audit
+    StatePanel.tsx         agreement and schedule first, then brief/account slot, ladder, belief table, latency, audit
     PrivateLock.tsx        lock panel (Creditor rep view) and lock tag (Debt negotiator view)
     ScenarioBrief.tsx      operator brief: creditor, client finances, firm fees (PRIVATE)
     YourAccount.tsx        Creditor rep view: the rep's own account and settlement rules
     ClientLedger.tsx       Debt negotiator view: client's deposits/debits with running balance (PRIVATE)
+    CaseEditor.tsx         "Add a test case" JSON editor with inline, path-named errors
     ui/                    button, card, badge, segmented (shadcn-style)
 scripts/gen-fixture.mjs    regenerates the fixture from its hand-written turn specs
 scripts/gen-types.mjs      events.schema.json → src/types/events.ts (json-schema-to-typescript)

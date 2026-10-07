@@ -40,6 +40,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 28 | Filler false-accept veto (user request) | done (veto failed the corpus gate, reverted) |
 | 29 | Hermetic tests ignore .env (CI fix, user request) | done |
 | 33 | Natural read-back copy in NLG bank, figure-free card replies (user request) | done |
+| 36 | UI review fixes + custom test cases, design pass (user request) | done |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -1240,3 +1241,82 @@ uv run python -m eval.ab_report --arm A=eval/results/ab1007_A_policy --arm B=eva
 - Alignment pass (user request during the phase): header controls are one row (phase badge, view toggle, theme button share a centre line) with the view hint right-aligned under that row and shortened to fit its width (it used to float between the badge and toggle and spill left). The ledger uses "Past" / "Scheduled" group rows instead of per-row badges and tighter padding, so its five columns fit the 3-column state card without horizontal scroll (measured `scrollWidth == clientWidth`). Phone width (390 px) was not re-checked in Chrome: the window would not resize.
 - Open issues: `web/README.md` screenshots predate Phase 35 (old labels, rep view still shows a trace column). The hosted demo needs a redeploy to show the fix.
 - Checks: `uv run ruff check .` clean. `uv run pytest -q` 778 passed / 2 skipped / 5 xfailed (one docs test, `test_operator_view_is_documented_as_public_by_design`, pins the README phrase "operator view is public", so that sentence keeps the word). `uv run pytest -q -m "not slow"` with `.env` moved aside (then restored): 775 passed / 2 skipped / 3 deselected / 5 xfailed. Oracle eval `eval_20261007_201544_s7` thresholds PASS. Web as CI: `npm ci && npm run gen:types && git diff --exit-code src/types/events.ts && npm run typecheck && npm run lint && npm test && npm run build` all green (67 tests).
+
+### Phase 36 (UI review fixes) (2026-10-08) — trace in every view, sentence case, plain copy, custom test cases (user request)
+
+#### Design plan (written before coding)
+
+Brief: an existing product with an established look; the audience is a newcomer (recruiter, engineer) watching a demo. Improve hierarchy, spacing, copy and consistency; no new brand, no decorative motion.
+
+- Colour (kept): `--bg #f6f6f4`, `--surface #fcfcfb`, `--fg #0b0b0b`, `--muted #52514e`, `--accent #2a78d6` (also "our offer"), `--series-ask #eb6834` (creditor ask); dark set unchanged. Status colours stay meaning-only (good / bad / warn) and always come with a word.
+- Type (kept): Inter → system sans for everything; the system mono only for code-like content (the JSON editor, the policy reason code). One scale: 20 px page title, 16 px card titles, 14 px body in cards, 12 px meta. Remove the all-caps ledger group labels and the "A · B" stance join (both read as template chrome).
+- Copy: sentence case everywhere (badges, statuses, headings, empty states). Codes (`COUNTER`, `known`) become words at one place each (`INTENT_LABEL`, `STATUS_LABEL`, guard stage labels).
+- Header: title + one plain-words tagline left; view toggle + theme right; the call-phase badge is removed (the turn cards already name each move).
+- Scenario row: curated cards, then custom cards (same card, "Custom" tag, edit / remove), then a dashed "Add a test case" tile at the end of the row so the entry point sits next to the picker. Expected outcome becomes a small sentence-case tag ("Deal", "No deal", "Counters, then deal", "Escalates").
+- Custom-case editor: an inline panel under the scenario row (not a modal: it keeps the cards in view, needs no focus trap, and works at 390 px). Left: monospace JSON textarea with a line-number gutter; right (stacked on phones): what each block means, and validation errors with their field path (`client.draft_day`), `aria-live`. Buttons: "Add test case" (primary) / "Save changes" when editing, "Reset to template", "Cancel".
+- Right column, both views:
+
+```
+Debt negotiator                 Creditor rep
++------------------------+      +------------------------+
+| Agreement drafted      |      | Agreement drafted      |   (only once agreed)
+| Proposed schedule      |      | Proposed schedule      |
+| Scenario brief         |      | Your account           |
+| Client deposits ...    |      | Terms we've heard      |
+| Negotiation ladder     |      +------------------------+
+| Terms we've heard      |
+| Latency                |
+| Audit log              |
++------------------------+
+```
+
+Review against the brief: a modal editor and a "big number" agreement hero were the default reach; both rejected (modal hides the cards the case joins; the agreement card keeps its current weight, it only moves up). No new fonts or colours: the product already has a look, and the brief says not to restyle it.
+
+Plan changes made while building (from the screenshot critique): the cards grid uses `auto-fit` (with `auto-fill` six cards left two empty columns at 1440 px); the custom card keeps edit/remove in its top-right corner but only the title makes room for them (padding the whole card squeezed the description); "Add a test case" is a text button next to the "Pick a scenario" heading rather than a dashed tile at the end of the row (on phones the row scrolls sideways and the tile was off screen).
+
+#### Candidate copy (swap in `web/src/components/AppShell.tsx`: `TAGLINE`, `VIEW_HINT`)
+
+Taglines:
+1. **(chosen)** "An AI voice agent negotiates a debt settlement for a client. Ordinary code decides every number and every move; the AI only understands the other side and puts the replies into words."
+2. "Watch an AI agent settle a debt over the phone. Plain code picks every offer and every figure; the AI just understands the creditor and words the reply."
+3. "An AI voice agent calls a creditor to settle a client's debt. Rules written in code choose every offer; the AI only follows the conversation and phrases the answers."
+
+View hints (Debt negotiator / Creditor rep):
+- A **(chosen)**: "Our side of the call: the client's money and the reason for every move." / "The other side: only what the creditor's representative sees."
+- B: "Everything the agent knows, including the client's money and why it chose each reply." / "What the creditor's representative sees and hears on the call."
+
+#### What changed
+
+- Files (new): `tests/unit/{test_operator_detail,test_custom_scenario}.py`, `web/src/components/CaseEditor.tsx`, `web/src/hooks/useOperatorDetail.ts`, `web/src/lib/{labels,customCases}.ts` (+ `.test.ts`), `web/src/sentenceCase.test.tsx`. Changed: `app/{main.py, voice/ws.py, domain/scenario.py}`, `web/index.html`, `web/src/{App.tsx, App.test.tsx, creditorLens.test.tsx, components/{AppShell,ClientLedger,Conversation,CurveSparkline,DecisionTrace(+test),StatePanel,YourAccount(+test),ui/badge}.tsx, hooks/{useCall,useScenarios}.ts, lib/{callState(+test),format}.ts, types/protocol.ts}`, `web/README.md`, `README.md` (two view lines). `events.py` unchanged (no schema regeneration).
+- 1. Decision trace in every view. Root decision: keep the rep socket exactly as filtered (no `turn_trace`), and keep operator detail server-side. `app.voice.ws._ViewSocket.send_json` records every `turn_trace` / `audit` / `eval` / `agreement` frame, as the operator stream would carry it (`redact_for_view(..., "operator")`, so audit rows have `private`), into a bounded in-memory store (`_DETAIL`, 256 calls, oldest evicted, reset on each `start`). `GET /calls/{id}/operator` serves it (404 when unknown/evicted). The web app (`useOperatorDetail`) fetches it only while the Debt negotiator view is open on a call that streams `view=rep`, refetches on every `turn_done` / `autoplay_done`, and `withOperatorDetail` lays traces (with local TTS onsets), the full audit, the operator eval (fee columns) and agreement over the rep-stream fold. Ladder, Latency, Audit and the schedule's fee columns therefore work too. If the server has lost the call: `TRACE_GONE_NOTE` in the trace column. `REP_STREAM_NOTE` and the top notice are gone.
+- 2. Header: call-phase badge and `AppShell.phase` removed.
+- 3. Sentence case: one module, `lib/labels.ts` (`INTENT_LABEL` → turn tag e.g. "Counteroffer", `STATUS_LABEL` "Confirmed / Tentative / Contradicted / Default / Unknown", `guardLabel` "Final line check blocked: …", `EXPECTED_LABEL` "Deal / No deal / Counters, then deal / Hands off to a person", `sentence()`). Badges: "Pending client approval", "Hedged", "Dropped: …", "Template fallback spoken", "Custom". Stance is now a badge next to "Creditor rep said" ("Made an offer"), not "said · made an offer". Ledger group labels no longer all caps. Structure values read "Even / Balloon / Flexible". Step titles in plain words ("What the agent understood", "Why the code chose this move", "Wording from a template, then checks"); the raw `INTENT` / reason codes stay in `<code>` chips. `Badge` carries `data-badge`; `sentenceCase.test.tsx` scans badges, headings, labels, buttons, cells, list items and paragraphs of AppShell + DecisionTrace + StatePanel + brief + ledger + YourAccount + CaseEditor in both views for a lowercase first letter (code exempt) and proves it catches one.
+- 4. Copy: tagline and view hints above; `index.html` title is "Settlement call console" and its description matches the tagline. Autoplay outcome notices read "The simulated call ended with a deal drafted." etc.
+- 5. Custom test cases: "Add a test case" opens `CaseEditor` inline under the cards (not a modal: keeps the cards in view, no focus trap, full width on phones). Monospace textarea with a line-number gutter (error lines in red), Tab inserts two spaces, Esc then Tab leaves; "Reset to template"; checked 600 ms after typing stops: local `JSON.parse` (syntax error with line) then `POST /scenarios/preview`, whose 400 is now `detail = {message, errors: [{path, message}]}` from `scenario_payload_errors` (every problem at once, e.g. `client.ledger[2].type`; clicking a path moves the cursor there via `locatePath`). Saved cases join the cards first ("Custom" tag, edit, remove with Undo), persist in `localStorage["dsa-custom-cases"]` (every access in try/catch; a notice says when the browser will not store them), start with `start.scenario_payload` (server id = `meta.id` or `custom`). Watch is disabled on a custom case with the reason as tooltip/description, a notice, and "You play the rep (no autoplay)" on the card. Carry 34.2: `POST /scenarios/preview/rep` → `{id, creditor, rules, suggested}` from `rep_card` tables, falling back to `offer` for the creditor name and balances; never reads `client` / `firm` (privacy test with distinctive client/firm values, scan sanity-checked on the brief). The template's rep card gained a "Suggested replies" section and a plain description.
+- 6. Right column: `StatePanel` renders Agreement drafted, Proposed schedule, then `context` (brief + ledger, or Your account), then the rest, in both views.
+- Carry 35.3 (390 px): checked in Chrome through a 390 px same-origin iframe (the window itself will not resize, as in Phase 35): page `scrollWidth == 390`, ledger 324/324 (was 366/324: phones now use 12 px type and tighter cell padding), schedule 324/324, editor fits. Also fixed: "Mic off" wrapped to two lines; the card row's snap scrolled it 16 px so the first card touched the screen edge (`scroll-px-4`).
+
+#### Interfaces
+
+- `app.domain.scenario.scenario_payload_errors(payload: Any) -> list[{"path": str, "message": str}]`; `rep_account_from_payload(payload: dict) -> {id, creditor, rules, suggested}`.
+- `app.voice.ws.operator_detail(call_id: str) -> {call_id, traces, audit, eval, agreement} | None`; `_reset_operator_detail(call_id)`; `_DETAIL_MAX_CALLS = 256`.
+- HTTP: `GET /calls/{id}/operator`; `POST /scenarios/preview/rep`; `POST /scenarios/preview` 400 detail is now an object (was a string).
+- Web: `useOperatorDetail(callId, tick) -> {status: off|loading|ready{detail}|gone}`; `withOperatorDetail(state, detail)`; `useScenarioBrief(src: ScenarioSource | null, lens, enabled)`, `useRepAccount(src)`, `useScenarioTemplate(enabled)`; `<YourAccount source>` (was `scenarioId`); `useCall().start(id, {view, autoplay?, payload?})`; `<StatePanel state lens context?>`; `AppShell` props `onAddCase`, `onEditCase`, `onRemoveCase`, `editor`, `watchDisabledReason` (no `phase`); exports `TAGLINE`, `VIEW_HINT`, `VIEW_LABEL`; `ScenarioMeta.custom?`.
+
+#### Vercel guidelines audit (changed components)
+
+Fixed while building: icon buttons have `aria-label` (edit, remove, close editor), decorative icons `aria-hidden`, validation results in an `aria-live` region, first error focused on submit, textarea has `name`, `autocomplete="off"`, `spellCheck={false}`, its `outline-none` is replaced by a `focus-within` ring on the frame, Tab is not a keyboard trap, loading copy ends with "…", curly quotes in notices, `tabular-nums` on the gutter, `text-balance` / `text-pretty` on the title and tagline, `transition-colors` (not `all`), remove has an undo window, long titles `break-words` and descriptions `line-clamp-3`.
+Deliberately skipped: Title Case (the brief asks for sentence case); URL state for the selected scenario and view (pre-existing app-wide, not in scope); `beforeunload` warning for an unsaved editor (the editor is an add flow, and a reload keeps saved cases; noted as deferred); `touch-action: manipulation` and `<meta name="theme-color">` (global, pre-existing); `Intl` formatting (pre-existing `lib/format.ts`).
+
+#### Manual check (Chrome, local uvicorn :8036 with `.env`, 2026-10-08)
+
+- easy_deal autoplay started in the Creditor rep view: Agreement drafted and Proposed schedule on top, then Your account, Terms we've heard; then switched to Debt negotiator: 6 turn cards, ladder, latency, fee columns, brief and ledger. Autoplay started in the Debt negotiator view: trace live mid-call.
+- Custom case: editor opens with the template ("Looks good"); `draft_day: 40` and a ledger `"deposit"` type show "2 problems to fix" with `client.draft_day (line 19)` and `client.ledger[1].type (line 33)` and red gutter lines; fixed and added ("Tight budget, late start" card, selected, Watch disabled); survived a reload; manual call on it (live NLU) got an agent reply to a suggested line; Creditor rep view showed its account from the preview endpoint; End call; remove then Undo restored it. Automated Chrome refused speech ("Speech playback failed; continuing the turn."), the known no-gesture limit. The test case was removed from this browser's storage afterwards.
+- Screenshots: `../dsa-orch-tools/p36-shots/` (`desktop-negotiator-mid-call.jpg`, `desktop-negotiator-after-rep-call.jpg`, `desktop-rep-view-after-autoplay.jpg`, `desktop-custom-case-editor-errors.jpg`, `390-header.png`). The rep-view and after-rep-call shots predate two small fixes (custom card spacing, the "fee and savings detail" lock wording).
+
+#### Checks
+
+`uv run ruff check .` clean. `uv run pytest -q` 804 passed / 2 skipped / 5 xfailed (one earlier full run had a single failure in `test_rep_http_export_and_events_leak_no_private_value` that did not reproduce in 8 isolated runs or 2 further full runs; output was lost, see DEFERRED). Fast suite with `.env` moved aside (restored): 801 passed / 2 skipped / 3 deselected / 5 xfailed. Oracle eval `eval_20261007_212704_s7` thresholds PASS. Web as CI: `npm ci && npm run gen:types && git diff --exit-code src/types/events.ts && npm run typecheck && npm run lint && npm test && npm run build` all green (89 tests).
+
+Open issues: `web/README.md` screenshots still predate Phases 35/36. Guard badges can repeat ("Final line check passed" ×3) because the trace lists the same stage more than once on some turns; the UI shows the data as sent (cause not investigated). Curated `meta.json` descriptions still use jargon ("reaches WRAP", "→ escalate"); fixture content, outside this phase's paths.
+

@@ -8,6 +8,11 @@ not go stale relative to ``date.today()``. ``scenario_details`` builds the
 operator-only brief (includes PRIVATE client finances; never sent to NLG).
 ``rep_account`` is the opposite: the creditor's own account and rules, parsed
 from ``rep_card.md`` only, for the human playing the rep (no client data).
+
+Custom test cases (pasted JSON from the web console's editor) go through
+``scenario_payload_errors`` (every problem with its field path, for inline
+errors) before ``scenario_from_payload`` builds them; ``rep_account_from_payload``
+is their rep-safe "Your account" (reads only ``offer`` and ``rep_card``).
 """
 
 from __future__ import annotations
@@ -184,7 +189,7 @@ SCENARIO_TEMPLATE: dict[str, Any] = {
     "meta": {
         "id": "custom",
         "title": "My test case",
-        "description": "Paste or edit this template, then Apply.",
+        "description": "A small balance with even payments; edit any value to try your own case.",
         "expected": "deal",
     },
     "offer": {
@@ -229,9 +234,172 @@ SCENARIO_TEMPLATE: dict[str, Any] = {
         "| Minimum payment | $100 |\n"
         "| Structure | even |\n"
         "| Opening ask | 45% of balance |\n"
-        "| Floor | 40% (do not go below) |\n"
+        "| Floor | 40% (do not go below) |\n\n"
+        "## Suggested replies\n\n"
+        "- Sure. We can take up to eight monthly payments, at least one hundred dollars each,"
+        " all the same amount.\n"
+        "- Correct.\n"
+        "- We are looking for forty-five percent of the balance.\n"
+        "- That is too low. I could do forty-two percent.\n"
+        "- Yes, that works for us.\n"
+        "- No, that's everything. Thanks.\n"
     ),
 }
+
+_EXPECTED = ("deal", "counter", "no_deal", "escalate")
+_LEDGER_TYPES = ("credit", "debit")
+
+
+def _is_int(v: Any) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _iso_date(v: Any) -> date | None:
+    if not isinstance(v, str):
+        return None
+    try:
+        return date.fromisoformat(v)
+    except ValueError:
+        return None
+
+
+def _bad_id(sid: str) -> bool:
+    return not sid or "/" in sid or "\\" in sid or sid.startswith(".") or ".." in sid
+
+
+def scenario_payload_errors(payload: Any) -> list[dict[str, str]]:
+    """Every problem in a custom test case as ``{path, message}`` (``[]`` = valid).
+
+    Paths name the field the way the JSON editor shows it (``client.ledger[2].type``).
+    Money must be whole cents (JSON integers), dates ISO ``YYYY-MM-DD``,
+    ``program_fee_pct`` a fraction (0.18 = 18%). Messages are sentence case and
+    say what to write instead. Structural only: whether a deal is reachable is
+    the call's job, not this check's.
+    """
+    if not isinstance(payload, dict):
+        return [{"path": "", "message": "The test case must be a JSON object."}]
+    errors: list[dict[str, str]] = []
+
+    def err(path: str, message: str) -> None:
+        errors.append({"path": path, "message": message})
+
+    def section(name: str) -> dict[str, Any] | None:
+        value = payload.get(name)
+        if value is None:
+            err(name, f"Add the \"{name}\" section (copy it from the template).")
+            return None
+        if not isinstance(value, dict):
+            err(name, f"\"{name}\" must be an object {{ ... }}.")
+            return None
+        return value
+
+    def cents(obj: dict[str, Any], path: str, key: str, *, positive: bool = False) -> None:
+        v = obj.get(key)
+        where = f"{path}.{key}"
+        if v is None:
+            err(where, "Required. Write an amount in whole cents, e.g. 22000 for $220.00.")
+        elif not _is_int(v):
+            err(where, "Use whole cents as a number without quotes, e.g. 22000 for $220.00.")
+        elif v < 0 or (positive and v == 0):
+            err(where, "Must be more than zero." if positive else "Cannot be negative.")
+
+    def iso(obj: dict[str, Any], path: str, key: str) -> date | None:
+        v = obj.get(key)
+        d = _iso_date(v)
+        if d is None:
+            err(f"{path}.{key}", "Use a date in the form YYYY-MM-DD, e.g. 2026-03-15.")
+        return d
+
+    meta = payload.get("meta")
+    if meta is not None and not isinstance(meta, dict):
+        err("meta", "\"meta\" must be an object { ... }.")
+    elif isinstance(meta, dict):
+        sid = meta.get("id")
+        if sid is not None and (not isinstance(sid, str) or _bad_id(sid.strip())):
+            err("meta.id", "Use letters, digits, - or _ (no slashes or dots).")
+        for key in ("title", "description"):
+            if meta.get(key) is not None and not isinstance(meta[key], str):
+                err(f"meta.{key}", "Must be text in quotes.")
+        if meta.get("expected") is not None and meta["expected"] not in _EXPECTED:
+            err("meta.expected", "Use one of: " + ", ".join(f'"{e}"' for e in _EXPECTED) + ".")
+
+    offer = section("offer")
+    if offer is not None:
+        name = offer.get("creditor")
+        if not isinstance(name, str) or not name.strip():
+            err("offer.creditor", "Write the creditor's name, e.g. \"NorthPeak Collections\".")
+        cents(offer, "offer", "creditor_balance_cents", positive=True)
+        cents(offer, "offer", "original_balance_cents", positive=True)
+
+    firm = section("firm")
+    if firm is not None:
+        fee = firm.get("program_fee_pct")
+        if isinstance(fee, bool) or not isinstance(fee, (int, float)) or not 0 <= fee < 1:
+            err(
+                "firm.program_fee_pct",
+                "Write the fee as a fraction between 0 and 1, e.g. 0.18 for 18%.",
+            )
+        cents(firm, "firm", "bank_fee_cents")
+
+    client = section("client")
+    if client is not None:
+        cents(client, "client", "draft_amount_cents", positive=True)
+        cents(client, "client", "current_balance_cents")
+        day = client.get("draft_day")
+        if not _is_int(day) or not 1 <= day <= 31:
+            err("client.draft_day", "Write the day of the month the deposit lands, 1 to 31.")
+        first = iso(client, "client", "first_draft_date")
+        last = iso(client, "client", "last_draft_date")
+        iso(client, "client", "as_of_date")
+        if first and last and last < first:
+            err("client.last_draft_date", "Must be on or after first_draft_date.")
+        ledger = client.get("ledger", [])
+        if not isinstance(ledger, list):
+            err("client.ledger", "Must be a list [ ... ] of entries.")
+        else:
+            for i, entry in enumerate(ledger):
+                path = f"client.ledger[{i}]"
+                if not isinstance(entry, dict):
+                    err(path, "Each entry must be an object with date, amount_cents and type.")
+                    continue
+                iso(entry, path, "date")
+                cents(entry, path, "amount_cents", positive=True)
+                if entry.get("type") not in _LEDGER_TYPES:
+                    err(f"{path}.type", 'Use "credit" (money in) or "debit" (money out).')
+
+    card = payload.get("rep_card")
+    if card is not None and not isinstance(card, str):
+        err("rep_card", "Must be the rep card as one text string (Markdown).")
+    return errors
+
+
+def rep_account_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Rep-safe "Your account" for a custom case: ``rep_card`` tables, else ``offer``.
+
+    Reads only ``offer`` (the creditor's name and balances, which the agent says
+    on the call anyway) and the ``rep_card`` text; ``client`` and ``firm`` are
+    never touched. Adds ``suggested`` (the card's suggested replies).
+    """
+    card = payload.get("rep_card")
+    markdown = card if isinstance(card, str) else ""
+    acct = rep_account_from_card(markdown)
+    offer = payload.get("offer")
+    if isinstance(offer, dict):
+        fallback = {
+            "name": offer.get("creditor") if isinstance(offer.get("creditor"), str) else None,
+            "outstanding_balance_cents": offer.get("creditor_balance_cents"),
+            "original_balance_cents": offer.get("original_balance_cents"),
+        }
+        for key, value in fallback.items():
+            if acct["creditor"][key] is None and (key == "name" or _is_int(value)):
+                acct["creditor"][key] = value
+    meta = payload.get("meta")
+    sid = meta.get("id") if isinstance(meta, dict) else None
+    return {
+        "id": str(sid or "custom"),
+        **acct,
+        "suggested": rep_card_suggestions(markdown),
+    }
 
 
 def resolve_scenario_dir(scenario_id: str, *, root: Path | None = None) -> Path:

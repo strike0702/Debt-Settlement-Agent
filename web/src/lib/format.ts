@@ -76,6 +76,8 @@ export function termValue(field: string, value: unknown): string {
   if (value == null) return "—";
   if (field === "min_payment_cents" && typeof value === "number") return money(value);
   if (field === "first_payment_date" && typeof value === "string") return isoDate(value);
+  // Structure codes (even / balloon / flexible) read as words in sentence case.
+  if (field === "payment_structure" && typeof value === "string" && value) return value[0]!.toUpperCase() + value.slice(1);
   if (field === "min_payment_tiers" && Array.isArray(value) && value.every(isTier)) {
     if (value.length === 0) return "No special tiers";
     return value.map(([from, cents]) => `${moneyShort(cents)} from the ${ordinal(from)} payment`).join(" and ");

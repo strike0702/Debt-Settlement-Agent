@@ -28,7 +28,7 @@ export function CurveSparkline({ curve, maxBp, askBp, counterBp }: CurveSparklin
             <YAxis domain={[0, 1]} hide />
             <Tooltip
               cursor={{ stroke: "var(--faint)" }}
-              formatter={(v) => (v === 1 ? "affordable" : "not affordable")}
+              formatter={(v) => (v === 1 ? "Affordable" : "Not affordable")}
               labelFormatter={(x) => `${String(x)}% of balance`}
               contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
             />

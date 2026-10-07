@@ -2,7 +2,7 @@
  "s0007_001_deal_contradictory": {
   "agent_lines": [
    "Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.",
-   "You are speaking with an automated agent authorized to discuss settlement options.",
+   "I am authorized to discuss settlement options for this account.",
    "What payment terms can you work with for a settlement?",
    "What settlement percentage of the balance are you looking for?",
    "Earlier you mentioned 8, and now I am hearing 10.",
@@ -64,7 +64,7 @@
  "s0007_002_deal_pressuring": {
   "agent_lines": [
    "Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.",
-   "You are speaking with an automated agent authorized to discuss settlement options.",
+   "I am authorized to discuss settlement options for this account.",
    "What payment terms can you work with for a settlement?",
    "What settlement percentage of the balance are you looking for?",
    "I cannot share the client's private financial information.",
@@ -113,7 +113,7 @@
  "s0007_035_rescue_pressuring": {
   "agent_lines": [
    "Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.",
-   "You are speaking with an automated agent authorized to discuss settlement options.",
+   "I am authorized to discuss settlement options for this account.",
    "What payment terms can you work with for a settlement?",
    "What settlement percentage of the balance are you looking for?",
    "I cannot share the client's private financial information.",
@@ -162,7 +162,7 @@
  "s0007_068_no_fix_pressuring": {
   "agent_lines": [
    "Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.",
-   "You are speaking with an automated agent authorized to discuss settlement options.",
+   "I am authorized to discuss settlement options for this account.",
    "What payment terms can you work with for a settlement?",
    "What settlement percentage of the balance are you looking for?",
    "I cannot share the client's private financial information.",
@@ -211,7 +211,7 @@
  "s0007_075_no_fix_flexible": {
   "agent_lines": [
    "Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.",
-   "You are speaking with an automated agent authorized to discuss settlement options.",
+   "I am authorized to discuss settlement options for this account.",
    "What payment terms can you work with for a settlement?",
    "What settlement percentage of the balance are you looking for?",
    "That start date does not fit the client's program.",

@@ -146,6 +146,28 @@ def test_rep_endpoint_leaks_no_client_or_firm_value(tmp_path: Path, scenario_id:
     assert leaked_private_values([brief], private, ref=ref) != []
 
 
+@pytest.mark.parametrize("scenario_id", CARD_IDS)
+def test_rep_endpoint_has_no_ledger_amount_or_running_balance(
+    tmp_path: Path, scenario_id: str
+) -> None:
+    """[P35] The negotiator's ledger table (entries and running balances) stays off ``/rep``."""
+    with make_client(tmp_path) as c:
+        body = c.get(f"/scenarios/{scenario_id}/rep").json()
+        client = c.get(f"/scenarios/{scenario_id}").json()["client"]
+    balance = client["sda_balance_cents"]
+    running: set[tuple[str, int | date]] = set()
+    for e in client["ledger"]:
+        if e["scheduled"]:
+            balance += e["amount_cents"] if e["type"] == "credit" else -e["amount_cents"]
+            running.add(("money", balance))
+    amounts = {("money", e["amount_cents"]) for e in client["ledger"]}
+    assert amounts
+    scan = {p for p in amounts | running if p[1]}
+    _, ref = _private(scenario_id)
+    assert leaked_private_values([body], scan, ref=ref) == []
+    assert leaked_private_values([client], scan, ref=ref) != []
+
+
 def test_rep_endpoint_unknown_id_is_404(tmp_path: Path) -> None:
     with make_client(tmp_path) as c:
         assert c.get("/scenarios/nope/rep").status_code == 404

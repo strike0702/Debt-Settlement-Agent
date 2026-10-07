@@ -1,11 +1,12 @@
 """Role-scoped WS streams (REVIEW_PLAN F7): what ``?view=rep`` may see.
 
 ``redact_for_view`` is the single choke point: ``app.voice.ws`` passes every
-outgoing frame through it. The operator stream gets frames unchanged except
-that audit rows carry ``private: true`` when the rep may not see them. The rep
-("creditor's eye") stream drops the affordability curve and ``max_bp``, firm
-fees, the client's savings balances, rescue amounts, guard ``offending`` tokens
-and private audit rows. Returns ``None`` when a frame must not be sent at all.
+outgoing frame through it. The operator ("Debt negotiator") stream gets frames
+unchanged except that audit rows carry ``private: true`` when the rep may not
+see them. The rep ("Creditor rep") stream gets no ``turn_trace`` at all (the
+decision trace is the negotiator's tool, Phase 35), and drops ``max_bp``, firm
+fees, the client's savings balances, rescue amounts, ``blocked.offending`` and
+private audit rows. Returns ``None`` when a frame must not be sent at all.
 
 Policy, NLG and the audit log are unchanged; this only filters what leaves the
 socket. Tested by running whole calls on the rep view and scanning every frame
@@ -97,6 +98,8 @@ def redact_for_view(payload: dict[str, Any], view: View) -> dict[str, Any] | Non
     if view == "operator":
         return payload
 
+    if kind == "turn_trace":
+        return None
     out = dict(payload)
     if kind == "eval":
         for key in ("max_bp", "program_fee_cents", "additional_funds"):
@@ -106,9 +109,4 @@ def redact_for_view(payload: dict[str, Any], view: View) -> dict[str, Any] | Non
         out["rows"] = _rep_rows(out.get("rows")) or []
     elif kind == "blocked":
         out.pop("offending", None)
-    elif kind == "turn_trace":
-        out.pop("affordability", None)
-        nlg = dict(out["nlg"])
-        nlg["guards"] = [{**g, "offending": None} for g in nlg.get("guards", [])]
-        out["nlg"] = nlg
     return out

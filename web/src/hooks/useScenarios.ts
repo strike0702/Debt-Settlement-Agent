@@ -3,9 +3,9 @@
  * and the rep's own account card (`GET /scenarios/{id}/rep`).
  *
  * The brief holds the client's private finances and the firm's fees, so it is
- * fetched only while the operator lens is on; switching to the creditor's eye
+ * fetched only while the operator lens is on; switching to the Creditor rep view
  * drops it from memory. The rep account holds only creditor-side data and is
- * what the creditor's eye shows instead. Fixture mode passes `fallback` and
+ * what the Creditor rep view shows instead. Fixture mode passes `fallback` and
  * never fetches.
  */
 import { useEffect, useState } from "react";

@@ -2,7 +2,7 @@
  * Operator scenario brief (`GET /scenarios/{id}`): who the creditor is, the
  * client's savings plan, and the firm's fees.
  *
- * Operator lens only. App does not fetch the brief in the creditor's eye, and
+ * Debt negotiator view (lens `operator`) only. App does not fetch the brief in the Creditor rep view, and
  * this component renders a lock if it is ever handed one there anyway.
  */
 import { PrivateLock, PrivateTag } from "@/components/PrivateLock";

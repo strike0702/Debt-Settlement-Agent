@@ -1,6 +1,6 @@
 /**
- * PRIVATE marking. `PrivateLock` replaces a whole panel in the creditor lens;
- * `PrivateTag` marks a private value the operator can see. One lock icon for both.
+ * PRIVATE marking. `PrivateLock` replaces a whole panel in the Creditor rep
+ * view; `PrivateTag` marks a private value the Debt negotiator can see. One lock icon for both.
  */
 import { Lock } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -17,8 +17,8 @@ export function PrivateLock({ what, className }: { what: string; className?: str
     >
       <Lock aria-hidden className="h-4 w-4 shrink-0" />
       <span>
-        <span className="font-medium text-fg">{what}</span> is private to the firm and is not
-        sent on the creditor's stream.
+        <span className="font-medium text-fg">{what}</span> is private to the debt
+        negotiator and is not sent to the creditor rep.
       </span>
     </div>
   );

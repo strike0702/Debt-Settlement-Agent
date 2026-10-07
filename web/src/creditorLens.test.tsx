@@ -1,6 +1,7 @@
 /**
- * Creditor's-eye privacy: render the whole recorded call in the creditor lens
+ * Creditor rep view privacy: render the whole recorded call in the creditor lens
  * and assert no PRIVATE value from the fixture appears anywhere on the page.
+ * Since Phase 35 that view has no decision trace column at all (as in App).
  */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
@@ -30,7 +31,7 @@ function renderConsole(lens: Lens) {
       theme="light"
       onTheme={() => {}}
       conversation={<Conversation messages={state.messages} mic="off" suggested={[]} emptyHint="" />}
-      trace={<DecisionTrace traces={state.traces} lens={lens} />}
+      trace={lens === "operator" ? <DecisionTrace traces={state.traces} lens={lens} /> : null}
       state={<StatePanel state={state} lens={lens} />}
     />,
   );
@@ -66,13 +67,24 @@ describe("creditor lens", () => {
     expect(text).not.toContain("balance_cents");
   });
 
-  it("replaces private panels with a lock and still shows the public call", () => {
+  it("shows the conversation and agreed terms, with no decision trace (Phase 35)", () => {
     renderConsole("creditor");
-    expect(screen.getAllByTestId("private-lock").length).toBeGreaterThanOrEqual(9);
+    expect(screen.getAllByTestId("private-lock").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Agreement drafted")).toBeInTheDocument();
+    expect(screen.getByText("Proposed schedule")).toBeInTheDocument();
     expect(screen.getAllByText("$500.00").length).toBeGreaterThan(0);
+    for (const gone of ["Decision trace", "Negotiation ladder", "Latency", "Audit log", "rep stance"]) {
+      expect(document.body.textContent).not.toContain(gone);
+    }
+    expect(screen.queryAllByTestId("turn-card")).toHaveLength(0);
+  });
+
+  it("the Debt negotiator view still has the trace, ladder, latency and audit", () => {
+    renderConsole("operator");
     fireEvent.click(screen.getByText("Audit log"));
-    expect(screen.queryByText("affordability")).not.toBeInTheDocument();
+    for (const shown of ["Decision trace", "Negotiation ladder", "Latency", "affordability"]) {
+      expect(document.body.textContent).toContain(shown);
+    }
   });
 
   it("shows human terms, not internals (F10–F12, ported from test_app_js_contracts)", () => {
@@ -94,6 +106,8 @@ describe("creditor lens", () => {
     for (const key of ["max_bp", "program_fee_cents", "bank_fee_cents", "balance_cents", "additional_funds", "affordability", "\"private\":true", "\"offending\":["]) {
       expect(json).not.toContain(key);
     }
-    expect(rep.some((e) => e.type === "turn_trace")).toBe(true);
+    // Phase 35: the rep stream carries no decision trace at all.
+    expect(rep.some((e) => e.type === "turn_trace")).toBe(false);
+    expect(rep.some((e) => e.type === "transcript")).toBe(true);
   });
 });

@@ -1,6 +1,11 @@
 /**
- * Page frame: header (title, call phase, lens and theme toggles), scenario
- * cards, and the three-column grid (conversation | decision trace | state).
+ * Page frame: header (title, call phase, view and theme toggles), scenario
+ * cards, and the grid (conversation | decision trace | state).
+ *
+ * The view toggle's labels are for people outside the industry: "Debt
+ * negotiator" (lens `operator`) and "Creditor rep" (lens `creditor`); the
+ * internal lens values and the WS `view` are unchanged. With no `trace` slot
+ * (the Creditor rep view) the grid is two columns.
  *
  * Layout: 3 columns at ≥1280 px, 2 at ≥900 px (state drops below), stacked
  * below 900. Children are passed in as slots so 23b can swap data sources
@@ -33,9 +38,20 @@ export interface AppShellProps {
   /** Extra call controls next to "Watch a call" (start/end a live call, download). */
   actions?: ReactNode;
   conversation: ReactNode;
-  trace: ReactNode;
+  /** Omit (null) to drop the decision-trace column. */
+  trace?: ReactNode;
   state: ReactNode;
 }
+
+export const VIEW_LABEL: Record<Lens, string> = {
+  operator: "Debt negotiator",
+  creditor: "Creditor rep",
+};
+
+export const VIEW_HINT: Record<Lens, string> = {
+  operator: "The agent's side: client money and why each move was made.",
+  creditor: "What the creditor's representative sees on the call.",
+};
 
 const EXPECTED: Record<string, string> = {
   deal: "Expected: deal",
@@ -47,32 +63,45 @@ const EXPECTED: Record<string, string> = {
 export function AppShell(p: AppShellProps) {
   return (
     <div className="mx-auto flex min-h-screen max-w-[1800px] flex-col gap-4 px-4 py-4 wide:px-6">
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-3">
+      <header className="flex flex-wrap items-start gap-x-6 gap-y-3">
         <div className="mr-auto min-w-0">
           <h1 className="text-xl font-semibold tracking-tight">Settlement call console</h1>
           <p className="text-sm text-muted">
             An agent negotiates a debt settlement. Code decides every move; the LLM only reads the rep and phrases the reply.
           </p>
         </div>
-        {p.phase && <Badge tone="accent" aria-label={`Call phase ${p.phase}`}>{p.phase}</Badge>}
-        <Segmented<Lens>
-          label="Lens"
-          value={p.lens}
-          onChange={p.onLens}
-          options={[
-            { value: "operator", label: "Operator" },
-            { value: "creditor", label: "Creditor's eye" },
-          ]}
-        />
-        <Button size="icon" variant="ghost" onClick={p.onTheme} aria-label={p.theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}>
-          {p.theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-        </Button>
+        {/* One row of controls (phase, view toggle, theme) with the view hint
+            right-aligned under the whole row, so nothing floats between lines. */}
+        <div className="flex flex-col items-start gap-1.5 mid:items-end">
+          <div className="flex items-center gap-3">
+            {p.phase && (
+              <Badge tone="accent" aria-label={`Call phase ${p.phase}`}>
+                {p.phase}
+              </Badge>
+            )}
+            <Segmented<Lens>
+              label="View"
+              value={p.lens}
+              onChange={p.onLens}
+              options={[
+                { value: "operator", label: VIEW_LABEL.operator },
+                { value: "creditor", label: VIEW_LABEL.creditor },
+              ]}
+            />
+            <Button size="icon" variant="ghost" onClick={p.onTheme} aria-label={p.theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}>
+              {p.theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+          </div>
+          <p className="text-xs text-muted mid:text-right" data-testid="view-hint">
+            {VIEW_HINT[p.lens]}
+          </p>
+        </div>
       </header>
 
       {p.lens === "creditor" && (
         <p className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm text-muted">
           <Lock aria-hidden className="h-4 w-4" />
-          Creditor's eye: only what the rep's stream carries. The client's finances, fees, and ceiling are locked.
+          Creditor rep view: only what the creditor's representative would see. The client's finances, the firm's fees, and the agent's reasoning stay private.
         </p>
       )}
 
@@ -108,11 +137,18 @@ export function AppShell(p: AppShellProps) {
         {p.notice}
       </section>
 
-      <main className="grid flex-1 grid-cols-1 gap-4 mid:grid-cols-2 wide:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)]">
-        <div className="min-w-0 mid:max-wide:sticky mid:max-wide:top-4 mid:self-start">{p.conversation}</div>
-        <div className="min-w-0">{p.trace}</div>
-        <div className="min-w-0 mid:col-span-2 wide:col-span-1">{p.state}</div>
-      </main>
+      {p.trace ? (
+        <main className="grid flex-1 grid-cols-1 gap-4 mid:grid-cols-2 wide:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)]">
+          <div className="min-w-0 mid:max-wide:sticky mid:max-wide:top-4 mid:self-start">{p.conversation}</div>
+          <div className="min-w-0">{p.trace}</div>
+          <div className="min-w-0 mid:col-span-2 wide:col-span-1">{p.state}</div>
+        </main>
+      ) : (
+        <main className="grid flex-1 grid-cols-1 gap-4 mid:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+          <div className="min-w-0 mid:sticky mid:top-4 mid:self-start">{p.conversation}</div>
+          <div className="min-w-0">{p.state}</div>
+        </main>
+      )}
     </div>
   );
 }

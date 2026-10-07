@@ -217,6 +217,12 @@ def test_scenario_brief_endpoint(tmp_path: Path) -> None:
         assert len(ledger) == 8
         assert all(e["type"] == "credit" for e in ledger)
         assert ledger[0]["amount_cents"] == 22_000
+        # [P35] Whole ledger for the negotiator's table, flagged past vs scheduled.
+        full = body["client"]["ledger"]
+        assert [e["date"] for e in full] == sorted(e["date"] for e in full)
+        assert {e["type"] for e in full} == {"credit"}
+        assert all(e["scheduled"] == (e["date"] > body["client"]["as_of_date"]) for e in full)
+        assert [e for e in full if e["scheduled"]] == [{**e, "scheduled": True} for e in ledger]
         assert body["firm"] == {
             "program_fee_bp": 1800,
             "program_fee_cents": 28_800,

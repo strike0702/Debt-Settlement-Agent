@@ -4,13 +4,14 @@ Client events: ``start``, ``end``, binary WAV, ``text``, ``sentence_done``,
 ``barge_in``, ``timing``. Server events (every ``type`` this module sends):
 ``transcript``, ``say``, ``belief``, ``eval``, ``blocked``, ``escalate``,
 ``latency``, ``audit``, ``phase``, ``agreement``, ``stt_error``, ``error``,
-``turn_done``, ``turn_trace`` (one per agent turn), ``autoplay_done``. Their
+``turn_done``, ``turn_trace`` (one per agent turn, operator only; it gains
+``needs_info`` when the engine did not run), ``autoplay_done``. Their
 Pydantic models live in ``app.schemas.events``. Speaks through
 ``Orchestrator``; STT via ``app.voice.stt``, run inside
 ``llm_call_scope(call_id)`` so the STT call is audited.
 
 Every frame passes ``app.voice.views.redact_for_view``: ``view=operator`` (the
-default) sees everything, ``view=rep`` never sees affordability, fees,
+default) sees everything, ``view=rep`` never sees the decision trace, fees,
 balances, rescue data or private audit rows. ``start`` with
 ``"autoplay": true`` runs ``app.autoplay`` (sim creditor, no LLM) over the same
 events; client text / audio is refused while it runs. An NLU or STT
@@ -43,6 +44,7 @@ from app.agent.policy import Agreement, Intent
 from app.agent.session import CallSession
 from app.autoplay import clamp_pause_ms, new_autoplay_call, run_autoplay
 from app.config import Settings, get_settings
+from app.domain.fields import REQUIRED_FIELDS
 from app.domain.scenario import (
     CallScenario,
     load_scenario,
@@ -257,6 +259,16 @@ _LATENCY_KEYS = (
 )
 
 
+def _missing_engine_fields(session: CallSession) -> list[str]:
+    """Required engine fields the belief cannot use yet (``build_rules``'s NeedsInfo list).
+
+    Read after the turn, so on an auto-acked turn it reflects committed effects;
+    an empty list means the engine was skipped for another reason (e.g. a
+    dollars-vs-cents clarify), not for missing rules.
+    """
+    return [f for f in REQUIRED_FIELDS if not session.belief.usable_for_engine(f)]
+
+
 async def _emit_utterance(
     ws: _ViewSocket,
     orch: Orchestrator,
@@ -332,6 +344,8 @@ async def _emit_utterance(
         trace = utt.trace.model_dump(mode="json")
         # The trace was closed before STT was known; same view as ``latency``.
         trace["timings"] = {k: v for k, v in timings.items() if isinstance(v, (int, float))}
+        if trace.get("affordability") is None and trace.get("creditor_text") is not None:
+            trace["needs_info"] = _missing_engine_fields(session)
         await _send(ws, {"type": "turn_trace", **trace})
     # Auto-ack calls (autoplay) commit on emit, so the agreement belongs to this turn.
     if orch.auto_ack and utt.agreement is not None:

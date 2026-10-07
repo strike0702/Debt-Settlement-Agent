@@ -1,4 +1,7 @@
-/** Which side of the call the console shows. `creditor` is the rep's eye (server `?view=rep`). */
+/**
+ * Which side of the call the console shows. User-facing names (Phase 35):
+ * `operator` = "Debt negotiator", `creditor` = "Creditor rep" (server `?view=rep`).
+ */
 import type { View } from "@/types/protocol";
 
 export type Lens = "operator" | "creditor";

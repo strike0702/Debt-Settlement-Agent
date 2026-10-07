@@ -1610,6 +1610,21 @@
           "title": "Dropped",
           "type": "array"
         },
+        "needs_info": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Needs Info"
+        },
         "nlg": {
           "$ref": "#/$defs/NlgTrace"
         },

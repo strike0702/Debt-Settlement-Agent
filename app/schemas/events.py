@@ -129,6 +129,10 @@ class TurnTrace(_Model):
     dropped: list[DroppedTerm]
     belief_changes: list[TraceBeliefChange]
     affordability: Affordability | None = None
+    # Set by the WS layer when ``affordability`` is null on a rep turn: the
+    # required engine fields still missing (``[]`` = the move did not need the
+    # engine). The rep stream carries no ``turn_trace`` at all.
+    needs_info: list[str] | None = None
     decide: Decide
     # Our counter or confirmed bp when this move speaks one (public once said).
     counter_bp: int | None

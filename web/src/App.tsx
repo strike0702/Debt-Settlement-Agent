@@ -2,15 +2,17 @@
  * Top-level wiring: picks the event source, folds it into state, and connects
  * the conversation controls to the call socket and the voice engine.
  *
- * Live (default): scenario cards from `/scenarios`; the state column opens
- * with the operator's brief, or in the creditor's eye with "Your account"
- * (the rep's own balances and rules from `/scenarios/{id}/rep`). "Start call" opens
+ * Two views (user-facing names; the lens values stay `operator` / `creditor`):
+ * "Debt negotiator" shows the decision trace, the operator brief and the
+ * client's ledger; "Creditor rep" shows only the conversation, "Your account"
+ * (the rep's own balances and rules from `/scenarios/{id}/rep`) and the
+ * agreed terms. Live (default): scenario cards from `/scenarios`. "Start call" opens
  * `/ws/call/{id}?view=…` and the visitor plays the creditor rep by typing,
  * clicking a suggested reply, or speaking; "Watch a call" starts the same
  * socket in autoplay (the server's sim creditor plays the rep). The socket's
- * view is fixed per call: switching to the creditor's eye mid-call re-filters
+ * view is fixed per call: switching to the Creditor rep view mid-call re-filters
  * on the client, and switching back cannot restore what a rep stream never
- * carried, so App says so.
+ * carried (including the whole decision trace), so App says so.
  *
  * `?fixture=1` replays `fixtures/call_easy_deal.json` with no backend
  * (`&speed=4` to speed up).
@@ -18,6 +20,7 @@
 import { Download, PhoneCall, PhoneOff } from "lucide-react";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { ClientLedger } from "@/components/ClientLedger";
 import { Conversation } from "@/components/Conversation";
 import { ScenarioBrief } from "@/components/ScenarioBrief";
 import { YourAccount } from "@/components/YourAccount";
@@ -68,14 +71,27 @@ export default function App() {
   return fixture ? <FixtureApp speed={speed} /> : <LiveApp />;
 }
 
-/** The decision-trace and state slots for AppShell (lazy: they pull in Recharts). */
-function columns(state: CallState, lens: Lens, brief?: ReactNode): { trace: ReactNode; state: ReactNode } {
+/** Shown in the trace column when the call streams the Creditor rep view (no traces). */
+export const REP_STREAM_NOTE =
+  "This call streams the Creditor rep view, which carries no decision trace. Start the next call in the Debt negotiator view to see each move and the engine's curve.";
+
+/**
+ * The decision-trace and state slots for AppShell (lazy: they pull in Recharts).
+ * The Creditor rep view has no trace column.
+ */
+function columns(
+  state: CallState,
+  lens: Lens,
+  brief?: ReactNode,
+  traceNote?: string,
+): { trace: ReactNode; state: ReactNode } {
   return {
-    trace: (
-      <Suspense fallback={<Loading />}>
-        <DecisionTrace traces={state.traces} lens={lens} />
-      </Suspense>
-    ),
+    trace:
+      lens === "operator" ? (
+        <Suspense fallback={<Loading />}>
+          <DecisionTrace traces={state.traces} lens={lens} note={traceNote} />
+        </Suspense>
+      ) : null,
     state: (
       <div className="flex flex-col gap-4">
         {brief}
@@ -197,17 +213,25 @@ function LiveApp() {
   const brief = useScenarioBrief(selected, lens, scenarios.length > 0);
   const inCall = call.status === "connecting" || call.status === "live" || call.status === "ending";
   const repLines = state.messages.filter((m) => m.role === "creditor").length;
-  // Operator: the private brief. Creditor's eye: the rep's own account and rules (rep-safe).
+  // Debt negotiator: the private brief and client ledger. Creditor rep: the rep's own account and rules (rep-safe).
   const side =
     lens === "operator"
-      ? brief && <ScenarioBrief brief={brief} lens={lens} />
+      ? brief && (
+          <>
+            <ScenarioBrief brief={brief} lens={lens} />
+            <ClientLedger brief={brief} lens={lens} />
+          </>
+        )
       : scenarios.length > 0 && <YourAccount scenarioId={selected} />;
-  const cols = columns(state, lens, side || null);
+  const repStream = call.view === "rep" && call.events.length > 0;
+  const cols = columns(state, lens, side || null, repStream ? REP_STREAM_NOTE : undefined);
 
   const notices: string[] = [];
   if (catalogError) notices.push(catalogError);
-  if (lens === "operator" && call.view === "rep" && call.events.length > 0) {
-    notices.push("This call streams the creditor's view, so private detail is not available for it. Operator detail starts with the next call.");
+  if (lens === "operator" && repStream) {
+    notices.push(
+      "This call streams the Creditor rep view, so the decision trace and private detail are not available for it. Debt negotiator detail starts with the next call.",
+    );
   }
   if (state.autoplay) notices.push(OUTCOME[state.autoplay.outcome] ?? "Autoplay finished.");
   const lastError = state.errors.at(-1);

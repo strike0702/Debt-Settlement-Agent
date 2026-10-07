@@ -1,10 +1,11 @@
 /**
  * Right column: the state of the negotiation after the latest turn.
  *
- * Ladder chart (ask vs our offers, private ceiling), proposed schedule,
- * belief table, per-turn latency waterfall, agreement, and a collapsible
- * audit log. In the creditor lens every private column, line, and row is
- * either absent or replaced by a lock; nothing private is rendered.
+ * Debt negotiator view: ladder chart (ask vs our offers, private ceiling),
+ * proposed schedule, belief table, per-turn latency waterfall, agreement, and
+ * a collapsible audit log. Creditor rep view (Phase 35): only the agreed terms
+ * (agreement, schedule without private columns, terms heard); the ladder,
+ * latency and audit are the negotiator's tools and are not shown.
  */
 import {
   Bar,
@@ -54,11 +55,11 @@ export function StatePanel({ state, lens }: { state: CallState; lens: Lens }) {
           </CardBody>
         </Card>
       )}
-      <LadderCard traces={state.traces} ceiling={latestCeiling} lens={lens} />
+      {lens === "operator" && <LadderCard traces={state.traces} ceiling={latestCeiling} lens={lens} />}
       <ScheduleCard rows={state.evaluation?.rows ?? null} lens={lens} programFee={lens === "operator" ? state.evaluation?.program_fee_cents ?? null : null} />
       <BeliefCard terms={state.belief} lens={lens} />
-      <LatencyCard traces={state.traces} />
-      <AuditCard rows={state.audit} lens={lens} />
+      {lens === "operator" && <LatencyCard traces={state.traces} />}
+      {lens === "operator" && <AuditCard rows={state.audit} lens={lens} />}
     </div>
   );
 }

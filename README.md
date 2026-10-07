@@ -6,13 +6,13 @@ A voice and text agent that negotiates a debt settlement with a creditor represe
 
 Personal project. Synthetic data. Not a live collections product.
 
-[![An autoplayed call in the operator lens: each agent line shows why the policy chose it](docs/assets/demo.gif)](docs/assets/demo.mp4)
+[![An autoplayed call in the Debt negotiator view: each agent line shows why the policy chose it](docs/assets/demo.gif)](docs/assets/demo.mp4)
 
-*An autoplayed `counter_ladder` call in the operator lens (slowed to 3.8 s per step). Each agent move has a decision trace: what the NLU heard, the belief change, the affordability curve, the policy's reason, and the guard checks. [MP4 version](docs/assets/demo.mp4).*
+*An autoplayed `counter_ladder` call in the Debt negotiator view (slowed to 3.8 s per step). Each agent move has a decision trace: what the NLU heard, the belief change, the affordability curve, the policy's reason, and the guard checks. [MP4 version](docs/assets/demo.mp4).*
 
 **Live demo:** [debt-settlement-agent-ggor.onrender.com](https://debt-settlement-agent-ggor.onrender.com/). Pick a scenario and press **Watch a call**: a simulated creditor plays the rep, so it works with **no API keys** and no quota. **Start call** lets you play the rep yourself (type, click a suggested reply, or use the mic); that path needs the server's LLM keys. The host is a free Render instance, so a cold first load can take about 30 s.
 
-The **Operator** lens shows the firm's side: the client's private finances, the affordability curve, guard verdicts, latency and the audit log. The **Creditor's eye** lens (`?view=rep`) is the privacy-scoped stream: the server filters every frame, and a test scans whole calls for every private value. The operator view is public on the hosted demo by design, because every figure in it is synthetic.
+The **Debt negotiator** view shows the firm's side: the client's private finances and ledger, the decision trace with the affordability curve, guard verdicts, latency and the audit log. The **Creditor rep** view (`?view=rep`) shows what the creditor's representative sees (the conversation, their own account, the agreed terms) and is the privacy-scoped stream: the server filters every frame, and a test scans whole calls for every private value. The operator view is public on the hosted demo by design, because every figure in it is synthetic.
 
 Design decisions, with an annotated voice turn: [`docs/DESIGN.md`](docs/DESIGN.md).
 
@@ -265,7 +265,7 @@ cp .env.example .env
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000. Pick a scenario card, then **Watch a call** (the simulated rep plays it; no keys needed) or **Start call** (you play the rep: type, click a suggested reply, or use the mic). The **Creditor's eye** lens shows only what the rep's stream carries. For UI work, `npm run dev` in `web/` serves on :5173 with hot reload and proxies the API to :8000; see [`web/README.md`](web/README.md).
+Open http://127.0.0.1:8000. Pick a scenario card, then **Watch a call** (the simulated rep plays it; no keys needed) or **Start call** (you play the rep: type, click a suggested reply, or use the mic). The **Creditor rep** view shows only what the rep's stream carries (no decision trace). For UI work, `npm run dev` in `web/` serves on :5173 with hot reload and proxies the API to :8000; see [`web/README.md`](web/README.md).
 
 Text-only, same pipeline, auto-acks every sentence:
 

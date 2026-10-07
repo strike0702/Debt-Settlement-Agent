@@ -334,7 +334,7 @@ function LiveApp() {
     );
   }
   if (!storageOk) note("storage", "This browser is not saving custom test cases, so they will be gone after a reload.");
-  if (custom && !callRunning) note("custom", `Custom case: ${CUSTOM_WATCH_REASON}`);
+  if (custom && !callRunning) note("custom", "This is your own test case. The simulated rep only knows the built-in cases, so press Start call and play the rep yourself.");
   if (state.autoplay) note("outcome", OUTCOME[state.autoplay.outcome] ?? "The simulated call finished.");
   const lastError = state.errors.at(-1);
   if (lastError) note("error", lastError);

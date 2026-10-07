@@ -159,7 +159,7 @@ describe("LiveApp Creditor rep view", () => {
     expect(await screen.findByText("Client deposits and credits")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("radio", { name: "Creditor rep" }));
     expect(await screen.findByText("Your account")).toBeInTheDocument();
-    expect(screen.queryByText("Decision trace")).not.toBeInTheDocument();
+    expect(screen.queryByText("How the agent decided")).not.toBeInTheDocument();
     expect(screen.queryByText("Client deposits and credits")).not.toBeInTheDocument();
     expect(document.body.textContent).not.toContain("$220.00");
   });

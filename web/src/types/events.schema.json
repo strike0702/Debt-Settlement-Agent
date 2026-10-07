@@ -405,6 +405,18 @@
           "title": "Reason Key",
           "type": "string"
         },
+        "reason_short": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Short"
+        },
         "reason_text": {
           "title": "Reason Text",
           "type": "string"

@@ -121,7 +121,8 @@ function ScheduleCard({ rows, lens, programFee }: { rows: ScheduleRow[] | null; 
           <p className="text-sm text-muted">No schedule yet. It appears once the agent has terms the client can afford.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm num">
+            {/* Phones: 12 px type so the five operator columns fit 390 px. */}
+            <table className="w-full text-xs num sm:text-sm">
               <thead className="text-left text-muted">
                 <tr>
                   <th className="py-1 pr-3 font-medium">Date</th>
@@ -138,7 +139,7 @@ function ScheduleCard({ rows, lens, programFee }: { rows: ScheduleRow[] | null; 
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.date} className="border-t border-border">
-                    <td className="py-1.5 pr-3">{isoDate(r.date)}</td>
+                    <td className="py-1.5 pr-3 whitespace-nowrap">{isoDate(r.date)}</td>
                     <td className="py-1.5 pr-3 text-right">{money(r.creditor_payment_cents)}</td>
                     {op && (
                       <>

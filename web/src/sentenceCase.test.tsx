@@ -7,7 +7,7 @@
  * Code is exempt on purpose: `<code>` and monospace text (policy reason codes,
  * the JSON editor) show identifiers as they are.
  */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "@/components/AppShell";
 import { CaseEditor } from "@/components/CaseEditor";
@@ -31,6 +31,8 @@ const LABELS = [
   "th",
   "dt",
   "summary",
+  "h5",
+  "dd",
   "label",
   "button",
   "[role=radio]",
@@ -153,6 +155,14 @@ describe("sentence case (Phase 36)", () => {
       <CaseEditor mode="add" initialText={'{\n  "client": {\n    "draft_day": 0\n  }\n}'} templateText="{}" onSave={() => {}} onCancel={() => {}} />,
     );
     expect(await screen.findByText("1 problem to fix", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(lowercaseLabels(container)).toEqual([]);
+  });
+
+  it("holds for every opened turn of the trace with its details open", () => {
+    const { container } = render(<DecisionTrace traces={fullCall("operator").traces} lens="operator" />);
+    for (const b of container.querySelectorAll<HTMLButtonElement>("[aria-expanded=false]")) fireEvent.click(b);
+    for (const d of container.querySelectorAll("details")) d.open = true;
+    expect(container.querySelectorAll("[aria-expanded=true]").length).toBe(7);
     expect(lowercaseLabels(container)).toEqual([]);
   });
 

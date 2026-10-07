@@ -43,6 +43,8 @@ def test_rep_view_call_keeps_operator_traces_on_the_server(tmp_path: Path) -> No
     assert any(t.get("affordability") for t in traces)
     for t in traces:
         SERVER_EVENT_ADAPTER.validate_python(t)
+        # Phase 36: the few-word reason for collapsed trace rows, added at emit time.
+        assert t["decide"]["reason_short"], t["decide"]
     # Audit rows come in the WS shape with the privacy flag, so the UI folds them as-is.
     assert any(a["private"] and a["actor"] == "engine" for a in body["audit"])
     for a in body["audit"]:

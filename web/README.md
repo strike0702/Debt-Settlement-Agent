@@ -31,7 +31,7 @@ npm run lint
 - Custom test cases (Phase 36): **Add a test case** (next to "Pick a scenario") opens an inline JSON editor pre-filled from `GET /scenarios/template`, checked as you type by `POST /scenarios/preview` (errors listed with their field path, click to jump). Saved cases join the cards first, marked "Custom", with edit and remove (undo); they persist in `localStorage` (`dsa-custom-cases`). A call on one sends `start.scenario_payload`; autoplay is curated-only, so you play the rep. The Creditor rep view's "Your account" for a custom case comes from `POST /scenarios/preview/rep` (reads only `offer` and `rep_card`).
 - Copy rule (Phase 36): sentence case for every heading, badge, status and label; protocol codes become words in one place, `src/lib/labels.ts`. `src/sentenceCase.test.tsx` scans the rendered components.
 - The Debt negotiator view's state column has the scenario brief and **Client deposits and credits**: the client's dedicated-account ledger (Date, Description, Credit, Debit, Running balance) anchored at the balance on the as-of date, past rows above it and scheduled rows below. PRIVATE: it comes from the operator brief only.
-- The Decision trace (Debt negotiator view only) says why a turn has no engine curve: the opening line, the rep's rules still missing (`needs_info`, e.g. "Waiting for: max payments, minimum payment"), or a clarifying question. Step 1 reads "Creditor rep said · made an offer" (plain-English stance).
+- "How the agent decided" (the decision trace, Debt negotiator view only, Phase 36): one row per turn, newest first, with the move in plain words ("Countered at 31%"), its number and a few-word reason (`decide.reason_short`). Opening a row tells the turn as What they said / What we heard / Can the client pay? / Decision / What we said; "How this was worked out" holds the affordability curve, belief changes, the reply template, the safety checks (each once) and the policy code. All its wording comes from `src/lib/traceStory.ts` and the server's reason sentences (`app/agent/reasons.py`).
 - The Creditor rep view shows the conversation, **Your account** and the agreed terms (agreement, public schedule, terms heard); no decision trace, ladder, latency or audit log. Its state column opens with **Your account** (`GET /scenarios/{id}/rep`): the rep's creditor name, outstanding and original balance, and their settlement rules from the rep card. It carries no client or firm data; the scenario brief and ledger stay in the Debt negotiator view.
 - **Download log** fetches `/calls/{id}/export?view=rep|operator` for the last call (it survives the end of the call); the rep export drops private audit rows.
 - `?fixture=1` replays `src/fixtures/call_easy_deal.json` with no backend (`&speed=4` to play faster).
@@ -67,7 +67,7 @@ src/
     latency.ts             waterfall rows from turn_trace timings
     lens.ts                Lens ("operator" | "creditor") → server view ("operator" | "rep"); shown as "Debt negotiator" | "Creditor rep"
     ledger.ts              client ledger → table rows with running balance (cents)
-    stance.ts              NLU stance → plain English ("made an offer", "pushed back", …)
+    traceStory.ts          a turn trace in plain words: title, what was heard, can the client pay, checks once each
     labels.ts              codes → sentence-case words (intent, belief status, guard stage, expected outcome)
     customCases.ts         custom test cases: localStorage, ScenarioSource, JSON parse errors, path → cursor
   hooks/
@@ -80,7 +80,7 @@ src/
   components/
     AppShell.tsx           header, lens + theme toggles, scenario cards (+ custom), 3-column grid
     Conversation.tsx       bubbles, mic state, suggested replies, text box
-    DecisionTrace.tsx      turn cards (the hero), 7 steps per turn; Debt negotiator view only
+    DecisionTrace.tsx      "How the agent decided": one row per turn, open for the story and details; Debt negotiator view only
     CurveSparkline.tsx     feasibility curve 1–100% with ask, ours, dashed private ceiling
     StatePanel.tsx         agreement and schedule first, then brief/account slot, ladder, belief table, latency, audit
     PrivateLock.tsx        lock panel (Creditor rep view) and lock tag (Debt negotiator view)

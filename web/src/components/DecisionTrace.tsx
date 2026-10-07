@@ -1,29 +1,42 @@
 /**
- * Center column, the hero: one card per agent turn showing how the move was
- * made. Order matches the pipeline: rep line → NLU → belief → engine →
- * policy → NLG template + guards → spoken line.
+ * Center column, "How the agent decided": one row per agent turn, newest
+ * first. A collapsed row gives the move in plain words ("Countered at 31%"),
+ * its key number, and the reason in a few words (`decide.reason_short`). An
+ * open row tells the turn as a short story — What they said / What we heard /
+ * Can the client pay? / Decision / What we said — with the technical detail
+ * (affordability curve, what the agent now knows, the reply template, the
+ * safety checks, the policy code) one more click away. The newest turn is
+ * open until the visitor opens or closes a row themselves.
  *
- * Reads `turn_trace` events only. Debt negotiator view only (Phase 35): the
- * rep stream carries no traces (for a call streamed in the Creditor rep view,
- * App backfills them from `GET /calls/{id}/operator`, Phase 36), and in the
+ * Reads `turn_trace` events only; every sentence comes from
+ * `lib/traceStory.ts` and the server's reason text. Debt negotiator view only:
+ * the rep stream carries no traces (for a call streamed in the Creditor rep
+ * view, App backfills them from `GET /calls/{id}/operator`), and in the
  * Creditor rep lens this renders a single lock even if it is handed traces.
- * When the engine did not run, step 4 says why (opening line, or rules still
- * missing via `needs_info`). `note` replaces the empty state, e.g. when the
- * server no longer has a call's trace. Labels are words, not codes
- * (`lib/labels.ts`); the policy's own code stays visible in step 5.
+ * Phase 36 replaced the seven-step card with this design (user's pick of four
+ * mockups); `note` replaces the empty state, e.g. when the server has
+ * forgotten a call.
  */
-import { ArrowRight, Check, ShieldAlert, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
+import { type ReactNode, useState } from "react";
 import { CurveSparkline } from "@/components/CurveSparkline";
-import { PrivateLock } from "@/components/PrivateLock";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader } from "@/components/ui/card";
-import type { Lens } from "@/lib/lens";
+import { PrivateLock, PrivateTag } from "@/components/PrivateLock";
+import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
-import { fieldLabel, pct, termValue } from "@/lib/format";
-import { guardLabel, intentLabel, sentence, STATUS_LABEL } from "@/lib/labels";
+import { fieldLabel, termValue } from "@/lib/format";
 import { splitByQuotes, splitTemplate } from "@/lib/highlight";
-import { STANCE_TONE, stanceText } from "@/lib/stance";
+import { STATUS_LABEL } from "@/lib/labels";
+import type { Lens } from "@/lib/lens";
+import {
+  type Afford,
+  affordLine,
+  checkSummary,
+  heardLines,
+  ignoredLines,
+  keyNumber,
+  spokenText,
+  turnTitle,
+} from "@/lib/traceStory";
 import type { TurnTraceEvent } from "@/types/protocol";
 
 export interface DecisionTraceProps {
@@ -33,15 +46,12 @@ export interface DecisionTraceProps {
   note?: string;
 }
 
-/** Why step 4 has no curve, in plain words. */
-export function engineNote(trace: Pick<TurnTraceEvent, "creditor_text" | "needs_info">): string {
-  if (trace.creditor_text == null) return "No engine run: the agent is opening or closing the call.";
-  const missing = trace.needs_info ?? null;
-  if (missing && missing.length > 0) {
-    return `Waiting for: ${missing.map((f) => fieldLabel(f).toLowerCase()).join(", ")}. The engine runs once the rep's rules are known.`;
-  }
-  if (missing) return "No engine run this turn: the agent asked a clarifying question first.";
-  return "No engine run this turn.";
+export const TRACE_TITLE = "How the agent decided";
+export const TRACE_SUBTITLE = "Every decision comes from code; the AI handles only the language.";
+
+/** The few-word reason for a collapsed row; older frames have only the full sentence. */
+export function shortReason(t: TurnTraceEvent): string {
+  return t.decide.reason_short ?? t.decide.reason_text;
 }
 
 export function DecisionTrace({ traces, lens, note }: DecisionTraceProps) {
@@ -49,165 +59,198 @@ export function DecisionTrace({ traces, lens, note }: DecisionTraceProps) {
   const ordered = [...traces].sort((a, b) => b.turn - a.turn);
   return (
     <Card className="flex min-h-0 flex-col">
-      <CardHeader
-        title="Decision trace"
-        aside={<span className="text-sm text-muted">Code decides each move; the AI only words it.</span>}
-      />
-      <div className="flex flex-col gap-4 px-4 pb-4" aria-label="Decision trace, newest turn first">
+      <div className="flex flex-col gap-0.5 px-4 pt-4 pb-3">
+        <h2 className="text-base font-semibold">{TRACE_TITLE}</h2>
+        <p className="m-0 text-sm text-muted">{TRACE_SUBTITLE}</p>
+      </div>
+      <div className="px-4 pb-4">
         {ordered.length === 0 ? (
           <p className="mx-auto max-w-[56ch] py-10 text-center text-pretty text-muted">
-            {note ?? (
-              <>
-                Each agent turn appears here: what the rep said, what the agent understood, what the client can afford,
-                why the code chose its move, and how the reply was checked before it was spoken.
-              </>
-            )}
+            {note ??
+              "Each turn of the call appears here: what the rep said, what the agent took from it, whether the client can pay, what the agent decided and why, and what it said back."}
           </p>
         ) : (
-          ordered.map((t, i) => <TurnCard key={t.turn} trace={t} latest={i === 0} />)
+          <TurnList traces={ordered} />
         )}
       </div>
     </Card>
   );
 }
 
-function Step({ n, title, aside, children }: { n: number; title: ReactNode; aside?: ReactNode; children: ReactNode }) {
+function TurnList({ traces }: { traces: TurnTraceEvent[] }) {
+  const latest = traces[0]?.turn ?? null;
+  // The newest turn is open until the visitor opens or closes a row; then their choice wins.
+  const [open, setOpen] = useState<Set<number> | null>(null);
+  const isOpen = (turn: number) => (open ? open.has(turn) : turn === latest);
+  const toggle = (turn: number) => {
+    const next = new Set(open ?? (latest != null ? [latest] : []));
+    if (next.has(turn)) next.delete(turn);
+    else next.add(turn);
+    setOpen(next);
+  };
   return (
-    <section className="grid grid-cols-[1.5rem_1fr] gap-x-3 gap-y-1">
-      <span className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold text-muted num">
-        {n}
-      </span>
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <h4 className="text-sm font-semibold text-muted">{title}</h4>
-          {aside}
-        </div>
-        <div className="mt-1">{children}</div>
-      </div>
-    </section>
+    <ol aria-label="Turns, newest first" className="m-0 flex flex-col divide-y divide-border rounded-xl border border-border bg-surface p-0">
+      {traces.map((t) => {
+        const expanded = isOpen(t.turn);
+        const num = keyNumber(t);
+        const panelId = `turn-${t.turn}-detail`;
+        return (
+          <li key={t.turn} className="list-none" data-testid="turn-card" aria-label={`Turn ${t.turn}`}>
+            <button
+              type="button"
+              aria-expanded={expanded}
+              aria-controls={panelId}
+              onClick={() => toggle(t.turn)}
+              className="grid w-full cursor-pointer grid-cols-[1rem_2.25rem_minmax(0,1fr)_auto] items-baseline gap-x-2 px-3 py-2.5 text-left hover:bg-surface-2"
+            >
+              <ChevronRight aria-hidden className={cn("mt-0.5 h-4 w-4 self-start text-muted transition-transform", expanded && "rotate-90")} />
+              <span className="text-xs text-muted num">
+                <span className="sr-only">Turn </span>
+                <span aria-hidden>T</span>
+                {t.turn}
+              </span>
+              <span className="min-w-0">
+                <span className="block font-medium">{turnTitle(t)}</span>
+                {!expanded && <span className="line-clamp-2 block text-sm text-muted">{shortReason(t)}</span>}
+              </span>
+              {num ? <span className="font-semibold num">{num}</span> : <span />}
+            </button>
+            {expanded && (
+              <div id={panelId} className="flex flex-col gap-3 px-3 pt-1 pb-4 sm:pl-[4.75rem]">
+                <Story trace={t} />
+                <Disclosure summary="How this was worked out">
+                  <Internals trace={t} />
+                </Disclosure>
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
-export function TurnCard({ trace, latest }: { trace: TurnTraceEvent; latest: boolean }) {
+// ---------------------------------------------------------------- the story
+
+function Quote({ trace }: { trace: TurnTraceEvent }) {
   const quotes = [...trace.terms.map((t) => t.quote), ...(trace.ask_quote ? [trace.ask_quote] : [])];
-  const guardsOk = trace.nlg.guards.every((g) => g.ok);
-  const said = stanceText(trace.stance);
-  const tone = trace.stance ? STANCE_TONE[trace.stance] : undefined;
   return (
-    <article
-      data-testid="turn-card"
-      aria-label={`Turn ${trace.turn}`}
-      className={cn(
-        "flex flex-col gap-4 rounded-xl border p-4",
-        latest ? "border-accent bg-surface" : "border-border bg-surface",
+    <>
+      {splitByQuotes(trace.creditor_text ?? "", quotes).map((s, i) =>
+        s.hit ? (
+          <mark key={i} className="rounded bg-hl px-0.5 text-fg">
+            {s.text}
+          </mark>
+        ) : (
+          <span key={i}>{s.text}</span>
+        ),
       )}
-    >
-      <header className="flex flex-wrap items-center gap-2">
-        <h3 className="text-base font-semibold num">Turn {trace.turn}</h3>
-        <Badge tone="accent">{intentLabel(trace.decide.intent)}</Badge>
-      </header>
+    </>
+  );
+}
 
-      <Step
-        n={1}
-        title="Creditor rep said"
-        aside={
-          said && (
-            <Badge data-testid="rep-stance" tone={tone ?? "neutral"}>
-              {sentence(said)}
-            </Badge>
-          )
-        }
-      >
-        {trace.creditor_text ? (
-          <blockquote className="m-0 border-l-2 border-ask pl-3">
-            {splitByQuotes(trace.creditor_text, quotes).map((s, i) =>
-              s.hit ? (
-                <mark key={i} className="rounded bg-hl px-0.5 text-fg">
-                  {s.text}
-                </mark>
-              ) : (
-                <span key={i}>{s.text}</span>
-              ),
-            )}
-          </blockquote>
-        ) : (
-          <p className="text-muted">Agent opens the call.</p>
-        )}
-      </Step>
+function AffordText({ afford }: { afford: NonNullable<Afford> }) {
+  return (
+    <span className="inline-flex flex-wrap items-baseline gap-x-2">
+      <span className={cn(afford.tone === "good" && "text-good", afford.tone === "bad" && "text-bad")}>{afford.text}</span>
+      <PrivateTag />
+    </span>
+  );
+}
 
-      <Step n={2} title="What the agent understood">
-        {trace.terms.length === 0 && trace.dropped.length === 0 && trace.ask_bp == null ? (
-          <p className="text-muted">No terms in this line.</p>
-        ) : (
-          <ul className="flex flex-col gap-1 text-sm">
-            {trace.ask_bp != null && (
-              <li>
-                Settlement ask <strong className="num">{pct(trace.ask_bp)}</strong>
-              </li>
-            )}
-            {trace.terms.map((t) => (
-              <li key={t.field} className="flex flex-wrap items-center gap-x-2">
-                <span>{fieldLabel(t.field)}</span>
-                <strong className="num">{termValue(t.field, t.value)}</strong>
-                {t.hedged && <Badge tone="warn">Hedged</Badge>}
-                <Check aria-label="verified against the quote" className="h-3.5 w-3.5 text-good" />
-              </li>
-            ))}
-            {trace.dropped.map((d) => (
-              <li key={`drop-${d.field}`} className="flex flex-wrap items-center gap-x-2 text-muted">
-                <s>
-                  {fieldLabel(d.field)} {termValue(d.field, d.value)}
-                </s>
-                <Badge tone="bad">Dropped: {d.reason.replaceAll("_", " ")}</Badge>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Step>
+/** Five plain lines; a line with nothing to say is left out. */
+function Story({ trace }: { trace: TurnTraceEvent }) {
+  const heard = heardLines(trace);
+  const afford = affordLine(trace);
+  const rows: [string, ReactNode][] = [];
+  if (trace.creditor_text) {
+    rows.push([
+      "What they said",
+      <q key="q" className="before:content-['“'] after:content-['”']">
+        <Quote trace={trace} />
+      </q>,
+    ]);
+  }
+  if (heard.length > 0) rows.push(["What we heard", heard.join(". ") + "."]);
+  if (afford) rows.push(["Can the client pay?", <AffordText key="a" afford={afford} />]);
+  rows.push(["Decision", trace.decide.reason_text]);
+  rows.push([
+    "What we said",
+    <span key="s" className="font-medium">
+      {spokenText(trace)}
+    </span>,
+  ]);
+  return (
+    <dl className="m-0 grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-[9.5rem_minmax(0,1fr)]">
+      {rows.map(([label, body]) => (
+        <div key={label} className="contents">
+          <dt className="text-sm text-muted">{label}</dt>
+          <dd className="m-0 -mt-2 sm:mt-0">{body}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
 
-      <Step n={3} title="What the agent now believes">
-        {trace.belief_changes.length === 0 ? (
-          <p className="text-sm text-muted">None.</p>
-        ) : (
-          <ul className="flex flex-col gap-1 text-sm">
-            {trace.belief_changes.map((c) => (
-              <li key={c.field} className="flex flex-wrap items-center gap-x-2">
-                <span>{fieldLabel(c.field)}</span>
-                <span className="text-muted num">{termValue(c.field, c.old_value)}</span>
-                <ArrowRight aria-label="becomes" className="h-3.5 w-3.5 text-muted" />
-                <strong className="num">{termValue(c.field, c.new_value)}</strong>
-                <span className="text-xs text-muted">
-                  {STATUS_LABEL[c.old_status]} → {STATUS_LABEL[c.new_status]}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Step>
+// ---------------------------------------------------------------- the details
 
-      <Step n={4} title="What the client can afford">
-        {trace.affordability ? (
+function Disclosure({ summary, children }: { summary: string; children: ReactNode }) {
+  return (
+    <details className="group rounded-lg border border-border">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-sm font-medium text-muted hover:text-fg [&::-webkit-details-marker]:hidden">
+        <ChevronRight aria-hidden className="h-4 w-4 transition-transform group-open:rotate-90" />
+        {summary}
+      </summary>
+      <div className="border-t border-border px-3 py-3">{children}</div>
+    </details>
+  );
+}
+
+/** Everything the story leaves out, for whoever wants to check the working. */
+function Internals({ trace }: { trace: TurnTraceEvent }) {
+  const c = checkSummary(trace);
+  const ignored = ignoredLines(trace);
+  return (
+    <div className="flex flex-col gap-4 text-sm">
+      {trace.affordability && (
+        <section>
+          <h5 className="mb-1 font-medium">Which settlements the client can afford</h5>
           <CurveSparkline
             curve={trace.affordability.curve}
             maxBp={trace.affordability.max_bp}
             askBp={trace.ask_bp}
             counterBp={trace.counter_bp}
           />
-        ) : (
-          <p className="text-sm text-muted" data-testid="engine-note">{engineNote(trace)}</p>
-        )}
-      </Step>
-
-      <Step n={5} title="Why the code chose this move">
-        <p>{trace.decide.reason_text}</p>
-        <p className="mt-1 flex flex-wrap gap-1.5 text-xs text-muted" aria-label="Policy codes">
-          <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono">{trace.decide.intent}</code>
-          {trace.decide.reason && <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono">{trace.decide.reason}</code>}
-        </p>
-      </Step>
-
-      <Step n={6} title={trace.nlg.mode === "llm" ? "How the AI worded it, then checks" : "Wording from a template, then checks"}>
-        <p className="font-mono text-sm leading-relaxed">
+        </section>
+      )}
+      {trace.belief_changes.length > 0 && (
+        <section>
+          <h5 className="mb-1 font-medium">What the agent now knows</h5>
+          <ul className="m-0 flex flex-col gap-0.5 p-0">
+            {trace.belief_changes.map((b) => (
+              <li key={b.field} className="list-none">
+                {fieldLabel(b.field)}: <span className="num">{termValue(b.field, b.new_value)}</span>{" "}
+                <span className="text-muted">({STATUS_LABEL[b.new_status].toLowerCase()})</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {ignored.length > 0 && (
+        <section>
+          <h5 className="mb-1 font-medium">What the agent ignored</h5>
+          <ul className="m-0 flex flex-col gap-0.5 p-0 text-muted">
+            {ignored.map((l) => (
+              <li key={l} className="list-none">
+                {l}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <section>
+        <h5 className="mb-1 font-medium">The reply before the numbers went in</h5>
+        <p className="m-0 font-mono text-xs leading-relaxed" data-testid="reply-template">
           {splitTemplate(trace.nlg.template).map((s, i) =>
             s.hit ? (
               <span key={i} className="rounded bg-accent-soft px-1 text-accent" data-placeholder>
@@ -218,26 +261,38 @@ export function TurnCard({ trace, latest }: { trace: TurnTraceEvent; latest: boo
             ),
           )}
         </p>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {trace.nlg.guards.map((g, i) => (
-            // A stage can repeat (LLM attempt, then the template fallback).
-            <Badge key={`${g.stage}-${i}`} tone={g.ok ? "good" : "bad"}>
-              {g.ok ? <Check aria-hidden className="h-3 w-3" /> : <X aria-hidden className="h-3 w-3" />}
-              {guardLabel(g.stage, g.ok, g.reason)}
-            </Badge>
+        <p className="m-0 mt-1 text-xs text-muted">
+          {trace.nlg.mode === "llm" ? "Worded by the AI from this outline." : "A fixed template."} Code fills each blank
+          with a checked figure.
+        </p>
+      </section>
+      <section>
+        <h5 className="mb-1 font-medium">Safety checks on the reply</h5>
+        <ul className="m-0 flex flex-col gap-0.5 p-0">
+          {c.passed.map((p) => (
+            <li key={p} className="list-none text-muted">
+              <span aria-hidden>✓ </span>
+              {p}
+            </li>
           ))}
-          {trace.nlg.fallback_used && (
-            <Badge tone="warn">
-              <ShieldAlert aria-hidden className="h-3 w-3" /> Template fallback spoken
-            </Badge>
-          )}
-        </div>
-        <span className="sr-only">{guardsOk ? "All checks passed." : "A check blocked the AI's wording."}</span>
-      </Step>
-
-      <Step n={7} title="Spoken">
-        <p className="text-base font-medium">{trace.spoken.map((s) => s.text).join(" ")}</p>
-      </Step>
-    </article>
+          {c.blocked.map((b) => (
+            <li key={b} className="list-none text-warn">
+              <span aria-hidden>✕ </span>
+              {b}
+            </li>
+          ))}
+          {c.fallback && <li className="list-none text-warn">The safe template was spoken instead of the AI's wording.</li>}
+        </ul>
+      </section>
+      <p className="m-0 text-xs text-muted">
+        Policy code: <code className="font-mono">{trace.decide.intent}</code>
+        {trace.decide.reason && (
+          <>
+            {" "}
+            <code className="font-mono">{trace.decide.reason}</code>
+          </>
+        )}
+      </p>
+    </div>
   );
 }

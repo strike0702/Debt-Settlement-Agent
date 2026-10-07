@@ -72,7 +72,7 @@ describe("creditor lens", () => {
     expect(screen.getByText("Agreement drafted")).toBeInTheDocument();
     expect(screen.getByText("Proposed schedule")).toBeInTheDocument();
     expect(screen.getAllByText("$500.00").length).toBeGreaterThan(0);
-    for (const gone of ["Decision trace", "Negotiation ladder", "Latency", "Audit log", "rep stance"]) {
+    for (const gone of ["How the agent decided", "Negotiation ladder", "Latency", "Audit log", "rep stance"]) {
       expect(document.body.textContent).not.toContain(gone);
     }
     expect(screen.queryAllByTestId("turn-card")).toHaveLength(0);
@@ -81,7 +81,7 @@ describe("creditor lens", () => {
   it("the Debt negotiator view still has the trace, ladder, latency and audit", () => {
     renderConsole("operator");
     fireEvent.click(screen.getByText("Audit log"));
-    for (const shown of ["Decision trace", "Negotiation ladder", "Latency", "affordability"]) {
+    for (const shown of ["How the agent decided", "Negotiation ladder", "Latency", "affordability"]) {
       expect(document.body.textContent).toContain(shown);
     }
   });

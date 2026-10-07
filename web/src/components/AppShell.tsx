@@ -63,8 +63,8 @@ export const VIEW_LABEL: Record<Lens, string> = {
 
 /** Under the view toggle: what the selected view shows (candidates in docs/PROGRESS.md, Phase 36). */
 export const VIEW_HINT: Record<Lens, string> = {
-  operator: "Our side of the call: the client's money and the reason for every move.",
-  creditor: "The other side: only what the creditor's representative sees.",
+  operator: "The agent's side of the call: the client's money and the reason behind every move.",
+  creditor: "What the creditor's representative sees on the call, and nothing more.",
 };
 
 /** Under the title (candidates in docs/PROGRESS.md, Phase 36). */
@@ -200,10 +200,10 @@ function ScenarioCard({
         {s.description && <span className="line-clamp-3 text-sm text-muted">{s.description}</span>}
         <span className="mt-auto flex flex-wrap items-center gap-1.5 pt-2">
           {s.custom && <Badge tone="accent">Custom</Badge>}
-          <span className="text-xs text-faint">Expected</span>
+          <span className="text-xs text-faint">Expected outcome</span>
           <Badge>{expectedLabel(s.expected)}</Badge>
         </span>
-        {s.custom && <span className="text-xs text-muted">You play the rep (no autoplay)</span>}
+        {s.custom && <span className="text-xs text-muted">You play the rep on this case</span>}
       </button>
       {hasActions && (
         <span className="absolute top-2 right-2 flex gap-0.5">

@@ -5,7 +5,8 @@ Client events: ``start``, ``end``, binary WAV, ``text``, ``sentence_done``,
 ``transcript``, ``say``, ``belief``, ``eval``, ``blocked``, ``escalate``,
 ``latency``, ``audit``, ``phase``, ``agreement``, ``stt_error``, ``error``,
 ``turn_done``, ``turn_trace`` (one per agent turn, operator only; it gains
-``needs_info`` when the engine did not run), ``autoplay_done``. Their
+``needs_info`` when the engine did not run, and ``decide.reason_short``),
+``autoplay_done``. Their
 Pydantic models live in ``app.schemas.events``. Speaks through
 ``Orchestrator``; STT via ``app.voice.stt``, run inside
 ``llm_call_scope(call_id)`` so the STT call is audited.
@@ -48,6 +49,7 @@ from app.adapter.engine_adapter import EvalSummary
 from app.agent.nlu_types import TurnAnalysis
 from app.agent.orchestrator import Orchestrator, Utterance
 from app.agent.policy import Agreement, Intent
+from app.agent.reasons import reason_short
 from app.agent.session import CallSession
 from app.autoplay import clamp_pause_ms, new_autoplay_call, run_autoplay
 from app.config import Settings, get_settings
@@ -404,6 +406,8 @@ async def _emit_utterance(
         trace["timings"] = {k: v for k, v in timings.items() if isinstance(v, (int, float))}
         if trace.get("affordability") is None and trace.get("creditor_text") is not None:
             trace["needs_info"] = _missing_engine_fields(session)
+        decide = trace["decide"]
+        decide["reason_short"] = reason_short(decide["intent"], decide["reason"])
         await _send(ws, {"type": "turn_trace", **trace})
     # Auto-ack calls (autoplay) commit on emit, so the agreement belongs to this turn.
     if orch.auto_ack and utt.agreement is not None:

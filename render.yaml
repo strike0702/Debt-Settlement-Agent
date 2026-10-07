@@ -26,9 +26,21 @@ services:
         value: "true"
       - key: DB_PATH
         value: /opt/render/project/src/debt_settlement_agent.db
-      - key: GROQ_API_KEY
+      - key: LLM_KEY_COOLDOWN_S
+        value: "60" # 429 cooldown per key when there is no Retry-After
+      # Key pool: NAME, then NAME_1, NAME_2, ... contiguous from 1 (a gap stops
+      # the scan). Use separate orgs: free-tier limits are per org, not per key.
+      - key: GROQ_API_KEY_1
         sync: false
-      - key: GEMINI_API_KEY
+      - key: GROQ_API_KEY_2
+        sync: false
+      - key: GROQ_API_KEY_3
+        sync: false
+      - key: GEMINI_API_KEY_1
+        sync: false
+      - key: GEMINI_API_KEY_2
+        sync: false
+      - key: GEMINI_API_KEY_3
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false

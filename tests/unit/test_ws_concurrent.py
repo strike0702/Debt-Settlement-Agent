@@ -31,7 +31,11 @@ class _SlowNLU(FakeLLM):
         self.nlu_prompts: list[str] = []
 
     async def chat_text(
-        self, role: Any, messages: Sequence[Mapping[str, Any]], max_tokens: int
+        self,
+        role: Any,
+        messages: Sequence[Mapping[str, Any]],
+        max_tokens: int,
+        **kw: Any,
     ) -> str:
         if role == "nlu":
             self.nlu_prompts.append("\n".join(str(m.get("content")) for m in messages))

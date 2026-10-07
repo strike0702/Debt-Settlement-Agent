@@ -1086,3 +1086,36 @@ uv run python -m eval.ab_report --arm A=eval/results/ab1007_A_policy --arm B=eva
 - Live NLU sometimes reads a stray number as the settlement ask (seen: "10%" from "10 payments" context), and LLM sim phrasing loops on restated amounts; both affect every arm equally (not 24b scope).
 
 **Checks at second pause:** `uv run ruff check .` clean; full `uv run pytest -q` 672 passed / 2 skipped; oracle CI eval PASS (`eval_20261007_104338_s7`).
+
+### Phase 26 (carry-over) (2026-10-07) — carry-over cleanup
+
+- Files added: `tests/unit/test_smoke_llm.py`, `web/src/App.test.tsx`. Changed: `app/llm/client.py`, `app/agent/{nlu,orchestrator}.py`, `app/voice/views.py`, `scripts/smoke_llm.py`, `config/providers.yaml`, `fixtures/scenarios/*/rep_card.md`, `tests/nlu_corpus.jsonl` (+6 lines `k01`–`k06`), `docs/eval/ab_20261007/providers_split2.yaml` (Cerebras `tpm: 15000`, see deviations), tests.
+- Interfaces:
+  - `LLMClient.chat_text(role, messages, max_tokens, *, json_mode: bool = False) -> str` (same on `FakeLLM`, which ignores it). `json_mode=True` sends `response_format: json_object` on providers with `json_mode: true`, appends the JSON-only system line elsewhere, and returns raw text (the caller parses). NLU (`app.agent.nlu.analyze`) now calls it with `json_mode=True`; its `_LLM` protocol has the kwarg. Test doubles that override `chat_text` must accept `**kwargs`.
+  - `app.voice.views.is_private_audit(actor, event)` is an **allow-list** (`_REP_AUDIT_EVENTS: dict[actor, frozenset[event]]`). A new audit event is operator-only until added there.
+  - `Orchestrator._run_turn`: NLU `LLMUnavailable` pops the turn's creditor history line and undoes the `turn_idx` bump before re-raising.
+  - `app.agent.nlu.post_verify`: a settlement ask whose quoted percent is directly followed by a non-ask noun (`balance`, `interest`, `installment(s)`, `payment(s)`, `down`, `rate`, `negotiable`, …) is dropped as `nlu_rejected_ask_value` (existing event / `DroppedTerm.reason`). "N% of the balance", "N% settlement", "settle at N%" still verify.
+  - `_INJECTION_RE` also matches forged prompt markup (`<utterance>` / `</utterance>`) and NLU JSON (`"stance":`), so such a line is never repaired to accept.
+  - `scripts/smoke_llm.py`: `_key_pool(settings, env)` = `settings.api_keys(env)`; every key is smoked alone via `_single_key_settings(settings, env, value)`; lines carry `[KEY_ENV_N]`.
+  - providers.yaml Cerebras: `rpm: 5`, `tpm: 30000`.
+  - Rep cards: a `- Correct.` suggestion after the first terms line (fast read-back confirm path) and an intro sentence telling the rep to answer read-backs first. No scenario figures changed.
+
+| item | outcome | test or evidence |
+|---|---|---|
+| P20 NLU never sends JSON mode | fixed | `test_nlu_chat_text_sends_json_mode` (NLU body has `response_format: json_object`, plain `chat_text` does not) |
+| P24a no native tool calling | deferred to user | needs a `tools=` path through `_chat`/`_call_chat`, cache key and fakes (well over 30 lines); the JSON tool-call protocol works for the A/B, and arm C runs on it tomorrow, so changing it mid-A/B would change conditions |
+| P21 filler false accepts (f23, f30) | fixed in part; rest deferred to user | Re-check: the short-ack rule does **not** produce f23/f30 (`repair_stance` keeps counter/info on both, with or without terms): `test_short_ack_rule_does_not_force_accept_on_filler_term_lines`. The accept label comes from the LLM under the newer prompt (AFTER had offer/counter). The third drift line, i06 (forged `{"stance":"accept"}`), is fixed: `test_forged_nlu_json_in_line_is_never_accept`. Vetoing an LLM accept on term-carrying lines would trade accept recall for precision and needs a live corpus run (≈173 Groq calls) to measure; not run, to keep the Groq quota for the 24b arm C resume |
+| P22 rep audit filter is a deny-list | fixed | `test_rep_audit_filter_is_an_allow_list`; frame-scan privacy tests (`test_ws_views.py`) still green |
+| P22 failed NLU turn skips a turn number | fixed | `test_nlu_llm_unavailable_rolls_back_turn` (fails on the old code) |
+| P27 smoke `_key_present` ignores suffixed keys, smokes one key | fixed | `test_smoke_llm.py` (suffixed-only pool is present; each key isolated) |
+| P27 Cerebras rpm 4 | fixed | Cerebras docs (inference-docs.cerebras.ai/support/rate-limits, Free Trial, gpt-oss-120b): 5 RPM, 30K uncached TPM, 1M TPD → `rpm: 5`, `tpm: 30000`; `test_shipped_cerebras_limits_match_free_tier_docs` |
+| P23b suggested lines drift from read-backs | fixed (reworded, not live-verified) | every card has a `Correct.` read-back answer: `test_rep_card_suggestions_answer_read_backs` (fast-path confirm, never a bare-ack accept). A live easy_deal rep-view call was not re-run |
+| P23b no App test for picker unlock | fixed | `web/src/App.test.tsx` (mocked fetch + WebSocket; locked mid-autoplay, unlocked after `autoplay_done`; fails with the 23b fix reverted) |
+| P24b "100% balance" / "10% balance" read as the ask | fixed | `test_percent_naming_a_non_ask_is_not_the_settlement_ask` (6 shapes from the A/B transcripts), `test_real_asks_still_verify` (5 real-ask shapes); corpus `k01`–`k06` (`ask_neg`). Policy, reason codes and the cascade unchanged |
+
+- Deviations:
+  - P24b: the item suggested "require an explicit ask cue (verb + %)". That would drop real verbless asks already in the corpus (f26 "okay sixty percent then", f01 "forty uh fifty percent"), so the check is the reverse: reject the specific non-ask shape (percent bound to a non-ask noun), keep everything else.
+  - `docs/eval/ab_20261007/providers_split2.yaml` gained Cerebras `tpm: 15000` because `test_split_providers_file_halves_every_rate` requires it to mirror providers.yaml halved. Its Cerebras rpm stays 2 (5//2 = 4//2), and 15K TPM cannot bind at 2 rpm, so arm C's conditions match A/B.
+  - P20 also changes non-`json_mode` providers (Mistral, OpenRouter): NLU now gets the extra "Reply with JSON only" system line there. Cache keys are unchanged (they hash the caller's messages).
+- Open issues: the P21 LLM-side false accepts (needs a live corpus run); P23b live verification of the reworded cards; P24a tools path.
+- Checks: `uv run ruff check .` clean; `uv run pytest -q` 692 passed / 2 skipped; oracle eval `eval_20261007_145210_s7` thresholds PASS, metrics table identical to `docs/eval/policy_eval_20261006/summary.md`; web: typecheck, lint, 47 Vitest tests, build green.

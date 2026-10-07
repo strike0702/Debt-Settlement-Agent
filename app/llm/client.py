@@ -457,6 +457,8 @@ class FakeLLM:
         role: Role,
         messages: Sequence[Mapping[str, Any]],
         max_tokens: int,
+        *,
+        json_mode: bool = False,
     ) -> str:
         raw = await self._take(role)
         if isinstance(raw, str):
@@ -844,10 +846,17 @@ class LLMClient:
         role: Role,
         messages: Sequence[Mapping[str, Any]],
         max_tokens: int,
+        *,
+        json_mode: bool = False,
     ) -> str:
+        """Raw reply text. ``json_mode`` asks for a JSON object (``response_format``
+        on providers with ``json_mode``, a JSON-only system line elsewhere) but
+        leaves parsing to the caller, which keeps its own lenient coerce."""
         if self._fake is not None and self.settings.llm_profile == "offline":
             return await self._fake.chat_text(role, messages, max_tokens)
-        return await self._chat(role, list(messages), schema=None, max_tokens=max_tokens)
+        return await self._chat(
+            role, list(messages), schema=None, max_tokens=max_tokens, json_text=json_mode
+        )
 
     async def _chat(
         self,
@@ -856,8 +865,9 @@ class LLMClient:
         *,
         schema: type[BaseModel] | None,
         max_tokens: int | None,
+        json_text: bool = False,
     ) -> str:
-        want_json = schema is not None
+        want_json = schema is not None or json_text
         temperature = self._temperature_for(role)
         route = self._route(role)
         failover_from: str | None = None

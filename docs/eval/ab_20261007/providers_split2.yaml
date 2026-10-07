@@ -94,6 +94,7 @@ providers:
     base_url: "https://api.cerebras.ai/v1"
     key_env: CEREBRAS_API_KEY
     rpm: 2
+    tpm: 15000 # Phase 26: half the documented 30K; cannot bind at rpm 2
     json_mode: true
   ollama:
     base_url: "http://localhost:11434/v1"

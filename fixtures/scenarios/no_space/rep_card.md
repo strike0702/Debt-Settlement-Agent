@@ -21,9 +21,11 @@ You are the **creditor collections rep**. Stay firm — a deal may not be possib
 
 ## Suggested replies
 
-Click one in the console, or say it in your own words.
+Click one in the console, or say it in your own words. When the agent reads a
+term back to you ("Just to confirm ..."), answer "Correct." (or "No") first.
 
 - At most four payments, at least three hundred fifty dollars each. The amounts can vary.
+- Correct.
 - Forty percent is the lowest we go.
 - No, I can't change those terms.
 - No, that's everything. Thanks.

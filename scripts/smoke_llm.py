@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Live smoke: one tiny nlu-role JSON call per available provider.
 
-Reads keys from ``.env`` via Settings. Skips providers without a key.
+Reads keys from ``.env`` via Settings. Skips providers without a key; with a
+key pool (``GROQ_API_KEY_1``, ``_2``, ...) every key is smoked on its own.
 Checks Ollama ``GET /api/tags`` before attempting a local call.
 Prints provider, model, latency_ms (or SKIP / FAIL).
 """
@@ -12,6 +13,7 @@ import asyncio
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import httpx
 from pydantic import BaseModel
@@ -19,7 +21,7 @@ from pydantic import BaseModel
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app.config import get_settings  # noqa: E402
+from app.config import Settings, get_settings  # noqa: E402
 from app.llm.client import LLMClient, LLMUnavailable, parse_route_entry  # noqa: E402
 
 
@@ -36,16 +38,25 @@ SMOKE_TARGETS = [
 ]
 
 
-def _key_present(settings, env_name: str) -> bool:
-    attr = {
-        "GROQ_API_KEY": "groq_api_key",
-        "MISTRAL_API_KEY": "mistral_api_key",
-        "GEMINI_API_KEY": "gemini_api_key",
-        "OPENROUTER_API_KEY": "openrouter_api_key",
-        "CEREBRAS_API_KEY": "cerebras_api_key",
-    }[env_name]
-    val = getattr(settings, attr, None)
-    return bool(val and str(val).strip())
+def _key_pool(settings: Settings, env_name: str) -> list[tuple[int, str]]:
+    """Every configured key for ``env_name`` (unsuffixed and ``_N``), in pool order."""
+    return settings.api_keys(env_name)
+
+
+def _single_key_settings(settings: Settings, env_name: str, value: str) -> Settings:
+    """Settings whose pool for ``env_name`` is exactly ``value`` (one key per smoke)."""
+    pool = {
+        k: v
+        for k, v in settings.api_key_pool.items()
+        if k != env_name and not k.startswith(f"{env_name}_")
+    }
+    update: dict[str, Any] = {"api_key_pool": pool}
+    field = env_name.lower()
+    if field in type(settings).model_fields:
+        update[field] = value
+    else:
+        pool[env_name] = value
+    return settings.model_copy(update=update)
 
 
 def _ollama_model(model: str) -> str | None:
@@ -66,9 +77,9 @@ def _ollama_model(model: str) -> str | None:
     return None
 
 
-async def _one(provider: str, model: str) -> tuple[str, float]:
+async def _one(provider: str, model: str, settings: Settings | None = None) -> tuple[str, float]:
     """Force a single-provider route via a throwaway YAML profile."""
-    settings = get_settings()
+    settings = (settings or get_settings()).model_copy()
     settings.llm_profile = "demo"
     settings.llm_cache = False
 
@@ -101,18 +112,21 @@ async def main() -> int:
     results: list[str] = []
 
     for provider, model, key_env in SMOKE_TARGETS:
-        if not _key_present(settings, key_env):
-            line = f"SKIP  {provider}/{model}  (no {key_env})"
+        keys = _key_pool(settings, key_env)
+        if not keys:
+            line = f"SKIP  {provider}/{model}  (no {key_env} or {key_env}_N)"
             print(line)
             results.append(line)
             continue
-        try:
-            label, ms = await _one(provider, model)
-            line = f"OK    {label}  {ms:.0f} ms"
-            print(line)
-            results.append(line)
-        except Exception as e:
-            line = f"FAIL  {provider}/{model}  {type(e).__name__}: {e}"
+        for suffix, value in keys:
+            key_label = key_env if suffix == 0 else f"{key_env}_{suffix}"
+            try:
+                label, ms = await _one(
+                    provider, model, _single_key_settings(settings, key_env, value)
+                )
+                line = f"OK    {label}  [{key_label}]  {ms:.0f} ms"
+            except Exception as e:
+                line = f"FAIL  {provider}/{model}  [{key_label}]  {type(e).__name__}: {e}"
             print(line)
             results.append(line)
 

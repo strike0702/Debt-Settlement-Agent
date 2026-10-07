@@ -18,21 +18,66 @@ from typing import Any
 
 from app.schemas.events import View
 
-# Audit actors whose rows carry engine results (max_bp, rescue amounts), the
-# drafted agreement with fees and balances, or LLM provider metadata.
-_PRIVATE_AUDIT_ACTORS = frozenset({"engine", "agent", "llm"})
-# Events whose payloads can hold private figures: guard hits name the blocked
-# number; committed / dropped effects carry the confirm fingerprint, which
-# includes the firm's fee rules.
-_PRIVATE_AUDIT_EVENTS = frozenset(
-    {"blocked", "effects_committed", "barge_in", "nlg_template_rejected", "llm_unavailable"}
-)
+# Allow-list of audit rows the rep may see, as (actor, event) pairs. Anything
+# not listed stays operator-only, so a new audit event is private until someone
+# checks its payload and adds it here. Deliberately absent: every ``engine`` row
+# (max_bp, rescue amounts), ``agent/agreement_drafted`` (fees, balances), every
+# ``llm`` row (provider metadata), ``nlg/blocked`` and ``nlg_template_rejected``
+# (name the blocked number), ``*/llm_unavailable``, ``orchestrator/barge_in``
+# and ``effects_committed`` (the confirm fingerprint includes fee rules).
+_REP_AUDIT_EVENTS: dict[str, frozenset[str]] = {
+    "belief": frozenset({"accept_terms_alt", "confirm_readback", "observe", "revise"}),
+    "client": frozenset({"timing"}),
+    "creditor": frozenset({"utterance", "utterance_source"}),
+    "nlg": frozenset({"act_dropped"}),
+    "nlu": frozenset(
+        {
+            "analysis",
+            "cents_clarify_out_of_range",
+            "cents_clarify_resolved",
+            "fast_field_answer",
+            "fast_readback",
+            "nlu_cents_ambiguity",
+            "nlu_rejected_ask_value",
+            "nlu_rejected_bare_year",
+            "nlu_rejected_date",
+            "nlu_rejected_quote",
+            "nlu_rejected_range",
+            "nlu_rejected_readback",
+            "nlu_rejected_tiers",
+            "nlu_repaired_cents",
+            "nlu_tiers_ambiguous",
+            "nlu_validation_failed",
+        }
+    ),
+    "orchestrator": frozenset(
+        {
+            "autoplay_done",
+            "call_ended",
+            "call_started",
+            "nlu_cancel_merge",
+            "nlu_restart",
+            "post_nlu_drain",
+            "sentence_done",
+            "start",
+            "text_queued",
+            "turn_complete",
+            "validator",
+            "wrap_failed_no_deal",
+            "wrap_infeasible",
+            "wrap_missing_eval",
+            "wrap_needs_info",
+        }
+    ),
+    "policy": frozenset({"decide"}),
+    "stt": frozenset({"stt_error"}),
+}
 _REP_ROW_KEYS = ("date", "creditor_payment_cents")
 
 
 def is_private_audit(actor: str, event: str) -> bool:
-    """True when an audit row must stay off the rep stream."""
-    return actor in _PRIVATE_AUDIT_ACTORS or event in _PRIVATE_AUDIT_EVENTS
+    """True when an audit row must stay off the rep stream (anything not allow-listed)."""
+    return event not in _REP_AUDIT_EVENTS.get(actor, frozenset())
 
 
 def _rep_rows(rows: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:

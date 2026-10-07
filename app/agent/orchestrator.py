@@ -625,19 +625,27 @@ class Orchestrator:
 
             self._lock.release()
             try:
-                verified = await analyze(
-                    working,
-                    session.last_agent_line(),
-                    session.neg.pending_readback,
-                    llm=self.llm,
-                    settings=self.settings,
-                    oracle=oracle,
-                    audit=self.audit,
-                    call_id=session.call_id,
-                    ref=self._ref,
-                )
-            finally:
-                await self._lock.acquire()
+                try:
+                    verified = await analyze(
+                        working,
+                        session.last_agent_line(),
+                        session.neg.pending_readback,
+                        llm=self.llm,
+                        settings=self.settings,
+                        oracle=oracle,
+                        audit=self.audit,
+                        call_id=session.call_id,
+                        ref=self._ref,
+                    )
+                finally:
+                    await self._lock.acquire()
+            except LLMUnavailable:
+                # The turn never happened: drop its creditor line and turn bump so
+                # turn numbers do not skip and a retry starts clean.
+                if session.history and session.history[-1].role == "creditor":
+                    session.history.pop()
+                session.neg.turn_idx -= 1
+                raise
 
             timings["nlu_ms"] = _ms_since(t_nlu)
 

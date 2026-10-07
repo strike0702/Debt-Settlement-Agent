@@ -177,3 +177,115 @@ async def test_oracle_overlay_uses_flag_or_regex() -> None:
         ref=_REF,
     )
     assert out.asks_client_private_info is True
+
+
+
+# --- Phase 28: filler false-accept veto -------------------------------------
+# Live NLU read corpus f23 / f30 as accept (DEFAULT_EFFORT row). A veto in
+# ``repair_stance`` was built and then reverted: it failed the corpus gate (the
+# same-day BEFORE row had no filler false accepts to remove; see FILLER_BEFORE /
+# FILLER_VETO in docs/eval/nlu_corpus.md). The xfail tests document the wanted
+# behaviour; the plain tests pin current behaviour any re-landed veto must keep.
+# All go through ``analyze`` with a canned LLM reply, the path the veto targets.
+
+_COUNTER_LINE = "We can offer fifty percent of the balance, which is two thousand dollars."
+_CONFIRM_LINE = (
+    "Fifty percent works for us. We can schedule four payments totaling "
+    "two thousand dollars, starting May first. Does that work?"
+)
+_QUESTION_LINE = "What settlement terms can you accept on this account?"
+_EIGHT = '[{"field": "max_payments", "value": 8, "quote": "eight payments"}]'
+_VETO_XFAIL = pytest.mark.xfail(
+    strict=True, reason="Phase 28 filler veto reverted after the corpus gate"
+)
+
+
+async def _llm_stance(utterance: str, agent_line: str, reply: str) -> str:
+    from app.llm.client import FakeLLM
+
+    llm = FakeLLM()
+    llm.enqueue("nlu", reply)
+    out = await analyze(
+        utterance,
+        agent_line,
+        None,
+        llm=llm,
+        settings=Settings(nlu_mode="llm", llm_profile="offline"),
+        ref=_REF,
+    )
+    return out.stance
+
+
+@_VETO_XFAIL
+async def test_veto_f23_new_count_after_proposal_is_counter() -> None:
+    reply = f'{{"terms": {_EIGHT}, "stance": "accept"}}'
+    utterance = "fine whatever just make it eight payments"
+    assert await _llm_stance(utterance, _COUNTER_LINE, reply) == "counter"
+
+
+@_VETO_XFAIL
+async def test_veto_f30_term_without_agent_proposal_is_info() -> None:
+    reply = (
+        '{"terms": [{"field": "payment_structure", "value": "flexible",'
+        ' "quote": "Flexible"}], "stance": "accept"}'
+    )
+    utterance = "Flexible schedule is fine with us."
+    assert await _llm_stance(utterance, _QUESTION_LINE, reply) == "info"
+
+
+@_VETO_XFAIL
+@pytest.mark.parametrize(
+    "utterance",
+    [
+        "That's not a deal, make it eight payments.",
+        "No deal unless it's eight payments.",
+        "I'm not sure that works, eight payments max.",
+    ],
+)
+async def test_veto_ignores_negated_agreement_cue(utterance: str) -> None:
+    reply = f'{{"terms": {_EIGHT}, "stance": "accept"}}'
+    assert await _llm_stance(utterance, _COUNTER_LINE, reply) == "counter"
+
+
+@_VETO_XFAIL
+def test_negated_accept_phrase_does_not_force_accept() -> None:
+    assert repair_stance("stall", "I'm not sure that works.") == "stall"
+
+
+async def test_accept_restating_proposed_terms_stays_accept() -> None:
+    reply = (
+        '{"terms": [{"field": "max_payments", "value": 4, "quote": "four payments"}],'
+        ' "settlement_ask_pct": 50, "ask_quote": "fifty percent", "stance": "accept"}'
+    )
+    utterance = "Okay, fifty percent over four payments is fine."
+    assert await _llm_stance(utterance, _CONFIRM_LINE, reply) == "accept"
+
+
+@pytest.mark.parametrize(
+    "utterance",
+    [
+        "Deal, eight payments then.",
+        "Eight payments, you've got a deal.",
+        "Let's do it, eight payments.",
+        "Eight payments and we accept.",
+    ],
+)
+async def test_accept_with_explicit_agreement_cue_stays_accept(utterance: str) -> None:
+    reply = f'{{"terms": {_EIGHT}, "stance": "accept"}}'
+    assert await _llm_stance(utterance, _COUNTER_LINE, reply) == "accept"
+
+
+@pytest.mark.parametrize("utterance", ["ok", "yeah that's fine", "sure thing"])
+async def test_short_ack_stays_accept_on_llm_path(utterance: str) -> None:
+    reply = '{"terms": [], "stance": "info"}'
+    assert await _llm_stance(utterance, _CONFIRM_LINE, reply) == "accept"
+
+
+def test_oracle_accept_with_terms_is_kept() -> None:
+    """Oracle / sim input keeps its stance (any veto belongs to the LLM path)."""
+    analysis = TurnAnalysis(
+        stance="accept",
+        terms=[ExtractedTerm(field="max_payments", value=8, quote="eight payments")],
+    )
+    out = post_verify(analysis, "fine whatever just make it eight payments", ref=_REF)
+    assert out.stance == "accept"

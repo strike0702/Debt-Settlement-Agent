@@ -193,3 +193,109 @@ Misses (line ids):
 - What low effort would buy, in Groq request time only (no rate-limit wait):
   p50 869 ms / p95 1533 ms (n=133 uncached), against 1275 / 2490 ms at default
   (n=173). Tokens per call: about 886 vs 1154 (−23%).
+
+### Phase 28: filler false-accept veto gate (2026-10-07)
+
+- Question: may `repair_stance` veto an LLM `accept` when the line carries new
+  or changed terms and no un-negated agreement cue ("deal", "agreed", "we
+  accept", "that works", ...), relabelling it `counter` (the agent's last line
+  had figures) or `info`? Aim: remove the DEFAULT_EFFORT filler false accepts
+  f23 / f30. The rule: filler false accepts drop, and every flag's precision
+  and recall stays within 2 points of the comparison row.
+- Commands (demo profile, default effort, Groq key pool incl. `GROQ_API_KEY_4`):
+  - `FILLER_BEFORE`: pre-change `app/agent/nlu.py` (HEAD `9998a65`),
+    `uv run python -m eval.nlu_corpus --label FILLER_BEFORE --concurrency 1`.
+    The first pass ran at the default concurrency (4) and skipped 58 lines on
+    429s and Gemini timeouts. Three more passes at `--concurrency 1` filled
+    them; answered lines replay from `eval/nlu_corpus_cache.db`.
+  - `FILLER_VETO`: same command with `--label FILLER_VETO` and the veto in the
+    working tree (uncommitted, so its `git` field also shows `9998a65`). It
+    replays the same cached LLM replies, so the only possible difference is
+    the deterministic veto.
+- Result: the two rows are **identical**. All 183 lines were answered in both,
+  and no line's prediction differs. Today the LLM labelled f23 and f30 `info`
+  itself, so the same-day BEFORE row already has 0 filler false accepts of 31.
+  The veto had nothing to remove and changed no other line; accept recall stays
+  1.000 in both.
+- Against DEFAULT_EFFORT, filler false accepts fall 2 → 0. But that change is
+  LLM drift, also seen in FILLER_BEFORE without the veto, and several flags
+  moved more than 2 points for the same reason (private-info recall
+  0.971 → 0.824, commitment precision 1.000 → 0.857 from k04 / k05, two of
+  the six `k` lines added in Phase 26).
+- **Gate: FAIL (no drop on the like-for-like row). The veto is reverted.** The
+  tests that describe it stay as strict `xfail` in
+  `tests/unit/test_nlu_repairs.py` (`_VETO_XFAIL`). They pass with the veto
+  applied, so re-landing it will turn them into XPASS failures.
+- New drift in both rows against DEFAULT_EFFORT: private-info FN p03, p08, p11,
+  p24, p27 (f25 as before), and the private-info FP moves from n12 to c10. The
+  commitment FPs k04 / k05 and the terms miss k05 are on new Phase 26 lines.
+  `stance=reject` FN moves from a10 to x08. All of these are LLM labels, not
+  repair code.
+
+## FILLER_BEFORE
+
+- git: `9998a65`  profile=`demo`  ref=2026-04-01
+- lines: 183  skipped (LLM unavailable): 0
+- model share: groq/openai/gpt-oss-120b=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 28 | 1 | 6 | 0.966 | 0.824 |
+| demands_commitment | 13 | 12 | 2 | 1 | 0.857 | 0.923 |
+| firm | 6 | 6 | 3 | 0 | 0.667 | 1.000 |
+| wants_to_end | 6 | 6 | 6 | 0 | 0.500 | 1.000 |
+| hostility | 5 | 3 | 0 | 2 | 1.000 | 0.600 |
+| stance=accept | 11 | 11 | 0 | 0 | 1.000 | 1.000 |
+| stance=reject | 9 | 8 | 0 | 1 | 1.000 | 0.889 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.672 |
+| term exact-match (all lines) | 0.967 |
+| term exact-match (lines with terms, n=66) | 0.924 |
+| filler false accepts (n=31) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP c10; FN p03, p08, p11, p24, p27, f25
+- demands_commitment: FP k04, k05; FN c10
+- firm: FP n03, i10, d07; FN -
+- wants_to_end: FP c06, i07, x02, e06, e07, e10; FN -
+- hostility: FP -; FN x02, x04
+- stance=reject: FP -; FN x08
+- terms: f01, f16, f17, d04, t11, k05
+- filler false accept: -
+
+## FILLER_VETO
+
+- git: `9998a65`  profile=`demo`  ref=2026-04-01
+- lines: 183  skipped (LLM unavailable): 0
+- model share: groq/openai/gpt-oss-120b=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 28 | 1 | 6 | 0.966 | 0.824 |
+| demands_commitment | 13 | 12 | 2 | 1 | 0.857 | 0.923 |
+| firm | 6 | 6 | 3 | 0 | 0.667 | 1.000 |
+| wants_to_end | 6 | 6 | 6 | 0 | 0.500 | 1.000 |
+| hostility | 5 | 3 | 0 | 2 | 1.000 | 0.600 |
+| stance=accept | 11 | 11 | 0 | 0 | 1.000 | 1.000 |
+| stance=reject | 9 | 8 | 0 | 1 | 1.000 | 0.889 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.672 |
+| term exact-match (all lines) | 0.967 |
+| term exact-match (lines with terms, n=66) | 0.924 |
+| filler false accepts (n=31) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP c10; FN p03, p08, p11, p24, p27, f25
+- demands_commitment: FP k04, k05; FN c10
+- firm: FP n03, i10, d07; FN -
+- wants_to_end: FP c06, i07, x02, e06, e07, e10; FN -
+- hostility: FP -; FN x02, x04
+- stance=reject: FP -; FN x08
+- terms: f01, f16, f17, d04, t11, k05
+- filler false accept: -

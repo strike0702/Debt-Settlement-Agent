@@ -30,7 +30,7 @@ _LINE = {"id": "b01", "text": "What is the client's monthly income?", "stance": 
 
 def test_without_budgeted_drops_only_the_demo_claude_target(tmp_path: Path) -> None:
     path, removed = run_eval.without_budgeted(_SHIPPED, tmp_path)
-    assert removed == ["demo/nlu/anthropic/claude-sonnet-5-5"]
+    assert removed == ["demo/nlu/anthropic/claude-haiku-5-5"]
     assert path.parent == tmp_path
     before = yaml.safe_load(_SHIPPED.read_text())
     after = yaml.safe_load(path.read_text())
@@ -62,7 +62,7 @@ def _patch_client(monkeypatch: pytest.MonkeyPatch, tmp: Path) -> _Calls:
                 "id": "m",
                 "type": "message",
                 "role": "assistant",
-                "model": "claude-sonnet-5-5",
+                "model": "claude-haiku-5-5",
                 "content": [{"type": "text", "text": _REPLY}],
                 "stop_reason": "end_turn",
                 "stop_sequence": None,
@@ -124,7 +124,7 @@ async def test_corpus_default_demo_run_makes_no_anthropic_call(
     assert models == Counter({"groq/openai/gpt-oss-120b": 1})
     assert not records[0].get("skipped")
     out = capsys.readouterr().out
-    assert out.count("skipped budgeted (paid) targets: demo/nlu/anthropic/claude-sonnet-5-5") == 1
+    assert out.count("skipped budgeted (paid) targets: demo/nlu/anthropic/claude-haiku-5-5") == 1
 
 
 async def test_corpus_allow_budgeted_keeps_claude(
@@ -133,7 +133,7 @@ async def test_corpus_allow_budgeted_keeps_claude(
     calls = _patch_client(monkeypatch, tmp_path)
     _, models = await nlu_corpus.run_corpus([_LINE], profile="demo", allow_budgeted=True)
     assert (calls.anthropic, calls.groq) == (1, 0)
-    assert models == Counter({"anthropic/claude-sonnet-5-5": 1})
+    assert models == Counter({"anthropic/claude-haiku-5-5": 1})
     assert calls.providers_path is None
     assert "skipped budgeted" not in capsys.readouterr().out
 
@@ -147,7 +147,7 @@ async def test_corpus_explicit_providers_file_is_used_as_is(
     _, models = await nlu_corpus.run_corpus([_LINE], profile="demo", providers_path=explicit)
     assert calls.providers_path == explicit
     assert calls.anthropic == 1
-    assert models == Counter({"anthropic/claude-sonnet-5-5": 1})
+    assert models == Counter({"anthropic/claude-haiku-5-5": 1})
 
 
 def test_corpus_cli_has_allow_budgeted_flag(monkeypatch: pytest.MonkeyPatch) -> None:

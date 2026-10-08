@@ -1,6 +1,6 @@
 # Free-tier OpenAI-compatible provider pool, plus one paid Anthropic provider
-# used by the eval-only `judge` role (Phase 30) and, under a daily budget, as the
-# demo NLU's first target (Phase 41). Limits change; check each console.
+# used by the eval-only `judge` role (Phase 30, Sonnet) and, under a daily budget,
+# as the demo NLU's first target (Phase 41; Haiku since Phase 43). Limits change; check each console.
 # Route entry key `budgeted: true` puts that target under the daily budget
 # (Settings.claude_daily_budget_usd); its provider must price the model.
 # A route entry is `provider/model` (model may contain slashes, e.g.
@@ -25,14 +25,15 @@ profiles:
     # Fallback is Cerebras with the same model: Gemini NLU (p50 11.4 s) cannot
     # finish inside the 6 s NLU timeout (carry-over 21.4).
     #
-    # Phase 41: Claude Sonnet 5.5 reads the rep first (AFTER_P39_CLAUDE in
-    # docs/eval/nlu_corpus.md; Haiku was weaker on stance, Phase 40). Paid, so
+    # Phase 43: Claude Haiku 5.5 reads the rep first (HAIKU_P43_FIX in
+    # docs/eval/nlu_corpus.md: stance 0.869 vs Sonnet's 0.820 on the old prompt,
+    # ~1.2 s p50, ~1/16 the cost per call; it replaced Sonnet from Phase 41). Paid, so
     # `budgeted`: once today's spend reaches CLAUDE_DAILY_BUDGET_USD (default
     # $1, UTC day) it is skipped until 00:00 UTC. With no ANTHROPIC_API_KEY it
     # is skipped silently. No timeout_s: the 6 s NLU role timeout applies, and
     # a timeout fails over to the free chain below (unchanged).
     nlu:
-      - {target: anthropic/claude-sonnet-5-5, params: {output_config: {effort: low}}, budgeted: true}
+      - {target: anthropic/claude-haiku-5-5, params: {output_config: {effort: low}}, budgeted: true}
       - groq/openai/gpt-oss-120b
       - cerebras/gpt-oss-120b
       - gemini/gemini-3.1-flash-lite
@@ -119,9 +120,11 @@ providers:
     rpm: 50 # tier-1 org limit; the judge makes 2 calls per scenario
     # USD per million tokens, for `budgeted` targets (Phase 41). Strings, not
     # floats: money is Decimal / integer micro-dollars. Official pricing page,
-    # read 2026-10-08 (docs/eval/nlu_haiku_20261008/summary.md).
+    # read 2026-10-08 (docs/eval/nlu_haiku_20261008/summary.md). Haiku is the demo
+    # NLU target (Phase 43); Sonnet stays priced for reference (the judge uses it).
     prices_usd_per_mtok:
       claude-sonnet-5-5: {input: "2.00", output: "10.00"}
+      claude-haiku-5-5: {input: "0.10", output: "0.50"}
   ollama:
     base_url: "http://localhost:11434/v1"
     api_key: "ollama"

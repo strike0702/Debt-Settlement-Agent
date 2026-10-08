@@ -422,8 +422,8 @@ def test_shipped_demo_nlu_fallback_fits_role_timeout() -> None:
 
     data = yaml.safe_load(Path("config/providers.yaml").read_text())
     demo_nlu = [parse_route_entry(e) for e in data["profiles"]["demo"]["nlu"]]
-    # Phase 41: budgeted Claude first; the free chain after it is unchanged.
-    assert demo_nlu[0].spec == "anthropic/claude-sonnet-5-5" and demo_nlu[0].budgeted
+    # Phase 41/43: budgeted Claude (Haiku 5.5) first; the free chain after it is unchanged.
+    assert demo_nlu[0].spec == "anthropic/claude-haiku-5-5" and demo_nlu[0].budgeted
     assert demo_nlu[1].spec == "groq/openai/gpt-oss-120b"
     # Fallback must be a fast target, not Gemini (p50 11.4 s > 6 s timeout).
     assert demo_nlu[2].provider == "cerebras"

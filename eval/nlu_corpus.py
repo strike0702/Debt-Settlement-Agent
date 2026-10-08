@@ -31,6 +31,10 @@ models inside a labelled row, so by default the CLI exits 2 when more than one
 report section; ``--allow-mixed-models`` writes the row and says so in it
 (Phase 38). Fast-path lines (no LLM call) never count as a model.
 
+Lines may also label ``ask_total_cents`` (a dollar-total ask) and
+``amount_ambiguous`` (total vs per payment unclear); both score as terms
+(Phase 39, ``tests/nlu_corpus_amounts.jsonl``).
+
 Not the policy eval (``eval.run_eval``): no orchestrator, no simulator.
 CLI: ``python -m eval.nlu_corpus --label BEFORE [--profile demo] [--corpus PATH]
 [--providers PATH] [--no-repair-stance] [--from-records PATH]
@@ -93,6 +97,7 @@ SECTION_ORDER = (
     "BEFORE_P32", "AFTER_P32", "HELDOUT_BEFORE_P32", "HELDOUT_AFTER_P32",
     "REGEX_ONLY_P32", "HELDOUT_REGEX_ONLY_P32",
     "CLAUDE_P37", "CLAUDE_P37_NO_GUARD", "CLAUDE_P37_PROBES",
+    "AMOUNTS_P39",
 )
 NOTES_SECTION = "Notes"
 
@@ -140,12 +145,16 @@ def predicted_flags(out: VerifiedAnalysis, hostility_threshold: float) -> dict[s
 
 
 def expected_terms(line: dict[str, Any]) -> dict[str, Any]:
-    """Term labels: field values (cents / int / enum / ISO date), ask %, cents clarify."""
+    """Term labels: field values, ask %, cents clarify, dollar-total ask, ambiguous amount."""
     out: dict[str, Any] = dict(line.get("terms", {}))
     if line.get("ask_pct") is not None:
         out["settlement_ask_pct"] = float(line["ask_pct"])
     if line.get("cents_ambiguity") is not None:
         out["cents_ambiguity"] = int(line["cents_ambiguity"])
+    if line.get("ask_total_cents") is not None:
+        out["ask_total_cents"] = int(line["ask_total_cents"])
+    if line.get("amount_ambiguous") is not None:
+        out["amount_ambiguous"] = int(line["amount_ambiguous"])
     return out
 
 
@@ -158,6 +167,10 @@ def predicted_terms(out: VerifiedAnalysis) -> dict[str, Any]:
         terms["settlement_ask_pct"] = float(out.settlement_ask_pct)
     if out.cents_ambiguity_bare is not None:
         terms["cents_ambiguity"] = out.cents_ambiguity_bare
+    if out.settlement_ask_total_cents is not None:
+        terms["ask_total_cents"] = out.settlement_ask_total_cents
+    if out.amount_ambiguous_cents is not None:
+        terms["amount_ambiguous"] = out.amount_ambiguous_cents
     return terms
 
 
@@ -168,6 +181,8 @@ def has_terms(out: VerifiedAnalysis) -> bool:
         or out.settlement_ask_pct is not None
         or out.cents_ambiguity_bare is not None
         or out.tiers_ambiguous
+        or out.settlement_ask_total_cents is not None
+        or out.amount_ambiguous_cents is not None
     )
 
 

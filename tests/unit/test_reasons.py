@@ -171,7 +171,7 @@ def test_rewrite_kept_every_key_and_placeholder() -> None:
     for key, text in REASON_TEXT.items():
         names = {n for _, n, _, _ in fmt.parse(text) if n}
         assert names == _PLACEHOLDERS_BEFORE.get(key, set()), key
-    assert len(REASON_TEXT) == 45
+    assert len(REASON_TEXT) == 47  # +2 in Phase 39: amount_meaning(_unresolved)
 
 
 _JARGON = ("ladder", "read back", "read-back", "wrap", "hedged", "engine", "policy", "feasible")

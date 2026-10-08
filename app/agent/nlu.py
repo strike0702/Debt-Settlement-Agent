@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import date
+from decimal import ROUND_CEILING, Decimal
 from typing import Any, Protocol
 
 from pydantic import BaseModel, Field, ValidationError
@@ -77,6 +78,15 @@ class VerifiedAnalysis(BaseModel):
     settlement_ask_pct: float | None = None
     ask_quote: str | None = None
     ask_verified: bool = False
+    # Dollar-total ask (Phase 39): verified against its quote here; converted to
+    # ``settlement_ask_pct`` by ``resolve_amounts`` once the balance is known.
+    settlement_ask_total_cents: int | None = None
+    ask_total_quote: str | None = None
+    # Set by ``resolve_amounts`` when the ask came from a dollar total.
+    ask_total_bp: int | None = None
+    # Verified dollar amount whose meaning (total vs per payment) is unclear.
+    amount_ambiguous_cents: int | None = None
+    amount_ambiguous_quote: str | None = None
     stance: str = "other"
     readback_response: str | None = None
     asks_client_private_info: bool = False
@@ -462,6 +472,17 @@ def coerce_analysis_payload(data: dict[str, Any]) -> dict[str, Any]:
         out["settlement_ask_pct"] = ask.get("value")
         if not out.get("ask_quote"):
             out["ask_quote"] = ask.get("quote")
+
+    total = out.get("settlement_ask_total_cents")
+    if isinstance(total, dict):
+        out["settlement_ask_total_cents"] = total.get("value")
+        if not out.get("ask_total_quote"):
+            out["ask_total_quote"] = total.get("quote")
+    amb = out.get("amount_ambiguous")
+    if isinstance(amb, dict) and out.get("amount_ambiguous_cents") is None:
+        out["amount_ambiguous_cents"] = amb.get("cents", amb.get("value"))
+        out["amount_ambiguous_quote"] = amb.get("quote")
+    out.pop("amount_ambiguous", None)
 
     out["terms"] = terms
     # An off-list topic must not fail validation of the whole analysis.
@@ -1009,6 +1030,54 @@ def _repair_dispositions(
     }
 
 
+def _amount_matches(cents: int, quote: str, utterance: str, *, ref: date) -> bool:
+    """True when ``quote`` names ``cents`` as money ($ / dollars / a money token).
+
+    A bare "420" with no unit is not accepted: it could be dollars or cents.
+    """
+    if not quote_in_utterance(quote, utterance):
+        return False
+    if not _value_matches_utterance_span("min_payment_cents", cents, quote, utterance, ref=ref):
+        return False
+    if _utterance_has_money_unit(quote):
+        return True
+    q = normalize_for_quote(quote)
+    return any(
+        t.kind == "money" and t.value == cents and normalize_for_quote(t.raw) == q
+        for t in extract_tokens(utterance, ref=ref)
+    )
+
+
+def _verify_amount(
+    field: str,
+    cents: Any,
+    quote: str | None,
+    utterance: str,
+    *,
+    ref: date,
+    drop: Any,
+) -> tuple[int | None, str | None]:
+    """Keep a dollar amount (Phase 39 slots) only when its quote verifies; else drop + audit."""
+    if cents is None:
+        return None, None
+    if not isinstance(cents, int) or isinstance(cents, bool) or cents <= 0:
+        drop("nlu_rejected_amount_value", field, cents, quote, {"field": field, "value": cents})
+        return None, None
+    if not quote or not quote_in_utterance(quote, utterance):
+        drop("nlu_rejected_quote", field, cents, quote, {"field": field, "quote": quote})
+        return None, None
+    if not _amount_matches(cents, quote, utterance, ref=ref):
+        drop(
+            "nlu_rejected_amount_value",
+            field,
+            cents,
+            quote,
+            {"field": field, "value": cents, "quote": quote},
+        )
+        return None, None
+    return cents, quote
+
+
 def post_verify(
     analysis: TurnAnalysis,
     utterance: str,
@@ -1204,11 +1273,32 @@ def post_verify(
         else:
             ask_verified = True
 
+    # Dollar-total ask and ambiguous amount: same rule as the % ask — the quote
+    # must be in the utterance and its money token must equal the value.
+    total_cents, total_quote = _verify_amount(
+        "settlement_ask_total_cents",
+        analysis.settlement_ask_total_cents,
+        analysis.ask_total_quote,
+        utterance,
+        ref=ref_d,
+        drop=_drop,
+    )
+    amb_cents, amb_quote = _verify_amount(
+        "amount_ambiguous_cents",
+        analysis.amount_ambiguous_cents,
+        analysis.amount_ambiguous_quote,
+        utterance,
+        ref=ref_d,
+        drop=_drop,
+    )
+
     has_terms = (
         bool(verified_terms)
         or ask_pct is not None
         or cents_ambiguity_bare is not None
         or tiers_ambiguous
+        or total_cents is not None
+        or amb_cents is not None
     )
     dispositions = _repair_dispositions(analysis, utterance, has_terms=has_terms)
     asks_question, question_topic = repair_question(
@@ -1229,6 +1319,10 @@ def post_verify(
         settlement_ask_pct=ask_pct,
         ask_quote=ask_quote,
         ask_verified=ask_verified,
+        settlement_ask_total_cents=total_cents,
+        ask_total_quote=total_quote,
+        amount_ambiguous_cents=amb_cents,
+        amount_ambiguous_quote=amb_quote,
         **dispositions,
         revises_terms=repair_revises_terms(utterance),
         cents_ambiguity_bare=cents_ambiguity_bare,
@@ -1237,6 +1331,257 @@ def post_verify(
         asks_question=asks_question,
         question_topic=question_topic,
     )
+
+
+# --- Phase 39: dollar-total asks and total-vs-per-payment ambiguity ---------
+#
+# ``post_verify`` cannot convert a dollar total to bp (it has no balance), so
+# the orchestrator calls ``resolve_amounts`` after NLU. It either turns a
+# verified total into the ordinary ``settlement_ask_pct`` or returns a pending
+# clarify; it never changes an amount on its own.
+
+# A % ask and a dollar total agree when they differ by at most half a percent
+# point (the rep rounding the percent to a whole number).
+_PCT_TOTAL_TOLERANCE_BP = 50
+
+# Total cues: the amount is the whole settlement. "pay $X by <date>" is a
+# deadline for a sum, not a per-payment floor.
+_TOTAL_CUE_RE = re.compile(
+    r"\b(?:total|in full|to settle|settle (?:it |this |the account )?for|lump[- ]sum)\b"
+    r"|\bpay\s+\$\s?[\d,]+(?:\.\d{2})?\s+by\b",
+    re.IGNORECASE,
+)
+# Per-payment cues: the amount is a floor for each payment.
+_PER_PAYMENT_CUE_RE = re.compile(
+    r"\b(?:per (?:payment|month|installment)|each|every|a month|monthly|minimum"
+    r"|at least|a payment)\b",
+    re.IGNORECASE,
+)
+# Answers to "Is $X the total settlement, or the minimum for each payment?".
+_ANSWER_TOTAL_RE = re.compile(
+    r"\b(?:total|in full|settle|settlement|whole|altogether|all in|the first|first one|lump)\b",
+    re.IGNORECASE,
+)
+_ANSWER_PER_RE = re.compile(
+    r"\b(?:per|each|every|minimum|monthly|a month|installments?|the second|second one)\b",
+    re.IGNORECASE,
+)
+
+
+# A payment count with these words is a maximum, not the count.
+_COUNT_CAP_RE = re.compile(
+    r"\b(?:up to|at most|max(?:imum)?|no more than|or fewer|or less|as many as)\b",
+    re.IGNORECASE,
+)
+_CLAUSE_SPLIT_RE = re.compile(r"[,.;!?]|\bbut\b", re.IGNORECASE)
+_NEGATION_RE = re.compile(r"\b(?:not|isn't|isnt|no)\b", re.IGNORECASE)
+
+
+def total_cents_to_bp(total_cents: int, balance_cents: int) -> tuple[int, Decimal]:
+    """``(bp, exact)``: a dollar total as bp of the balance, rounded UP to a whole bp.
+
+    Rounding up never favours the client: we never believe the ask is lower
+    than the rep said.
+    """
+    exact = Decimal(total_cents) * Decimal(10000) / Decimal(balance_cents)
+    return int(exact.to_integral_value(rounding=ROUND_CEILING)), exact
+
+
+def bp_to_ask_pct(bp: int) -> float:
+    """Inverse of ``ask_pct_to_bp`` for a whole bp (4567 → 45.67, round-trips exactly)."""
+    return float(Decimal(bp) / Decimal(100))
+
+
+def _amount_pending(
+    cents: int, quote: str | None, trigger: str, analysis: VerifiedAnalysis
+) -> dict[str, Any]:
+    """Pending clarify state. A verified % ask the clarify holds back rides along."""
+    pending: dict[str, Any] = {"cents": cents, "quote": quote, "trigger": trigger}
+    if analysis.settlement_ask_pct is not None and analysis.ask_verified:
+        pending["pct"] = analysis.settlement_ask_pct
+        pending["pct_quote"] = analysis.ask_quote
+    return pending
+
+
+def resolve_amounts(
+    verified: VerifiedAnalysis,
+    utterance: str,
+    *,
+    balance_cents: int,
+    check_min_payment: bool = True,
+    audit: AuditLog | None = None,
+    call_id: str | None = None,
+) -> tuple[VerifiedAnalysis, dict[str, Any] | None]:
+    """Turn a verified dollar total into the ask, or return a pending clarify.
+
+    Returns ``(analysis, pending)``. With ``pending`` set, the caller asks
+    "total or per payment?" and ``analysis`` has the doubtful amount (and any
+    disagreeing ask) removed so the rest of the turn can still be applied.
+    Triggers, first match: NLU ``amount_ambiguous``; % and total disagree;
+    total above the balance; a ``min_payment_cents`` term that is implausible
+    (amount × an exact payment count said this turn, else × 1, > balance),
+    sits under a total cue with no per-payment cue, or equals a total the NLU
+    also gave.
+    ``check_min_payment=False`` after the rep already said "per payment".
+    """
+
+    def _log(event: str, payload: dict[str, Any]) -> None:
+        if audit is not None and call_id is not None:
+            audit.append(call_id, "nlu", event, payload)
+
+    def _clarify(
+        cents: int, quote: str | None, trigger: str, *, drop_ask: bool = False
+    ) -> tuple[VerifiedAnalysis, dict[str, Any]]:
+        pending = _amount_pending(cents, quote, trigger, verified)
+        update: dict[str, Any] = {
+            "terms": [
+                t
+                for t in verified.terms
+                if not (t.field == "min_payment_cents" and t.value == cents)
+            ],
+            "settlement_ask_total_cents": None,
+            "ask_total_quote": None,
+            "amount_ambiguous_cents": None,
+            "amount_ambiguous_quote": None,
+        }
+        if drop_ask:
+            update.update(settlement_ask_pct=None, ask_quote=None, ask_verified=False)
+        _log("nlu_amount_ambiguous", {"cents": cents, "quote": quote, "trigger": trigger})
+        return verified.model_copy(update=update), pending
+
+    if verified.amount_ambiguous_cents is not None:
+        return _clarify(
+            verified.amount_ambiguous_cents, verified.amount_ambiguous_quote, "nlu_flag"
+        )
+
+    total = verified.settlement_ask_total_cents
+    if total is not None and balance_cents > 0:
+        bp, exact = total_cents_to_bp(total, balance_cents)
+        pct_bp = (
+            ask_pct_to_bp(verified.settlement_ask_pct)
+            if verified.settlement_ask_pct is not None and verified.ask_verified
+            else None
+        )
+        if pct_bp is not None and abs(exact - Decimal(pct_bp)) > _PCT_TOTAL_TOLERANCE_BP:
+            return _clarify(total, verified.ask_total_quote, "pct_total_disagree", drop_ask=True)
+        if bp > 10000:
+            return _clarify(total, verified.ask_total_quote, "total_exceeds_balance")
+        chosen = bp if pct_bp is None else max(bp, pct_bp)
+        _log(
+            "nlu_ask_total_to_bp",
+            {
+                "total_cents": total,
+                "balance_cents": balance_cents,
+                "exact_bp": str(exact),
+                "rounded_bp": bp,
+                "pct_bp": pct_bp,
+                "ask_bp": chosen,
+            },
+        )
+        verified = verified.model_copy(
+            update={
+                "settlement_ask_pct": bp_to_ask_pct(chosen),
+                "ask_quote": verified.ask_quote or verified.ask_total_quote,
+                "ask_verified": True,
+                "ask_total_bp": chosen,
+            }
+        )
+
+    if check_min_payment:
+        # "up to 12 payments" is a cap (one payment is still allowed), so only an
+        # exact count said in the same turn ("only 3 even payments") multiplies.
+        counts = [
+            int(t.value)
+            for t in verified.terms
+            if t.field == "max_payments" and isinstance(t.value, int)
+        ]
+        exact_count = bool(counts) and not _COUNT_CAP_RE.search(utterance)
+        count = min(counts) if exact_count else 1
+        per_cue = bool(_PER_PAYMENT_CUE_RE.search(utterance))
+        for t in verified.terms:
+            if t.field != "min_payment_cents" or not isinstance(t.value, int):
+                continue
+            if balance_cents > 0 and t.value * count > balance_cents:
+                return _clarify(t.value, t.quote, "min_exceeds_balance")
+            if not per_cue and _TOTAL_CUE_RE.search(utterance):
+                return _clarify(t.value, t.quote, "total_cue")
+            if total is not None and t.value == total:
+                return _clarify(t.value, t.quote, "both_readings")
+    return verified, None
+
+
+def try_resolve_amount_clarify(
+    utterance: str,
+    pending: dict[str, Any],
+    *,
+    ref: date | None = None,
+) -> VerifiedAnalysis | None:
+    """Resolve "total or per payment?" deterministically; ``None`` when still unclear.
+
+    "the total" → a verified dollar-total ask (``resolve_amounts`` converts it);
+    "per payment" → a verified ``min_payment_cents`` term. Either way a % ask
+    the clarify held back comes back, except after a %-vs-total disagreement
+    answered "the total". A restated amount counts only with one of those cues
+    ("$450 total"); a bare amount, "yes", or both cues stay unclear.
+    """
+    text = utterance.strip()
+    # "the total, not per payment": a negated clause names the reading the rep
+    # rules out, so only un-negated clauses count. Unpunctuated negation stays
+    # unclear (asked again) rather than guessed.
+    clauses = [
+        c for c in _CLAUSE_SPLIT_RE.split(text) if c.strip() and not _NEGATION_RE.search(c)
+    ]
+    is_total = any(_ANSWER_TOTAL_RE.search(c) for c in clauses)
+    is_per = any(_ANSWER_PER_RE.search(c) for c in clauses)
+    if is_total == is_per:
+        return None
+    ref_d = ref or date.today()
+    cents = int(pending["cents"])
+    quote = str(pending.get("quote") or "")
+    money = [t for t in extract_tokens(text, ref=ref_d) if t.kind == "money"]
+    if len(money) > 1:
+        return None
+    if money:
+        cents, quote = int(money[0].value), money[0].raw
+    if is_total:
+        out = VerifiedAnalysis(
+            stance="info",
+            settlement_ask_total_cents=cents,
+            ask_total_quote=quote or None,
+        )
+        # A % that disagreed with this total is what the rep just overruled.
+        if pending.get("pct") is not None and pending.get("trigger") != "pct_total_disagree":
+            out = out.model_copy(
+                update={
+                    "settlement_ask_pct": float(pending["pct"]),
+                    "ask_quote": pending.get("pct_quote"),
+                    "ask_verified": True,
+                }
+            )
+        return out
+    if not _in_prior_range("min_payment_cents", cents):
+        return None
+    out = VerifiedAnalysis(
+        terms=[
+            VerifiedTerm(
+                field="min_payment_cents",
+                value=cents,
+                quote=quote,
+                hedged=False,
+                verified=True,
+            )
+        ],
+        stance="info",
+    )
+    if pending.get("pct") is not None:
+        out = out.model_copy(
+            update={
+                "settlement_ask_pct": float(pending["pct"]),
+                "ask_quote": pending.get("pct_quote"),
+                "ask_verified": True,
+            }
+        )
+    return out
 
 
 async def analyze(

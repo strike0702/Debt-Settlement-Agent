@@ -1,0 +1,14 @@
+{"id": "am01", "tags": ["amount_total"], "text": "We can settle this account for $420 total.", "stance": "offer", "ask_total_cents": 42000}
+{"id": "am02", "tags": ["amount_total"], "text": "If the client pays $1,800 in full, we will close the account.", "stance": "offer", "ask_total_cents": 180000}
+{"id": "am03", "tags": ["amount_total"], "text": "To settle, we need twelve hundred dollars.", "stance": "offer", "ask_total_cents": 120000}
+{"id": "am04", "tags": ["amount_total"], "text": "The total settlement would be $2,500, paid in up to six payments.", "stance": "offer", "ask_total_cents": 250000, "terms": {"max_payments": 6}}
+{"id": "am05", "tags": ["amount_per_payment"], "text": "Each payment has to be at least $150.", "stance": "info", "terms": {"min_payment_cents": 15000}}
+{"id": "am06", "tags": ["amount_per_payment"], "text": "We need $200 a month minimum.", "stance": "info", "terms": {"min_payment_cents": 20000}}
+{"id": "am07", "tags": ["amount_per_payment"], "text": "Monthly payments of no less than $90, up to ten payments.", "stance": "info", "terms": {"min_payment_cents": 9000, "max_payments": 10}}
+{"id": "am08", "tags": ["amount_per_payment"], "text": "The minimum per payment is seventy-five dollars.", "stance": "info", "terms": {"min_payment_cents": 7500}}
+{"id": "am09", "tags": ["amount_ambiguous"], "text": "You must pay $420 by March 31 to avoid further action. We only accept 3 even payments, so settle this now.", "stance": "offer", "amount_ambiguous": 42000, "terms": {"max_payments": 3, "payment_structure": "even"}}
+{"id": "am10", "tags": ["amount_ambiguous"], "text": "We would need $600 from the client.", "stance": "offer", "amount_ambiguous": 60000}
+{"id": "am11", "tags": ["amount_ambiguous"], "text": "Three payments, $350.", "stance": "offer", "amount_ambiguous": 35000, "terms": {"max_payments": 3}}
+{"id": "am12", "tags": ["amount_near_miss"], "text": "The balance is $4,000 and we can take forty-five percent of it.", "stance": "offer", "ask_pct": 45.0}
+{"id": "am13", "tags": ["amount_near_miss"], "text": "There is a $25 late fee every month this stays open.", "stance": "info"}
+{"id": "am14", "tags": ["amount_near_miss"], "text": "Fifty percent, which comes to $900 total.", "stance": "offer", "ask_pct": 50.0, "ask_total_cents": 90000}

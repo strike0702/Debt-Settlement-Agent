@@ -43,15 +43,24 @@ from app.adapter.validator import validate
 from app.agent.acts import attach_acts
 from app.agent.guards import _cross_match
 from app.agent.nlg import SAFE_FALLBACK, render_action, render_acts, speak_action
-from app.agent.nlu import VerifiedAnalysis, analyze, try_resolve_cents_clarify
+from app.agent.nlu import (
+    VerifiedAnalysis,
+    analyze,
+    resolve_amounts,
+    try_resolve_amount_clarify,
+    try_resolve_cents_clarify,
+)
 from app.agent.nlu_types import TurnAnalysis
 from app.agent.numbers import extract_tokens
 from app.agent.policy import (
+    AMOUNT_CLARIFY_KEY,
     Action,
     Agreement,
     Effect,
     Intent,
     Phase,
+    amount_meaning_clarify_action,
+    amount_meaning_escalate_action,
     ask_pct_to_bp,
     cents_ambiguity_clarify_action,
     decide,
@@ -431,6 +440,33 @@ def apply_effects(session: CallSession, effects: list[Effect]) -> None:
             session.neg.phase = Phase(str(data["phase"]))
 
 
+def _merge_amount_answer(
+    verified: VerifiedAnalysis, resolved: VerifiedAnalysis
+) -> VerifiedAnalysis:
+    """This turn's analysis with the "total or per payment?" answer swapped in.
+
+    Keeps the rep's stance, flags and other terms; the answer's amount (and
+    any % ask it brings back) replaces the doubtful one.
+    """
+    terms = [*resolved.terms, *(t for t in verified.terms if t.field != "min_payment_cents")]
+    update: dict[str, Any] = {
+        "terms": terms,
+        "settlement_ask_total_cents": resolved.settlement_ask_total_cents,
+        "ask_total_quote": resolved.ask_total_quote,
+        "amount_ambiguous_cents": None,
+        "amount_ambiguous_quote": None,
+    }
+    if resolved.settlement_ask_pct is not None:
+        update.update(
+            settlement_ask_pct=resolved.settlement_ask_pct,
+            ask_quote=resolved.ask_quote,
+            ask_verified=True,
+        )
+    elif resolved.settlement_ask_total_cents is not None:
+        update.update(settlement_ask_pct=None, ask_quote=None, ask_verified=False)
+    return verified.model_copy(update=update)
+
+
 def _call_scoped[**P, R](
     fn: Callable[Concatenate[Orchestrator, P], Awaitable[R]],
 ) -> Callable[Concatenate[Orchestrator, P], Awaitable[R]]:
@@ -746,6 +782,67 @@ class Orchestrator:
                 )
                 return await self._emit(action, sentences, timings, [])
 
+            # Total-vs-per-payment amounts (Phase 39): answer a pending question,
+            # then turn a dollar-total ask into bp or ask about a doubtful amount.
+            check_min_payment = True
+            pending_amount = session.neg.pending_amount_clarify
+            if pending_amount is not None:
+                resolved_amount = try_resolve_amount_clarify(
+                    working, pending_amount, ref=self._ref
+                )
+                # A closing, private ask, lock-in demand or hostility outranks the
+                # question: drop it and let ``decide`` handle the turn.
+                interrupts = (
+                    verified.wants_to_end
+                    or verified.asks_client_private_info
+                    or verified.demands_commitment
+                    or verified.hostility >= self.settings.hostility_threshold
+                )
+                if resolved_amount is None and interrupts:
+                    session.neg.pending_amount_clarify = None
+                    self._audit("nlu", "amount_clarify_dropped", {"cents": pending_amount["cents"]})
+                elif resolved_amount is None:
+                    if session.neg.clarify_counts.get(AMOUNT_CLARIFY_KEY, 0) >= 2:
+                        session.neg.pending_amount_clarify = None
+                        action = amount_meaning_escalate_action()
+                    else:
+                        action = amount_meaning_clarify_action(
+                            cents=int(pending_amount["cents"])
+                        )
+                    return await self._emit_preempted(action, working, timings, t_server, [])
+                else:
+                    session.neg.pending_amount_clarify = None
+                    check_min_payment = False
+                    verified = _merge_amount_answer(verified, resolved_amount)
+                    self._audit(
+                        "nlu",
+                        "amount_clarify_resolved",
+                        {
+                            "total_cents": resolved_amount.settlement_ask_total_cents,
+                            "min_payment_cents": next(
+                                (t.value for t in resolved_amount.terms), None
+                            ),
+                        },
+                    )
+            verified, amount_pending = resolve_amounts(
+                verified,
+                working,
+                balance_cents=session.scenario.creditor_balance_cents,
+                check_min_payment=check_min_payment,
+                audit=self.audit,
+                call_id=session.call_id,
+            )
+            self._trace_ctx["verified"] = verified
+            if amount_pending is not None:
+                # Eager, like the cents clarify: a fast reply must still resolve.
+                session.neg.pending_amount_clarify = amount_pending
+                belief_changes = self._apply_belief(verified, turn)
+                session.last_belief_changes = belief_changes
+                action = amount_meaning_clarify_action(cents=int(amount_pending["cents"]))
+                return await self._emit_preempted(
+                    action, working, timings, t_server, belief_changes
+                )
+
             belief_changes = self._apply_belief(verified, turn)
             session.last_belief_changes = belief_changes
 
@@ -840,6 +937,32 @@ class Orchestrator:
                     return follow
 
             return utterance
+
+    async def _emit_preempted(
+        self,
+        action: Action,
+        working: str,
+        timings: dict[str, float],
+        t_server: float,
+        belief_changes: list[BeliefChange],
+    ) -> Utterance:
+        """Speak and emit a move chosen before ``decide`` (a clarify or its escalation)."""
+        t_nlg = time.perf_counter()
+        sentences = await self._speak(action, last_rep_line=working)
+        timings["policy_ms"] = 0.0
+        timings["nlg_ms"] = _ms_since(t_nlg)
+        _close_timings(timings, t_server, self._turn_queue)
+        self._audit(
+            "policy",
+            "decide",
+            {
+                "intent": action.intent.value,
+                "reason": action.reason,
+                "next_phase": action.next_phase.value,
+                "policy_ms": 0.0,
+            },
+        )
+        return await self._emit(action, sentences, timings, belief_changes)
 
     def _commit_pending(self, pending: PendingSpeech) -> Agreement | None:
         """Apply effects + deferred eval; draft agreement or fail WRAP to END."""

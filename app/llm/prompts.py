@@ -122,13 +122,6 @@ Use reject when they refuse terms or say a schedule does not work.
 Set wants_to_end=true for thanks, thank you, goodbye, bye, that's all, or similar closings.
 Set asks_for_schedule=true when the rep asks for payment dates or amounts per payment.
 firm=true only when the rep says the number is final, their floor, or they cannot go lower.
-asks_client_private_info=true when the rep asks about the client's own money, even
-indirectly: income, wages or take-home pay; savings, cash or any account balance;
-the amount drafted or deposited from the client each month; budget, expenses or
-assets; fees the client pays; or how much the client could really afford or stretch to
-("realistically, what could they manage?", "how much goes into the program each
-month?"). Not for the creditor's own figures: balance owed, payment counts, dates,
-their minimum payment, or percentages. Not when the rep says they do not need it.
 asks_question=true only for an off-script process question the terms do not answer:
 why the offer is not higher, next steps, who approves, or how long things take.
 Not for questions about terms, percentages, schedules, or the client's finances.

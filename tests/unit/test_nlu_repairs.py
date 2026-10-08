@@ -354,6 +354,13 @@ def test_negated_phrase_falls_through_to_unnegated_later_phrase() -> None:
 
 
 # --- Phase 32: indirect private-info asks (regex arm, LLM flag off) ---------
+# The Phase 32 cues (commit b385a42) failed the corpus gate together with the
+# NLU prompt change and were reverted (docs/eval/nlu_corpus.md, "Phase 32").
+# Strict xfail: re-landing the cues turns these into XPASS failures, so the
+# markers must be dropped in the same change.
+_P32_XFAIL = pytest.mark.xfail(
+    strict=True, reason="Phase 32 private-info cues reverted after the corpus gate"
+)
 
 
 @pytest.mark.parametrize(
@@ -388,6 +395,7 @@ def test_negated_phrase_falls_through_to_unnegated_later_phrase() -> None:
         "Is any of it in savings?",
     ],
 )
+@_P32_XFAIL
 def test_indirect_private_cue_fires(utterance: str) -> None:
     out = post_verify(TurnAnalysis(stance="question"), utterance, ref=_REF)
     assert out.asks_client_private_info is True
@@ -428,6 +436,7 @@ def test_indirect_private_cue_near_misses_do_not_fire(utterance: str) -> None:
     assert out.asks_client_private_info is False
 
 
+@_P32_XFAIL
 def test_nlu_prompt_describes_indirect_private_asks() -> None:
     from app.llm.prompts import nlu_messages
 

@@ -132,9 +132,33 @@ substring of the utterance.
 hedged=true for hedges like about/around/roughly.
 If pending_readback is set, fill readback_response with "confirm" or "deny".
 stance must be one of: offer, counter, accept, reject, stall, info, question, other.
-Use accept when the rep agrees to a schedule or counter ("agreed", "that works").
-Use reject when they refuse terms or say a schedule does not work.
+- info: the rep states a fact, rule or limit (payment count, minimum per payment,
+  even/balloon, first payment date, balance, policy), even hedged, and names no
+  settlement price. Extracting a term does not make a line an offer or counter.
+  Stance never changes extraction: still put every rule or limit the line states
+  in terms, and a dollar amount with no total or per-payment cue stays ambiguous.
+  Telling the agent to take it to the client, or that there is no rush, is info.
+- counter: the rep names a settlement price (a percent of the balance or a dollar
+  total to settle), or asks to change a price or term already proposed by either side.
+  offer: the same, but only when Agent last said is (opening).
+- accept when the rep agrees to a schedule or counter ("agreed", "that works").
+- reject when they refuse terms, are unhappy with an offer, or say a schedule
+  does not work.
+- question: the rep asks a question or requests information. Demands are not questions.
+- stall: the rep puts off their own answer (hold on, let me check, I'll ask my
+  supervisor, I'm not sure).
+- other: closings, goodbyes, impatience to end the call, insults, and fillers or
+  unfinished fragments with no content.
+  A rep who is ending or wants to end the call is other, never stall.
+Examples: "Six installments is our limit." → info; "We'd take fifty-two percent." →
+counter; "Give me a minute to check." → stall; "Okay, I'll let you go." → other.
 Set wants_to_end=true for thanks, thank you, goodbye, bye, that's all, or similar closings.
+asks_client_private_info=true when the rep asks about the client's own money, directly
+or indirectly: income, take-home pay, savings, bank or program account balance, assets,
+budget, what the client can afford, or how much the client pays, deposits or has
+drafted each month ("How much is the client saving toward this each week?").
+Not for questions about the debt itself: balance owed, account number, payment
+history, or the terms being proposed.
 Set asks_for_schedule=true when the rep asks for payment dates or amounts per payment.
 firm=true only when the rep says the number is final, their floor, or they cannot go lower.
 asks_question=true only for an off-script process question the terms do not answer:

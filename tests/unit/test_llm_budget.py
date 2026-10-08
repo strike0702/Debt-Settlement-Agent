@@ -1,7 +1,8 @@
-"""Phase 41: Claude Sonnet NLU on the demo under a daily budget.
+"""Phase 41: Claude NLU on the demo under a daily budget (Haiku 5.5 since Phase 43).
 
 Hermetic: fake keys, ``MockTransport`` for both SDKs, a temp SQLite budget DB
-and an injected clock. Covers the shipped route shape, under / at / over budget,
+and an injected clock. Covers the shipped route shape and Haiku prices (Phase 43),
+under / at / over budget,
 UTC day rollover, spend surviving a new client, no-key behaviour (identical to
 before, no DB touched), Anthropic failure → fallback and not counted, the eval
 ``judge`` role never being budgeted, and the audit rows the markers produce.
@@ -58,6 +59,17 @@ providers:
 """
 # 1000 input × $2/M + 100 output × $10/M = 2000 + 1000 micro-dollars.
 _CALL_MICROS = 3000
+# Phase 43: the shipped demo NLU target is Haiku 5.5 ($0.10 / $0.50 per MTok).
+_HAIKU_YAML = _YAML.replace(
+    "      - target: anthropic/claude-sonnet-5-5\n        params",
+    "      - target: anthropic/claude-haiku-5-5\n        params",
+).replace(
+    '      claude-sonnet-5-5: {input: "2.00", output: "10.00"}\n',
+    '      claude-sonnet-5-5: {input: "2.00", output: "10.00"}\n'
+    '      claude-haiku-5-5: {input: "0.10", output: "0.50"}\n',
+)
+# 1000 input × $0.10/M + 100 output × $0.50/M = 100 + 50 micro-dollars.
+_HAIKU_CALL_MICROS = 150
 
 
 class _Out(BaseModel):
@@ -113,10 +125,11 @@ class _Rig:
         profile: str = "demo",
         anthropic: Any = None,
         budget: DailyBudget | None = None,
+        yaml_text: str = _YAML,
         **settings_kw: Any,
     ) -> None:
         path = tmp / "providers.yaml"
-        path.write_text(_YAML)
+        path.write_text(yaml_text)
         self.anthropic_calls = 0
         self.free_calls = 0
         handler = anthropic or (lambda r: httpx2.Response(200, json=_anthropic_ok()))
@@ -171,13 +184,13 @@ def _budget(tmp: Path, clock: _Clock, usd: str = "1.00") -> DailyBudget:
 # --- shipped config -------------------------------------------------------
 
 
-def test_shipped_demo_nlu_is_sonnet_first_then_the_old_free_chain() -> None:
+def test_shipped_demo_nlu_is_haiku_first_then_the_old_free_chain() -> None:
     import yaml
 
     data = yaml.safe_load((_REPO / "config" / "providers.yaml").read_text())
     nlu = [parse_route_entry(e) for e in data["profiles"]["demo"]["nlu"]]
     first = nlu[0]
-    assert (first.provider, first.model) == ("anthropic", "claude-sonnet-5-5")
+    assert (first.provider, first.model) == ("anthropic", "claude-haiku-5-5")
     assert first.params == {"output_config": {"effort": "low"}}
     assert first.budgeted is True
     assert first.timeout_s is None  # the 6 s NLU role timeout applies
@@ -200,6 +213,22 @@ def test_shipped_demo_nlu_is_sonnet_first_then_the_old_free_chain() -> None:
             assert not any(parse_route_entry(e).budgeted for e in entries), (pname, role)
     price = data["providers"]["anthropic"]["prices_usd_per_mtok"]["claude-sonnet-5-5"]
     assert ModelPrice.from_config(price, "shipped") == ModelPrice(2_000_000, 10_000_000)
+
+
+def test_shipped_anthropic_prices_haiku_and_keeps_sonnet() -> None:
+    import yaml
+
+    data = yaml.safe_load((_REPO / "config" / "providers.yaml").read_text())
+    prices = data["providers"]["anthropic"]["prices_usd_per_mtok"]
+    haiku = ModelPrice.from_config(prices["claude-haiku-5-5"], "haiku")
+    assert haiku == ModelPrice(100_000, 500_000)
+    assert haiku.cost_micros(1000, 100) == _HAIKU_CALL_MICROS
+    # Sonnet stays priced: the eval judge uses it (never budgeted).
+    assert ModelPrice.from_config(prices["claude-sonnet-5-5"], "sonnet") == ModelPrice(
+        2_000_000, 10_000_000
+    )
+    # $1/day at a typical Haiku NLU call (~1,950 in / ~200 out, Phase 43) ≈ 3,400 turns.
+    assert usd_to_micros("1.00") // haiku.cost_micros(1950, 200) == 3389
 
 
 def test_settings_budget_default_and_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -260,6 +289,19 @@ async def test_under_budget_uses_sonnet_and_records_spend(tmp_path: Path) -> Non
     assert status["spent_usd"] == Decimal("0.003")
     assert status["remaining_usd"] == Decimal("0.997")
     assert status["day"] == "2026-10-08"
+    await rig.client.aclose()
+
+
+async def test_haiku_under_budget_records_haiku_prices(tmp_path: Path) -> None:
+    clock = _Clock()
+    budget = _budget(tmp_path, clock, usd="0.0003")  # exactly two Haiku calls
+    rig = _Rig(tmp_path, budget=budget, yaml_text=_HAIKU_YAML)
+    assert [await rig.nlu() for _ in range(2)] == ["claude", "claude"]
+    assert budget.spent_micros() == 2 * _HAIKU_CALL_MICROS
+    assert await rig.nlu() == "free"
+    assert rig.anthropic_calls == 2
+    free = [m for m in rig.metas if m["provider"] == "free"]
+    assert free[0]["failover_from"] == "anthropic/claude-haiku-5-5"
     await rig.client.aclose()
 
 
@@ -325,6 +367,16 @@ async def test_no_key_behaves_as_before(tmp_path: Path) -> None:
     assert rig.anthropic_calls == 0
     assert rig.metas == [m for m in rig.metas if m.get("event") is None]
     assert len(rig.metas) == 1 and rig.metas[0]["failover_from"] is None
+    assert rig.client._budget is None
+    assert not (tmp_path / "app.db").exists()
+    await rig.client.aclose()
+
+
+async def test_no_key_behaves_as_before_with_haiku(tmp_path: Path) -> None:
+    rig = _Rig(tmp_path, key=None, yaml_text=_HAIKU_YAML)
+    assert await rig.nlu() == "free"
+    assert rig.anthropic_calls == 0
+    assert len(rig.metas) == 1 and rig.metas[0].get("event") is None
     assert rig.client._budget is None
     assert not (tmp_path / "app.db").exists()
     await rig.client.aclose()

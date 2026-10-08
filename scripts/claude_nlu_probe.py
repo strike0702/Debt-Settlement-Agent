@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Live probe (paid): the demo NLU route with Claude Sonnet 5.5 first (Phase 41).
+"""Live probe (paid): the demo NLU route with its Claude target first (Phase 41, 43).
 
 Runs ``app.agent.nlu.analyze`` on N lines of ``tests/nlu_corpus.jsonl`` through
 the shipped ``demo`` profile (cache off), then one call with the daily budget
-forced to 0 to show the fallback. Prints Sonnet latency p50 / p95, tokens and
-cost per call, and how many calls failed over (e.g. hit the 6 s NLU timeout).
+forced to 0 to show the fallback. Prints the Claude model's latency p50 / p95,
+tokens and cost per call, and how many calls failed over (e.g. hit the 6 s NLU
+timeout). The model is the demo route's budgeted target (Haiku 5.5 since Phase
+43); ``--model`` names it explicitly and must match that target.
 
 Spend control: the probe's own budget DB (``--db``, a scratch file, not the
 app DB) is capped at ``--cap-usd`` through the same ``DailyBudget`` the demo
@@ -56,7 +58,12 @@ async def _run(args: argparse.Namespace) -> int:
     if "anthropic" not in client._keys:
         print("SKIP: no ANTHROPIC_API_KEY")
         return 2
-    price = client._providers["anthropic"].prices["claude-sonnet-5-5"]
+    budgeted = [t for t in client._route("nlu") if t.budgeted]
+    model = args.model or (budgeted[0].model if budgeted else "")
+    if not any(t.model == model for t in budgeted):
+        print(f"STOP: {model!r} is not a budgeted target of the demo NLU route")
+        return 2
+    price = client._providers["anthropic"].prices[model]
     cap_micros = int(Decimal(args.cap_usd) * 1_000_000)
     rows: list[dict[str, Any]] = []
     for i, line in enumerate(picked, 1):
@@ -83,7 +90,7 @@ async def _run(args: argparse.Namespace) -> int:
     failed = [m for r in rows for m in r["metas"] if m["provider"] == "anthropic" and m["error"]]
     lat = [m["latency_ms"] for m in ok]
     costs = [price.cost_micros(m["prompt_tokens"] or 0, m["completion_tokens"] or 0) for m in ok]
-    print("\n--- Sonnet NLU (demo route, effort low, 6 s NLU timeout) ---")
+    print(f"\n--- {model} NLU (demo route, effort low, 6 s NLU timeout) ---")
     print(f"calls ok={len(ok)} failed={len(failed)} lines={len(rows)}")
     for m in failed:
         print(f"  failed: {m['error'][:120]}")
@@ -119,6 +126,8 @@ def main() -> int:
     ap.add_argument("--n", type=int, default=20)
     ap.add_argument("--pilot", type=int, default=3)
     ap.add_argument("--cap-usd", default="0.25")
+    ap.add_argument("--model", default=None,
+                    help="Claude model to report (default: the demo NLU budgeted target)")
     ap.add_argument("--db", required=True, help="scratch SQLite file for the probe's budget")
     return asyncio.run(_run(ap.parse_args()))
 

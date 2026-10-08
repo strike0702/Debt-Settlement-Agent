@@ -117,31 +117,54 @@ prompt, Claude Sonnet 5.5 scored stance accuracy 0.820, private-info recall
 1.000 and term exact-match 0.984
 ([`AFTER_P39_CLAUDE`](eval/nlu_corpus.md#after_p39_claude)), and it got all 14
 amount lines right where Groq got 0.857 of them
-([`AMOUNTS_P39`](eval/nlu_corpus.md#amounts_p39)). Claude Haiku 5.5 costs about
-1/19 as much but scored stance accuracy 0.601 and private-info recall 0.941
-([Phase 40 summary](eval/nlu_haiku_20261008/summary.md)). Sonnet is paid, and
-the hosted demo is public.
+([`AMOUNTS_P39`](eval/nlu_corpus.md#amounts_p39)). Phase 41 put Sonnet on the
+demo. Claude Haiku 5.5 costs about 1/19 as much, but on that prompt it scored
+stance accuracy 0.601 and private-info recall 0.941: it heard rule statements
+as offers ([Phase 40 summary](eval/nlu_haiku_20261008/summary.md)). Phase 42
+rewrote the prompt's stance and private-info guidance for Haiku (0.896 on the
+corpus, 0.906 on a new held-out set;
+[Phase 42 summary](eval/nlu_prompt_p42/summary.md)). Phase 43 added one line
+(stance never changes which terms are extracted) and confirmed it. Claude is
+paid, and the hosted demo is public.
 
-**Decision.** The `demo` profile's NLU route is Sonnet 5.5 (effort `low`,
-the 6 s NLU timeout) first, then the old free chain unchanged. The Sonnet target
-is `budgeted`: spend is summed per UTC day from each live reply's token counts
-at the prices in `config/providers.yaml`, as integer micro-dollars in the app
-DB. Once the day reaches `CLAUDE_DAILY_BUDGET_USD` (default $1.00), the target
-is skipped and the call goes to Groq until 00:00 UTC. A budget never blocks a
-call. Phrasing (NLG), speech-to-text and "Watch a call" are unchanged, and the
-eval `judge` role is never budgeted. Without `ANTHROPIC_API_KEY` the route
-behaves exactly as before.
+**Decision.** Haiku 5.5 reads the rep first. The `demo` profile's NLU route
+is Haiku 5.5 (effort `low`, the 6 s NLU timeout), then the old free chain
+unchanged. The Haiku target is `budgeted`: spend is summed per UTC day from
+each live reply's token counts at the prices in `config/providers.yaml`
+($0.10 / $0.50 per million tokens), as integer micro-dollars in the app DB.
+Once the day reaches `CLAUDE_DAILY_BUDGET_USD` (default $1.00), the target is
+skipped and the call goes to Groq until 00:00 UTC. A budget never blocks a
+call. Phrasing (NLG), speech-to-text and "Watch a call" are unchanged. Sonnet
+5.5 remains the eval `judge`, which is never budgeted. Without
+`ANTHROPIC_API_KEY` the route behaves exactly as before.
 
-**Consequences.** On the shipped route Sonnet answered in 2.07 s p50 / 2.70 s
-p95 at $0.0046 per call, so $1 buys about 215 rep turns a day
-([live probe](eval/claude_nlu_demo_20261008/summary.md)). That is about 0.6 s
-p50 slower than Groq. After the cap the demo reads the rep with the free
-models, so quality can change mid-call; the audit shows which model answered
-each turn (`llm` rows, operator view). The rule-based stance guards still run
-on Claude's output, and Phase 37 showed they override some correct Claude
-labels; that is a separate open decision. Render's disk is ephemeral, so a
-restart starts the day's count at zero; a monthly limit in the Anthropic
-console is the backstop.
+Why Haiku over Sonnet, on the final prompt (Phase 43 runs, one each):
+
+| | Haiku 5.5, P43 prompt | Sonnet 5.5, P39 prompt (Phase 41 demo) |
+|---|---|---|
+| stance accuracy, corpus (183) | **0.869** ([`HAIKU_P43_FIX`](eval/nlu_corpus.md#haiku_p43_fix)) | 0.820 |
+| stance accuracy, held-out (32) | 0.969 | not run |
+| private-info recall, corpus / held-out | 1.000 / 1.000 | 1.000 / not run |
+| term exact-match, 66 lines with terms | 62 | 63 |
+| amounts (14 lines) terms correct | 14 / 14 | 14 / 14 |
+| filler false accepts (31) | 0 | 1 |
+| NLU request p50 / p95, shipped route (n=20) | **1.17 s / 1.81 s** | 2.07 s / 2.70 s |
+| cost per NLU call | **$0.00029** | $0.0046 |
+
+Sonnet was not rerun on the new prompt (cost cap, Phase 42).
+
+**Consequences.** $1 buys about 3,400 rep turns a day on Haiku, against about
+215 on Sonnet ([live probe](eval/haiku_nlu_demo_20261008/summary.md)), and the
+line is read about 0.9 s faster at p50, slightly faster than Groq. Haiku still
+over-flags commitment demands (5 false positives on the corpus vs 2 for Sonnet)
+and drops a few terms, which makes the agent ask again; `post_verify` never
+lets a wrong number through. After the cap the demo reads the rep with the free
+models, so quality can change mid-call; Groq has not been measured on the new
+prompt. The audit shows which model answered each turn (`llm` rows, operator
+view). The rule-based stance guards still run on Claude's output, and Phase 37
+showed they override some correct Claude labels; that is a separate open
+decision. Render's disk is ephemeral, so a restart starts the day's count at
+zero; a monthly limit in the Anthropic console is the backstop.
 
 ## One voice turn, annotated
 

@@ -913,6 +913,194 @@ Misses (line ids):
 - terms: i06, f16, f17, d04, d10, t06
 - filler false accept: -
 
+## AMOUNTS_HAIKU_P43
+
+- git: `a246036`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 14  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=14
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 1 | 0 | 0.000 | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.571 |
+| term exact-match (all lines) | 0.929 |
+| term exact-match (lines with terms, n=13) | 0.923 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- demands_commitment: FP am09; FN -
+- terms: am10
+- filler false accept: -
+
+## HAIKU_P43
+
+- git: `a246036`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 183  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 2 | 0 | 0.944 | 1.000 |
+| demands_commitment | 13 | 13 | 6 | 0 | 0.684 | 1.000 |
+| firm | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 6 | 6 | 4 | 0 | 0.600 | 1.000 |
+| hostility | 5 | 2 | 0 | 3 | 1.000 | 0.400 |
+| stance=accept | 11 | 11 | 1 | 0 | 0.917 | 1.000 |
+| stance=reject | 9 | 9 | 0 | 0 | 1.000 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.891 |
+| term exact-match (all lines) | 0.973 |
+| term exact-match (lines with terms, n=66) | 0.924 |
+| filler false accepts (n=31) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP n10, n14; FN -
+- demands_commitment: FP n08, i09, a11, x03, k04, k05; FN -
+- wants_to_end: FP x02, e06, e07, e10; FN -
+- hostility: FP -; FN x01, x02, x04
+- stance=accept: FP c11; FN -
+- terms: f16, f17, d04, d10, t06
+- filler false accept: -
+
+## HELDOUT_STANCE_HAIKU_P43
+
+- git: `a246036`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 32  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=32
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 6 | 5 | 0 | 1 | 1.000 | 0.833 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 5 | 4 | 0 | 1 | 1.000 | 0.800 |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.938 |
+| term exact-match (all lines) | 0.969 |
+| term exact-match (lines with terms, n=16) | 0.938 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP -; FN hs28
+- wants_to_end: FP -; FN hs20
+- terms: hs08
+- filler false accept: -
+
+## AMOUNTS_HAIKU_P43_FIX
+
+- git: `a246036`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 14  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=14
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.429 |
+| term exact-match (all lines) | 1.000 |
+| term exact-match (lines with terms, n=13) | 1.000 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- terms: -
+- filler false accept: -
+
+## HAIKU_P43_FIX
+
+- git: `a246036`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 183  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 1 | 0 | 0.971 | 1.000 |
+| demands_commitment | 13 | 13 | 5 | 0 | 0.722 | 1.000 |
+| firm | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 6 | 6 | 4 | 0 | 0.600 | 1.000 |
+| hostility | 5 | 2 | 0 | 3 | 1.000 | 0.400 |
+| stance=accept | 11 | 11 | 1 | 0 | 0.917 | 1.000 |
+| stance=reject | 9 | 9 | 0 | 0 | 1.000 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.869 |
+| term exact-match (all lines) | 0.978 |
+| term exact-match (lines with terms, n=66) | 0.939 |
+| filler false accepts (n=31) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP n10; FN -
+- demands_commitment: FP n08, i09, a11, x03, k05; FN -
+- wants_to_end: FP x02, e06, e07, e10; FN -
+- hostility: FP -; FN x01, x02, x04
+- stance=accept: FP c11; FN -
+- terms: f16, f17, d04, d11
+- filler false accept: -
+
+## HELDOUT_STANCE_HAIKU_P43_FIX
+
+- git: `a246036`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 32  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=32
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 5 | 4 | 0 | 1 | 1.000 | 0.800 |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.969 |
+| term exact-match (all lines) | 0.969 |
+| term exact-match (lines with terms, n=16) | 0.938 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- wants_to_end: FP -; FN hs20
+- terms: hs08
+- filler false accept: -
+
 ## Notes
 
 - Both runs used the same model and prompt (Groq `gpt-oss-120b`, temperature 0).
@@ -1229,3 +1417,28 @@ over the $1.30 cap. The candidate prompt is `nlu_prompt_p42/nlu_prompt_v4.patch`
   only; d11 fixed). Held-out 31 → 30 (hs09).
 - Sonnet: only a 10-line pilot ($0.056, report section not kept). Phase cost
   **$0.278**.
+
+### Phase 43: demo NLU on Haiku 5.5 with the P42 prompt (2026-10-08)
+
+Full write-up: `haiku_nlu_demo_20261008/summary.md`. The v4 prompt is applied
+to `app/llm/prompts.py`, plus one line in Phase 43, and the demo NLU route now
+starts with Haiku 5.5.
+
+- All runs: Haiku 5.5 (`claude_haiku_nlu`), concurrency 2, single model, fresh
+  response cache (none existed in this worktree), 0 cache hits. The prompts
+  were uncommitted at run time, so the `git` field shows `a246036`.
+- `HAIKU_P43`, `AMOUNTS_HAIKU_P43`, `HELDOUT_STANCE_HAIKU_P43`: the v4 patch
+  as is. d10 and t06 were dropped again (as in v4), and am10 ("$600 from the
+  client") was read as a total instead of ambiguous (13/14).
+- `*_P43_FIX`: v4 plus one sentence under `info`: "Stance never changes
+  extraction: still put every rule or limit the line states in terms, and a
+  dollar amount with no total or per-payment cue stays ambiguous." No corpus
+  strings. This is the shipped prompt.
+- Final prompt: stance 0.869 (corpus), 0.969 (held-out); private-info recall
+  1.000 / 1.000; terms 62/66 (d10, t06 back; d11 dropped); amounts 14/14;
+  filler false accepts 0.
+- Amounts stance accuracy reads 0.429: the ambiguous lines am09–am11 are
+  `info`, and asks are `counter` where this set expects `offer` (Phase 42
+  open issue (d)). The clarify fires on the ambiguous-amount flag, not the
+  stance.
+- Cost: **$0.132** for the six runs (450 calls, 877,372 in / 89,226 out).

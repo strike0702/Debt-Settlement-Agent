@@ -1566,3 +1566,58 @@ Every reason sentence, before and after:
   - `uv run pytest -q`: 926 passed / 2 skipped / 26 xfailed;
   - fast suite (`-m "not slow"`) with `.env` moved aside (restored): 923 passed / 2 skipped / 3 deselected / 26 xfailed;
   - oracle eval `eval_20261008_174142_s7` thresholds PASS (turns_to_outcome 5.12, surplus_captured 0.689, as before).
+
+### Phase 43 (demo NLU on Haiku) (2026-10-08) — Claude Haiku 5.5 with the P42 prompt replaces Sonnet on the demo NLU route (user decision "Switch demo to Haiku"; not in REVIEW_PLAN)
+
+- Outcome: **switched.** All gate checks held on the final prompt's Haiku runs. Full write-up: `docs/eval/haiku_nlu_demo_20261008/summary.md`.
+  - `app/llm/prompts.py` = the P42 v4 patch plus one sentence under `info`: "Stance never changes extraction: still put every rule or limit the line states in terms, and a dollar amount with no total or per-payment cue stays ambiguous." No corpus strings.
+  - The `demo` NLU route starts with `{target: anthropic/claude-haiku-5-5, params: {output_config: {effort: low}}, budgeted: true}`, in the same position. The free chain after it is unchanged.
+  - The budget stays at $1 per UTC day.
+- Files:
+  - prompt and config: `app/llm/prompts.py` (NLU prompt only); `config/providers.yaml` (demo NLU target + comment; anthropic `prices_usd_per_mtok` += `claude-haiku-5-5: {input: "0.10", output: "0.50"}`, Sonnet price kept for the judge);
+  - probe: `scripts/claude_nlu_probe.py` (`--model`; the default is the demo route's budgeted target, and any other model stops the run; labels no longer say Sonnet);
+  - tests: `tests/unit/test_llm_budget.py` (shipped route is Haiku first; Haiku and Sonnet priced; Haiku budget math; Haiku under / at budget with `failover_from`; no-key behaviour with Haiku); `tests/unit/test_eval_budgeted.py` and `tests/unit/test_llm_key_pool.py` (pinned the Sonnet route);
+  - docs: `README.md`, `docs/DESIGN.md` (ADR 6), new `docs/eval/haiku_nlu_demo_20261008/summary.md`, `docs/eval/nlu_corpus.md` (six sections + note "Phase 43"), raw `docs/eval/nlu_corpus_{haiku_p43,amounts_haiku_p43,heldout_stance_haiku_p43}{,_fix}.jsonl`.
+  - No test pinned the prompt text.
+- Interfaces: `scripts/claude_nlu_probe.py --model <claude model>` (optional). The demo NLU budgeted model is `claude-haiku-5-5`, so eval tools print `skipped budgeted (paid) targets: demo/nlu/anthropic/claude-haiku-5-5`.
+- Runs (Haiku, `claude_haiku_nlu`, fresh cache, single model, 0 errors):
+  - v4 as is: `HAIKU_P43`, `AMOUNTS_HAIKU_P43`, `HELDOUT_STANCE_HAIKU_P43`. Stance was 0.891 on the corpus and 0.938 on the held-out set. d10 and t06 were dropped again. am10 was read as a total, so amounts were 13/14.
+  - Final prompt: the `*_P43_FIX` runs, gate below.
+
+| gate check (final prompt) | needed | Haiku P43 fix | Sonnet P39 (old demo) | Haiku P40 |
+|---|---|---|---|---|
+| main stance accuracy | ≥ 0.820 | **0.869** | 0.820 | 0.601 |
+| held-out stance accuracy | ≥ 0.85 | **0.969** | not run | 0.562 (P42 before) |
+| main private-info recall | 1.000 | **1.000** | 1.000 | 0.941 |
+| held-out private-info recall | ≥ 0.833 | **1.000** | not run | 1.000 |
+| amounts terms, am09 ambiguous | 14/14 | **14/14** (am09 $420 ambiguous) | 14/14 | 14/14 |
+| main terms, lines with terms | ≥ 60/66 | **62/66** | 63/66 | 62/66 |
+| filler false accepts | 0 | **0** | 1 | 1 |
+
+- Other numbers (final prompt):
+  - commitment P 0.722 (5 FPs: n08, i09, a11, x03, k05), against Sonnet's 0.867;
+  - accept P/R 0.917/1.000; reject P/R 1.000/1.000;
+  - private-info FPs: 1 (n10);
+  - amounts stance accuracy 0.429 (am09–am11 → `info`, asks → `counter`; the clarify fires on the ambiguous flag, not the stance).
+- Variance: v4 on P42 vs P43 differed on 6 fields, with stance accuracy within 0.005. The fix vs v4 moved stance −0.022: f01, t08, t13 and t14 went counter → offer.
+- Live probe (shipped route, `scripts/claude_nlu_probe.py`, 20 lines, cache off):
+  - 20/20 answered by Haiku, 0 timeouts;
+  - **p50 1172 ms, p95 1805 ms**, max 2279 ms; in 1950 / out 194 tokens mean;
+  - **$0.00029 per call**, so $1 ≈ 3,400 rep turns a day;
+  - forced exhaustion: `llm_budget_exhausted` + `llm_budget_skip` at 0 ms, then answered by `groq/openai/gpt-oss-120b` (`failover_from` = Haiku) in 2022 ms.
+- **Cost actually spent: $0.138** of the $0.25 cap, all Haiku, no Sonnet: eval runs $0.132 (450 calls), probe $0.0058 (20 calls); 916,364 in / 93,104 out.
+- Deviations:
+  1. The one allowed wording fix covers two things in one sentence: rule terms are still extracted, and an amount with no cue stays ambiguous. The second part was added because am10 failed the amounts check on v4.
+  2. The probe's latency and cost labels now follow `--model`.
+  3. The run sections show git `a246036`, because the prompt was uncommitted at run time.
+- Open issues:
+  - (a) Groq (the free fallback) is not measured on the new prompt (free quota).
+  - (b) Haiku commitment FPs (5 vs Sonnet's 2) are unchanged.
+  - (c) The amounts set labels asks `offer` where the main corpus uses `counter`, so amounts stance accuracy is not comparable between runs.
+  - (d) f16, f17, d04 and hs08 terms are wrong on every Haiku run. d11 flips between runs.
+  - (e) Sonnet is not measured on the new prompt. It is only the judge now.
+- Checks:
+  - `uv run ruff check .` clean;
+  - `uv run pytest -q`: 955 passed / 2 skipped / 26 xfailed;
+  - fast suite (`-m "not slow"`) with `.env` moved aside (restored): 952 passed / 2 skipped / 3 deselected / 26 xfailed;
+  - oracle eval `eval_20261008_181232_s7` thresholds PASS, metrics unchanged (turns_to_outcome 5.12, surplus_captured 0.689, stuck 0, leaks 0).

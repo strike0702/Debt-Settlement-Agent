@@ -230,3 +230,18 @@ def test_cli_writes_report_when_all_answered(tmp_path: Path, monkeypatch) -> Non
     assert rc == 0
     assert "lines: 2  skipped (LLM unavailable): 0" in report.read_text()
     assert (tmp_path / "nlu_corpus_t.jsonl").exists()
+
+
+def test_heldout_private_set_schema() -> None:
+    """Phase 32 held-out set: written before the private-info fix, never tuned on."""
+    held = load_corpus(Path("tests/nlu_corpus_heldout.jsonl"))
+    main_ids = {ln["id"] for ln in load_corpus()}
+    assert len({ln["id"] for ln in held}) == len(held)
+    assert not main_ids & {ln["id"] for ln in held}
+    pos = [ln for ln in held if ln.get("asks_client_private_info")]
+    neg = [ln for ln in held if "private_neg" in ln["tags"]]
+    assert len(pos) >= 15 and len(neg) >= 15
+    for ln in held:
+        assert "heldout" in ln["tags"], ln["id"]
+        assert ln["stance"] in _STANCES, ln["id"]
+        assert set(ln) <= {"id", "tags", "text", "stance", "terms", "ask_pct", *FLAGS}

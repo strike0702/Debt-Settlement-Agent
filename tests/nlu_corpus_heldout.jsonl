@@ -1,0 +1,32 @@
+{"id": "hp01", "tags": ["private", "heldout"], "text": "Roughly what does your client bring home after deductions?", "stance": "question", "asks_client_private_info": true}
+{"id": "hp02", "tags": ["private", "heldout"], "text": "How much wiggle room is there in the client's monthly budget?", "stance": "question", "asks_client_private_info": true}
+{"id": "hp03", "tags": ["private", "heldout"], "text": "What's sitting in the client's checking account right now?", "stance": "question", "asks_client_private_info": true}
+{"id": "hp04", "tags": ["private", "heldout"], "text": "Be straight with me, what can they truly afford?", "stance": "question", "asks_client_private_info": true}
+{"id": "hp05", "tags": ["private", "heldout"], "text": "How much has your customer got stashed away in savings?", "stance": "question", "asks_client_private_info": true}
+{"id": "hp06", "tags": ["private", "heldout"], "text": "What's the deposit you collect from the consumer every month?", "stance": "question", "asks_client_private_info": true}
+{"id": "hp07", "tags": ["private", "heldout"], "text": "Between us, how high could your client go if pushed?", "stance": "question", "asks_client_private_info": true}
+{"id": "hp08", "tags": ["private", "heldout"], "text": "What kind of money is the debtor making these days?", "stance": "question", "asks_client_private_info": true}
+{"id": "hp09", "tags": ["private", "heldout"], "text": "How much are you charging the client in fees on this program?", "stance": "question", "asks_client_private_info": true}
+{"id": "hp10", "tags": ["private", "heldout"], "text": "Is there enough in their dedicated account to cover a lump sum today?", "stance": "question", "asks_client_private_info": true}
+{"id": "hp11", "tags": ["private", "heldout"], "text": "What are the client's monthly expenses looking like?", "stance": "question", "asks_client_private_info": true}
+{"id": "hp12", "tags": ["private", "heldout"], "text": "Does the borrower have a 401k or any retirement money they could tap?", "stance": "question", "asks_client_private_info": true}
+{"id": "hp13", "tags": ["private", "heldout", "stt"], "text": "what kind of paycheck is the client pulling in", "stance": "question", "asks_client_private_info": true}
+{"id": "hp14", "tags": ["private", "heldout"], "text": "Level with me, what's the real number your client can pay each month?", "stance": "question", "asks_client_private_info": true}
+{"id": "hp15", "tags": ["private", "heldout"], "text": "How much has built up in the client's escrow so far?", "stance": "question", "asks_client_private_info": true}
+{"id": "hp16", "tags": ["private", "heldout"], "text": "Who does the client bank with, and what's the balance there?", "stance": "question", "asks_client_private_info": true}
+{"id": "hn01", "tags": ["private_neg", "heldout"], "text": "What balance do you show owed on this account?", "stance": "question"}
+{"id": "hn02", "tags": ["private_neg", "heldout"], "text": "How many payments were you thinking?", "stance": "question"}
+{"id": "hn03", "tags": ["private_neg", "heldout"], "text": "When would the first payment go out?", "stance": "question"}
+{"id": "hn04", "tags": ["private_neg", "heldout"], "text": "Our records show the account charged off at $5,300.", "stance": "info"}
+{"id": "hn05", "tags": ["private_neg", "heldout"], "text": "What's the total you're proposing to pay on this balance?", "stance": "question"}
+{"id": "hn06", "tags": ["private_neg", "heldout"], "text": "The smallest monthly draft we accept is $100.", "stance": "info", "terms": {"min_payment_cents": 10000}}
+{"id": "hn07", "tags": ["private_neg", "heldout"], "text": "Could you stretch the plan over a few more months?", "stance": "question"}
+{"id": "hn08", "tags": ["private_neg", "heldout"], "text": "What's the real reason you can't go higher than that?", "stance": "question"}
+{"id": "hn09", "tags": ["private_neg", "heldout"], "text": "Off the record, I can probably get my manager to approve a bit lower.", "stance": "info"}
+{"id": "hn10", "tags": ["private_neg", "heldout"], "text": "Our take-home on this account after collection costs is pretty thin.", "stance": "info"}
+{"id": "hn11", "tags": ["private_neg", "heldout"], "text": "What's the reference number on this account so I can pull it up?", "stance": "question"}
+{"id": "hn12", "tags": ["private_neg", "heldout"], "text": "How much is still owed after the last payment we received?", "stance": "question"}
+{"id": "hn13", "tags": ["private_neg", "heldout"], "text": "Which date works for the first payment, the first or the fifteenth?", "stance": "question"}
+{"id": "hn14", "tags": ["private_neg", "heldout"], "text": "Can you afford to hold off until Monday for our decision?", "stance": "question"}
+{"id": "hn15", "tags": ["private_neg", "heldout"], "text": "We really can't do better than fifty-five percent.", "stance": "counter", "firm": true, "ask_pct": 55}
+{"id": "hn16", "tags": ["private_neg", "heldout"], "text": "What percentage of the balance are you offering in total?", "stance": "question"}

@@ -351,3 +351,87 @@ def test_negation_guard_never_forces_reject() -> None:
 
 def test_negated_phrase_falls_through_to_unnegated_later_phrase() -> None:
     assert repair_stance("stall", "Not sure that works... actually, sounds good.") == "accept"
+
+
+# --- Phase 32: indirect private-info asks (regex arm, LLM flag off) ---------
+
+
+@pytest.mark.parametrize(
+    "utterance",
+    [
+        # money drafted / deposited from the client
+        "How much do you draft from the client every month?",
+        "What deposits come out of the borrower's account each month?",
+        "Tell me the monthly deposit you collect for this file.",
+        "How much gets drafted for the program right now?",
+        # take-home pay
+        "Roughly what's his take-home pay?",
+        "What does the customer bring home every two weeks?",
+        # really / truly afford or pay
+        "Honestly, what can this person realistically afford?",
+        "What would they truly pay if I dropped the fees?",
+        # stretch
+        "How far could your customer stretch on this?",
+        "Would they stretch to a bigger first payment?",
+        # what / most / how much the client can pay, afford, earn
+        "What could the debtor pay each month?",
+        "Just tell me what the borrower can afford.",
+        "What's the most the client can pay up front?",
+        "How much does the consumer earn?",
+        "and she makes how much?",
+        # off the record + question
+        "Off the record, how much does she have?",
+        # the client's savings / accounts / budget
+        "Can you send over the debtor's budget?",
+        "Do they have their savings in a separate account?",
+        "What's the customer's checking look like?",
+        "Is any of it in savings?",
+    ],
+)
+def test_indirect_private_cue_fires(utterance: str) -> None:
+    out = post_verify(TurnAnalysis(stance="question"), utterance, ref=_REF)
+    assert out.asks_client_private_info is True
+
+
+@pytest.mark.parametrize(
+    "utterance",
+    [
+        # Phase 32 held-out near-misses (tests/nlu_corpus_heldout.jsonl, hn*).
+        "What balance do you show owed on this account?",
+        "How many payments were you thinking?",
+        "When would the first payment go out?",
+        "Our records show the account charged off at $5,300.",
+        "What's the total you're proposing to pay on this balance?",
+        "The smallest monthly draft we accept is $100.",
+        "Could you stretch the plan over a few more months?",
+        "What's the real reason you can't go higher than that?",
+        "Off the record, I can probably get my manager to approve a bit lower.",
+        "Our take-home on this account after collection costs is pretty thin.",
+        "What's the reference number on this account so I can pull it up?",
+        "How much is still owed after the last payment we received?",
+        "Which date works for the first payment, the first or the fifteenth?",
+        "Can you afford to hold off until Monday for our decision?",
+        "We really can't do better than fifty-five percent.",
+        "What percentage of the balance are you offering in total?",
+        # Creditor-side uses of the new cue words.
+        "We can set up a monthly draft of at least $100.",
+        "My managers said they would stretch to six payments.",
+        "Can you actually get me a signed letter by Friday?",
+        "How much does the client still owe us?",
+        # Disclaimers are vetoed for the new cues too.
+        "We don't need to know what your client can afford.",
+        "I'm not asking about their savings, just the percentage.",
+    ],
+)
+def test_indirect_private_cue_near_misses_do_not_fire(utterance: str) -> None:
+    out = post_verify(TurnAnalysis(stance="question"), utterance, ref=_REF)
+    assert out.asks_client_private_info is False
+
+
+def test_nlu_prompt_describes_indirect_private_asks() -> None:
+    from app.llm.prompts import nlu_messages
+
+    system = nlu_messages("x", "", None)[0]["content"]
+    assert "asks_client_private_info=true" in system
+    for cue in ("take-home", "drafted or deposited", "stretch", "creditor's own figures"):
+        assert cue in system

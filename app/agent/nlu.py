@@ -761,7 +761,14 @@ _HOSTILITY_RE = re.compile(
     re.IGNORECASE,
 )
 # "client's account" alone is usually the creditor's own account, so only
-# account balance / number count.
+# account balance / number count. Phase 32 adds indirect asks: money drafted
+# from the client, take-home pay, what the client can really afford or stretch
+# to, "off the record, what ...", and the client's savings / budget. Each cue
+# names the client (or a third person) as the owner, so the creditor's own
+# draft minimum, take-home or balance owed does not fire.
+_PRIVATE_WHO = r"(?:client|customer|consumer|debtor|borrower|guy|gal|they|he|she|them|him|her)"
+# Optional determiner + the client (or a third person), e.g. "your client", "they".
+_PRIVATE_SUBJ = r"(?:the |your |this )?" + _PRIVATE_WHO + r"\w*\s+(?:\w+\s+)?"
 _PRIVATE_INFO_RE = re.compile(
     r"(?:"
     r"\b(?:client'?s?|their|his|her)\s+"
@@ -770,6 +777,30 @@ _PRIVATE_INFO_RE = re.compile(
     r"|\b(?:bank balance|monthly income|social security|ssn|routing number)\b"
     r"|\bdraft amount\b"
     r"|\bwhat (?:is|are) (?:the )?client\b"
+    # Money that leaves the client: drafted / deposited from them, or pulled by us.
+    r"|\b(?:drafts?|drafted|deposits?|deposited)\b[^.?!]{0,30}?"
+    r"\b(?:(?:from|out of) (?:the |your |this )?" + _PRIVATE_WHO
+    + r"|you (?:pull|take|collect|get))\b"
+    r"|\bhow much\b[^.?!]{0,30}?\b(?:draft|drafted|deposited)\b"
+    # Take-home pay (bare "our take-home" is the creditor's, so pay/income or a subject).
+    r"|\btake[- ]home (?:pay|income)\b"
+    r"|\b" + _PRIVATE_SUBJ + r"(?:takes?|taking|brings?|bringing) home\b"
+    # Capacity: what the client can really afford, or stretch to.
+    r"|\b(?:really|truly|actually|realistically)\s+(?:\w+\s+)?(?:pay|afford)\b"
+    r"|\b(?:if|how far|could|can|would)\s+" + _PRIVATE_SUBJ + r"stretch(?:ed|es|ing)?\b"
+    r"|\bwhat " + _PRIVATE_SUBJ + r"(?:can|could)\s+(?:\w+\s+)?(?:pay|afford)\b"
+    r"|\bwhat (?:can|could) " + _PRIVATE_SUBJ + r"(?:pay|afford)\b"
+    r"|\b(?:most|max|maximum) " + _PRIVATE_SUBJ + r"(?:could|can)\s+(?:\w+\s+)?(?:pay|afford)\b"
+    r"|\bhow much (?:can|could|do|does|did|will|would) " + _PRIVATE_SUBJ
+    + r"(?:afford|make|earn|bring in|save)\b"
+    r"|\b" + _PRIVATE_WHO + r"\w* (?:pays|earns|makes|has|saves) how much\b"
+    # "Off the record, what/how ..." is an ask; an off-the-record statement is not.
+    r"|\boff the record\b[^.!?]{0,12}?\b(?:what|how|tell me)\b"
+    # The client's own savings, accounts, budget.
+    r"|\b(?:client|customer|consumer|debtor|borrower)'?s?\s+"
+    r"(?:savings|checking|escrow|budget|expenses|assets)\b"
+    r"|\b(?:their|his|her)\s+(?:savings|checking|budget|expenses|assets)\b"
+    r"|\bin savings\b"
     r")",
     re.IGNORECASE,
 )

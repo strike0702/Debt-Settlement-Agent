@@ -22,7 +22,10 @@ reply before ``repair_stance``), plus which guard rule decided
 ``--from-records`` it rescores a saved JSONL without any LLM call, so one paid
 pass yields both variants (Phase 37). Eval-only: ``app/`` is unchanged.
 ``--providers`` swaps ``config/providers.yaml`` for this run (like
-``eval.run_eval``).
+``eval.run_eval``). Without it, paid ``budgeted: true`` targets (the demo NLU's
+Claude, Phase 41) are dropped unless ``--allow-budgeted`` is passed, so the
+default ``demo`` profile never spends money by accident; an explicit
+``--providers`` file is used as is (that is how approved paid runs are made).
 
 One row must be one model. A fail-over (e.g. the ``demo`` NLU route's 6 s
 timeout to the next provider) or a JSON retry on another model would mix
@@ -50,6 +53,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from datetime import date
 from pathlib import Path
@@ -72,6 +76,7 @@ from app.domain.fields import FIELDS_BY_NAME
 from app.llm.call_audit import audit_llm_calls, llm_call_scope
 from app.llm.client import LLMUnavailable, make_client
 from app.store.audit import AuditLog
+from eval.run_eval import _DEFAULT_PROVIDERS, without_budgeted
 
 CORPUS_PATH = Path("tests/nlu_corpus.jsonl")
 REPORT_PATH = Path("docs/eval/nlu_corpus.md")
@@ -390,6 +395,14 @@ from separate organizations (`GROQ_API_KEY_1`, `_2`, ...): one full corpus
 pass is about 230K tokens (about 1.3K per NLU call), above one free-tier
 organization's 200K tokens/day, so one key runs dry near line 157 (Phase 32)
 and the rest of the run would fail over to another model.
+
+Paid targets (Phase 41): the shipped `demo` NLU route starts with Claude Sonnet
+5.5 marked `budgeted: true`. Without `--providers`, the runner drops budgeted
+targets and prints one line saying so, so a default run stays on the free
+chain and spends nothing. `--allow-budgeted` keeps them (and the run then
+counts against the demo's daily budget in the app DB). Approved paid runs use
+an explicit `--providers` file, which is used as is (e.g. the Phase 37 and
+Phase 40 files).
 """
 
 
@@ -433,6 +446,7 @@ async def run_corpus(
     retry_backoff_s: float = RETRY_BACKOFF_S,
     min_interval_s: float = 0.0,
     providers_path: Path | None = None,
+    allow_budgeted: bool = False,
 ) -> tuple[list[dict[str, Any]], Counter[str]]:
     """Analyze every line; returns per-line records and answering-model counts.
 
@@ -442,7 +456,8 @@ async def run_corpus(
     LLM call holds its slot for at least ``min_interval_s`` (rate pacing).
     With ``audit``, each line's LLM calls are audited under ``corpus:<id>``.
     ``llm`` overrides the client built from ``profile`` (tests);
-    ``providers_path`` replaces ``config/providers.yaml`` for the built client.
+    ``providers_path`` replaces ``config/providers.yaml`` for the built client;
+    without it, ``budgeted`` (paid) targets are dropped unless ``allow_budgeted``.
     """
     settings = get_settings().model_copy(
         update={
@@ -470,7 +485,16 @@ async def run_corpus(
 
     hook = audit_llm_calls(audit, then=on_call) if audit is not None else on_call
     owns_llm = llm is None
-    if llm is None:
+    if llm is None and providers_path is None and not allow_budgeted:
+        # The client reads the YAML only while it is built, so a temp copy will do.
+        with tempfile.TemporaryDirectory() as tmp:
+            path, removed = without_budgeted(_DEFAULT_PROVIDERS, Path(tmp))
+            mine = [r for r in removed if r.startswith(f"{profile}/")]
+            if mine:
+                print(f"skipped budgeted (paid) targets: {', '.join(mine)} "
+                      "(--allow-budgeted keeps)")
+            llm = make_client(settings, on_call=hook, providers_path=path)
+    elif llm is None:
         llm = make_client(settings, on_call=hook, providers_path=providers_path)
     else:
         llm.on_call = hook
@@ -609,6 +633,10 @@ def main(argv: list[str] | None = None) -> int:
         help="providers.yaml for this run (default config/providers.yaml)",
     )
     ap.add_argument(
+        "--allow-budgeted", action="store_true",
+        help="keep paid `budgeted: true` targets of the default providers file",
+    )
+    ap.add_argument(
         "--no-repair-stance", action="store_true",
         help="score the raw LLM stance (repair_stance off); eval-only, app/ unchanged",
     )
@@ -642,6 +670,7 @@ def main(argv: list[str] | None = None) -> int:
                     retry_backoff_s=args.retry_backoff_s,
                     min_interval_s=args.min_interval_s,
                     providers_path=args.providers,
+                    allow_budgeted=args.allow_budgeted,
                 )
             )
         finally:

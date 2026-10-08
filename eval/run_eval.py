@@ -3,7 +3,7 @@
 CLI: ``python -m eval.run_eval --scenarios 12 --seed 7 [--resume RUN_ID]
 [--profile eval] [--nlu oracle|llm] [--nlg llm|bank|template]
 [--sim-phrasing llm|template] [--no-oracle-overlay]
-[--agent policy|policy_h3|react|llm_only] [--providers PATH]``.
+[--agent policy|policy_h3|react|llm_only] [--providers PATH] [--allow-budgeted]``.
 
 Two layers:
 - ``--nlu oracle``: offline policy eval. Sim ground-truth ``TurnAnalysis``
@@ -23,6 +23,10 @@ metrics; per-call results add ``agent``, ``transcript``,
 
 ``--providers`` swaps ``config/providers.yaml`` for this run only (e.g. split
 per-key rpm when several arms run at once: each process paces its own keys).
+Without it, paid ``budgeted: true`` route targets (the demo NLU's Claude,
+Phase 41) are dropped from the shipped file (``without_budgeted``, copy written
+to the run dir) unless ``--allow-budgeted`` is passed, so an eval never spends
+money by accident. An explicit ``--providers`` file is used as is.
 
 Writes ``eval/results/<run_id>/<scenario_id>.json`` as each finishes; resume
 skips completed ``status=ok`` files and retries ``skipped_quota``. ``run.json``
@@ -509,6 +513,39 @@ async def run_one_scenario(
 _DEFAULT_PROVIDERS = Path(__file__).resolve().parents[1] / "config" / "providers.yaml"
 
 
+def without_budgeted(src: Path, dest_dir: Path) -> tuple[Path, list[str]]:
+    """``src`` minus every ``budgeted: true`` (paid) route entry, written to ``dest_dir``.
+
+    Returns the providers path to use and the removed ``profile/role/target``
+    names; when nothing is budgeted, ``src`` itself and ``[]``.
+    """
+    import yaml
+
+    data = yaml.safe_load(src.read_text(encoding="utf-8"))
+    removed: list[str] = []
+    for pname, roles in (data.get("profiles") or {}).items():
+        for role, entries in roles.items():
+            keep = []
+            for e in entries:
+                if isinstance(e, dict) and e.get("budgeted") is True:
+                    removed.append(f"{pname}/{role}/{e.get('target')}")
+                else:
+                    keep.append(e)
+            roles[role] = keep
+    if not removed:
+        return src, []
+    dest = dest_dir / "providers_no_budgeted.yaml"
+    dest.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    return dest, removed
+
+
+def count_live_call(counts: Counter[str], meta: dict[str, Any]) -> None:
+    """Count one attempt that reached a provider (cache hits and budget markers excluded)."""
+    if meta.get("cache_hit") or meta.get("event"):
+        return
+    counts[f"{meta.get('provider', '?')}/{meta.get('model', '?')}"] += 1
+
+
 def _route_models(settings: Settings, path: Path = _DEFAULT_PROVIDERS) -> dict[str, list[str]]:
     import yaml
 
@@ -554,13 +591,14 @@ async def _async_main(args: argparse.Namespace) -> int:
     call_counts: Counter[str] = Counter()
 
     def on_call(meta: dict[str, Any]) -> None:
-        if meta.get("cache_hit"):
-            return
-        provider = meta.get("provider", "?")
-        model = meta.get("model", "?")
-        call_counts[f"{provider}/{model}"] += 1
+        count_live_call(call_counts, meta)
 
     providers = Path(args.providers) if args.providers else _DEFAULT_PROVIDERS
+    if not args.providers and not args.allow_budgeted:
+        providers, removed = without_budgeted(providers, run_dir)
+        mine = [r for r in removed if r.startswith(f"{profile}/")]
+        if mine:
+            print(f"skipped budgeted (paid) targets: {', '.join(mine)} (--allow-budgeted keeps)")
     llm = make_client(settings, on_call=on_call, providers_path=providers)
     scenarios = generate(n, seed)
 
@@ -695,6 +733,11 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         metavar="PATH",
         help="providers.yaml for this run (default config/providers.yaml)",
+    )
+    p.add_argument(
+        "--allow-budgeted",
+        action="store_true",
+        help="keep paid `budgeted: true` targets of the default providers file",
     )
     args = p.parse_args(argv)
     if args.nlu == "oracle":

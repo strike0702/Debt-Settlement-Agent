@@ -46,6 +46,18 @@ that failed before the call moved to another key. Each meta carries ``key_id``
 cooldown waits); ``queue_wait_scope`` sums it for a turn.
 ``app.llm.call_audit`` turns that hook into audit-log rows.
 
+Daily budget (Phase 41): a route entry may carry ``budgeted: true`` (only the
+demo ``nlu`` route's Claude target does; a ``judge`` route may not, so eval
+judging is never capped). Its provider must list the model under
+``prices_usd_per_mtok``. Before such a target, once its provider has a usable
+key, ``app.llm.budget.DailyBudget`` is checked: when today's (UTC) spend has
+reached ``Settings.claude_daily_budget_usd`` the target is skipped and the call
+goes down the route (``failover_from`` = the skipped target). The skip emits a
+meta with ``event="llm_budget_skip"`` (and, first time each day,
+``event="llm_budget_exhausted"``), ``error`` set and ``latency_ms`` 0. A live
+success adds ``prompt_tokens`` × input price + ``completion_tokens`` × output
+price to the day; failures and cache hits add nothing.
+
 Does not own NLU/NLG prompts or policy. SQLite response cache (temp 0 only).
 ``FakeLLM`` is the offline/test stand-in with a per-role response queue.
 """
@@ -77,6 +89,7 @@ from openai import APIConnectionError, APIStatusError, AsyncOpenAI
 from pydantic import BaseModel
 
 from app.config import Settings, get_settings
+from app.llm.budget import DailyBudget, ModelPrice, micros_to_usd, usd_to_micros
 
 Role = Literal["nlu", "nlg", "sim", "stt", "agent", "judge"]
 
@@ -179,6 +192,8 @@ class RouteTarget:
     model: str
     params: Mapping[str, Any] = field(default_factory=dict)
     timeout_s: float | None = None
+    # Phase 41: subject to the daily budget (see module docstring).
+    budgeted: bool = False
 
     @property
     def spec(self) -> str:
@@ -192,7 +207,7 @@ def parse_route_entry(raw: str | Mapping[str, Any]) -> RouteTarget:
         return RouteTarget(provider, model)
     if not isinstance(raw, Mapping) or not isinstance(raw.get("target"), str):
         raise ValueError(f"route entry needs a 'target' string: {raw!r}")
-    extra = set(raw) - {"target", "params", "timeout_s"}
+    extra = set(raw) - {"target", "params", "timeout_s", "budgeted"}
     if extra:
         raise ValueError(f"unknown route entry keys {sorted(extra)}: {raw!r}")
     params = raw.get("params") or {}
@@ -203,9 +218,16 @@ def parse_route_entry(raw: str | Mapping[str, Any]) -> RouteTarget:
         isinstance(timeout_s, bool) or not isinstance(timeout_s, (int, float)) or timeout_s <= 0
     ):
         raise ValueError(f"route timeout_s must be a positive number: {raw!r}")
+    budgeted = raw.get("budgeted", False)
+    if not isinstance(budgeted, bool):
+        raise ValueError(f"route budgeted must be true or false: {raw!r}")
     provider, model = _parse_target(raw["target"])
     return RouteTarget(
-        provider, model, dict(params), float(timeout_s) if timeout_s is not None else None
+        provider,
+        model,
+        dict(params),
+        float(timeout_s) if timeout_s is not None else None,
+        budgeted,
     )
 
 
@@ -246,6 +268,8 @@ class _ProviderCfg:
     health: str | None = None
     tpm: float = 0  # tokens per minute per key; 0 = no TPM budget
     api: Literal["openai", "anthropic"] = "openai"
+    # model -> price, from ``prices_usd_per_mtok`` (Phase 41 daily budget).
+    prices: dict[str, ModelPrice] = field(default_factory=dict)
 
 
 @dataclass(eq=False)
@@ -514,8 +538,11 @@ class LLMClient:
         on_call: OnCallHook | None = None,
         fake: FakeLLM | None = None,
         skip_health_check: bool = False,
+        budget: DailyBudget | None = None,
     ) -> None:
         self.settings = settings or get_settings()
+        # Built on first use (see _budget_for) so a keyless route never opens the DB.
+        self._budget = budget
         self._fake = fake
         self._owns_fake = False
         self.on_call = on_call
@@ -563,6 +590,10 @@ class LLMClient:
             api = raw.get("api", "openai")
             if api not in ("openai", "anthropic"):
                 raise ValueError(f"provider {name}: unknown api {api!r}")
+            prices = {
+                str(m): ModelPrice.from_config(p, f"provider {name} price {m}")
+                for m, p in (raw.get("prices_usd_per_mtok") or {}).items()
+            }
             self._providers[name] = _ProviderCfg(
                 name=name,
                 base_url=raw["base_url"],
@@ -577,6 +608,7 @@ class LLMClient:
                 local=bool(raw.get("local", False)),
                 health=raw.get("health"),
                 tpm=float(raw.get("tpm") or 0),
+                prices=prices,
             )
         for pname, proute in (data.get("profiles") or {}).items():
             if "all" in proute:
@@ -593,11 +625,22 @@ class LLMClient:
                     k: [parse_route_entry(e) for e in v] for k, v in proute.items()
                 }
         for pname, roles in self._profiles.items():
-            for targets in roles.values():
+            for role, targets in roles.items():
                 for t in targets:
                     cfg = self._providers.get(t.provider)
                     if cfg is not None and cfg.api == "anthropic":
                         _check_anthropic_params(f"{pname}/{t.spec}", t.params)
+                    if not t.budgeted:
+                        continue
+                    # The eval judge has its own spend approval; a capped judge
+                    # would also switch model mid-run, which _NO_NLU_FALLBACK forbids.
+                    if role in _NO_NLU_FALLBACK:
+                        raise ValueError(f"{pname}/{role}/{t.spec}: {role} may not be budgeted")
+                    if cfg is None or t.model not in cfg.prices:
+                        raise ValueError(
+                            f"{pname}/{role}/{t.spec}: budgeted target needs a "
+                            f"prices_usd_per_mtok entry on provider {t.provider!r}"
+                        )
 
     def _resolve_keys(self, cfg: _ProviderCfg) -> list[tuple[int, str]]:
         """``(suffix, value)`` pool: inline ``api_key`` (local) or ``Settings.api_keys``."""
@@ -767,6 +810,77 @@ class LLMClient:
         soonest = self._soonest_cooldown_s(provider, model)
         return soonest is not None and soonest <= min(horizon_s, _SHORT_RETRY_S)
 
+    def _budget_for(self) -> DailyBudget:
+        if self._budget is None:
+            self._budget = DailyBudget(
+                self.settings.db_path,
+                limit_micros=usd_to_micros(self.settings.claude_daily_budget_usd),
+            )
+        return self._budget
+
+    def budget_status(self) -> dict[str, Any]:
+        """Today's budget as ``{day, spent_usd, limit_usd, remaining_usd}`` (Decimal USD)."""
+        b = self._budget_for()
+        spent = b.spent_micros()
+        return {
+            "day": b.today().isoformat(),
+            "spent_usd": micros_to_usd(spent),
+            "limit_usd": micros_to_usd(b.limit_micros),
+            "remaining_usd": micros_to_usd(max(0, b.limit_micros - spent)),
+        }
+
+    async def _skip_over_budget(
+        self, role: Role, target: RouteTarget, failover_from: str | None
+    ) -> bool:
+        """True (after emitting the budget markers) when ``target`` must be skipped today."""
+        budget = self._budget_for()
+        if not budget.exhausted():
+            return False
+        status = "daily budget exhausted"
+        base: dict[str, Any] = {
+            "role": role,
+            "provider": target.provider,
+            "model": target.model,
+            "latency_ms": 0.0,
+            "prompt_tokens": None,
+            "completion_tokens": None,
+            "cache_hit": False,
+            "failover_from": failover_from,
+            "error": status,
+            "queue_ms": 0.0,
+            "key_id": None,
+        }
+        if budget.note_exhausted():
+            try:
+                spent = budget.spent_micros()
+            except sqlite3.Error:  # the marker must not fail the call
+                spent = -1
+            await self._emit(
+                {
+                    **base,
+                    "event": "llm_budget_exhausted",
+                    "day": budget.today().isoformat(),
+                    "spent_usd": str(micros_to_usd(spent)) if spent >= 0 else None,
+                    "limit_usd": str(micros_to_usd(budget.limit_micros)),
+                }
+            )
+        await self._emit({**base, "event": "llm_budget_skip"})
+        return True
+
+    def _record_spend(
+        self,
+        target: RouteTarget,
+        messages: Sequence[Mapping[str, Any]],
+        max_tokens: int | None,
+        pt: int | None,
+        ct: int | None,
+    ) -> None:
+        """Charge one live budgeted success; missing usage is charged high, not as 0."""
+        price = self._providers[target.provider].prices[target.model]
+        pt_n = pt if pt is not None else _estimate_tokens(messages)
+        ct_n = ct if ct is not None else (max_tokens or _ANTHROPIC_DEFAULT_MAX_TOKENS)
+        self._budget_for().record(price, pt_n, ct_n)
+
     async def _emit(self, meta: dict[str, Any]) -> None:
         if self.on_call is not None:
             result = self.on_call(meta)
@@ -930,6 +1044,11 @@ class LLMClient:
             timeout_s = target.timeout_s or self._timeout_for(role)
             if not self._provider_usable(provider, model, timeout_s):
                 continue
+            # After the key check, so a route whose paid target has no key behaves
+            # exactly as before (no DB access, no marker).
+            if target.budgeted and await self._skip_over_budget(role, target, failover_from):
+                failover_from = target.spec
+                continue
 
             cfg = self._providers[provider]
 
@@ -1002,6 +1121,8 @@ class LLMClient:
                     pt,
                     ct,
                 )
+            if target.budgeted:
+                self._record_spend(target, messages, max_tokens, pt, ct)
 
             await self._emit_call(
                 role,
@@ -1376,6 +1497,8 @@ class LLMClient:
                 await k.client.close()
         if self._cache is not None:
             self._cache.close()
+        if self._budget is not None:
+            self._budget.close()
 
 
 class _TargetError(Exception):

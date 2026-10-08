@@ -14,6 +14,14 @@ pass is about 230K tokens (about 1.3K per NLU call), above one free-tier
 organization's 200K tokens/day, so one key runs dry near line 157 (Phase 32)
 and the rest of the run would fail over to another model.
 
+Paid targets (Phase 41): the shipped `demo` NLU route starts with Claude Sonnet
+5.5 marked `budgeted: true`. Without `--providers`, the runner drops budgeted
+targets and prints one line saying so, so a default run stays on the free
+chain and spends nothing. `--allow-budgeted` keeps them (and the run then
+counts against the demo's daily budget in the app DB). Approved paid runs use
+an explicit `--providers` file, which is used as is (e.g. the Phase 37 and
+Phase 40 files).
+
 ## BEFORE
 
 - git: `1af0c86`  profile=`demo`  ref=2026-04-01

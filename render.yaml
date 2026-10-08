@@ -48,3 +48,13 @@ services:
         sync: false
       - key: MISTRAL_API_KEY
         sync: false
+      # Paid (Phase 41): Claude Sonnet 5.5 reads the rep first on the demo NLU.
+      # Unset = the free chain only, exactly as before.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Daily Claude cap in USD per UTC day (code default 1.00). The spend counter
+      # lives in DB_PATH, which is on the instance's ephemeral disk: a restart or
+      # deploy starts the day at $0 again, so also set a monthly limit in the
+      # Anthropic console as the backstop.
+      - key: CLAUDE_DAILY_BUDGET_USD
+        sync: false

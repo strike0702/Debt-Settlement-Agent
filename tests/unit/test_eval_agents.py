@@ -429,6 +429,10 @@ def test_split_providers_file_halves_every_rate() -> None:
     split = yaml.safe_load(
         Path("docs/eval/ab_20261007/providers_split2.yaml").read_text(encoding="utf-8")
     )
+    # The split file is the frozen 2026-10-07 A/B config: it predates the
+    # Phase 41 budgeted Claude target on the demo NLU, so compare without it.
+    for entries in base["profiles"]["demo"].values():
+        entries[:] = [e for e in entries if not (isinstance(e, dict) and e.get("budgeted"))]
     assert split["profiles"] == base["profiles"]
     for name, cfg in base["providers"].items():
         for key in ("rpm", "tpm"):

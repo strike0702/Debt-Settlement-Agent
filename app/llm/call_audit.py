@@ -7,9 +7,11 @@ The eval runner also sets it around the sim, so sim-phrasing calls are audited.
 
 ``audit_llm_calls`` builds an ``on_call`` hook for ``LLMClient`` / ``FakeLLM``
 that writes one row per attempt: ``llm_call`` on success or cache hit,
-``llm_call_failed`` when a target failed (``error`` set). Wired in the FastAPI
-lifespan (``app.main``), ``app.cli``, and ``eval.run_eval``. Calls made with no
-call id in context (e.g. the NLU corpus scorer) are not written anywhere.
+``llm_call_failed`` when a target failed (``error`` set), or the meta's own
+``event`` when it names one (Phase 41 budget markers ``llm_budget_exhausted`` /
+``llm_budget_skip``). Wired in the FastAPI lifespan (``app.main``),
+``app.cli``, and ``eval.run_eval``. Calls made with no call id in context
+(e.g. the NLU corpus scorer) are not written anywhere.
 """
 
 from __future__ import annotations
@@ -42,7 +44,7 @@ def audit_llm_calls(audit: AuditLog, *, then: OnCallHook | None = None) -> OnCal
     async def hook(meta: dict[str, Any]) -> None:
         call_id = LLM_CALL_ID.get()
         if call_id is not None:
-            event = "llm_call_failed" if meta.get("error") else "llm_call"
+            event = meta.get("event") or ("llm_call_failed" if meta.get("error") else "llm_call")
             audit.append(call_id, "llm", event, dict(meta))
         if then is not None:
             result = then(meta)

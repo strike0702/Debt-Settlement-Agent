@@ -302,11 +302,15 @@ def test_shipped_judge_route_is_sonnet_5_5_without_fallback() -> None:
     for name in ("eval", "local"):
         route = [parse_route_entry(e) for e in data["profiles"][name]["judge"]]
         assert [t.spec for t in route] == ["anthropic/claude-sonnet-5-5"], name
-    # No existing role moved off the free tier.
-    for prof in data["profiles"].values():
+    # No other role moved off the free tier, except the demo NLU (Phase 41),
+    # whose Claude target is budgeted (tests/unit/test_llm_budget.py).
+    for pname, prof in data["profiles"].items():
         for role, entries in prof.items():
-            if role != "judge":
-                assert all(parse_route_entry(e).provider != "anthropic" for e in entries)
+            if role == "judge":
+                continue
+            for t in map(parse_route_entry, entries):
+                if t.provider == "anthropic":
+                    assert (pname, role, t.budgeted) == ("demo", "nlu", True)
 
 
 def test_judge_timeout_setting() -> None:

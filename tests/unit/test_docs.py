@@ -1,4 +1,4 @@
-"""Docs and evidence hygiene (Phase 25): links, media size, frozen-pack notes.
+"""Docs and evidence hygiene (Phases 25, 25r): links, media size, frozen-pack notes.
 
 The README promises that every number links to a committed file, so a broken
 relative link or heading anchor is a correctness bug here. These tests read
@@ -68,10 +68,14 @@ def test_readme_media_within_size_budget() -> None:
     assert sum(p.stat().st_size for p in media) <= MEDIA_LIMIT_BYTES
 
 
-def test_ab_pending_markers_are_paired() -> None:
+def test_ab_results_replaced_the_pending_placeholders() -> None:
+    # Phase 25r filled in the A/B result; no placeholder may come back, and both
+    # docs must cite the committed summary the numbers come from.
+    marker = "AB-" + "PENDING"
     for doc in ("README.md", "docs/DESIGN.md"):
         text = (ROOT / doc).read_text(encoding="utf-8")
-        assert text.count("<!-- AB-PENDING -->") == text.count("<!-- /AB-PENDING -->") >= 1
+        assert marker not in text
+        assert "ab_20261007/summary.md" in text
 
 
 def test_operator_view_is_documented_as_public_by_design() -> None:

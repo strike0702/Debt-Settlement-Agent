@@ -22,10 +22,20 @@ valid agreements 1.0, n=23). The eval arms must be given private figures to
 work at all, which is the risk this decision avoids. The cost is rigidity: a
 new move needs code and tests, not a prompt edit.
 
-<!-- AB-PENDING -->
-**A/B in progress.** The three-arm A/B (policy vs policy + H3 vs ReAct, same
-seeds) has not finished; its summary will land in `docs/eval/ab_20261007/`.
-<!-- /AB-PENDING -->
+**A/B result.** The decision was tested against the alternatives on the same 48
+seeds, with live NLU and live creditor phrasing
+([summary](eval/ab_20261007/summary.md), [decision](eval/ab_20261007/decision.md)).
+The adoption rule was written down before the run and was not moved afterwards.
+The policy with template NLG (A) stays the default. The policy with
+conversational acts (B, H3) was judged more natural, winning 0.80 [0.61, 0.91]
+of decisive pairs against A, but it fails the rule: it spoke 1 private figure,
+from a policy accept of a figure the simulated creditor invented, and its
+`agreement_valid` was 0.71 against A's 0.75. Both of those agreement failures
+come from live-NLU extraction errors that every arm shares. The ReAct agent (C)
+fails on safety (2 private and 8 unverified figures spoken in its own text),
+escalation (0.22 against 1.00) and latency (10.2 s p50 against 2.0 s). The
+LLM-only arm (D) was stopped at 13 of 48 scenarios and was behind A on every
+check it reached. A human check of the judge is pending (20 pairs).
 
 ## ADR 2. The LLM writes placeholders, never digits
 

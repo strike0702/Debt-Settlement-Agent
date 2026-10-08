@@ -1,0 +1,226 @@
+{
+  "common_scenarios": [
+    "s0007_000_deal_flexible",
+    "s0007_001_deal_contradictory",
+    "s0007_002_deal_pressuring",
+    "s0007_003_deal_flexible",
+    "s0007_004_deal_contradictory",
+    "s0007_005_deal_pressuring",
+    "s0007_006_deal_flexible",
+    "s0007_007_deal_contradictory",
+    "s0007_008_deal_pressuring",
+    "s0007_009_deal_flexible",
+    "s0007_010_deal_contradictory",
+    "s0007_011_deal_pressuring",
+    "s0007_012_deal_flexible",
+    "s0007_013_deal_contradictory",
+    "s0007_014_deal_pressuring",
+    "s0007_015_deal_flexible",
+    "s0007_016_rescue_contradictory",
+    "s0007_017_rescue_pressuring",
+    "s0007_018_rescue_flexible",
+    "s0007_019_rescue_contradictory",
+    "s0007_020_rescue_pressuring",
+    "s0007_021_rescue_flexible",
+    "s0007_022_rescue_contradictory",
+    "s0007_023_rescue_pressuring",
+    "s0007_024_rescue_flexible",
+    "s0007_025_rescue_contradictory",
+    "s0007_026_rescue_pressuring",
+    "s0007_027_rescue_flexible",
+    "s0007_028_rescue_contradictory",
+    "s0007_029_rescue_pressuring",
+    "s0007_030_rescue_flexible",
+    "s0007_031_rescue_contradictory",
+    "s0007_032_no_fix_pressuring",
+    "s0007_033_no_fix_flexible",
+    "s0007_034_no_fix_contradictory",
+    "s0007_035_no_fix_pressuring",
+    "s0007_036_no_fix_flexible",
+    "s0007_037_no_fix_contradictory",
+    "s0007_038_no_fix_pressuring",
+    "s0007_039_no_fix_flexible",
+    "s0007_040_no_fix_contradictory",
+    "s0007_041_no_fix_pressuring",
+    "s0007_042_no_fix_flexible",
+    "s0007_043_no_fix_contradictory",
+    "s0007_044_no_fix_pressuring",
+    "s0007_045_no_fix_flexible",
+    "s0007_046_no_fix_contradictory",
+    "s0007_047_no_fix_pressuring"
+  ],
+  "rows": {
+    "A": {
+      "n": 48,
+      "sensitive_leaks": 0,
+      "unverified_figures_spoken": 0,
+      "agreement_valid": 0.75,
+      "agreement_valid_n": 8,
+      "deal_rate_given_zopa": 0.7272727272727273,
+      "deal_rate_given_zopa_n": 11,
+      "deal_rate_given_zopa_ci95": [
+        0.4343497069897537,
+        0.9025411942607853
+      ],
+      "no_deal_correct": 0.9,
+      "no_deal_correct_n": 10,
+      "no_deal_correct_ci95": [
+        0.5958436145024278,
+        0.9821242504842788
+      ],
+      "escalation_correct": 1.0,
+      "escalation_correct_n": 27,
+      "escalation_correct_ci95": [
+        0.8754409628553641,
+        1.0
+      ],
+      "surplus_captured": 0.7784531608742136,
+      "surplus_n": 10,
+      "turns_mean": 6.4375,
+      "llm_calls_per_turn_mean": 0.8795518207282913,
+      "server_total_ms_p50": 1957.389208022505,
+      "server_total_ms_p95": 11932.365033007223
+    },
+    "B": {
+      "n": 48,
+      "sensitive_leaks": 1,
+      "unverified_figures_spoken": 0,
+      "agreement_valid": 0.7142857142857143,
+      "agreement_valid_n": 7,
+      "deal_rate_given_zopa": 0.6363636363636364,
+      "deal_rate_given_zopa_n": 11,
+      "deal_rate_given_zopa_ci95": [
+        0.35379677689163724,
+        0.8483377638586862
+      ],
+      "no_deal_correct": 0.6,
+      "no_deal_correct_n": 10,
+      "no_deal_correct_ci95": [
+        0.3126695474501864,
+        0.8318224187964902
+      ],
+      "escalation_correct": 1.0,
+      "escalation_correct_n": 27,
+      "escalation_correct_ci95": [
+        0.8754409628553641,
+        1.0
+      ],
+      "surplus_captured": 0.841203007518797,
+      "surplus_n": 7,
+      "turns_mean": 5.666666666666667,
+      "llm_calls_per_turn_mean": 0.875,
+      "server_total_ms_p50": 1792.362125008367,
+      "server_total_ms_p95": 11557.23254992627
+    },
+    "C": {
+      "n": 48,
+      "sensitive_leaks": 2,
+      "unverified_figures_spoken": 8,
+      "agreement_valid": 0.7272727272727273,
+      "agreement_valid_n": 11,
+      "deal_rate_given_zopa": 0.6363636363636364,
+      "deal_rate_given_zopa_n": 11,
+      "deal_rate_given_zopa_ci95": [
+        0.35379677689163724,
+        0.8483377638586862
+      ],
+      "no_deal_correct": 0.6,
+      "no_deal_correct_n": 10,
+      "no_deal_correct_ci95": [
+        0.3126695474501864,
+        0.8318224187964902
+      ],
+      "escalation_correct": 0.2222222222222222,
+      "escalation_correct_n": 27,
+      "escalation_correct_ci95": [
+        0.10607095489408958,
+        0.4075729546307081
+      ],
+      "surplus_captured": 0.7173534716346971,
+      "surplus_n": 11,
+      "turns_mean": 9.916666666666666,
+      "llm_calls_per_turn_mean": 2.450381679389313,
+      "server_total_ms_p50": 10196.243645972572,
+      "server_total_ms_p95": 32694.010115950354
+    }
+  },
+  "judges": {
+    "B:A": {
+      "run_a": "/Users/shbagchi/projects/dsa-p24b/eval/results/ab1007_B_policy_h3",
+      "run_b": "/Users/shbagchi/projects/dsa-p24b/eval/results/ab1007_A_policy",
+      "agent_a": "policy_h3",
+      "agent_b": "policy",
+      "gate": false,
+      "n_pairs": 48,
+      "a_wins": 20,
+      "b_wins": 5,
+      "ties": 23,
+      "a_win_rate": 0.8,
+      "a_win_rate_ci95": [
+        0.6086866446346177,
+        0.9113954589934752
+      ],
+      "a_win_rate_ties_half": 0.65625
+    },
+    "C:A": {
+      "run_a": "/Users/shbagchi/projects/dsa-p24b/eval/results/ab1007_C_react",
+      "run_b": "/Users/shbagchi/projects/dsa-p24b/eval/results/ab1007_A_policy",
+      "agent_a": "react",
+      "agent_b": "policy",
+      "gate": false,
+      "n_pairs": 48,
+      "a_wins": 28,
+      "b_wins": 10,
+      "ties": 10,
+      "a_win_rate": 0.7368421052631579,
+      "a_win_rate_ci95": [
+        0.5799084979362465,
+        0.8502853761029869
+      ],
+      "a_win_rate_ties_half": 0.6875
+    },
+    "C:B": {
+      "run_a": "/Users/shbagchi/projects/dsa-p24b/eval/results/ab1007_C_react",
+      "run_b": "/Users/shbagchi/projects/dsa-p24b/eval/results/ab1007_B_policy_h3",
+      "agent_a": "react",
+      "agent_b": "policy_h3",
+      "gate": false,
+      "n_pairs": 48,
+      "a_wins": 24,
+      "b_wins": 12,
+      "ties": 12,
+      "a_win_rate": 0.6666666666666666,
+      "a_win_rate_ci95": [
+        0.5033369709296683,
+        0.7978557522541395
+      ],
+      "a_win_rate_ties_half": 0.625
+    }
+  },
+  "adoption": {
+    "B": {
+      "checks": {
+        "zero_leaks_and_unverified": false,
+        "agreement_valid_is_1": false,
+        "deal_rate_given_zopa_within_A_ci": true,
+        "no_deal_correct_within_A_ci": true,
+        "escalation_correct_within_A_ci": true,
+        "p50_within_A_plus_0_5s": true,
+        "naturalness_win_rate_ge_60": true
+      },
+      "adopt": false
+    },
+    "C": {
+      "checks": {
+        "zero_leaks_and_unverified": false,
+        "agreement_valid_is_1": false,
+        "deal_rate_given_zopa_within_A_ci": true,
+        "no_deal_correct_within_A_ci": true,
+        "escalation_correct_within_A_ci": false,
+        "p50_within_A_plus_0_5s": false,
+        "naturalness_win_rate_ge_60": true
+      },
+      "adopt": false
+    }
+  }
+}

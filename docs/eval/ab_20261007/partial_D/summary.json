@@ -1,0 +1,90 @@
+{
+  "common_scenarios": [
+    "s0007_000_deal_flexible",
+    "s0007_001_deal_contradictory",
+    "s0007_002_deal_pressuring",
+    "s0007_003_deal_flexible",
+    "s0007_004_deal_contradictory",
+    "s0007_005_deal_pressuring",
+    "s0007_006_deal_flexible",
+    "s0007_007_deal_contradictory",
+    "s0007_008_deal_pressuring",
+    "s0007_009_deal_flexible",
+    "s0007_010_deal_contradictory",
+    "s0007_011_deal_pressuring",
+    "s0007_012_deal_flexible"
+  ],
+  "rows": {
+    "A": {
+      "n": 13,
+      "sensitive_leaks": 0,
+      "unverified_figures_spoken": 0,
+      "agreement_valid": 0.8571428571428571,
+      "agreement_valid_n": 7,
+      "deal_rate_given_zopa": 0.7777777777777778,
+      "deal_rate_given_zopa_n": 9,
+      "deal_rate_given_zopa_ci95": [
+        0.4525833436728054,
+        0.9367762376877727
+      ],
+      "no_deal_correct": null,
+      "no_deal_correct_n": 0,
+      "no_deal_correct_ci95": null,
+      "escalation_correct": 1.0,
+      "escalation_correct_n": 4,
+      "escalation_correct_ci95": [
+        0.5100999795960008,
+        1.0
+      ],
+      "surplus_captured": 0.7538368454157928,
+      "surplus_n": 9,
+      "turns_mean": 8.23076923076923,
+      "llm_calls_per_turn_mean": 0.9083333333333333,
+      "server_total_ms_p50": 1704.8420624923892,
+      "server_total_ms_p95": 11935.210957995147
+    },
+    "D": {
+      "n": 13,
+      "sensitive_leaks": 1,
+      "unverified_figures_spoken": 9,
+      "agreement_valid": 0.2857142857142857,
+      "agreement_valid_n": 7,
+      "deal_rate_given_zopa": 0.2222222222222222,
+      "deal_rate_given_zopa_n": 9,
+      "deal_rate_given_zopa_ci95": [
+        0.06322376231222723,
+        0.5474166563271946
+      ],
+      "no_deal_correct": null,
+      "no_deal_correct_n": 0,
+      "no_deal_correct_ci95": null,
+      "escalation_correct": 0.0,
+      "escalation_correct_n": 4,
+      "escalation_correct_ci95": [
+        0.0,
+        0.48990002040399916
+      ],
+      "surplus_captured": 0.656715470997525,
+      "surplus_n": 10,
+      "turns_mean": 12.846153846153847,
+      "llm_calls_per_turn_mean": 1.961111111111111,
+      "server_total_ms_p50": 6909.994499990717,
+      "server_total_ms_p95": 22058.911155920938
+    }
+  },
+  "judges": {},
+  "adoption": {
+    "D": {
+      "checks": {
+        "zero_leaks_and_unverified": false,
+        "agreement_valid_is_1": false,
+        "deal_rate_given_zopa_within_A_ci": false,
+        "no_deal_correct_within_A_ci": false,
+        "escalation_correct_within_A_ci": false,
+        "p50_within_A_plus_0_5s": false,
+        "naturalness_win_rate_ge_60": false
+      },
+      "adopt": false
+    }
+  }
+}

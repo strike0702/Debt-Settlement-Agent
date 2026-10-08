@@ -33,7 +33,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 23a | Web call console: scaffold and components (REVIEW_PLAN) | done |
 | 23b | Web call console: wire-up and cutover (REVIEW_PLAN) | done (voice call not run by hand, see handoff) |
 | 24a | A/B harness, ReAct and LLM-only arms (REVIEW_PLAN) | done |
-| 24b | H3 conversational NLG + the A/B run (REVIEW_PLAN) | WIP (paused) |
+| 24b | H3 conversational NLG + the A/B run (REVIEW_PLAN) | done |
 | 27 | Provider API key pool (user request) | done |
 
 ## Environment facts
@@ -1024,65 +1024,48 @@ Offline oracle/template WS (FakeLLM): server_total p50≈0.9 ms, p95≈8.1 ms (n
 - Tests: `pytest -q` 615 passed / 2 skipped (incl. slow, 173 s); `ruff check .` clean; web: typecheck, lint, 46 Vitest tests, build all green.
 - Open issues: see the DEFERRED lines in the phase-23b report.
 
-### Phase 24b (WIP, paused 2026-10-07, quota; C resumes 2026-10-08) — H3 conversational NLG + A/B (REVIEW_PLAN §2(c))
+### Phase 24b (2026-10-08) — H3 conversational NLG + A/B (REVIEW_PLAN §2(c))
 
-Paused on the orchestrator's instruction (usage limit). Interface entries above already describe the new code.
-
-**Done (code + tests):**
-- Task 1 ack act: `Action.ack` (PUBLIC `ack_*` facts, `source="creditor"`), built by new `app/agent/acts.py` (`ack_facts` / `attach_acts`) only for terms that became KNOWN or changed this turn, creditor-said, never colliding with the private blocklist; skipped before READ_BACK / CLARIFY / refusals / endings. Rendered by `nlg.render_acts` as a leading sentence ("Got it, 8 payments at a $100 minimum."); same two guards; a failing act is dropped (audit `nlg/act_dropped`), never SAFE_FALLBACK.
-- Task 2 ANSWER: `Intent.ANSWER` (attached act only), `AnswerAct`, `ANSWER_POINTS` (5 number-free talking points). NLU fields `asks_question` / `question_topic` (prompt, coercion, `repair_question`: never on a private ask; an "other" question mentioning terms/figures is dropped — seen live). Private asks still REFUSE_PRIVATE first.
-- Task 3: NLG prompt gets the last 3 public turns (`Orchestrator._recent_public_turns`, drops unspoken lines and any line with a private figure). Bank: `scripts/build_template_bank.py --acts` merged 7 `ACK` + 5 `ANSWER:<topic>` entries into `config/nlg_bank.json` (demo profile, reviewed by hand; 3 awkward ACK variants removed).
-- `Settings.nlg_h3` (default False) gates acts in the orchestrator; eval arm `--agent policy_h3`; `--nlg bank`; `--providers PATH`; new `eval/ab_report.py` (common-scenario table, adoption rule, transcripts) with tests.
-- `web/src/types/events.schema.json` regenerated (only change: `ANSWER` in the Intent enum).
-- Policy unchanged: `test_h3_moves_identical_to_plain_policy_on_seed7` (same intents / reasons / outcome with acts on). Oracle CI eval `eval_20261006_224236_s7` (default agent): thresholds PASS, metrics table identical to `docs/eval/policy_eval_20261006/summary.md`.
-- Carry-over (all done, each with a test):
-  - [24a.1] client role `agent`, `Settings.llm_timeout_agent_s=20`, eval-profile `agent` route (groq → cerebras → gemini), `AGENT_ROLE="agent"` (`test_agent_role_timeout_and_nlu_fallback_route`, `test_shipped_eval_profile_has_free_tier_agent_route`, `test_agent_steps_use_dedicated_agent_role`).
-  - [24a.3] not code: the "sim reacts to intents, not text" limitation must be stated in the A/B summary (still to write).
-  - [24a.4] prompts ask for `"N%"`; **bug fixed**: `coerce_bp("1%")` returned 10000 (re-scaled after percent parse) (`test_coerce_bp_percent_form_is_prompted_and_unambiguous`).
-  - [21.7] `NLG_MAX_TOKENS=800`, `reasoning_effort: low` on Groq nlg routes; an empty LLM template falls back to `TEMPLATES` (`test_empty_llm_template_falls_back_to_default_template`, `test_shipped_groq_nlg_routes_use_low_reasoning_effort`).
-  - [22.5] `counter_no_total` display text (`test_counter_without_offer_total_omits_the_amount`).
-  - [27.2] `_build_settings` passes `api_key_pool` (+ cooldown, bank path, nlg_h3, timeouts) (`test_build_settings_keeps_explicit_key_pool`).
-  - [27.4] 429 cooldown parsed from body (Groq "try again in", Gemini `retryDelay`), per-day quota ≥ 3600 s (`test_quota_429_cooldown_from_error_body`, `test_daily_quota_moves_on_instead_of_retrying_each_minute`).
-
-**User decisions (2026-10-07, via orchestrator):**
-1. Arm D (`llm_only`) is **dropped** at its partial 13/48 (REVIEW_PLAN cut order allows it). Do not resume it; report it as partial in the summary.
-2. Arm C (`react`) resumes **2026-10-08** after the daily quota reset, to 48/48; then the three judges and `summary.md`.
-3. The pre-registered adoption rule stays **exactly as written** (no restating relative to A). The summary says B fails as registered and notes that A also misses `agreement_valid = 1` under live NLU.
-4. The orchestrator merges the current code (through this commit) into main on 2026-10-07; work continues on `phase-24b` in this worktree.
-
-**Left (2026-10-08):**
-- Task 4: resume C to 48/48 (one process; command below), then judges B vs A, C vs A, C vs B.
-- Task 5: `docs/eval/ab_20261007/summary.md` via `eval.ab_report` with arms A, B, C (D left out of the common-scenario table so it does not shrink n to its 13; give D's partial numbers in a separate labelled paragraph, e.g. from a separate `ab_report --arm A=... --arm D=...` run over their common scenarios). Notes preamble `docs/eval/ab_20261007/notes.md` + a decision paragraph: B fails the rule as registered (leaks, `agreement_valid`; naturalness from the judge), A also misses `agreement_valid = 1` under live NLU, D dropped as partial; keep the [24a.3] limitation note.
-- Task 6: decided — **A stays the demo default** (B fails the rule; `Settings.nlg_h3` already defaults to False, no config change). Record it in the summary and the handoff.
-- Final: full `pytest -q`, `ruff check .`, oracle CI eval, replace this WIP section with the final Phase 24b handoff (Action fields, `Intent.ANSWER`, NLU fields, A/B commands, carry-overs incl. the first-payment-date fix), commit `phase 24b: <summary>`.
-
-**A/B state at second pause (2026-10-07 16:50 IST; results are git-ignored, they live only in this worktree under `eval/results/`):**
-- A `ab1007_A_policy`: **48/48 ok**. B `ab1007_B_policy_h3`: **48/48 ok**.
-- C `ab1007_C_react`: 9 ok, 4 `skipped_quota` (13 attempted). D `ab1007_D_llm_only`: 13 ok, 3 `skipped_quota` (16 attempted). Both stopped by hand: Gemini free tier hit its **per-day** cap (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, `retryDelay` 45671 s ≈ 12.7 h from 16:49 IST), Groq's daily token cap was already spent, and Cerebras / OpenRouter time out under load, Mistral 429s, so every scenario was skipping. `--resume` re-runs `skipped_quota` / `error` files.
-- Fixed during this resume: `Orchestrator._engine_first_payment_date()` — a denied first-payment-date read-back leaves the field UNKNOWN (`value=None`), `build_rules` does not require it, and the old `assert isinstance(fpd, date)` (3 sites: `_eval_bp`, `_engine_context`, wrap validation) crashed the turn (A/B `s0007_025/028/037`, contradictory persona, both arms). Now falls back to the engine's EOM default (the same value the belief starts with as ASSUMED), audited `engine/first_payment_date_default`. Test `test_denied_first_payment_readback_falls_back_to_engine_default`. Oracle CI eval after the fix: PASS, metrics table identical to `docs/eval/policy_eval_20261006/summary.md`.
-- Preliminary A vs B (offline `eval.ab_report`, 48 common scenarios): B fails the pre-registered rule on leaks (1: `s0007_006`, a **policy** ACCEPT echoing an LLM-sim "100% balance" that equals the true ceiling; no H3 act spoke a private figure) and on `agreement_valid` (0.71; A is 0.75 too: live-NLU extraction errors, e.g. `s0007_015` fails identically in both). So the demo default stays A whatever the judges say. Draft preamble: `docs/eval/ab_20261007/notes.md` (includes the [24a.3] limitation).
-
-**Resume commands** (2026-10-08; C only, a single process, so the full-rate providers file would also do; keep `providers_split2.yaml` for identical conditions):
-```bash
-P="--scenarios 48 --seed 7 --profile eval --nlu llm --sim-phrasing llm --no-oracle-overlay --providers docs/eval/ab_20261007/providers_split2.yaml"
-# A and B are complete (48/48); D is dropped (13/48, do not resume).
-uv run python -m eval.run_eval $=P --agent react --nlg template --resume ab1007_C_react
-# judges (RUN_A = the arm being rated), after C finishes:
-uv run python -m eval.judge_naturalness eval/results/ab1007_B_policy_h3 eval/results/ab1007_A_policy --profile eval
-uv run python -m eval.judge_naturalness eval/results/ab1007_C_react eval/results/ab1007_A_policy --profile eval
-uv run python -m eval.judge_naturalness eval/results/ab1007_C_react eval/results/ab1007_B_policy_h3 --profile eval
-# report (A, B, C; D reported separately as partial):
-uv run python -m eval.ab_report --arm A=eval/results/ab1007_A_policy --arm B=eval/results/ab1007_B_policy_h3 \
-  --arm C=eval/results/ab1007_C_react \
-  --judge B:A=<judge dir> --judge C:A=<judge dir> --judge C:B=<judge dir> \
-  --out docs/eval/ab_20261007 --decision <decision.md> --notes docs/eval/ab_20261007/notes.md
-```
-(`$=P` is zsh word-splitting; in bash use `$P`. A plain `$P` in zsh passes one argument and argparse rejects it.)
-
-**Gotchas:**
-- Never run more than two arms at once: each process paces its own keys, so 4 processes oversubscribed Gemini (15 rpm/key real limit) and cascaded to `skipped_quota`. Two processes need `providers_split2.yaml` (all rpm/tpm halved).
-- `generate(24, 7)` is **not** a prefix of `generate(48, 7)`; if quota forces fewer scenarios, keep n=48 with `--resume` and let `ab_report` compare the scenarios every arm completed (it does that by design).
-- `GROQ_API_KEY_1`'s org hit its daily token cap (TPD 200k) during the aborted 4-way run; the react arm's `agent` route starts on Groq, so it will lean on Cerebras/Gemini until that resets.
-- Live NLU sometimes reads a stray number as the settlement ask (seen: "10%" from "10 payments" context), and LLM sim phrasing loops on restated amounts; both affect every arm equally (not 24b scope).
-
-**Checks at second pause:** `uv run ruff check .` clean; full `uv run pytest -q` 672 passed / 2 skipped; oracle CI eval PASS (`eval_20261007_104338_s7`).
+- **Decision: A (policy + template NLG) stays the demo default.** `Settings.nlg_h3` stays False and no config changed. B fails the pre-registered rule as written. A/B summary: `docs/eval/ab_20261007/summary.md`.
+- Files (new): `app/agent/acts.py`, `eval/ab_report.py`, `tests/unit/{test_h3_acts,test_ab_report}.py`, `docs/eval/ab_20261007/{notes,decision,summary}.md`, `summary.json`, `partial_D/`, `providers_split2.yaml`. Edited: `app/agent/{nlg,nlg_bank,nlu,orchestrator,reasons}.py`, `app/config.py`, `app/domain/{actions,nlu_types}.py`, `app/llm/{client,prompts}.py`, `config/{nlg_bank.json,providers.yaml}`, `eval/run_eval.py`, `eval/agents/{base,protocol,react_agent,llm_only_agent,README.md}`, `scripts/build_template_bank.py`, `web/src/types/events.schema.json` (only `ANSWER` added to Intent), tests.
+- Interfaces (detail in the module entries above):
+  - Action fields: `Action.ack: dict[str, Fact]`. The ids are `ack_max_payments` (count), `ack_min_payment` (money) and `ack_first_payment_date` (date); all are PUBLIC with `source="creditor"`, and only for terms that became KNOWN or changed this turn. `Action.answer: AnswerAct | None` (`AnswerAct(topic, text)`).
+  - New intent: `Intent.ANSWER`, which is only ever an attached act and never `decide()`'s move. `ANSWER_POINTS` holds 5 number-free talking points.
+  - NLU fields: `TurnAnalysis.asks_question: bool`, `question_topic: QuestionTopic | None` (`why_not_higher | next_steps | who_approves | timeline | other`), and `repair_question(...)`. Private asks still go to REFUSE_PRIVATE first.
+  - `app.agent.acts.ack_facts` / `attach_acts`; `nlg.render_acts` (a failing act is dropped and audited as `nlg/act_dropped`, never SAFE_FALLBACK); `speak_action(recent_turns=)`; `NLG_CONTEXT_TURNS = 3` (public turns only, any line with a private figure dropped).
+  - `Settings.nlg_h3 = False`; `Settings.llm_timeout_agent_s = 20.0`; client role `agent`; eval `--agent policy_h3`, `--nlg bank`, `--providers PATH`; `eval.ab_report`.
+  - Bank: 7 `ACK` and 5 `ANSWER:<topic>` entries in `config/nlg_bank.json`, built with `scripts/build_template_bank.py --acts` and reviewed by hand.
+- Policy unchanged: no change to cascade order or reason codes; `test_h3_moves_identical_to_plain_policy_on_seed7`.
+- A/B (n = 48, seed 7, `--profile eval --nlu llm --sim-phrasing llm --no-oracle-overlay --providers docs/eval/ab_20261007/providers_split2.yaml`). Results are git-ignored, under `eval/results/`:
+  - A `ab1007_A_policy`, B `ab1007_B_policy_h3` and C `ab1007_C_react` are each 48/48. D `ab1007_D_llm_only` is partial at 13/48 (dropped by user decision).
+  - Judges: `judge_B_vs_A`, `judge_C_vs_A` and `judge_C_vs_B`, each with `judge_tokens.jsonl`. They ran from a detached main checkout with the Phase 30 `judge` role (Claude Sonnet 5.5) and cost about $1.17 in total.
+  - B vs A naturalness: 0.80 [0.61, 0.91] (20–5, 23 ties). C vs A: 0.74 [0.58, 0.85]. C vs B: 0.67 [0.50, 0.80].
+  - B fails `zero_leaks_and_unverified` (1 leak: a policy ACCEPT of a sim-invented "100%", not an H3 act) and `agreement_valid = 1` (0.71). B passes the rest.
+  - C fails leaks/unverified (2 / 8), `agreement_valid` (0.73), escalation (0.22 vs A's 1.00) and p50 (10.2 s vs 2.0 s).
+  - A itself has `agreement_valid` 0.75 under live NLU (extraction errors; the oracle eval is 1.0).
+  - Commands: `uv run python -m eval.run_eval --scenarios 48 --seed 7 --profile eval --nlu llm --sim-phrasing llm --no-oracle-overlay --providers docs/eval/ab_20261007/providers_split2.yaml --agent {policy --nlg template | policy_h3 --nlg bank | react --nlg template | llm_only --nlg template} [--resume RUN_ID]`.
+  - Judge: `uv run python -m eval.judge_naturalness RUN_RATED RUN_BASE --profile eval --out DIR` (needs the Phase 30 `judge` role).
+  - Report: `uv run python -m eval.ab_report --arm A=... --arm B=... --arm C=... --judge B:A=DIR --judge C:A=DIR --judge C:B=DIR --out docs/eval/ab_20261007 --decision docs/eval/ab_20261007/decision.md --notes docs/eval/ab_20261007/notes.md`. Run it again with `--arm A=... --arm D=... --out docs/eval/ab_20261007/partial_D` for D.
+- Carry-over (each with a test):
+  - [24a.1] client role `agent`, `llm_timeout_agent_s`, eval `agent` route, `AGENT_ROLE="agent"`.
+  - [24a.3] limitation stated in the summary: the sim reacts to intents, not text.
+  - [24a.2/26.1] summary note: ReAct uses prompt-based JSON tool calls. Invalid-step rate on 48: 70 `step_invalid` + 15 `step_rejected` of 588 steps = 14.5% (11.9% unparseable). Native calls would trim retries but not close the cost gap: C makes 2.45 LLM calls/turn against A's 0.88.
+  - [24a.4] prompts use "N%"; fixed `coerce_bp("1%")` returning 10000.
+  - [24a.5] B vs A judged first; `human_pairs.csv` is ready, and the rating is **pending**.
+  - [21.7] `NLG_MAX_TOKENS=800` and Groq nlg `reasoning_effort: low`; an empty template falls back.
+  - [22.5] display text `counter_no_total`.
+  - [27.2] `_build_settings` keeps `api_key_pool`.
+  - [27.4] 429 cooldown read from the body; daily quota cools for at least 3600 s.
+- Fixed during the A/B:
+  - `Orchestrator._engine_first_payment_date()`: a denied first-payment-date read-back leaves the field UNKNOWN. It now falls back to the engine's EOM default (audited as `engine/first_payment_date_default`) instead of hitting an assert (`test_denied_first_payment_readback_falls_back_to_engine_default`).
+  - `tests/unit/test_eval_agents.py` pins the opening disclosure that the golden was recorded with. Before this, `test_policy_agent_output_identical_to_pre_24a_runner` passed only when a local `.env` set `OPENING_DISCLOSURE`, so it failed with no `.env` (as in CI).
+- Deviations:
+  - The judge ran from a separate main checkout, because this branch predates the `judge` role. It was wrapped by a scratch script that logs token usage; no repo change.
+  - Arm C spanned two days (the free-tier daily quota ran out; Gemini resets at midnight PT, 12:30 IST). `--resume` re-ran only the `skipped_quota` scenarios, with identical settings.
+  - D is reported as partial.
+- Open issues:
+  - Live NLU extraction errors keep `agreement_valid` below 1 for every arm.
+  - The policy accepts a sim-invented ask that equals the true ceiling (B's leak).
+  - The human-vs-judge agreement rating is still pending.
+  - The judge has no audit or cost log of its own (24b wrapped it).
+- Checks: `ruff check .` clean. Full `pytest -q`: 672 passed / 2 skipped. Fast suite with `.env` moved aside: 669 passed / 2 skipped. Oracle CI eval `eval_20261008_091111_s7`: thresholds PASS.

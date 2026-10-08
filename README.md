@@ -257,7 +257,7 @@ The eval prints a summary whose metrics table should match [`summary.md`](docs/e
 
 You need Python 3.12, [`uv`](https://docs.astral.sh/uv/) for the virtual environment, and Node 24 (or 22.22 or later) to build the web console.
 
-**The tests and the offline policy eval need no API keys.** The live browser demo and the command-line client need at least one of `GROQ_API_KEY` or `GEMINI_API_KEY` in `.env`. Server-side speech-to-text needs Groq. `ANTHROPIC_API_KEY` is optional and paid: with it, the `demo` profile reads the representative with Claude Sonnet 5.5 until the day's spend reaches `CLAUDE_DAILY_BUDGET_USD` (default 1.00, per UTC day, counted in the app DB), then falls back to the free models. Without it, everything runs on the free tier as before. `python -m eval.nlu_corpus` defaults to the `demo` profile, so with the key set it calls Claude too.
+**The tests and the offline policy eval need no API keys.** The live browser demo and the command-line client need at least one of `GROQ_API_KEY` or `GEMINI_API_KEY` in `.env`. Server-side speech-to-text needs Groq. `ANTHROPIC_API_KEY` is optional and paid: with it, the `demo` profile reads the representative with Claude Sonnet 5.5 until the day's spend reaches `CLAUDE_DAILY_BUDGET_USD` (default 1.00, per UTC day, counted in the app DB), then falls back to the free models. Without it, everything runs on the free tier as before. `python -m eval.nlu_corpus` and `eval.run_eval` skip paid targets unless you pass `--allow-budgeted` or an explicit `--providers` file.
 
 ```bash
 uv venv --python 3.12 && source .venv/bin/activate

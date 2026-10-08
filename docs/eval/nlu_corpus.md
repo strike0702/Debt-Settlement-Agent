@@ -299,3 +299,67 @@ Misses (line ids):
 - stance=reject: FP -; FN x08
 - terms: f01, f16, f17, d04, t11, k05
 - filler false accept: -
+
+## BEFORE_P32
+
+- git: `0bc6d5c`  profile=`eval`  ref=2026-04-01
+- lines: 183  skipped (LLM unavailable): 0
+- model share: gemini/gemini-3.1-flash-lite=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 33 | 0 | 1 | 1.000 | 0.971 |
+| demands_commitment | 13 | 10 | 0 | 3 | 1.000 | 0.769 |
+| firm | 6 | 6 | 3 | 0 | 0.667 | 1.000 |
+| wants_to_end | 6 | 6 | 5 | 0 | 0.545 | 1.000 |
+| hostility | 5 | 3 | 0 | 2 | 1.000 | 0.600 |
+| stance=accept | 11 | 11 | 0 | 0 | 1.000 | 1.000 |
+| stance=reject | 9 | 8 | 2 | 1 | 0.800 | 0.889 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.776 |
+| term exact-match (all lines) | 0.984 |
+| term exact-match (lines with terms, n=66) | 0.955 |
+| filler false accepts (n=31) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP -; FN p08
+- demands_commitment: FP -; FN c06, c09, c11
+- firm: FP i10, e04, k04; FN -
+- wants_to_end: FP i07, x02, e06, e07, e10; FN -
+- hostility: FP -; FN x02, x04
+- stance=reject: FP a13, x02; FN a10
+- terms: n07, f16, f17
+- filler false accept: -
+
+## HELDOUT_BEFORE_P32
+
+- git: `0bc6d5c`  profile=`eval`  ref=2026-04-01
+- lines: 32  skipped (LLM unavailable): 0
+- model share: gemini/gemini-3.1-flash-lite=32
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 16 | 14 | 2 | 2 | 0.875 | 0.875 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 1 | 1 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 1 | 0 | 0.000 | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.969 |
+| term exact-match (all lines) | 1.000 |
+| term exact-match (lines with terms, n=2) | 1.000 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP hn01, hn11; FN hp06, hp09
+- stance=accept: FP hn06; FN -
+- terms: -
+- filler false accept: -

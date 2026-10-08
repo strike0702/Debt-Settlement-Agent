@@ -1,0 +1,18 @@
+# Eval-only providers file for Phase 40 (Haiku NLU measurement). Not a shipped
+# profile: use with `python -m eval.nlu_corpus --providers <this file> --profile claude_haiku_nlu`.
+# Same shape as ../nlu_guard_20261008/providers_claude.yaml (the Sonnet 5.5 file):
+# one paid target, no fallback, so a run cannot mix models.
+# Effort low: Haiku 5.5 accepts output_config.effort (low..max, default medium),
+# so the Sonnet params carry over unchanged. No temperature (Haiku 5.5 rejects
+# non-default sampling) and no thinking param (omitted = adaptive, bounded by effort).
+profiles:
+  claude_haiku_nlu:
+    nlu:
+      - {target: anthropic/claude-haiku-5-5, params: {output_config: {effort: low}}, timeout_s: 60}
+
+providers:
+  anthropic: # paid; Messages API via the `anthropic` SDK (not OpenAI-compatible)
+    api: anthropic
+    base_url: "https://api.anthropic.com"
+    key_env: ANTHROPIC_API_KEY
+    rpm: 50

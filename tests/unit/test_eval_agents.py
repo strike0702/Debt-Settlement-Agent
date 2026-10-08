@@ -42,8 +42,16 @@ class ScriptedLLM(FakeLLM):
         return raw(messages) if callable(raw) else str(raw)
 
 
+# The golden was recorded with .env.example's disclosure, not the Settings default;
+# pin it so the test does not depend on a local .env (CI has none).
+_GOLDEN_DISCLOSURE = (
+    "You are speaking with an automated agent authorized to discuss settlement options."
+)
+
+
 def _oracle_settings() -> Any:
-    return _build_settings(profile="offline", nlg="template", nlu="oracle")
+    s = _build_settings(profile="offline", nlg="template", nlu="oracle")
+    return s.model_copy(update={"opening_disclosure": _GOLDEN_DISCLOSURE})
 
 
 def _bp_in_prompt(pattern: str, messages: list[dict[str, Any]]) -> int:

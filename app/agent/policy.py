@@ -45,6 +45,8 @@ __all__ = [
     "Intent",
     "NegotiationState",
     "Phase",
+    "amount_meaning_clarify_action",
+    "amount_meaning_escalate_action",
     "ask_pct_to_bp",
     "decide",
     "draft_agreement",
@@ -85,6 +87,10 @@ class NegotiationState:
     # Bare money reply awaiting dollars-vs-cents disambiguation.
     # ``{"field", "bare", "as_dollars", "as_cents"}`` — amounts in integer cents.
     pending_cents_clarify: dict[str, Any] | None = None
+    # Dollar amount awaiting "total or per payment?" (Phase 39). Set and cleared
+    # by the orchestrator: ``{"cents", "quote", "trigger"}`` plus ``"pct"`` /
+    # ``"pct_quote"`` when a disagreeing % ask was held back.
+    pending_amount_clarify: dict[str, Any] | None = None
 
 
 def terms_counter_key(field: str, value: Any) -> str:
@@ -414,6 +420,47 @@ def cents_ambiguity_clarify_action(
             "I heard {bare_amount} for the {field_label}. "
             "Is that {clarify_old}, or {clarify_new}?"
         ),
+    )
+
+
+# ``clarify_counts`` key for the total-vs-per-payment question (Phase 39).
+AMOUNT_CLARIFY_KEY = "amount_meaning"
+
+
+def amount_meaning_clarify_action(*, cents: int) -> Action:
+    """Ask whether a dollar amount is the total settlement or the per-payment minimum.
+
+    Counts toward ``clarify_counts[AMOUNT_CLARIFY_KEY]``; the orchestrator
+    escalates once it reaches two unresolved asks.
+    """
+    return Action(
+        intent=Intent.CLARIFY,
+        facts={
+            "amount_in_question": Fact(
+                id="amount_in_question",
+                kind="money",
+                value=cents,
+                visibility="PUBLIC",
+                source="creditor",
+            )
+        },
+        required={"amount_in_question"},
+        effects=[Effect(kind="note_clarify", data={"field": AMOUNT_CLARIFY_KEY})],
+        next_phase=Phase.DISCOVERY,
+        reason="amount_meaning",
+        template_override=(
+            "Just to be sure: is {amount_in_question} the total settlement, "
+            "or the minimum for each payment?"
+        ),
+    )
+
+
+def amount_meaning_escalate_action() -> Action:
+    """Hand off after two unanswered total-vs-per-payment questions."""
+    return _escalate(
+        [],
+        reason="amount_meaning_unresolved",
+        spoken_reason="I need a specialist to confirm what that amount covers.",
     )
 
 

@@ -71,6 +71,10 @@ REASON_TEXT: dict[str, str] = {
         "The rep said a bare number, so we ask whether it means dollars or cents before "
         "using it."
     ),
+    "amount_meaning": (
+        "The rep named a dollar amount that could be the total settlement or the minimum "
+        "for each payment, so we ask which one before using it."
+    ),
     # Price moves
     "counter": (
         "We offer {counter_pct} ({offer_total}). We start below their ask and move up in "
@@ -170,6 +174,10 @@ REASON_TEXT: dict[str, str] = {
         "We hand the call to a person, because the minimum payment rules were still unclear "
         "after we asked twice."
     ),
+    "amount_meaning_unresolved": (
+        "We hand the call to a person, because after we asked twice it was still unclear "
+        "whether the rep's dollar amount was the total settlement or the minimum per payment."
+    ),
     "already_escalated": (
         "We wait for a person to take over, "
         "because a specialist still needs to join the call."
@@ -213,6 +221,7 @@ REASON_SHORT: dict[str, str] = {
     "clarify_field": "The rep gave two different values.",
     "tiers_ambiguous": "Their minimum payment rules were unclear.",
     "cents_ambiguity": "Dollars or cents? We ask before using it.",
+    "amount_meaning": "Total or per payment? We ask before using it.",
     "counter": "A step toward their ask that the client can afford.",
     "counter_no_total": "A step toward their ask that the client can afford.",
     "confirm": "The client can afford it, so we ask for a yes.",
@@ -242,6 +251,7 @@ REASON_SHORT: dict[str, str] = {
     "hostile": "The conversation became too hostile.",
     "contradiction_unresolved": "Conflicting terms stayed unresolved.",
     "tiers_unresolved": "The minimum payment rules stayed unclear.",
+    "amount_meaning_unresolved": "What their dollar amount covers stayed unclear.",
     "already_escalated": "Waiting for a specialist to join.",
     "out_of_guardrail": "Only extra money from the client would make a plan work.",
     "infeasible": "No affordable plan fits their rules.",

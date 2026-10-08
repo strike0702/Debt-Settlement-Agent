@@ -512,6 +512,36 @@ Misses (line ids):
 - terms: -
 - filler false accept: -
 
+## AMOUNTS_P39
+
+- git: `789a283`  profile=`demo`  ref=2026-04-01
+- stance: repaired (repair_stance on, as shipped)
+- lines: 14  skipped (LLM unavailable): 0
+- model share: groq/openai/gpt-oss-120b=14
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 3 | 0 | 0.000 | n/a |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.786 |
+| term exact-match (all lines) | 0.857 |
+| term exact-match (lines with terms, n=13) | 0.846 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- firm: FP am05, am06, am09; FN -
+- terms: am09, am10
+- filler false accept: -
+
 ## Notes
 
 - Both runs used the same model and prompt (Groq `gpt-oss-120b`, temperature 0).
@@ -701,3 +731,32 @@ Measurement only. Full write-up: `nlu_guard_20261008/summary.md`.
   tokens over 191 live calls, pilot included).
 - Options for 31.1 / 31.2 (patch / remove force-accept / leave) are in the
   summary. No fix lands in this phase.
+
+### Phase 39: dollar-total asks and ambiguous amounts (2026-10-08)
+
+- `AMOUNTS_P39` runs `tests/nlu_corpus_amounts.jsonl` (14 lines: total,
+  per-payment, ambiguous, near misses; committed before the prompt change).
+  It ran on the first Phase 39 prompt wording. The shipped wording differs in
+  one line: `min_payment_cents` said "only for a floor per payment"; it now
+  says "only for the smallest amount of each payment".
+- Why the wording changed: a main-corpus pass on the first wording (Groq
+  `gpt-oss-120b`, 144 lines answered by Groq only, shared with
+  `FILLER_BEFORE`) raised `firm` false positives from 3 to 13 (F1 0.727 →
+  0.381). All of the new false positives are "minimum …" lines: the word
+  "floor" collided with the firm rule ("their floor"). On the same lines,
+  private-info F1 0.889 → 0.892, commitment 0.923 → 0.880 (one more FN),
+  accept 1.0 → 0.9 (two FPs), term exact-match 140/144 both. No row was
+  written: free-tier quota ran out (164–175 of 183 lines answered, so the
+  runner refused the partial row).
+- Recheck on the shipped wording, same quota: 5 of the 14 firm-FP lines
+  answered (n03, i06, i10, f02, f15). All five match `FILLER_BEFORE` (n03,
+  i10 firm; i06, f02, f15 not firm). The other 9 lines and a full main-corpus
+  row are still to run.
+- Amounts lines on the shipped wording (partial, mixed models, no row): am02
+  total and am13 none on Gemini, both correct; am09 (the user's sentence)
+  `amount_ambiguous` on Gemini, matching its label; am10 still read as a total
+  on Groq.
+- `AMOUNTS_P39` misses: am09 and am10 were read as a total on Groq.
+  The spec's cue list says "pay $X by <date>" means a total, so the label
+  ("ambiguous") and the cue list disagree on am09. The prompt was not tuned to
+  the label.

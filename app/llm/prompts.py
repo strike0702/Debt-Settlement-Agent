@@ -37,6 +37,7 @@ PLACEHOLDER_MEANINGS: dict[str, str] = {
     "ack_max_payments": "maximum number of payments the rep just stated",
     "ack_min_payment": "minimum payment amount the rep just stated",
     "ack_first_payment_date": "first payment date the rep just stated",
+    "amount_in_question": "dollar amount the rep said whose meaning we are checking",
 }
 
 # How many recent public turns the NLG prompt sees (REVIEW_PLAN §2(c), H3).
@@ -88,6 +89,10 @@ Reply with JSON only in this exact shape (no other top-level keys):
   "terms":[{"field":"max_payments","value":6,"quote":"six payments","hedged":false}],
   "settlement_ask_pct":45.0,
   "ask_quote":"forty-five percent",
+  "settlement_ask_total_cents":null,
+  "ask_total_quote":null,
+  "amount_ambiguous_cents":null,
+  "amount_ambiguous_quote":null,
   "stance":"info",
   "readback_response":null,
   "asks_client_private_info":false,
@@ -104,7 +109,9 @@ max_payments, min_payment_cents, payment_structure, first_payment_date,
 max_segments, max_token_pays, min_payment_tiers.
 Units:
 - max_payments / max_segments / max_token_pays: integers
-- min_payment_cents: dollars as integer cents ($250 → 25000).
+- min_payment_cents: dollars as integer cents ($250 → 25000), only for the smallest
+  amount of each payment (per payment, each, a month, monthly, minimum, at least
+  $X a payment).
   Bare digits with no $ / dollars / cents stay empty so the agent can clarify.
 - payment_structure: "even" | "balloon" | "flexible"
 - first_payment_date: YYYY-MM-DD
@@ -113,7 +120,15 @@ Units:
   ("from the fourth payment on, at least $75" → [{"from_payment":4,"min_cents":7500}]).
   "No tiers" / "no tiered minimums" → [].
 - settlement_ask_pct: percent points as a bare number (45.0), not an object
-Each term quote must be a verbatim substring of the utterance.
+- settlement_ask_total_cents: the settlement ask as a dollar TOTAL in integer cents
+  ("settle for $1,200 total" → 120000), with ask_total_quote. Cues: total, in full,
+  to settle, settle for, pay $X by a date with no payment count or per-payment word.
+- amount_ambiguous_cents: a dollar amount (integer cents) that could be either the
+  total to settle or the minimum per payment, with amount_ambiguous_quote. Use it
+  instead of guessing, e.g. "$350, three payments" or "pay $420 by March 31, we only
+  accept 3 payments". Do not also put that amount in terms or the total.
+Each term quote, ask_total_quote and amount_ambiguous_quote must be a verbatim
+substring of the utterance.
 hedged=true for hedges like about/around/roughly.
 If pending_readback is set, fill readback_response with "confirm" or "deny".
 stance must be one of: offer, counter, accept, reject, stall, info, question, other.

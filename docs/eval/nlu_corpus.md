@@ -607,6 +607,106 @@ Misses (line ids):
 - terms: -
 - filler false accept: -
 
+## HAIKU_P40
+
+- git: `6fb0fbc`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 183  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 32 | 2 | 2 | 0.941 | 0.941 |
+| demands_commitment | 13 | 13 | 4 | 0 | 0.765 | 1.000 |
+| firm | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 6 | 6 | 4 | 0 | 0.600 | 1.000 |
+| hostility | 5 | 2 | 0 | 3 | 1.000 | 0.400 |
+| stance=accept | 11 | 11 | 2 | 0 | 0.846 | 1.000 |
+| stance=reject | 9 | 9 | 4 | 0 | 0.692 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.601 |
+| term exact-match (all lines) | 0.978 |
+| term exact-match (lines with terms, n=66) | 0.939 |
+| filler false accepts (n=31) | 1 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP n10, c10; FN p08, f25
+- demands_commitment: FP n08, i09, x03, k05; FN -
+- wants_to_end: FP x02, e06, e07, e10; FN -
+- hostility: FP -; FN x01, x02, x04
+- stance=accept: FP c11, f30; FN -
+- stance=reject: FP n15, x02, x04, k04; FN -
+- terms: f16, f17, d04, d11
+- filler false accept: f30
+
+## AMOUNTS_HAIKU_P40
+
+- git: `6fb0fbc`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 14  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=14
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 1 | 0 | 0.000 | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.714 |
+| term exact-match (all lines) | 1.000 |
+| term exact-match (lines with terms, n=13) | 1.000 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- demands_commitment: FP am09; FN -
+- terms: -
+- filler false accept: -
+
+## HAIKU_P40_NO_GUARD
+
+- git: `6fb0fbc`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: raw LLM (repair_stance off, eval-only); rescored from `docs/eval/nlu_corpus_haiku_p40.jsonl`
+- lines: 183  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 32 | 2 | 2 | 0.941 | 0.941 |
+| demands_commitment | 13 | 13 | 4 | 0 | 0.765 | 1.000 |
+| firm | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 6 | 6 | 4 | 0 | 0.600 | 1.000 |
+| hostility | 5 | 2 | 0 | 3 | 1.000 | 0.400 |
+| stance=accept | 11 | 11 | 2 | 0 | 0.846 | 1.000 |
+| stance=reject | 9 | 8 | 4 | 1 | 0.667 | 0.889 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.596 |
+| term exact-match (all lines) | 0.978 |
+| term exact-match (lines with terms, n=66) | 0.939 |
+| filler false accepts (n=31) | 1 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP n10, c10; FN p08, f25
+- demands_commitment: FP n08, i09, x03, k05; FN -
+- wants_to_end: FP x02, e06, e07, e10; FN -
+- hostility: FP -; FN x01, x02, x04
+- stance=accept: FP c11, f30; FN -
+- stance=reject: FP n15, x02, x04, k04; FN f18
+- terms: f16, f17, d04, d11
+- filler false accept: f30
+
 ## Notes
 
 - Both runs used the same model and prompt (Groq `gpt-oss-120b`, temperature 0).
@@ -872,3 +972,31 @@ Measurement only. Full write-up: `nlu_guard_20261008/summary.md`.
   its label. Stance accuracy on the 14 lines is 0.571, because Claude says
   counter or offer where the labels say offer or info. Stance is not what this
   corpus measures.
+
+### Phase 40: Claude Haiku 5.5 vs Sonnet 5.5 (2026-10-08)
+
+Measurement only. Full write-up: `nlu_haiku_20261008/summary.md`.
+
+- `HAIKU_P40` (183/183), `AMOUNTS_HAIKU_P40` (14/14) and `HAIKU_P40_NO_GUARD`
+  (rescore, no calls) ran on `anthropic/claude-haiku-5-5`, effort `low`, one
+  target (`nlu_haiku_20261008/providers_haiku.yaml`, profile
+  `claude_haiku_nlu`), shipped prompt at `6fb0fbc`, concurrency 2, single model.
+  Compared with `AFTER_P39_CLAUDE` / `AMOUNTS_P39_CLAUDE` (Sonnet 5.5, same
+  prompt and settings).
+- F1 Sonnet → Haiku: private info 0.986 → 0.941 (recall 1.000 → 0.941; misses
+  p08, f25), commitment 0.929 → 0.867, firm 1.000 → 1.000, wants_to_end 0.750
+  → 0.750, hostility 0.571 → 0.571, accept 0.957 → 0.917, reject 0.947 →
+  0.818. **Stance accuracy 0.820 → 0.601**: Haiku labels creditor rule
+  statements (info) as offer/counter (34 of 59 info lines). Term exact-match on
+  lines with terms 0.955 → 0.939 (Haiku drops f17, d11; gets i06 right).
+- Filler false accepts 1 → 1, on different lines (Sonnet f28, Haiku f30); f23
+  is counter on both. Haiku also has accept FP c11.
+- Amounts: terms 14/14 on both. am09 (the user's $420 sentence) is
+  `amount_ambiguous` $420 + 3 even payments on both, plus `demands_commitment`
+  against the label on both; am10 ambiguous $600 on both.
+- Guard on/off: Haiku 0.601 / 0.596 (one line changed, f18, helped); Sonnet
+  0.820 / 0.814 (f19, helped).
+- Per NLU call: Haiku p50 1.23 s, p95 1.96 s; $0.00024 vs Sonnet $0.0047
+  (Sonnet P39 latency not available; P37 p50 ≈ 2.1 s).
+- Cost of this phase: **$0.047** (194 calls, 271,542 in / 39,088 out at
+  $0.10/M in, $0.50/M out).

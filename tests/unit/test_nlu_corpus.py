@@ -245,3 +245,24 @@ def test_heldout_private_set_schema() -> None:
         assert "heldout" in ln["tags"], ln["id"]
         assert ln["stance"] in _STANCES, ln["id"]
         assert set(ln) <= {"id", "tags", "text", "stance", "terms", "ask_pct", *FLAGS}
+
+
+async def test_min_interval_paces_lines_with_llm_calls(monkeypatch) -> None:
+    import asyncio
+
+    import eval.nlu_corpus as nc
+
+    slept: list[float] = []
+    real_sleep = asyncio.sleep
+
+    async def fake_sleep(s: float) -> None:
+        slept.append(s)
+        await real_sleep(0)
+
+    monkeypatch.setattr(nc.asyncio, "sleep", fake_sleep)
+    lines = _lines(2)
+    records, _ = await nc.run_corpus(
+        lines, profile="offline", llm=_flaky_llm({}), retry_backoff_s=0, min_interval_s=5.0
+    )
+    assert nc.unanswered(records) == []
+    assert len(slept) == 2 and all(4.0 < s <= 5.0 for s in slept)

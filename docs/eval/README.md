@@ -39,5 +39,27 @@ Live demo-profile probe, BEFORE / AFTER Phase 21 plus the Phase 27 key pool:
 
 ## A/B (Phase 24b)
 
-[`ab_20261007/`](ab_20261007/): conditions and reading notes. The run is still
-in progress; `summary.md` lands there when it finishes.
+[`ab_20261007/`](ab_20261007/): [`summary.md`](ab_20261007/summary.md) (results
+table, the pre-registered adoption rule, the decision, and one representative and
+one worst transcript per arm), [`decision.md`](ab_20261007/decision.md),
+[`notes.md`](ab_20261007/notes.md) (conditions and how to read the numbers), and
+[`partial_D/`](ab_20261007/partial_D/) for the LLM-only arm that was stopped at
+13 of 48 scenarios. Outcome: A (policy + template NLG) stays the default; B (H3)
+and C (ReAct) fail the rule. The human check of the judge (20 pairs) is pending.
+
+## NLU stance guards on Claude (Phase 37)
+
+[`nlu_guard_20261008/`](nlu_guard_20261008/): the corpus and 12 probe lines on
+Claude Sonnet 5.5, scored with the rule-based stance guards on and off.
+Measurement only; see its [`summary.md`](nlu_guard_20261008/summary.md).
+
+## Live runs and free-tier daily limits
+
+Live evals that run several arms (such as the A/B) use the free-tier providers,
+and their daily caps can stall a run partway through. Gemini's requests-per-day
+limit resets at midnight Pacific time (about 12:30 IST). Groq's tokens-per-day
+limit is a rolling 24-hour window, so it frees up gradually rather than at a fixed
+time. Start multi-arm runs just after the Gemini reset, run at most two arms at a
+time (as the A/B did with `ab_20261007/providers_split2.yaml`), and finish an
+interrupted run with `python -m eval.run_eval ... --resume RUN_ID`, which re-runs
+only the scenarios skipped for quota.

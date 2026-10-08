@@ -39,6 +39,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 27 | Provider API key pool (user request) | done |
 | 28 | Filler false-accept veto (user request) | done (veto failed the corpus gate, reverted) |
 | 29 | Hermetic tests ignore .env (CI fix, user request) | done |
+| 30 | Anthropic provider + Claude naturalness judge (user request) | done |
 | 33 | Natural read-back copy in NLG bank, figure-free card replies (user request) | done |
 | 36 | UI review fixes + custom test cases, design pass (user request) | done |
 
@@ -54,6 +55,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 ### `app.config`
 - `class Settings(BaseSettings)` — fields: `groq_api_key`, `mistral_api_key`, `gemini_api_key`, `openrouter_api_key`, `cerebras_api_key` (`str | None`); `llm_profile` (`str`, default `"demo"`); `llm_timeout_nlu_s` / `llm_timeout_nlg_s` / `llm_timeout_stt_s` / `llm_timeout_sim_s` (`float`, 6 / 4 / 8 / 15); `llm_cache` (`bool`); `llm_cache_path` (`str`); `nlg_mode` (`llm` | `bank` | `template`) / `nlu_mode` (`str`); `nlg_bank_path` (`str`, `config/nlg_bank.json`); `db_path` (`str`); `hostility_threshold` (`float`); `max_turns` / `max_counters` (`int`); `anchor_ratio` / `concession_factor` (`float`); `firm_name` / `opening_disclosure` (`str`).
 - Phase 24b: `nlg_h3: bool = False` (ack / answer acts + 3-turn NLG context); `llm_timeout_agent_s: float = 20.0` (eval A/B agent role).
+- Phase 30: `anthropic_api_key: SecretStr | None` (pool `ANTHROPIC_API_KEY_1..N` via `api_keys`); `llm_timeout_judge_s: float = 60.0`.
 - `get_settings() -> Settings`
 
 ### `app.domain.units`
@@ -217,7 +219,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 ### `eval.judge_naturalness` (Phase 24a; not a gate)
 - CLI `python -m eval.judge_naturalness RUN_A RUN_B [--profile eval] [--limit N] [--seed 0] [--human-pairs 20] [--out DIR]`
 - `paired_results(run_a, run_b)`, `async judge_pair(llm, text_a, text_b) -> {a_first, b_first, verdict}`, `summarize(verdicts) -> dict` (Wilson CI over decisive pairs), `write_human_pairs(out_dir, pairs, *, n, seed, label_a, label_b)`, `async run_judge(run_a, run_b, *, llm, out_dir, limit=None, seed=0, human_pairs=20) -> dict`
-- Judge calls use role `sim`; a win needs both orders to agree, else tie
+- Judge calls use role `judge` (Phase 30; was `sim`); a win needs both orders to agree, else tie
 
 ### `app.agent.nlg`
 - `SAFE_FALLBACK: str`; `TEMPLATES: dict[Intent, str]`
@@ -336,7 +338,8 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
   - `async transcribe(wav_bytes, prompt=None) -> str`
   - `async aclose()`
 - `make_client(settings=None, **kwargs) -> LLMClient | FakeLLM` — offline profile returns `FakeLLM`
-- Roles: `nlu` | `nlg` | `sim` | `stt` | `agent` (Phase 24b; eval A/B arms; a profile without an `agent` route uses its `nlu` route). Routing from `config/providers.yaml` profiles (`demo`/`eval`/`local`/`offline`).
+- Roles: `nlu` | `nlg` | `sim` | `stt` | `agent` (Phase 24b; eval A/B arms; a profile without an `agent` route uses its `nlu` route) | `judge` (Phase 30; eval naturalness judge; **no** nlu fallback: a profile without a `judge` route raises `LLMUnavailable`).
+- Phase 30: provider config key `api: openai | anthropic` (default `openai`). `api: anthropic` uses `anthropic.AsyncAnthropic` (SDK 1.x, httpx2; `max_retries=0`), so `http_clients[name]` for it must be an `anthropic.DefaultAsyncHttpxClient` / `httpx2.AsyncClient`. Anthropic route params `tool_choice` / `temperature` / `top_p` / `top_k` / `thinking.type in (disabled, enabled)` are rejected at load (`ValueError`). Routing from `config/providers.yaml` profiles (`demo`/`eval`/`local`/`offline`).
 - Phase 24b: 429 cooldown = max(Retry-After, body delay: Groq "try again in XmYs" / Gemini `retryDelay`); a per-day quota without a Groq delay cools ≥ `DAILY_QUOTA_COOLDOWN_S = 3600`.
 - `on_call` meta (one per finished attempt, success or failure): `{role, provider, model, latency_ms, prompt_tokens, completion_tokens, cache_hit, failover_from, error, queue_ms}`; `error` is `None` on success; `queue_ms` (Phase 21) = limiter wait + short-429 Retry-After sleeps.
 - Phase 21: `class QueueWait` (`.ms`); `queue_wait_scope() -> ContextManager[QueueWait]` sums `queue_ms` of calls inside it. `@dataclass(frozen) RouteTarget(provider, model, params={}, timeout_s=None)` (`.spec`); `parse_route_entry(raw: str | Mapping) -> RouteTarget` (ValueError on unknown keys / bad timeout). Buckets keyed `(provider, model)`, burst `min(rpm, 5)`, refill `rpm/60`/s, start full. Limiter wait + request share the per-attempt timeout. `LLMClient.on_call` is a settable property (propagates to the offline FakeLLM it built).
@@ -1382,3 +1385,13 @@ Every reason sentence, before and after:
 | `wants_to_end` | End the call: the rep wants to stop and has not accepted. | We end the call, because the rep wants to stop and has not agreed to a deal. | The rep wants to stop. |
 | (unknown code) | The policy chose {intent}. | Our code chose this move ({intent}). | (full sentence) |
 
+### Phase 30 (Anthropic provider + judge role) (2026-10-08) — user request, not in REVIEW_PLAN
+- Files: `app/llm/client.py` (Anthropic Messages API path `_call_anthropic`, `judge` role, shared pool error handling for both SDKs), `app/config.py`, `config/providers.yaml` (provider `anthropic`, `judge` routes in `eval` + `local`), `.env.example`, `eval/judge_naturalness.py` (role `sim` → `judge`), `docs/eval/ab_20261007/providers_split2.yaml` (mirror: same routes, anthropic rpm halved), `pyproject.toml` + `uv.lock` (`anthropic>=1.12.0`), tests `tests/unit/test_llm_anthropic.py` (new), `tests/unit/test_judge_naturalness.py`.
+- Interfaces: role `judge`; `Settings.anthropic_api_key`, `Settings.llm_timeout_judge_s = 60.0`; providers.yaml `api: anthropic`, `key_env: ANTHROPIC_API_KEY`, `base_url: https://api.anthropic.com`, `rpm: 50`; judge route `{target: anthropic/claude-sonnet-5-5, params: {output_config: {effort: low}}}`, one target, no fallback.
+- Request mapping: system messages joined into `system`; other messages passed as is; `max_tokens` (chat_json default 1024); no `temperature` (Sonnet 5.5 rejects non-default sampling), no `thinking` (`disabled` is a 400 on Sonnet 5.5; omitted = adaptive, bounded by effort `low`), no `tool_choice` (forced use is a 400); JSON mode = the existing "Reply with JSON only" system line + the caller's local parse. Reply = joined `text` blocks (thinking blocks skipped). `stop_reason=refusal`, or `max_tokens` with no text, fails the target (→ `LLMUnavailable` for the judge). No server-side `fallbacks` param on purpose: a refusal must fail, not switch model.
+- Errors: 429 → key cooldown (Retry-After) + next key, same as other providers; 529 overloaded / 5xx → backoff retry inside the deadline, then fail; 401/403 → key disabled; key values redacted by label (`anthropic#0`). Audit rows: `provider=anthropic`, `model=claude-sonnet-5-5`, `prompt_tokens` = input (+ cache read/write), `completion_tokens` = output, `latency_ms`.
+- Run the judge: put `ANTHROPIC_API_KEY` in `.env`, then `uv run python -m eval.judge_naturalness RUN_A RUN_B --profile eval [--limit N]`. Cost ~2 calls per scenario; the eval-profile response cache (temperature-0 key) replays repeated judgments for free.
+- Live sanity (2026-10-08, one call, role `judge`, profile `eval`, cache off): `anthropic/claude-sonnet-5-5`, 50 input / 12 output tokens, 1490 ms, reply `{"pong": "ok"}` (≈ $0.0002).
+- Acceptance: `uv run pytest -q` 820 passed / 2 skipped / 5 xfailed; `ruff check .` clean; oracle eval (`--nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7`) thresholds PASS; fast suite with `.env` moved aside 817 passed.
+- Deviation: judge `max_tokens` 400 → 1024 (Sonnet 5.5 thinking counts against `max_tokens`; 400 risked a cut-off verdict). Output format unchanged.
+- Open: judge not yet run on real transcripts (thinking-token use per call at effort `low` unmeasured); `scripts/smoke_llm.py` still smokes only OpenAI-compatible providers (out of scope).

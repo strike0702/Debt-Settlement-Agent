@@ -59,10 +59,16 @@ profiles:
       - cerebras/gpt-oss-120b
       - groq/openai/gpt-oss-20b
       - mistral/mistral-small-latest
+    # Naturalness judge (eval/judge_naturalness): paid, ONE target on purpose.
+    # No free-tier fallback: a judge that switches model mid-run corrupts the
+    # metric, so a failure raises instead. Low effort keeps thinking short.
+    judge: &judge
+      - {target: anthropic/claude-sonnet-5-5, params: {output_config: {effort: low}}}
   local: # unlimited eval on the laptop; cloud only as fallback
     nlu: [ollama/qwen3.5:9b, gemini/gemini-3.1-flash-lite, mistral/mistral-small-latest]
     nlg: [ollama/gemma4:e4b, gemini/gemini-3.1-flash-lite]
     sim: [ollama/gemma4:e4b, gemini/gemini-3.1-flash-lite]
+    judge: *judge
   offline: # CI; no network
     all: [fake]
 
@@ -96,6 +102,11 @@ providers:
     rpm: 2
     tpm: 15000 # Phase 26: half the documented 30K; cannot bind at rpm 2
     json_mode: true
+  anthropic: # paid; Messages API via the `anthropic` SDK (Phase 30)
+    api: anthropic
+    base_url: "https://api.anthropic.com"
+    key_env: ANTHROPIC_API_KEY
+    rpm: 25
   ollama:
     base_url: "http://localhost:11434/v1"
     api_key: "ollama"

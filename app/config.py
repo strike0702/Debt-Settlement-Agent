@@ -80,6 +80,8 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr | None = None
     openrouter_api_key: SecretStr | None = None
     cerebras_api_key: SecretStr | None = None
+    # Paid Anthropic key (Phase 30): only the ``judge`` role routes to it.
+    anthropic_api_key: SecretStr | None = None
     # Every NAME / NAME_<n> ending in _KEY from env + .env (see module docstring).
     # Read through api_keys(); SecretStr keeps values out of repr().
     api_key_pool: dict[str, SecretStr] = {}
@@ -103,6 +105,8 @@ class Settings(BaseSettings):
     llm_timeout_sim_s: float = 15.0
     # Eval-only A/B agent arms (eval/agents): multi-step tool calls, not on the voice path.
     llm_timeout_agent_s: float = 20.0
+    # Eval-only naturalness judge (Phase 30, Anthropic): two transcripts in, one verdict out.
+    llm_timeout_judge_s: float = 60.0
 
     db_path: str = "debt_settlement_agent.db"
 

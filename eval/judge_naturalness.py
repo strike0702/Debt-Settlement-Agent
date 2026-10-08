@@ -4,13 +4,15 @@ CLI: ``python -m eval.judge_naturalness RUN_A RUN_B [--profile eval]
 [--limit N] [--seed 0] [--human-pairs 20] [--out DIR]``.
 
 For every scenario id completed (``status=ok``) in both runs, an LLM (role
-``sim`` routing) sees the two transcripts as "Transcript 1" / "Transcript 2",
-with no arm names, and picks the more natural agent. Each pair is judged twice
-with the order swapped; a scenario counts as a win only when both orders agree,
-otherwise it is a tie (position bias). Output: ``judge.json`` (per-scenario
-verdicts) and ``summary.json`` with A's win-rate over decisive scenarios and its
-Wilson 95% CI. Also writes ``human_pairs.csv`` (20 random pairs, sides
-shuffled, blank rating column) and ``human_pairs_key.csv`` (which side is which
+``judge``: Claude Sonnet 5.5 on the ``eval`` / ``local`` profiles, no free-tier
+fallback, needs ``ANTHROPIC_API_KEY``; Phase 30) sees the two transcripts as
+"Transcript 1" / "Transcript 2", with no arm names, and picks the more natural
+agent. Each pair is judged twice with the order swapped; a scenario counts as a
+win only when both orders agree, otherwise it is a tie (position bias). Output:
+``judge.json`` (per-scenario verdicts) and ``summary.json`` with A's win-rate
+over decisive scenarios and its Wilson 95% CI. Also writes ``human_pairs.csv``
+(20 random pairs, sides shuffled, blank rating column) and
+``human_pairs_key.csv`` (which side is which
 arm) so a human can check the judge.
 
 This reverses ROADMAP §6's "no LLM-as-judge" for this one secondary metric only
@@ -79,7 +81,9 @@ async def _judge_once(llm: Any, first: str, second: str) -> str:
             "content": f"Transcript 1:\n{first}\n\nTranscript 2:\n{second}",
         },
     ]
-    raw = await llm.chat_text("sim", messages, max_tokens=400)
+    # Sonnet 5.5 thinking (low effort) counts against max_tokens; 400 could cut
+    # the verdict off before the JSON line.
+    raw = await llm.chat_text("judge", messages, max_tokens=1024)
     try:
         start, end = raw.find("{"), raw.rfind("}")
         reply = _JudgeReply.model_validate_json(raw[start : end + 1])

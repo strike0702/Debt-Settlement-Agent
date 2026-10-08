@@ -4,7 +4,11 @@
 Reads keys from ``.env`` via Settings. Skips providers without a key; with a
 key pool (``GROQ_API_KEY_1``, ``_2``, ...) every key is smoked on its own.
 Checks Ollama ``GET /api/tags`` before attempting a local call.
-Prints provider, model, latency_ms (or SKIP / FAIL).
+The paid Anthropic judge is smoked through the shipped ``judge`` route of the
+``eval`` profile (``LLMClient.chat_text("judge", ...)``, one call per key,
+cache off, about $0.0002 each) and only when ``ANTHROPIC_API_KEY`` is set.
+Prints provider, model, latency_ms (or SKIP / FAIL). Exit 0 needs a Groq OK;
+the judge line is informational.
 """
 
 from __future__ import annotations
@@ -22,7 +26,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from app.config import Settings, get_settings  # noqa: E402
-from app.llm.client import LLMClient, LLMUnavailable, parse_route_entry  # noqa: E402
+from app.llm.client import (  # noqa: E402
+    LLMClient,
+    LLMUnavailable,
+    parse_route_entry,
+    strip_json_fences,
+)
 
 
 class SmokeOut(BaseModel):
@@ -36,6 +45,13 @@ SMOKE_TARGETS = [
     ("openrouter", "cohere/north-mini-code:free", "OPENROUTER_API_KEY"),
     ("cerebras", "gpt-oss-120b", "CEREBRAS_API_KEY"),
 ]
+
+
+# The judge has no OpenAI-compatible target to force; smoke the real route instead.
+JUDGE_PROFILE = "eval"
+JUDGE_KEY_ENV = "ANTHROPIC_API_KEY"
+# Sonnet 5.5 thinking counts against max_tokens (Phase 30); a pong needs ~12.
+JUDGE_MAX_TOKENS = 1024
 
 
 def _key_pool(settings: Settings, env_name: str) -> list[tuple[int, str]]:
@@ -106,6 +122,37 @@ async def _one(provider: str, model: str, settings: Settings | None = None) -> t
     return f"{provider}/{model}", ms
 
 
+async def _smoke_judge(settings: Settings) -> list[str]:
+    """One ``chat_text("judge", ...)`` per Anthropic key on the shipped judge route."""
+    keys = _key_pool(settings, JUDGE_KEY_ENV)
+    if not keys:
+        return [f"SKIP  judge/{JUDGE_PROFILE}  (no {JUDGE_KEY_ENV} or {JUDGE_KEY_ENV}_N)"]
+    lines: list[str] = []
+    for suffix, value in keys:
+        key_label = JUDGE_KEY_ENV if suffix == 0 else f"{JUDGE_KEY_ENV}_{suffix}"
+        one = _single_key_settings(settings, JUDGE_KEY_ENV, value).model_copy(
+            update={"llm_profile": JUDGE_PROFILE, "llm_cache": False}
+        )
+        client = LLMClient(one, skip_health_check=True)
+        try:
+            t0 = time.perf_counter()
+            text = await client.chat_text(
+                "judge",
+                [{"role": "user", "content": 'Return {"pong":"ok"} as JSON.'}],
+                JUDGE_MAX_TOKENS,
+                json_mode=True,
+            )
+            ms = (time.perf_counter() - t0) * 1000.0
+            if SmokeOut.model_validate_json(strip_json_fences(text)).pong != "ok":
+                raise RuntimeError(f"unexpected payload: {text!r}")
+            lines.append(f"OK    judge/{JUDGE_PROFILE}  [{key_label}]  {ms:.0f} ms")
+        except Exception as e:
+            lines.append(f"FAIL  judge/{JUDGE_PROFILE}  [{key_label}]  {type(e).__name__}: {e}")
+        finally:
+            await client.aclose()
+    return lines
+
+
 async def main() -> int:
     settings = get_settings()
     print(f"profile={settings.llm_profile} cache={settings.llm_cache}")
@@ -129,6 +176,10 @@ async def main() -> int:
                 line = f"FAIL  {provider}/{model}  [{key_label}]  {type(e).__name__}: {e}"
             print(line)
             results.append(line)
+
+    for line in await _smoke_judge(settings):
+        print(line)
+        results.append(line)
 
     ollama_model = "qwen3.5:9b"
     pulled = _ollama_model(ollama_model)

@@ -167,3 +167,32 @@ def test_operator_trace_says_why_the_engine_did_not_run(tmp_path: Path) -> None:
     assert traces[1]["needs_info"] == ["max_payments", "min_payment_cents", "payment_structure"]
     assert traces[2]["affordability"] and traces[2]["affordability"]["curve"]
     assert traces[2].get("needs_info") is None
+
+
+_REF = date(2026, 10, 1)
+_FEE = {("money", 950)}  # easy_deal's private $9.50 bank fee
+
+
+def test_leak_scan_ignores_iso_timestamp_that_tokenizes_as_a_private_amount() -> None:
+    """[36.1] An audit ``ts`` whose seconds read ``09.50…`` is not the $9.50 fee."""
+    frame = {"type": "audit", "ts": "2026-10-08T03:17:09.500412+00:00", "event": "decide"}
+    assert leaked_private_values([frame], _FEE, ref=_REF) == []
+
+
+def test_leak_scan_still_catches_private_amounts_beside_or_under_ts() -> None:
+    """[36.1] The timestamp exemption is narrow: money text is still scanned, even under ``ts``."""
+    said = {"type": "say", "text": "The fee is $9.50.", "ts": "2026-10-08T03:17:09.500412+00:00"}
+    fake_ts = {"type": "audit", "ts": "fee $9.50"}
+    assert leaked_private_values([{"type": "x", "text": "fee $9.50"}], _FEE, ref=_REF) != []
+    assert leaked_private_values([fake_ts], _FEE, ref=_REF) != []
+    assert leaked_private_values([{"type": "x", "fee_cents": 950}], _FEE, ref=_REF) != []
+    # A say is exempt only because the agent itself spoke it (existing rule).
+    assert leaked_private_values([said], _FEE, ref=_REF) == []
+
+
+def test_leak_scan_reports_the_full_path_of_each_hit() -> None:
+    """[36.1] A failure names frame type, key path and value, so a flake is triageable."""
+    frame = {"type": "audit", "events": [{"payload": {"note": "fee $9.50"}}]}
+    assert leaked_private_values([frame], _FEE, ref=_REF) == [
+        ("audit:events[0].payload.note", "$9.50")
+    ]

@@ -1,8 +1,20 @@
-"""Role-based OpenAI-compatible LLM client with provider failover.
+"""Role-based LLM client (OpenAI-compatible + Anthropic) with provider failover.
 
-Callers ask for a role (``nlu`` / ``nlg`` / ``sim`` / ``stt`` / ``agent``), never
-a model name. ``agent`` is the eval-only A/B arms' move role (``eval/agents``);
-a profile without an ``agent`` route falls back to its ``nlu`` route.
+Callers ask for a role (``nlu`` / ``nlg`` / ``sim`` / ``stt`` / ``agent`` /
+``judge``), never a model name. ``agent`` is the eval-only A/B arms' move role
+(``eval/agents``); a profile without an ``agent`` route falls back to its
+``nlu`` route. ``judge`` (Phase 30, ``eval/judge_naturalness``) never falls
+back: a profile without a ``judge`` route raises ``LLMUnavailable``, because a
+judge that silently changes model would corrupt the metric.
+
+Providers speak the OpenAI chat API unless their config sets ``api:
+anthropic``; those go through the official ``anthropic`` SDK (Messages API):
+system messages fold into ``system``, JSON mode is a prompt line plus the
+caller's local parse (no forced ``tool_choice``), no ``temperature`` or
+``thinking`` is sent (Sonnet 5.5 rejects non-default sampling and disabled
+thinking), route ``params`` (e.g. ``output_config: {effort: low}``) go in the
+body, and a ``refusal`` or an empty ``max_tokens`` reply fails the target.
+Anthropic 429 / 529 / 5xx / 401 use the same pool handling as below.
 Routing comes from ``config/providers.yaml`` profiles; a route entry is
 either ``provider/model`` or ``{target: provider/model, params: {...},
 timeout_s: N}`` (params go into the request body and the response-cache key;
@@ -58,6 +70,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, TypeVar
 
+import anthropic
 import httpx
 import yaml
 from openai import APIConnectionError, APIStatusError, AsyncOpenAI
@@ -65,7 +78,19 @@ from pydantic import BaseModel
 
 from app.config import Settings, get_settings
 
-Role = Literal["nlu", "nlg", "sim", "stt", "agent"]
+Role = Literal["nlu", "nlg", "sim", "stt", "agent", "judge"]
+
+# Both SDKs' status / connection errors take the same pool path (cooldown, retry, failover).
+_STATUS_ERRORS = (APIStatusError, anthropic.APIStatusError)
+_CONNECTION_ERRORS = (APIConnectionError, anthropic.APIConnectionError)
+_AnyStatusError = APIStatusError | anthropic.APIStatusError
+# Roles that must not borrow the profile's nlu route when they have none.
+_NO_NLU_FALLBACK: frozenset[str] = frozenset({"judge"})
+# The Messages API requires max_tokens; chat_json passes None.
+_ANTHROPIC_DEFAULT_MAX_TOKENS = 1024
+# Route params an anthropic target may not carry: forced tool use, sampling, and
+# disabled thinking all 400 on Sonnet 5.5 (and JSON is emulated, never forced).
+_ANTHROPIC_BANNED_PARAMS = frozenset({"tool_choice", "temperature", "top_p", "top_k"})
 
 # A per-day quota does not reset in a minute: cool the key long enough that the
 # call moves to other keys / targets instead of re-hitting it every minute.
@@ -220,6 +245,7 @@ class _ProviderCfg:
     local: bool = False
     health: str | None = None
     tpm: float = 0  # tokens per minute per key; 0 = no TPM budget
+    api: Literal["openai", "anthropic"] = "openai"
 
 
 @dataclass(eq=False)
@@ -229,7 +255,7 @@ class _ApiKey:
     provider: str
     suffix: int
     secret: str = field(repr=False)
-    client: AsyncOpenAI = field(repr=False)
+    client: AsyncOpenAI | anthropic.AsyncAnthropic = field(repr=False)
     disabled: bool = False
 
     @property
@@ -484,7 +510,7 @@ class LLMClient:
         settings: Settings | None = None,
         *,
         providers_path: str | Path | None = None,
-        http_clients: Mapping[str, httpx.AsyncClient] | None = None,
+        http_clients: Mapping[str, Any] | None = None,
         on_call: OnCallHook | None = None,
         fake: FakeLLM | None = None,
         skip_health_check: bool = False,
@@ -497,7 +523,7 @@ class LLMClient:
         self._providers: dict[str, _ProviderCfg] = {}
         self._profiles: dict[str, dict[str, list[RouteTarget]]] = {}
         # First key's client per provider (membership = provider has a usable key).
-        self._openai: dict[str, AsyncOpenAI] = {}
+        self._openai: dict[str, AsyncOpenAI | anthropic.AsyncAnthropic] = {}
         self._keys: dict[str, list[_ApiKey]] = {}
         self._rr: dict[str, int] = defaultdict(int)
         # Keyed (provider, key suffix, model); see module docstring.
@@ -534,6 +560,9 @@ class LLMClient:
     def _load_yaml(self, path: Path) -> None:
         data = yaml.safe_load(path.read_text())
         for name, raw in (data.get("providers") or {}).items():
+            api = raw.get("api", "openai")
+            if api not in ("openai", "anthropic"):
+                raise ValueError(f"provider {name}: unknown api {api!r}")
             self._providers[name] = _ProviderCfg(
                 name=name,
                 base_url=raw["base_url"],
@@ -541,7 +570,9 @@ class LLMClient:
                 api_key=raw.get("api_key"),
                 rpm=float(raw.get("rpm") or 0),
                 min_interval_s=float(raw.get("min_interval_s") or 0),
-                json_mode=bool(raw.get("json_mode", True)),
+                # Anthropic has no JSON response_format: always the prompt line.
+                json_mode=bool(raw.get("json_mode", True)) and api != "anthropic",
+                api=api,
                 quota_as_400=bool(raw.get("quota_as_400", False)),
                 local=bool(raw.get("local", False)),
                 health=raw.get("health"),
@@ -555,11 +586,18 @@ class LLMClient:
                     "nlg": specs,
                     "sim": specs,
                     "stt": specs,
+                    "judge": specs,
                 }
             else:
                 self._profiles[pname] = {
                     k: [parse_route_entry(e) for e in v] for k, v in proute.items()
                 }
+        for pname, roles in self._profiles.items():
+            for targets in roles.values():
+                for t in targets:
+                    cfg = self._providers.get(t.provider)
+                    if cfg is not None and cfg.api == "anthropic":
+                        _check_anthropic_params(f"{pname}/{t.spec}", t.params)
 
     def _resolve_keys(self, cfg: _ProviderCfg) -> list[tuple[int, str]]:
         """``(suffix, value)`` pool: inline ``api_key`` (local) or ``Settings.api_keys``."""
@@ -581,6 +619,7 @@ class LLMClient:
             http = self._http_clients.get(name)
             keys: list[_ApiKey] = []
             for suffix, secret in pool:
+                # max_retries=0: the pool owns retries, cooldowns and failover.
                 kwargs: dict[str, Any] = {
                     "base_url": cfg.base_url,
                     "api_key": secret,
@@ -588,7 +627,8 @@ class LLMClient:
                 }
                 if http is not None:
                     kwargs["http_client"] = http
-                keys.append(_ApiKey(name, suffix, secret, AsyncOpenAI(**kwargs)))
+                sdk = anthropic.AsyncAnthropic if cfg.api == "anthropic" else AsyncOpenAI
+                keys.append(_ApiKey(name, suffix, secret, sdk(**kwargs)))
             self._keys[name] = keys
             self._openai[name] = keys[0].client
 
@@ -707,8 +747,12 @@ class LLMClient:
         profile = self._profiles.get(self.settings.llm_profile)
         if not profile:
             raise LLMUnavailable(f"unknown llm_profile={self.settings.llm_profile!r}")
-        specs = profile.get(role) or profile.get("nlu") or []
-        return list(specs)
+        specs = profile.get(role)
+        if not specs and role in _NO_NLU_FALLBACK:
+            raise LLMUnavailable(
+                f"llm_profile={self.settings.llm_profile!r} has no {role} route"
+            )
+        return list(specs or profile.get("nlu") or [])
 
     def _provider_usable(self, provider: str, model: str, horizon_s: float) -> bool:
         """Has a live key, or one whose cooldown ends within ``horizon_s`` (short-wait cap)."""
@@ -763,7 +807,7 @@ class LLMClient:
             }
         )
 
-    def _retry_after_seconds(self, err: APIStatusError) -> float | None:
+    def _retry_after_seconds(self, err: _AnyStatusError) -> float | None:
         headers = getattr(err, "headers", None)
         if headers is None and getattr(err, "response", None) is not None:
             headers = err.response.headers
@@ -778,13 +822,13 @@ class LLMClient:
             return None
 
     @staticmethod
-    def _error_body(err: APIStatusError) -> str:
+    def _error_body(err: _AnyStatusError) -> str:
         try:
             return str(err.body) if err.body is not None else str(err)
         except Exception:
             return str(err)
 
-    def _quota_cooldown_s(self, err: APIStatusError) -> float | None:
+    def _quota_cooldown_s(self, err: _AnyStatusError) -> float | None:
         """Cooldown for a 429 / quota error: header, body delay, or a per-day floor.
 
         Groq's "try again in 7m12s" is trusted as is (rolling window). A per-day
@@ -808,7 +852,7 @@ class LLMClient:
             return max(best or 0.0, DAILY_QUOTA_COOLDOWN_S)
         return best
 
-    def _is_gemini_quota_400(self, provider: str, err: APIStatusError) -> bool:
+    def _is_gemini_quota_400(self, provider: str, err: _AnyStatusError) -> bool:
         cfg = self._providers.get(provider)
         if not cfg or not cfg.quota_as_400:
             return False
@@ -919,8 +963,9 @@ class LLMClient:
 
             t0 = time.perf_counter()
             queue = QueueWait()
+            call = self._call_anthropic if cfg.api == "anthropic" else self._call_chat
             try:
-                body, pt, ct, latency_ms, key_id = await self._call_chat(
+                body, pt, ct, latency_ms, key_id = await call(
                     role,
                     provider,
                     model,
@@ -983,7 +1028,7 @@ class LLMClient:
         role: Role,
         provider: str,
         model: str,
-        send: Callable[[AsyncOpenAI, float], Awaitable[Any]],
+        send: Callable[[Any, float], Awaitable[Any]],
         *,
         timeout_s: float,
         cost: int,
@@ -1059,7 +1104,7 @@ class LLMClient:
                     t0 = time.perf_counter()
                     try:
                         resp = await send(key.client, max(0.001, deadline - loop.time()))
-                    except APIStatusError as e:
+                    except _STATUS_ERRORS as e:
                         latency_ms = (time.perf_counter() - t0) * 1000.0
                         status = e.status_code
                         where = f"{provider}/{model} {key.label}"
@@ -1086,7 +1131,7 @@ class LLMClient:
                         else:
                             msg = f"{where} HTTP {status}: {e}"
                         raise _TargetFailed(self._redact(msg), key.label) from None
-                    except APIConnectionError as e:
+                    except _CONNECTION_ERRORS as e:
                         # Includes APITimeoutError (SDK-side timeout).
                         raise _TargetFailed(
                             self._redact(f"{provider}/{model} {key.label} connection: {e}"),
@@ -1160,6 +1205,78 @@ class LLMClient:
         choice = resp.choices[0].message.content or ""
         return choice, pt, ct, latency_ms, key.label
 
+    async def _call_anthropic(
+        self,
+        role: Role,
+        provider: str,
+        model: str,
+        messages: list[Mapping[str, Any]],
+        *,
+        temperature: float,
+        max_tokens: int | None,
+        json_mode: bool,
+        timeout_s: float,
+        params: Mapping[str, Any] | None = None,
+        queue: QueueWait | None = None,
+        failover_from: str | None = None,
+    ) -> tuple[str, int | None, int | None, float, str]:
+        """One Anthropic Messages API target on its key pool; same contract as ``_call_chat``.
+
+        ``temperature`` and ``json_mode`` are accepted for signature parity and
+        ignored: sampling stays at the model default and JSON was already asked
+        for by the system line ``_chat`` adds (providers with ``api: anthropic``
+        never have ``json_mode``). Tokens are ``usage.input_tokens`` (+ cache
+        read / write) and ``usage.output_tokens``.
+        """
+        system = "\n\n".join(
+            str(m.get("content") or "") for m in messages if m.get("role") == "system"
+        )
+        convo = [
+            {"role": m["role"], "content": m.get("content") or ""}
+            for m in messages
+            if m.get("role") != "system"
+        ]
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "max_tokens": max_tokens or _ANTHROPIC_DEFAULT_MAX_TOKENS,
+            "messages": convo,
+        }
+        if system:
+            kwargs["system"] = system
+        if params:
+            kwargs["extra_body"] = dict(params)
+
+        async def send(client: anthropic.AsyncAnthropic, remaining_s: float) -> Any:
+            return await client.messages.create(**kwargs, timeout=remaining_s)
+
+        resp, latency_ms, key = await self._on_pool(
+            role,
+            provider,
+            model,
+            send,
+            timeout_s=timeout_s,
+            cost=_estimate_tokens(messages),
+            queue=queue if queue is not None else QueueWait(),
+            failover_from=failover_from,
+        )
+        usage = resp.usage
+        pt = ct = None
+        if usage is not None:
+            pt = (
+                usage.input_tokens
+                + (getattr(usage, "cache_read_input_tokens", None) or 0)
+                + (getattr(usage, "cache_creation_input_tokens", None) or 0)
+            )
+            ct = usage.output_tokens
+        text = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text")
+        where = f"{provider}/{model} {key.label}"
+        # Fail the target rather than hand back an empty or cut-off verdict.
+        if resp.stop_reason == "refusal":
+            raise _TargetFailed(f"{where} stop_reason=refusal", key.label)
+        if resp.stop_reason == "max_tokens" and not text.strip():
+            raise _TargetFailed(f"{where} stop_reason=max_tokens with no text", key.label)
+        return text, pt, ct, latency_ms, key.label
+
     async def transcribe(self, wav_bytes: bytes, prompt: str | None = None) -> str:
         if self._fake is not None and self.settings.llm_profile == "offline":
             return await self._fake.transcribe(wav_bytes, prompt)
@@ -1223,6 +1340,8 @@ class LLMClient:
     ) -> tuple[str, float, str]:
         """One STT target on its key pool, under one STT deadline; returns ``(text, ms, key)``."""
         timeout_s = timeout_s or self._timeout_for("stt")
+        if self._providers[provider].api == "anthropic":
+            raise _TargetFailed(f"{provider}/{model} has no speech-to-text API")
 
         async def send(client: AsyncOpenAI, remaining_s: float) -> Any:
             # The SDK wants a named file-like object; a fresh one per attempt.
@@ -1273,6 +1392,16 @@ class _TargetExhausted(_TargetError):
 
 class _TargetFailed(_TargetError):
     """Hard failure on target after retries; caller should fail over."""
+
+
+def _check_anthropic_params(where: str, params: Mapping[str, Any]) -> None:
+    """Reject route params that an Anthropic target must never send (see module docstring)."""
+    bad = sorted(set(params) & _ANTHROPIC_BANNED_PARAMS)
+    thinking = params.get("thinking")
+    if isinstance(thinking, Mapping) and thinking.get("type") in ("disabled", "enabled"):
+        bad.append(f"thinking.type={thinking.get('type')}")
+    if bad:
+        raise ValueError(f"anthropic route {where}: unsupported params {bad}")
 
 
 def make_client(

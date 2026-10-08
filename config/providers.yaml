@@ -1,4 +1,5 @@
-# Free-tier OpenAI-compatible provider pool. Limits change; check each console.
+# Free-tier OpenAI-compatible provider pool, plus one paid Anthropic provider
+# used only by the eval-only `judge` role (Phase 30). Limits change; check each console.
 # A route entry is `provider/model` (model may contain slashes, e.g.
 # openai/gpt-oss-120b) or a mapping:
 #   {target: provider/model, params: {reasoning_effort: low}, timeout_s: 20}
@@ -55,10 +56,16 @@ profiles:
       - cerebras/gpt-oss-120b
       - groq/openai/gpt-oss-20b
       - mistral/mistral-small-latest
+    # Naturalness judge (eval/judge_naturalness): paid, ONE target on purpose.
+    # No free-tier fallback: a judge that switches model mid-run corrupts the
+    # metric, so a failure raises instead. Low effort keeps thinking short.
+    judge: &judge
+      - {target: anthropic/claude-sonnet-5-5, params: {output_config: {effort: low}}}
   local: # unlimited eval on the laptop; cloud only as fallback
     nlu: [ollama/qwen3.5:9b, gemini/gemini-3.1-flash-lite, mistral/mistral-small-latest]
     nlg: [ollama/gemma4:e4b, gemini/gemini-3.1-flash-lite]
     sim: [ollama/gemma4:e4b, gemini/gemini-3.1-flash-lite]
+    judge: *judge
   offline: # CI; no network
     all: [fake]
 
@@ -94,6 +101,11 @@ providers:
     rpm: 5
     tpm: 30000
     json_mode: true
+  anthropic: # paid; Messages API via the `anthropic` SDK (not OpenAI-compatible)
+    api: anthropic
+    base_url: "https://api.anthropic.com"
+    key_env: ANTHROPIC_API_KEY
+    rpm: 50 # tier-1 org limit; the judge makes 2 calls per scenario
   ollama:
     base_url: "http://localhost:11434/v1"
     api_key: "ollama"

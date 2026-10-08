@@ -1,6 +1,6 @@
 # Design decisions
 
-Five short architecture decision records (ADRs) and one annotated voice turn.
+Six short architecture decision records (ADRs) and one annotated voice turn.
 Each ADR is context, decision, consequences. Numbers link to the committed
 evidence in [`docs/eval/`](eval/); nothing here is measured anywhere else.
 
@@ -109,13 +109,48 @@ cache hit (`docs/PROGRESS.md`, Environment facts). The policy eval's 0 stuck cal
 and the invariant sweep (counters never above the private max) rely on it. The
 grid is 1-point granular; finer offers would need a denser scan.
 
+## ADR 6. Claude reads the rep on the demo, under a daily cap
+
+**Context.** The NLU step decides what the representative meant, and the
+free-tier models were weakest there. On the same 183 corpus lines and the same
+prompt, Claude Sonnet 5.5 scored stance accuracy 0.820, private-info recall
+1.000 and term exact-match 0.984
+([`AFTER_P39_CLAUDE`](eval/nlu_corpus.md#after_p39_claude)), and it got all 14
+amount lines right where Groq got 0.857 of them
+([`AMOUNTS_P39`](eval/nlu_corpus.md#amounts_p39)). Claude Haiku 5.5 costs about
+1/19 as much but scored stance accuracy 0.601 and private-info recall 0.941
+([Phase 40 summary](eval/nlu_haiku_20261008/summary.md)). Sonnet is paid, and
+the hosted demo is public.
+
+**Decision.** The `demo` profile's NLU route is Sonnet 5.5 (effort `low`,
+the 6 s NLU timeout) first, then the old free chain unchanged. The Sonnet target
+is `budgeted`: spend is summed per UTC day from each live reply's token counts
+at the prices in `config/providers.yaml`, as integer micro-dollars in the app
+DB. Once the day reaches `CLAUDE_DAILY_BUDGET_USD` (default $1.00), the target
+is skipped and the call goes to Groq until 00:00 UTC. A budget never blocks a
+call. Phrasing (NLG), speech-to-text and "Watch a call" are unchanged, and the
+eval `judge` role is never budgeted. Without `ANTHROPIC_API_KEY` the route
+behaves exactly as before.
+
+**Consequences.** On the shipped route Sonnet answered in 2.07 s p50 / 2.70 s
+p95 at $0.0046 per call, so $1 buys about 215 rep turns a day
+([live probe](eval/claude_nlu_demo_20261008/summary.md)). That is about 0.6 s
+p50 slower than Groq. After the cap the demo reads the rep with the free
+models, so quality can change mid-call; the audit shows which model answered
+each turn (`llm` rows, operator view). The rule-based stance guards still run
+on Claude's output, and Phase 37 showed they override some correct Claude
+labels; that is a separate open decision. Render's disk is ephemeral, so a
+restart starts the day's count at zero; a monthly limit in the Anthropic
+console is the backstop.
+
 ## One voice turn, annotated
 
 Per-stage p50s are the Phase 21 AFTER voice run (n=20, `easy_deal`, demo
-profile) in [`docs/eval/latency_20261007.md`](eval/latency_20261007.md). Stages
-nest: `queue_ms` (rate-limit wait) sits inside NLU. The VAD hangover and TTS
-onset are not measured by the probe; the end-to-end figure is an estimate until
-a browser-measured voice run exists.
+profile, before the demo NLU moved to Claude in ADR 6) in
+[`docs/eval/latency_20261007.md`](eval/latency_20261007.md). Stages nest:
+`queue_ms` (rate-limit wait) sits inside NLU. The VAD hangover and TTS onset
+are not measured by the probe; the end-to-end figure is an estimate until a
+browser-measured voice run exists.
 
 ```mermaid
 sequenceDiagram

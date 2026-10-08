@@ -5,6 +5,9 @@ NLG template-bank path), DB path,
 negotiation knobs (max turns, anchor ratio, firm disclosure). Call
 ``get_settings()``; do not construct ``Settings`` ad hoc in hot paths.
 
+Phase 41: ``claude_daily_budget_usd`` (env ``CLAUDE_DAILY_BUDGET_USD``) caps the
+demo's paid Claude NLU per UTC day; see ``app.llm.budget``.
+
 API key pools: besides the declared ``<provider>_api_key`` fields, every
 ``*_KEY`` / ``*_KEY_<n>`` variable in the environment or ``.env`` is collected
 into ``api_key_pool``; ``api_keys(key_env)`` returns a provider's ordered,
@@ -15,10 +18,11 @@ object except through ``api_keys``.
 from __future__ import annotations
 
 import re
+from decimal import Decimal
 from functools import lru_cache
 from typing import Any
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic.fields import FieldInfo
 from pydantic_settings import (
     BaseSettings,
@@ -80,8 +84,13 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr | None = None
     openrouter_api_key: SecretStr | None = None
     cerebras_api_key: SecretStr | None = None
-    # Paid Anthropic key (Phase 30): only the ``judge`` role routes to it.
+    # Paid Anthropic key: the eval ``judge`` role (Phase 30) and, since Phase 41,
+    # the demo ``nlu`` route's first target (under the daily budget below).
     anthropic_api_key: SecretStr | None = None
+    # Phase 41: daily cap (USD, UTC day) on route targets marked ``budgeted`` in
+    # providers.yaml (only the demo NLU's Claude target). Decimal, never float;
+    # app.llm.budget converts it to integer micro-dollars. Prices live in providers.yaml.
+    claude_daily_budget_usd: Decimal = Field(default=Decimal("1.00"), ge=0)
     # Every NAME / NAME_<n> ending in _KEY from env + .env (see module docstring).
     # Read through api_keys(); SecretStr keeps values out of repr().
     api_key_pool: dict[str, SecretStr] = {}

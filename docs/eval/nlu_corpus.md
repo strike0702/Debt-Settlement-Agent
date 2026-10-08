@@ -303,6 +303,37 @@ Misses (line ids):
   the same with `--corpus tests/nlu_corpus_heldout.jsonl --label HELDOUT_BEFORE_P32`,
   then `--label AFTER_P32` / `HELDOUT_AFTER_P32` on `b385a42`.
 
+### Phase 37: stance guards on Claude, with vs without (2026-10-08)
+
+Measurement only. Full write-up: `nlu_guard_20261008/summary.md`.
+
+- Model: `anthropic/claude-sonnet-5-5`, effort `low`, one target
+  (`nlu_guard_20261008/providers_claude.yaml`, profile `claude_nlu`). 183/183
+  answered (179 by Claude, 4 by the fast path). One paid pass. Every record now
+  keeps the raw LLM stance (`predicted.stance_raw`) beside the repaired one, so
+  `CLAUDE_P37_NO_GUARD` is a rescore of the same replies (`--from-records ...
+  --no-repair-stance`), with no extra calls.
+- Corpus: the guard changes **1 of 183 lines**: f19 `ok`, where Claude said
+  `other` and the guard made it `accept` (helped; the label is arguable). Stance
+  accuracy is 0.820 with the guard and 0.814 without. Accept recall is 1.000 with
+  and 0.909 without. Every other class, flag and term is identical. Filler false
+  accepts are 0 both ways (f23 / f30 are right from the raw LLM). The injection,
+  reject-phrase and accept-phrase rules fired on 15 lines and changed none.
+- Probes (`nlu_guard_20261008/probes.jsonl`, 12 lines, section
+  `CLAUDE_P37_PROBES`): the guard overrides a correct Claude label on 8 of the
+  10 targeted lines. These are all six 31.1 lines ("Is that agreed?", "Let me
+  check if that works for the client." → forced accept) and two 31.2 lines ("not
+  too low, we can accept that", a self-corrected "doesn't work" → forced reject).
+  The two controls are unchanged. Raw Claude gets 10 of 12 right; with the guard
+  on, 3 of 12 are right.
+- Gemini (`BEFORE_P32`) has no stored raw stance, so its split cannot be
+  computed. The phrase rules force the same 8 corpus lines there, and all 8
+  forced labels are right.
+- Cost: $0.648 at $2/M input and $10/M output (200,512 input / 24,721 output
+  tokens over 191 live calls, pilot included).
+- Options for 31.1 / 31.2 (patch / remove force-accept / leave) are in the
+  summary. No fix lands in this phase.
+
 ## FILLER_BEFORE
 
 - git: `9998a65`  profile=`demo`  ref=2026-04-01
@@ -560,4 +591,105 @@ Misses (line ids):
 - stance=accept: FP c11; FN -
 - stance=reject: FP n15, a13, x01, x02; FN a10
 - terms: f16, f17
+- filler false accept: -
+
+## CLAUDE_P37
+
+- git: `14ef59b`  profile=`claude_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_guard_20261008/providers_claude.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 183  skipped (LLM unavailable): 0
+- model share: anthropic/claude-sonnet-5-5=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 2 | 0 | 0.944 | 1.000 |
+| demands_commitment | 13 | 13 | 2 | 0 | 0.867 | 1.000 |
+| firm | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 6 | 6 | 5 | 0 | 0.545 | 1.000 |
+| hostility | 5 | 2 | 0 | 3 | 1.000 | 0.400 |
+| stance=accept | 11 | 11 | 0 | 0 | 1.000 | 1.000 |
+| stance=reject | 9 | 9 | 1 | 0 | 0.900 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.820 |
+| term exact-match (all lines) | 0.989 |
+| term exact-match (lines with terms, n=66) | 0.970 |
+| filler false accepts (n=31) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP n10, n11; FN -
+- demands_commitment: FP i09, k05; FN -
+- wants_to_end: FP c06, x02, e06, e07, e10; FN -
+- hostility: FP -; FN x01, x02, x04
+- stance=reject: FP k04; FN -
+- terms: f16, d04
+- filler false accept: -
+
+## CLAUDE_P37_NO_GUARD
+
+- git: `14ef59b`  profile=`claude_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_guard_20261008/providers_claude.yaml`
+- stance: raw LLM (repair_stance off, eval-only); rescored from `docs/eval/nlu_corpus_claude_p37.jsonl`
+- lines: 183  skipped (LLM unavailable): 0
+- model share: anthropic/claude-sonnet-5-5=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 2 | 0 | 0.944 | 1.000 |
+| demands_commitment | 13 | 13 | 2 | 0 | 0.867 | 1.000 |
+| firm | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 6 | 6 | 5 | 0 | 0.545 | 1.000 |
+| hostility | 5 | 2 | 0 | 3 | 1.000 | 0.400 |
+| stance=accept | 11 | 10 | 0 | 1 | 1.000 | 0.909 |
+| stance=reject | 9 | 9 | 1 | 0 | 0.900 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.814 |
+| term exact-match (all lines) | 0.989 |
+| term exact-match (lines with terms, n=66) | 0.970 |
+| filler false accepts (n=31) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP n10, n11; FN -
+- demands_commitment: FP i09, k05; FN -
+- wants_to_end: FP c06, x02, e06, e07, e10; FN -
+- hostility: FP -; FN x01, x02, x04
+- stance=accept: FP -; FN f19
+- stance=reject: FP k04; FN -
+- terms: f16, d04
+- filler false accept: -
+
+## CLAUDE_P37_PROBES
+
+- git: `14ef59b`  profile=`claude_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_guard_20261008/providers_claude.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 12  skipped (LLM unavailable): 0
+- model share: anthropic/claude-sonnet-5-5=12
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 1 | 0 | 0.000 | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 4 | 1 | 6 | 3 | 0.143 | 0.250 |
+| stance=reject | 1 | 1 | 4 | 0 | 0.200 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.167 |
+| term exact-match (all lines) | 1.000 |
+| term exact-match (lines with terms, n=0) | n/a |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- demands_commitment: FP q02; FN -
+- stance=accept: FP q01, q02, q03, q04, q05, q06; FN q07, q08, q10
+- stance=reject: FP q07, q08, q09, q10; FN -
+- terms: -
 - filler false accept: -

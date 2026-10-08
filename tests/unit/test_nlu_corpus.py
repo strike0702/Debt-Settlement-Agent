@@ -266,3 +266,187 @@ async def test_min_interval_paces_lines_with_llm_calls(monkeypatch) -> None:
     )
     assert nc.unanswered(records) == []
     assert len(slept) == 2 and all(4.0 < s <= 5.0 for s in slept)
+
+
+# --- Phase 37: raw vs repaired stance from one pass; --providers; rescore ---
+
+
+def _stance_llm(replies: dict[str, str]):
+    """FakeLLM whose NLU reply stance is picked by a substring of the rep line."""
+    import json
+
+    from app.llm.client import FakeLLM
+
+    class ByText(FakeLLM):
+        async def chat_text(self, role, messages, max_tokens, *, json_mode=False):
+            user = messages[-1]["content"]
+            stance = next((s for k, s in replies.items() if k in user), "info")
+            self.enqueue(role, json.dumps({"terms": [], "stance": stance}))
+            return await super().chat_text(role, messages, max_tokens, json_mode=json_mode)
+
+    return ByText()
+
+
+_GUARD_LINES = [
+    # Accept phrase in a question: the guard forces accept over the LLM's question.
+    {"id": "g01", "tags": [], "text": "Is that agreed?", "stance": "question"},
+    # Reject phrase under negation: the guard forces reject over the LLM's accept.
+    {"id": "g02", "tags": [], "text": "That's not too low.", "agent": "counter",
+     "stance": "accept"},
+    # No rule fires: raw and repaired agree.
+    {"id": "g03", "tags": [], "text": "Let me look into the file.", "stance": "stall"},
+    # Short ack: the guard forces accept over the LLM's info.
+    {"id": "g04", "tags": [], "text": "Okay, yeah.", "stance": "accept"},
+]
+_GUARD_REPLIES = {
+    "Is that agreed": "question",
+    "not too low": "accept",
+    "look into": "stall",
+    "Okay, yeah": "info",
+}
+
+
+async def test_records_keep_raw_and_repaired_stance() -> None:
+    from eval.nlu_corpus import run_corpus
+
+    records, _ = await run_corpus(
+        _GUARD_LINES, profile="offline", llm=_stance_llm(_GUARD_REPLIES), retry_backoff_s=0
+    )
+    by = {r["id"]: r for r in records}
+    assert (by["g01"]["predicted"]["stance_raw"], by["g01"]["predicted"]["stance"]) == (
+        "question", "accept")
+    assert by["g01"]["stance_rule"] == "accept_phrase"
+    assert (by["g02"]["predicted"]["stance_raw"], by["g02"]["predicted"]["stance"]) == (
+        "accept", "reject")
+    assert by["g02"]["stance_rule"] == "reject_phrase"
+    assert by["g03"]["predicted"]["stance_raw"] == by["g03"]["predicted"]["stance"] == "stall"
+    assert by["g03"]["stance_rule"] == "none"
+    assert by["g04"]["predicted"]["stance_raw"] == "info"
+    assert by["g04"]["stance_rule"] == "short_ack"
+    assert all(r["stance_source"] == "llm" for r in records)
+
+
+async def test_fast_path_line_has_raw_equal_to_repaired() -> None:
+    from eval.nlu_corpus import run_corpus
+
+    line = {"id": "m01", "tags": [], "agent": "min_ask", "text": "Two hundred fifty dollars.",
+            "stance": "info", "terms": {"min_payment_cents": 25000}}
+    records, _ = await run_corpus([line], profile="offline", llm=_stance_llm({}),
+                                  retry_backoff_s=0)
+    r = records[0]
+    assert r["stance_source"] == "fast_path" and r["stance_rule"] == "fast_path"
+    assert r["predicted"]["stance_raw"] == r["predicted"]["stance"]
+
+
+async def test_unparseable_reply_counts_as_raw_other() -> None:
+    from app.llm.client import FakeLLM
+    from eval.nlu_corpus import run_corpus
+
+    class Junk(FakeLLM):
+        async def chat_text(self, role, messages, max_tokens, *, json_mode=False):
+            return "not json"
+
+    line = {"id": "j01", "tags": [], "text": "Sounds good to me.", "stance": "accept"}
+    records, _ = await run_corpus([line], profile="offline", llm=Junk(), retry_backoff_s=0)
+    assert records[0]["predicted"]["stance_raw"] == "other"
+    assert records[0]["predicted"]["stance"] == "accept"  # the phrase rule still fires
+
+
+async def test_raw_stance_scoring_differs_only_in_stance() -> None:
+    from eval.nlu_corpus import raw_stance_records, run_corpus
+
+    records, _ = await run_corpus(
+        _GUARD_LINES, profile="offline", llm=_stance_llm(_GUARD_REPLIES), retry_backoff_s=0
+    )
+    raw = raw_stance_records(records)
+    guarded, unguarded = score(records), score(raw)
+    assert guarded["stance"]["accept"]["fp_ids"] == ["g01"]
+    assert unguarded["stance"]["accept"]["fp_ids"] == []
+    assert guarded["stance"]["reject"]["fp_ids"] == ["g02"]
+    assert unguarded["stance"]["reject"]["fp_ids"] == []
+    assert unguarded["stance"]["accept"]["fn_ids"] == ["g04"]
+    assert guarded["flags"] == unguarded["flags"] and guarded["terms"] == unguarded["terms"]
+    # The input records are not mutated by the raw view.
+    assert records[0]["predicted"]["stance"] == "accept"
+
+
+def test_raw_stance_records_require_raw_field() -> None:
+    import pytest
+
+    from eval.nlu_corpus import raw_stance_records
+
+    rec = {"id": "x", "tags": [], "expected": {"stance": "info"},
+           "predicted": {"stance": "info"}}
+    with pytest.raises(ValueError, match="stance_raw"):
+        raw_stance_records([rec])
+
+
+def test_cli_providers_flag_reaches_client(tmp_path: Path, monkeypatch) -> None:
+    import json
+
+    import eval.nlu_corpus as nc
+
+    corpus = tmp_path / "c.jsonl"
+    corpus.write_text("".join(json.dumps(ln) + "\n" for ln in _lines(1)))
+    monkeypatch.setattr(nc, "REPORT_PATH", tmp_path / "report.md")
+    seen: dict = {}
+    real = nc.run_corpus
+
+    async def fake_run(corpus, **kw):
+        seen.update(kw)
+        return await real(corpus, **{**kw, "llm": _flaky_llm({})})
+
+    monkeypatch.setattr(nc, "run_corpus", fake_run)
+    prov = tmp_path / "p.yaml"
+    prov.write_text("profiles: {}\nproviders: {}\n")
+    rc = nc.main(["--label", "T", "--profile", "offline", "--corpus", str(corpus),
+                  "--providers", str(prov), "--audit-db", str(tmp_path / "a.db")])
+    assert rc == 0
+    assert seen["providers_path"] == prov
+    assert f"providers=`{prov}`" in (tmp_path / "report.md").read_text()
+
+
+def test_run_corpus_passes_providers_path_to_make_client(monkeypatch, tmp_path) -> None:
+    import asyncio
+
+    import eval.nlu_corpus as nc
+
+    seen: dict = {}
+
+    def fake_make_client(settings, **kw):
+        seen.update(kw)
+        return _flaky_llm({})
+
+    monkeypatch.setattr(nc, "make_client", fake_make_client)
+    prov = tmp_path / "p.yaml"
+    records, _ = asyncio.run(nc.run_corpus(_lines(1), profile="offline", providers_path=prov,
+                                           retry_backoff_s=0))
+    assert seen["providers_path"] == prov
+    assert nc.unanswered(records) == []
+
+
+def test_cli_no_repair_stance_rescores_saved_records(tmp_path: Path, monkeypatch) -> None:
+    """--from-records + --no-repair-stance: second variant from the same replies, no LLM."""
+    import asyncio
+    import json
+
+    import eval.nlu_corpus as nc
+
+    records, _ = asyncio.run(nc.run_corpus(
+        _GUARD_LINES, profile="offline", llm=_stance_llm(_GUARD_REPLIES), retry_backoff_s=0
+    ))
+    saved = tmp_path / "saved.jsonl"
+    saved.write_text("".join(json.dumps(r) + "\n" for r in records))
+    report = tmp_path / "report.md"
+    monkeypatch.setattr(nc, "REPORT_PATH", report)
+
+    async def no_llm(*a, **kw):
+        raise AssertionError("rescoring must not call the LLM")
+
+    monkeypatch.setattr(nc, "run_corpus", no_llm)
+    rc = nc.main(["--label", "RAW", "--from-records", str(saved), "--no-repair-stance"])
+    assert rc == 0
+    text = report.read_text()
+    assert "stance: raw LLM" in text
+    out = [json.loads(ln) for ln in (tmp_path / "nlu_corpus_raw.jsonl").read_text().splitlines()]
+    assert [r["predicted"]["stance"] for r in out] == ["question", "accept", "stall", "info"]

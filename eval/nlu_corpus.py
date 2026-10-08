@@ -15,14 +15,25 @@ more try after a backoff. If any line is still unanswered the CLI exits 2,
 prints the missing ids and writes no report section: a partial run silently
 scores a different denominator (Phase 28 lost 58 lines at concurrency 4).
 
+Each record keeps the repaired stance (``predicted.stance``, what the agent
+uses) and the raw LLM stance (``predicted.stance_raw``, parsed from the same
+reply before ``repair_stance``), plus which guard rule decided
+(``stance_rule``). ``--no-repair-stance`` scores the raw stance instead; with
+``--from-records`` it rescores a saved JSONL without any LLM call, so one paid
+pass yields both variants (Phase 37). Eval-only: ``app/`` is unchanged.
+``--providers`` swaps ``config/providers.yaml`` for this run (like
+``eval.run_eval``).
+
 Not the policy eval (``eval.run_eval``): no orchestrator, no simulator.
-CLI: ``python -m eval.nlu_corpus --label BEFORE [--profile demo] [--corpus PATH]``.
+CLI: ``python -m eval.nlu_corpus --label BEFORE [--profile demo] [--corpus PATH]
+[--providers PATH] [--no-repair-stance] [--from-records PATH]``.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import copy
 import json
 import re
 import subprocess
@@ -32,7 +43,18 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from app.agent.nlu import VerifiedAnalysis, analyze
+# Private helpers are imported read-only to attribute which stance guard fired;
+# the eval never changes how the agent repairs stance.
+from app.agent.nlu import (
+    _INJECTION_RE,
+    _REJECT_STANCE_RE,
+    VerifiedAnalysis,
+    _ack_dominant,
+    _has_unnegated_accept_phrase,
+    _parse_analysis,
+    analyze,
+    repair_stance,
+)
 from app.config import get_settings
 from app.domain.fields import FIELDS_BY_NAME
 from app.llm.call_audit import audit_llm_calls, llm_call_scope
@@ -120,6 +142,75 @@ def predicted_terms(out: VerifiedAnalysis) -> dict[str, Any]:
     return terms
 
 
+def has_terms(out: VerifiedAnalysis) -> bool:
+    """Same ``has_terms`` that ``post_verify`` hands to ``repair_stance``."""
+    return (
+        bool(out.terms)
+        or out.settlement_ask_pct is not None
+        or out.cents_ambiguity_bare is not None
+        or out.tiers_ambiguous
+    )
+
+
+def stance_rule(utterance: str, *, terms: bool) -> str:
+    """Which ``repair_stance`` rule decides this line (mirrors its order).
+
+    ``injection`` (only changes an LLM accept), ``reject_phrase``,
+    ``accept_phrase`` (un-negated), ``short_ack`` (no terms), else ``none``.
+    A rule can fire and still agree with the LLM; compare raw vs repaired.
+    """
+    if _INJECTION_RE.search(utterance):
+        return "injection"
+    if _REJECT_STANCE_RE.search(utterance):
+        return "reject_phrase"
+    if _has_unnegated_accept_phrase(utterance):
+        return "accept_phrase"
+    if not terms and _ack_dominant(utterance):
+        return "short_ack"
+    return "none"
+
+
+def raw_stance_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Deep copies with ``predicted.stance`` set to the raw LLM stance (guards off)."""
+    out = copy.deepcopy(records)
+    for r in out:
+        if r.get("skipped"):
+            continue
+        if "stance_raw" not in r["predicted"]:
+            raise ValueError(f"record {r['id']} has no predicted.stance_raw (pre-Phase 37 run)")
+        r["predicted"]["stance"] = r["predicted"]["stance_raw"]
+    return out
+
+
+class _NluReplyRecorder:
+    """Proxy over the LLM client that keeps each task's last NLU reply text.
+
+    ``analyze`` may call twice (JSON retry); the last reply is the one it used.
+    Everything else is forwarded to the wrapped client unchanged.
+    """
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+        self.last: dict[int, str] = {}
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+    async def chat_text(self, role: Any, messages: Any, max_tokens: int, **kw: Any) -> str:
+        text = await self._inner.chat_text(role, messages, max_tokens, **kw)
+        if role == "nlu":
+            self.last[id(asyncio.current_task())] = text
+        return text
+
+
+def _raw_stance(reply: str) -> str:
+    """Stance the LLM reply carries before repair; unparseable ⇒ ``other`` (as analyze)."""
+    try:
+        return _parse_analysis(reply).stance
+    except Exception:  # noqa: BLE001 - analyze falls back to an empty analysis
+        return "other"
+
+
 def _pr(tp: int, fp: int, fn: int) -> tuple[float | None, float | None]:
     prec = tp / (tp + fp) if tp + fp else None
     rec = tp / (tp + fn) if tp + fn else None
@@ -200,7 +291,11 @@ def render_section(label: str, summary: dict[str, Any], meta: dict[str, Any]) ->
     lines = [
         f"## {label}",
         "",
-        f"- git: `{meta['git']}`  profile=`{meta['profile']}`  ref={REF.isoformat()}",
+        f"- git: `{meta['git']}`  profile=`{meta['profile']}`  ref={REF.isoformat()}"
+        + (f"  providers=`{meta['providers']}`" if meta.get("providers") else ""),
+        *(
+            [f"- stance: {meta['stance_variant']}"] if meta.get("stance_variant") else []
+        ),
         f"- lines: {summary['n']}  skipped (LLM unavailable): {summary['skipped']}",
         "- model share: "
         + (", ".join(f"{m}={c}" for m, c in meta["models"].most_common()) or "none"),
@@ -277,6 +372,7 @@ async def run_corpus(
     retries: int = 1,
     retry_backoff_s: float = RETRY_BACKOFF_S,
     min_interval_s: float = 0.0,
+    providers_path: Path | None = None,
 ) -> tuple[list[dict[str, Any]], Counter[str]]:
     """Analyze every line; returns per-line records and answering-model counts.
 
@@ -285,7 +381,8 @@ async def run_corpus(
     failed keeps ``skipped=True`` and ``error``. A line that made an uncached
     LLM call holds its slot for at least ``min_interval_s`` (rate pacing).
     With ``audit``, each line's LLM calls are audited under ``corpus:<id>``.
-    ``llm`` overrides the client built from ``profile`` (tests).
+    ``llm`` overrides the client built from ``profile`` (tests);
+    ``providers_path`` replaces ``config/providers.yaml`` for the built client.
     """
     settings = get_settings().model_copy(
         update={
@@ -310,9 +407,10 @@ async def run_corpus(
     hook = audit_llm_calls(audit, then=on_call) if audit is not None else on_call
     owns_llm = llm is None
     if llm is None:
-        llm = make_client(settings, on_call=hook)
+        llm = make_client(settings, on_call=hook, providers_path=providers_path)
     else:
         llm.on_call = hook
+    recorder = _NluReplyRecorder(llm)
     sem = asyncio.Semaphore(concurrency)
 
     async def one(line: dict[str, Any]) -> dict[str, Any]:
@@ -328,7 +426,9 @@ async def run_corpus(
                         await asyncio.sleep(left)
 
     async def _analyze_line(line: dict[str, Any]) -> dict[str, Any]:
-        current[id(asyncio.current_task())] = line["id"]
+        tid = id(asyncio.current_task())
+        current[tid] = line["id"]
+        recorder.last.pop(tid, None)
         agent = AGENT_LINES[line.get("agent", "default")]
         rec: dict[str, Any] = {
             "id": line["id"],
@@ -344,18 +444,30 @@ async def run_corpus(
             with llm_call_scope(f"corpus:{line['id']}"):
                 out = await analyze(
                     line["text"], agent, line.get("pending"),
-                    llm=llm, settings=settings, ref=REF,
+                    llm=recorder, settings=settings, ref=REF,
                 )
         except Exception as e:  # noqa: BLE001 - any failure is a skip, retried below
             rec["skipped"] = True
             kind = "" if isinstance(e, LLMUnavailable) else f"{type(e).__name__}: "
             rec["error"] = (kind + str(e))[:200]
             return rec
+        reply = recorder.last.pop(tid, None)
+        if reply is None:  # fast path: no LLM call, no stance repair
+            raw, rule, source = out.stance, "fast_path", "fast_path"
+        else:
+            raw, source = _raw_stance(reply), "llm"
+            rule = stance_rule(line["text"], terms=has_terms(out))
+            # Guard against this mirror drifting from the shipped repair.
+            if repair_stance(raw, line["text"], has_terms=has_terms(out)) != out.stance:
+                raise RuntimeError(f"{line['id']}: raw stance does not replay to the repaired one")
         rec["predicted"] = {
             **predicted_flags(out, settings.hostility_threshold),
             "stance": out.stance,
+            "stance_raw": raw,
             "terms": predicted_terms(out),
         }
+        rec["stance_rule"] = rule
+        rec["stance_source"] = source
         rec["model"] = line_models.get(line["id"], "fast_path")
         return rec
 
@@ -410,24 +522,44 @@ def main(argv: list[str] | None = None) -> int:
         help="minimum seconds per uncached line (pace a single free-tier key)",
     )
     ap.add_argument("--audit-db", type=Path, default=AUDIT_PATH)
+    ap.add_argument(
+        "--providers", type=Path, default=None,
+        help="providers.yaml for this run (default config/providers.yaml)",
+    )
+    ap.add_argument(
+        "--no-repair-stance", action="store_true",
+        help="score the raw LLM stance (repair_stance off); eval-only, app/ unchanged",
+    )
+    ap.add_argument(
+        "--from-records", type=Path, default=None,
+        help="rescore a saved nlu_corpus_<label>.jsonl instead of calling the LLM",
+    )
     args = ap.parse_args(argv)
 
-    corpus = load_corpus(args.corpus)
-    args.audit_db.parent.mkdir(parents=True, exist_ok=True)
-    audit = AuditLog(args.audit_db)
-    try:
-        records, models = asyncio.run(
-            run_corpus(
-                corpus,
-                profile=args.profile,
-                concurrency=args.concurrency,
-                audit=audit,
-                retry_backoff_s=args.retry_backoff_s,
-                min_interval_s=args.min_interval_s,
-            )
+    if args.from_records is not None:
+        records = load_corpus(args.from_records)
+        models: Counter[str] = Counter(
+            r["model"] for r in records if not r.get("skipped")
         )
-    finally:
-        audit.close()
+        corpus = records
+    else:
+        corpus = load_corpus(args.corpus)
+        args.audit_db.parent.mkdir(parents=True, exist_ok=True)
+        audit = AuditLog(args.audit_db)
+        try:
+            records, models = asyncio.run(
+                run_corpus(
+                    corpus,
+                    profile=args.profile,
+                    concurrency=args.concurrency,
+                    audit=audit,
+                    retry_backoff_s=args.retry_backoff_s,
+                    min_interval_s=args.min_interval_s,
+                    providers_path=args.providers,
+                )
+            )
+        finally:
+            audit.close()
     missing = unanswered(records)
     if missing:
         partial = args.audit_db.parent / f"nlu_corpus_{args.label.lower()}.partial.jsonl"
@@ -439,8 +571,21 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+    if args.no_repair_stance:
+        records = raw_stance_records(records)
     summary = score(records)
-    meta = {"git": _git_sha(), "profile": args.profile, "models": models}
+    meta = {
+        "git": _git_sha(),
+        "profile": args.profile,
+        "models": models,
+        "providers": str(args.providers) if args.providers else None,
+        "stance_variant": (
+            "raw LLM (repair_stance off, eval-only)" if args.no_repair_stance
+            else "repaired (repair_stance on, as shipped)"
+        ),
+    }
+    if args.from_records is not None:
+        meta["stance_variant"] += f"; rescored from `{args.from_records}`"
     write_report(REPORT_PATH, args.label, render_section(args.label, summary, meta))
     raw = REPORT_PATH.parent / f"nlu_corpus_{args.label.lower()}.jsonl"
     raw.write_text("".join(json.dumps(r, default=str) + "\n" for r in records))

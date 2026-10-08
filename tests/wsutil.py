@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -109,15 +109,28 @@ def scripted_easy_deal(ws: Any) -> list[dict]:
     return frames
 
 
-def _walk(value: Any, key: str = "") -> Iterable[tuple[str, Any]]:
+def _walk(value: Any, key: str = "", path: str = "") -> Iterable[tuple[str, str, Any]]:
+    """``(path, key, leaf)``; ``key`` is the nearest dict key (list items inherit it)."""
     if isinstance(value, dict):
         for k, v in value.items():
-            yield from _walk(v, k)
+            yield from _walk(v, k, f"{path}.{k}" if path else k)
     elif isinstance(value, list):
-        for v in value:
-            yield from _walk(v, key)
+        for i, v in enumerate(value):
+            yield from _walk(v, key, f"{path}[{i}]")
     else:
-        yield key, value
+        yield path, key, value
+
+
+def _is_timestamp(key: str, leaf: str) -> bool:
+    """An ISO datetime under ``ts``: its ``SS.ffffff`` tokenizes as money (``09.50`` = 950
+    cents) and collided with a private fee once (36.1). Only real datetimes are skipped."""
+    if key != "ts" or "T" not in leaf:
+        return False
+    try:
+        datetime.fromisoformat(leaf)
+    except ValueError:
+        return False
+    return True
 
 
 # Ints under these keys are counters / ids / timings, not money or percentages.
@@ -147,7 +160,9 @@ def leaked_private_values(
     ceiling), and, under keys with no unit, a number the rep said (their own
     ``$100`` minimum is 10000 cents, which equals a 100% ``max_bp``). Ints are
     matched by the unit their key implies; strings are tokenized with
-    ``extract_tokens``; ISO date strings are matched as dates.
+    ``extract_tokens``; ISO date strings are matched as dates. ISO datetimes
+    under ``ts`` are skipped (audit clock, not an amount; see ``_is_timestamp``).
+    Each hit is ``("<frame type>:<key path>", value)``.
     """
     spoken: set[tuple[str, int | date]] = set()
     said: set[int | date] = set()
@@ -164,10 +179,12 @@ def leaked_private_values(
     dates = {v for k, v in targets if k == "date"}
     hits: list[tuple[str, Any]] = []
     for f in frames:
-        for key, leaf in _walk(f):
+        for path, key, leaf in _walk(f):
             if isinstance(leaf, bool) or key.endswith("_ms") or key in _NON_AMOUNT_KEYS:
                 continue
-            where = f"{f.get('type')}.{key}"
+            if isinstance(leaf, str) and _is_timestamp(key, leaf):
+                continue
+            where = f"{f.get('type')}:{path}"
             if isinstance(leaf, int):
                 kinds = _int_kinds(key)
                 if len(kinds) > 1 and leaf in said:

@@ -450,3 +450,166 @@ def test_cli_no_repair_stance_rescores_saved_records(tmp_path: Path, monkeypatch
     assert "stance: raw LLM" in text
     out = [json.loads(ln) for ln in (tmp_path / "nlu_corpus_raw.jsonl").read_text().splitlines()]
     assert [r["predicted"]["stance"] for r in out] == ["question", "accept", "stall", "info"]
+
+
+# --- Phase 38 (item 32.3): one labelled row = one answering model ---
+
+
+def _routed_llm(plan: dict[str, list[tuple[str, str | None]]]):
+    """FakeLLM whose NLU call per line emits ``(provider/model, error)`` metas, then answers.
+
+    ``plan`` maps a text key to the metas of that line's attempts, e.g. a fail-over
+    ``[("groq/a", "timeout"), ("gemini/b", None)]``. Unlisted lines answer as ``groq/a``.
+    """
+    from app.llm.client import FakeLLM
+
+    class Routed(FakeLLM):
+        async def chat_text(self, role, messages, max_tokens, *, json_mode=False):
+            user = messages[-1]["content"]
+            attempts = next((v for k, v in plan.items() if k in user), [("groq/a", None)])
+            for spec, err in attempts:
+                provider, model = spec.split("/", 1)
+                await self._emit({"role": role, "provider": provider, "model": model,
+                                  "cache_hit": False, "error": err})
+            return _OK
+
+    return Routed()
+
+
+async def test_single_model_run_is_not_mixed() -> None:
+    from eval.nlu_corpus import mixed_models, run_corpus
+
+    records, _ = await run_corpus(_lines(3), profile="offline", llm=_routed_llm({}))
+    assert mixed_models(records) == {}
+    assert all(r["answered_by"] == ["groq/a"] for r in records)
+
+
+async def test_failover_to_another_model_marks_the_run_mixed() -> None:
+    """A timed-out primary that fails over answers from a second model: two models, one row."""
+    from eval.nlu_corpus import mixed_models, run_corpus
+
+    llm = _routed_llm({"Line number 1 ": [("groq/a", "timeout after 6s"), ("gemini/b", None)]})
+    records, _ = await run_corpus(_lines(3), profile="offline", llm=llm)
+    assert records[1]["answered_by"] == ["gemini/b"]  # the failed attempt did not answer
+    assert mixed_models(records) == {"gemini/b": ["z01"], "groq/a": ["z00", "z02"]}
+
+
+async def test_two_models_inside_one_line_is_mixed() -> None:
+    """The JSON retry inside ``analyze`` can land on a second model; that line is mixed too."""
+    from eval.nlu_corpus import mixed_models, run_corpus
+
+    llm = _routed_llm({"Line number 0 ": [("groq/a", None), ("gemini/b", None)]})
+    records, _ = await run_corpus(_lines(1), profile="offline", llm=llm)
+    assert mixed_models(records) == {"gemini/b": ["z00"], "groq/a": ["z00"]}
+
+
+def test_old_records_fall_back_to_model_and_ignore_fast_path() -> None:
+    from eval.nlu_corpus import mixed_models
+
+    old = [
+        {"id": "a", "model": "groq/a"},
+        {"id": "b", "model": "fast_path"},
+        {"id": "c", "skipped": True},
+    ]
+    assert mixed_models(old) == {}
+    assert mixed_models([*old, {"id": "d", "model": "gemini/b"}]) == {
+        "gemini/b": ["d"], "groq/a": ["a"]
+    }
+
+
+def _cli(nc, tmp_path: Path, monkeypatch, llm, *extra: str) -> int:
+    import json
+
+    corpus = tmp_path / "c.jsonl"
+    corpus.write_text("".join(json.dumps(ln) + "\n" for ln in _lines(3)))
+    monkeypatch.setattr(nc, "REPORT_PATH", tmp_path / "report.md")
+    real = nc.run_corpus
+
+    async def fake_run(corpus, **kw):
+        return await real(corpus, **{**kw, "llm": llm})
+
+    monkeypatch.setattr(nc, "run_corpus", fake_run)
+    return nc.main([
+        "--label", "T", "--profile", "offline", "--corpus", str(corpus),
+        "--retry-backoff-s", "0", "--audit-db", str(tmp_path / "a.db"), *extra,
+    ])
+
+
+def test_cli_fails_loudly_on_mixed_models_by_default(tmp_path: Path, monkeypatch, capsys) -> None:
+    import eval.nlu_corpus as nc
+
+    llm = _routed_llm({"Line number 1 ": [("groq/a", "timeout"), ("gemini/b", None)]})
+    rc = _cli(nc, tmp_path, monkeypatch, llm)
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "FAILED: 2 models answered one run" in err
+    assert "gemini/b: z01" in err and "groq/a: z00, z02" in err
+    assert not (tmp_path / "report.md").exists()
+    assert (tmp_path / "nlu_corpus_t.partial.jsonl").exists()
+
+
+def test_cli_allow_mixed_models_writes_the_row_and_says_so(tmp_path: Path, monkeypatch) -> None:
+    import eval.nlu_corpus as nc
+
+    llm = _routed_llm({"Line number 1 ": [("groq/a", "timeout"), ("gemini/b", None)]})
+    rc = _cli(nc, tmp_path, monkeypatch, llm, "--allow-mixed-models")
+    assert rc == 0
+    text = (tmp_path / "report.md").read_text()
+    assert "mixed models: allowed" in text and "groq/a=2, gemini/b=1" in text
+
+
+def test_cli_from_records_also_refuses_mixed_rows(tmp_path: Path, monkeypatch, capsys) -> None:
+    import json
+
+    import eval.nlu_corpus as nc
+
+    saved = tmp_path / "saved.jsonl"
+    rows = [
+        {"id": "a", "tags": [], "model": m,
+         "expected": {**{f: False for f in FLAGS}, "stance": "info", "terms": {}},
+         "predicted": {**{f: False for f in FLAGS}, "stance": "info", "stance_raw": "info",
+                       "terms": {}}}
+        for m in ("groq/a", "gemini/b")
+    ]
+    saved.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    monkeypatch.setattr(nc, "REPORT_PATH", tmp_path / "report.md")
+    rc = nc.main(["--label", "R", "--from-records", str(saved),
+                  "--audit-db", str(tmp_path / "a.db")])
+    assert rc == 2 and "2 models answered" in capsys.readouterr().err
+    assert nc.main(["--label", "R", "--from-records", str(saved), "--allow-mixed-models",
+                    "--audit-db", str(tmp_path / "a.db")]) == 0
+
+
+# --- Phase 38 (item 32.5): rows stay next to their BEFORE/AFTER pair, Notes last ---
+
+
+def _headings(p: Path) -> list[str]:
+    return [ln[3:] for ln in p.read_text().splitlines() if ln.startswith("## ")]
+
+
+def test_new_after_row_lands_next_to_its_before_row(tmp_path: Path) -> None:
+    p = tmp_path / "r.md"
+    for label in ("BEFORE", "AFTER", "Notes", "BEFORE_P40", "OTHER_P40", "AFTER_P40"):
+        write_report(p, label, f"## {label}\n\nx\n")
+    assert _headings(p) == ["BEFORE", "AFTER", "BEFORE_P40", "AFTER_P40", "OTHER_P40", "Notes"]
+
+
+def test_heldout_pair_groups_by_its_own_prefix(tmp_path: Path) -> None:
+    p = tmp_path / "r.md"
+    for label in ("Notes", "HELDOUT_BEFORE_P41", "BEFORE_P41", "AFTER_P41", "HELDOUT_AFTER_P41"):
+        write_report(p, label, f"## {label}\n\nx\n")
+    assert _headings(p) == [
+        "HELDOUT_BEFORE_P41", "HELDOUT_AFTER_P41", "BEFORE_P41", "AFTER_P41", "Notes"
+    ]
+
+
+def test_shipped_report_rows_are_in_section_order() -> None:
+    """docs/eval/nlu_corpus.md: every P32 AFTER row sits right after its BEFORE row."""
+    from eval.nlu_corpus import REPORT_PATH
+
+    h = _headings(REPORT_PATH)
+    assert h[-1] == "Notes"
+    for before, after in [("BEFORE", "AFTER"), ("BEFORE_P32", "AFTER_P32"),
+                          ("HELDOUT_BEFORE_P32", "HELDOUT_AFTER_P32"),
+                          ("FILLER_BEFORE", "FILLER_VETO")]:
+        assert h.index(after) == h.index(before) + 1, (before, after, h)

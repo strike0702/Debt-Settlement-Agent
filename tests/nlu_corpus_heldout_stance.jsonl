@@ -1,0 +1,32 @@
+{"id": "hs01", "tags": ["stance_info", "heldout"], "text": "Our policy caps it at nine installments.", "stance": "info", "terms": {"max_payments": 9}}
+{"id": "hs02", "tags": ["stance_info", "heldout"], "text": "Each installment has to be at least $180.", "stance": "info", "terms": {"min_payment_cents": 18000}}
+{"id": "hs03", "tags": ["stance_info", "heldout"], "text": "We only do equal installments on these accounts.", "stance": "info", "terms": {"payment_structure": "even"}}
+{"id": "hs04", "tags": ["stance_info", "heldout"], "text": "The opening payment can't be later than May 20.", "stance": "info", "terms": {"first_payment_date": "2026-05-20"}}
+{"id": "hs05", "tags": ["stance_info", "heldout"], "text": "A larger final payment is allowed.", "stance": "info", "terms": {"payment_structure": "balloon"}}
+{"id": "hs06", "tags": ["stance_info", "heldout"], "text": "Nothing under $95 per payment.", "stance": "info", "terms": {"min_payment_cents": 9500}}
+{"id": "hs07", "tags": ["stance_info", "heldout"], "text": "Five payments is the longest plan we set up.", "stance": "info", "terms": {"max_payments": 5}}
+{"id": "hs08", "tags": ["stance_info", "heldout"], "text": "We'd want the first draft on or before June 15, and they all need to match.", "stance": "info", "terms": {"first_payment_date": "2026-06-15", "payment_structure": "even"}}
+{"id": "hs09", "tags": ["stance_info", "heldout"], "text": "Two different payment amounts at most on a plan.", "stance": "info", "terms": {"max_segments": 2}}
+{"id": "hs10", "tags": ["stance_info", "heldout"], "text": "The account has been with our office since last spring.", "stance": "info"}
+{"id": "hs11", "tags": ["stance_ask", "heldout"], "text": "We're looking for sixty percent to close it out.", "stance": "counter", "ask_pct": 60}
+{"id": "hs12", "tags": ["stance_ask", "heldout"], "agent": "counter", "text": "We could move to fifty-seven percent.", "stance": "counter", "ask_pct": 57}
+{"id": "hs13", "tags": ["stance_ask", "heldout"], "text": "Settle for $2,400 total and we'll close the file.", "stance": "counter", "ask_total_cents": 240000}
+{"id": "hs14", "tags": ["stance_ask", "heldout"], "agent": "confirm", "text": "Make it five payments instead of four.", "stance": "counter", "terms": {"max_payments": 5}}
+{"id": "hs15", "tags": ["stance_ask", "heldout"], "agent": "confirm", "text": "Push the start to June 10 instead.", "stance": "counter", "terms": {"first_payment_date": "2026-06-10"}}
+{"id": "hs16", "tags": ["stance_ask", "heldout"], "text": "Our number is forty-eight percent of the balance.", "stance": "counter", "ask_pct": 48}
+{"id": "hs17", "tags": ["stance_ask", "heldout"], "agent": "counter", "text": "Bump it to fifty-three percent and I can take it upstairs.", "stance": "counter", "ask_pct": 53}
+{"id": "hs18", "tags": ["closing", "heldout"], "text": "Alright, I think we're finished for today.", "stance": "other", "wants_to_end": true}
+{"id": "hs19", "tags": ["closing", "heldout"], "text": "Okay, have a good one.", "stance": "other", "wants_to_end": true}
+{"id": "hs20", "tags": ["closing", "heldout"], "text": "I've got another call waiting, I need to wrap this up.", "stance": "other", "wants_to_end": true}
+{"id": "hs21", "tags": ["closing", "heldout"], "text": "Thanks for your time, talk soon.", "stance": "other", "wants_to_end": true}
+{"id": "hs22", "tags": ["closing", "heldout"], "text": "I don't have all day, let's end it here.", "stance": "other", "wants_to_end": true}
+{"id": "hs23", "tags": ["private", "heldout"], "text": "What comes out of the client's checking for the program each month?", "stance": "question", "asks_client_private_info": true}
+{"id": "hs24", "tags": ["private", "heldout"], "text": "How big is the monthly deposit the consumer makes with you?", "stance": "question", "asks_client_private_info": true}
+{"id": "hs25", "tags": ["private", "heldout"], "text": "What's the client's net pay per paycheck?", "stance": "question", "asks_client_private_info": true}
+{"id": "hs26", "tags": ["private", "stt", "heldout"], "text": "so what are they putting aside every month for this", "stance": "question", "asks_client_private_info": true}
+{"id": "hs27", "tags": ["private", "heldout"], "text": "Roughly what does the client have left after rent each month?", "stance": "question", "asks_client_private_info": true}
+{"id": "hs28", "tags": ["private", "heldout"], "text": "How much does your firm collect from them monthly?", "stance": "question", "asks_client_private_info": true}
+{"id": "hs29", "tags": ["private_neg", "heldout"], "text": "What balance do you show on your end for this account?", "stance": "question"}
+{"id": "hs30", "tags": ["private_neg", "heldout"], "text": "Which account number are you calling about?", "stance": "question"}
+{"id": "hs31", "tags": ["private_neg", "heldout"], "text": "When was the last payment made on this debt?", "stance": "question"}
+{"id": "hs32", "tags": ["private_neg", "heldout"], "text": "How many payments are you proposing?", "stance": "question"}

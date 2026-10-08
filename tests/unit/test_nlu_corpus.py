@@ -247,6 +247,28 @@ def test_heldout_private_set_schema() -> None:
         assert set(ln) <= {"id", "tags", "text", "stance", "terms", "ask_pct", *FLAGS}
 
 
+def test_heldout_stance_set_schema() -> None:
+    """Phase 42 held-out set: written before the stance prompt change, never tuned on."""
+    held = load_corpus(Path("tests/nlu_corpus_heldout_stance.jsonl"))
+    other_ids = {ln["id"] for ln in load_corpus()} | {
+        ln["id"] for ln in load_corpus(Path("tests/nlu_corpus_heldout.jsonl"))
+    }
+    ids = [ln["id"] for ln in held]
+    assert len(set(ids)) == len(held) >= 30
+    assert not other_ids & set(ids)
+    stances = [ln["stance"] for ln in held]
+    assert stances.count("info") >= 8 and stances.count("counter") >= 6
+    assert sum(1 for ln in held if ln.get("wants_to_end")) >= 4
+    assert sum(1 for ln in held if ln.get("asks_client_private_info")) >= 5
+    allowed = {"id", "tags", "text", "stance", "agent", "terms", "ask_pct", "ask_total_cents",
+               *FLAGS}
+    for ln in held:
+        assert "heldout" in ln["tags"], ln["id"]
+        assert ln["stance"] in _STANCES, ln["id"]
+        assert set(ln) <= allowed, ln["id"]
+        assert ln.get("agent", "default") in AGENT_LINES, ln["id"]
+
+
 async def test_min_interval_paces_lines_with_llm_calls(monkeypatch) -> None:
     import asyncio
 

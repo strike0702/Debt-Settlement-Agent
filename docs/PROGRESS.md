@@ -47,6 +47,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 38 | Carry-over cleanup: eval tooling + test robustness | done |
 | 39 | Total-amount asks + ambiguous amounts (user request) | done |
 | 40 | Haiku NLU measurement (user request, measurement only) | done |
+| 42 | NLU prompt for Haiku, gated on Sonnet (user request) | done: Haiku improved, Sonnet gate not run (cost cap), prompt reverted |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -1498,3 +1499,44 @@ Every reason sentence, before and after:
 - Open issues: (a) Haiku stance mislabels (info → offer/counter, other → stall) were not traced to whole-call behaviour; policy reads offer/counter/reject in `_wrap_should_renegotiate` and the confirm path. (b) Haiku at effort `medium` is unmeasured. (c) One run per model; P39 showed ±9 stance lines of run-to-run movement on Sonnet. (d) Sonnet per-call latency p95 has never been recorded. The demo model choice is the user's.
 - Checks: `uv run ruff check .` clean; `uv run pytest -q` 925 passed / 2 skipped / 26 xfailed.
 
+### Phase 42 (NLU prompt for Haiku) (2026-10-08) — stance and private-info guidance for Haiku 5.5, gated on Sonnet 5.5 (user request, not in REVIEW_PLAN)
+
+- Outcome: **Haiku improved on both the corpus and the held-out set. The Sonnet gate was not run, so the prompt change is reverted.**
+  - The 10-line Sonnet pilot projected $1.48 for the gate's three runs. Main + amounts alone projected $1.302. Both are over the $1.30 cap.
+  - `app/llm/prompts.py` is the same as `main`.
+  - The candidate prompt is saved as `docs/eval/nlu_prompt_p42/nlu_prompt_v4.patch`. Full write-up: `docs/eval/nlu_prompt_p42/summary.md`.
+- Files:
+  - held-out set and test: new `tests/nlu_corpus_heldout_stance.jsonl` (32 lines, committed in `66f2404` before the prompt change); `tests/unit/test_nlu_corpus.py` (`test_heldout_stance_set_schema`);
+  - write-up: new `docs/eval/nlu_prompt_p42/{summary.md,nlu_prompt_v4.patch}`;
+  - raw records: `docs/eval/nlu_corpus_{heldout_stance_haiku_before,heldout_stance_haiku_after,haiku_p42_v1..v4}.jsonl`;
+  - `docs/eval/nlu_corpus.md`: sections `HELDOUT_STANCE_HAIKU_BEFORE/AFTER`, `HAIKU_P42_V1..V4`, note "Phase 42".
+  - No code change.
+- Interfaces: none new.
+- Haiku results (`claude_haiku_nlu`, single model):
+  - **Stance accuracy, corpus:** 0.601 → 0.896 (v4). Sonnet P39 on the shipped prompt is 0.820.
+  - **Stance accuracy, held-out:** 0.562 → 0.906. The held-out gain matches the corpus gain, so there is no sign of overfitting.
+  - **F1, corpus:** info 0.364 → 0.891, counter 0.510 → 0.933, reject 0.818 → 1.000, other 0.645 → 0.806.
+  - **Private-info recall:** 0.941 → 1.000 on the corpus (p08, f25 fixed; n14 new FP). On the held-out set it went 1.000 → 0.833 (hs28 miss); both FPs (hs30, hs31) are gone.
+  - **Commitment F1:** 0.867 → 0.839 (a11 new FP).
+  - **Term exact-match (66 lines with terms):** 62 → 60. d10 and t06 were dropped in v4 only; d11 is fixed.
+  - **Filler false accepts:** 1 → 0.
+- Gate: **not evaluated**. There are no `AFTER_P42_CLAUDE` / `AMOUNTS_P42_CLAUDE` rows. The pilot (p01–p10) kept 10/10 private recall, and stance went 9/10 vs 8/10 on P39.
+- **Cost actually spent: $0.278.**
+  - Haiku: $0.222 over 781 calls (1,463,534 in / 151,709 out). Held-out before $0.0075, v1 $0.0503, v2 $0.0510, v3 $0.0523, v4 $0.0519, held-out after $0.0092.
+  - Sonnet pilot: $0.056 over 10 calls (19,195 in / 1,760 out; $0.0056/call vs $0.0047 on the P39 prompt, because the prompt is ~35% longer).
+- Deviations:
+  1. Step 5 stopped at the pilot because of the cost rule, so the prompt was reverted without a gate verdict.
+  2. The pilot's report section and JSONL were not kept, as in P40. Its numbers come from a free cache replay.
+  3. The P42 Haiku sections show git `66f2404`, because the candidate prompt was uncommitted at run time.
+  4. The held-out baseline was seen before v1 was written, as the step order requires. v1's "questions about the debt itself" rule covers the category of its two FPs, which the phase prompt also names.
+- Open issues:
+  - (a) The Sonnet gate on `nlu_prompt_v4.patch` is owed: about $1.20 for main + amounts + held-out, or about $1.02 for main + amounts.
+  - (b) `max_segments` terms were dropped in both v4 runs (t06, hs09) and not in v1–v3. It may be a side effect of the prompt, not noise.
+  - (c) Haiku commitment FPs (n08, i09, x03, k05, a11) are untouched.
+  - (d) The corpus labels settlement asks in reply to the agent `counter`, but the amounts corpus labels them `offer`. Policy treats the two the same.
+  - (e) The demo fallback (Groq) is not measured on the candidate prompt.
+- Checks:
+  - `uv run ruff check .` clean;
+  - `uv run pytest -q`: 926 passed / 2 skipped / 26 xfailed;
+  - fast suite (`-m "not slow"`) with `.env` moved aside (restored): 923 passed / 2 skipped / 3 deselected / 26 xfailed;
+  - oracle eval `eval_20261008_174142_s7` thresholds PASS (turns_to_outcome 5.12, surplus_captured 0.689, as before).

@@ -40,6 +40,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 28 | Filler false-accept veto (user request) | done (veto failed the corpus gate, reverted) |
 | 29 | Hermetic tests ignore .env (CI fix, user request) | done |
 | 30 | Anthropic provider + Claude naturalness judge (user request) | done |
+| 32 | Corpus runner fix + private-info recall (user request) | done (runner fixed; private-info fix failed the gate, reverted) |
 | 33 | Natural read-back copy in NLG bank, figure-free card replies (user request) | done |
 | 36 | UI review fixes + custom test cases, design pass (user request) | done |
 
@@ -1395,3 +1396,26 @@ Every reason sentence, before and after:
 - Acceptance: `uv run pytest -q` 820 passed / 2 skipped / 5 xfailed; `ruff check .` clean; oracle eval (`--nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7`) thresholds PASS; fast suite with `.env` moved aside 817 passed.
 - Deviation: judge `max_tokens` 400 → 1024 (Sonnet 5.5 thinking counts against `max_tokens`; 400 risked a cut-off verdict). Output format unchanged.
 - Open: judge not yet run on real transcripts (thinking-token use per call at effort `low` unmeasured); `scripts/smoke_llm.py` still smokes only OpenAI-compatible providers (out of scope).
+### Phase 32 (corpus runner + private-info recall) (2026-10-08) — runner retries and fails loudly; private-info fix gated and reverted (user request)
+
+- Outcome: **runner fix shipped; the private-info fix (item 28.3) failed the gate and was reverted.** `app/agent/nlu.py` and `app/llm/prompts.py` are the same as `main` (the fix is commit `b385a42`; a later commit undoes it).
+- Files: `eval/nlu_corpus.py`; new `tests/nlu_corpus_heldout.jsonl` (32 lines, committed in `4dd5d58` before the fix); `tests/unit/test_nlu_corpus.py` (runner and held-out schema tests); `tests/unit/test_nlu_repairs.py` (Phase 32 block); `docs/eval/nlu_corpus.md` (rows `BEFORE_P32`, `HELDOUT_BEFORE_P32`, `HELDOUT_AFTER_P32`, `REGEX_ONLY_P32`, `HELDOUT_REGEX_ONLY_P32`, partial `AFTER_P32`, note "Phase 32: private-info recall gate"); `docs/eval/nlu_corpus_{before_p32,heldout_before_p32,heldout_after_p32,regex_only_p32,heldout_regex_only_p32,after_p32_partial}.jsonl`.
+- Runner (item 28.4), interfaces:
+  - CLI `python -m eval.nlu_corpus --label L [--profile demo] [--corpus tests/nlu_corpus.jsonl] [--concurrency 1] [--retry-backoff-s 30] [--min-interval-s 0] [--audit-db ...]`.
+  - `DEFAULT_CONCURRENCY = 1`: free-tier per-key limits are the bottleneck, and P28 lost 58 lines at 4. `RETRY_BACKOFF_S = 30.0`.
+  - `run_corpus(corpus, *, profile, concurrency=1, audit=None, llm=None, retries=1, retry_backoff_s=30.0, min_interval_s=0.0)`. Any exception from `analyze` is a skip (`error` is prefixed with the exception type when it is not `LLMUnavailable`). After the first pass, skipped lines are re-run once after the backoff. A line that made an uncached LLM call holds its slot for at least `min_interval_s`.
+  - `unanswered(records) -> list[str]`. If any line is still skipped, `main` prints `nlu_corpus FAILED: N/M lines answered ...` with the missing ids to stderr, writes `<audit-db dir>/nlu_corpus_<label>.partial.jsonl`, writes **no** report section, and returns 2. A rerun fills the gaps from the response cache.
+  - Tests (FakeLLM, no keys): default concurrency 1; a line that fails once then recovers; a line that fails twice stays skipped; a non-LLM exception is a skip, not a crash; the CLI exits 2 with ids and no report; the CLI writes the report when every line is answered; pacing sleeps only after lines with LLM calls.
+- Gate (details in `docs/eval/nlu_corpus.md`): **FAIL.**
+  - Prompt + regex: corpus private-info 1.000 / 1.000 (163/183 answered), held-out 0.941 / 1.000. But stance=reject F1 fell 0.769 → 0.667 and stance=accept F1 1.000 → 0.957 on the same 163 lines. That is more than 0.03 even in the best case for the 20 missing lines (reject 0.762 vs 0.842).
+  - Regex alone (old prompt, all replies replayed from cache): corpus 1.000 / 1.000 with every other class unchanged. Held-out precision 0.882 fails, from LLM false positives hn01 / hn11 that the OR rule cannot veto.
+  - BEFORE on Gemini: corpus 1.000 / 0.971, held-out 0.875 / 0.875.
+- Deviations:
+  1. **Model:** every Phase 32 row is Gemini `gemini-3.1-flash-lite` on the `eval` profile, with only `GEMINI_API_KEY_4` in the pool (orchestrator decision). Earlier rows are Groq `gpt-oss-120b` / `demo`. The first BEFORE attempt (demo, Groq `_4` only, paced at 11 s/line) reached Groq's 200K tokens/day cap at line 157. That cap refills at about one NLU call every 10 minutes, so finishing on Groq would have taken about 45 hours. That attempt was discarded, not scored.
+  2. **Keys:** no `_1`..`_3` keys and no Anthropic were used. A scratch launcher points `Settings.model_config["env_file"]` at a copy of `.env` whose only key is `GEMINI_API_KEY=<the _4 value>` (it shows as `gemini#0` in audit rows), with the shell `GEMINI_API_KEY` / `GROQ_API_KEY` unset. No code or `.env` change.
+  3. **Quota:** Gemini `_4` hit its free-tier cap (500 requests/day/model, `retryDelay` about 21.5 h) at AFTER_P32 line 163. Per the orchestrator, the run stopped rather than mix models, so `AFTER_P32` is partial (163/183) and was rendered by hand. The verdict does not depend on the 20 missing lines (see above).
+  4. Added `--min-interval-s` pacing and `--corpus` (needed for the held-out set) to the runner; neither was named in the prompt.
+  5. The Mac idle-slept once during the Groq attempt and froze the run for 16 minutes. `caffeinate -i` was held for the rest of the session.
+- Open issues: the prompt change that fixes held-out precision (hn01 / hn11) also moves Gemini stances (n15, x01 → reject; c11 → accept). A re-land needs a narrower prompt line, or a gate measured on Groq once quota allows. Private-info drift on Groq (FILLER_BEFORE 0.824) has not been re-measured. The regex cues are in `b385a42` and are pinned by the strict-xfail tests `_P32_XFAIL`.
+- Checks (final, reverted tree): `uv run ruff check .` clean; `uv run pytest -q` 837 passed / 2 skipped / 26 xfailed; fast suite with `.env` moved aside 834 passed / 2 skipped / 26 xfailed; oracle eval `eval_20261008_023529_s7` thresholds PASS (also `eval_20261008_021810_s7` with the fix applied).
+

@@ -232,6 +232,77 @@ Misses (line ids):
   `stance=reject` FN moves from a10 to x08. All of these are LLM labels, not
   repair code.
 
+### Phase 32: private-info recall gate (2026-10-08)
+
+- Question: do indirect-ask examples in the NLU prompt plus general cues in
+  `_PRIVATE_INFO_RE` (money drafted / deposited from the client, take-home
+  pay, "really / truly afford", "if they stretch", "what can the client pay",
+  "off the record, what ...", the client's savings / checking / budget) lift
+  private-info recall? Gate: private-info precision and recall ≥ 0.9 on both
+  the corpus and the held-out set, and no other class's F1 down by more than
+  0.03 against `BEFORE_P32`.
+- **Model deviation:** every Phase 32 row ran on **Gemini
+  `gemini-3.1-flash-lite` (`eval` profile, 20 s timeout), with only
+  `GEMINI_API_KEY_4` in the pool**. Earlier rows are Groq `gpt-oss-120b` on the
+  `demo` profile, so they are not comparable with these. The first BEFORE
+  attempt (demo, Groq `_4` only) used up Groq's 200K tokens/day at line 157
+  of 183. That cap refills at about one NLU call every 10 minutes, so the four
+  rows would have taken about 45 hours. The orchestrator chose Gemini `_4` for
+  all four rows. No row mixes models: Groq was removed from the pool, so a
+  Gemini failure becomes a skip and retry, never a fail-over.
+- Held-out set: `tests/nlu_corpus_heldout.jsonl`, 16 indirect private asks
+  (`hp*`) and 16 near-miss public lines (`hn*`: balance owed, payment counts,
+  dates, the creditor's own draft minimum or "take-home", "off the record"
+  statements, "can you afford to wait"). It was committed (`4dd5d58`) before
+  any fix commit, and the fix was written before any held-out result was
+  seen. The fix was not changed after the held-out runs.
+- Results (private-info precision / recall):
+
+| row | corpus | held-out |
+|---|---|---|
+| BEFORE_P32 (pre-fix) | 1.000 / 0.971 (FN p08) | 0.875 / 0.875 (FP hn01, hn11; FN hp06, hp09) |
+| AFTER_P32 (prompt + regex) | 1.000 / 1.000, **partial 163/183** | 0.941 / 1.000 (FP hn05) |
+| REGEX_ONLY_P32 (regex, old prompt) | 1.000 / 1.000 | 0.882 / 0.938 (FP hn01, hn11; FN hp09) |
+
+- Other classes, prompt + regex (AFTER_P32 vs BEFORE_P32 on the same 163
+  answered lines): stance=reject F1 0.769 → 0.667 (new FPs n15, x01; P
+  0.714 → 0.556), stance=accept F1 1.000 → 0.957 (FP c11), stance accuracy
+  0.791 → 0.736. Commitment F1 rose 0.870 → 0.917. Even if all three reject
+  positives among the 20 missing lines came back right with no new FP, the
+  full-corpus reject F1 would be 0.762 against BEFORE's 0.842 (−0.08). So the
+  missing lines cannot change the verdict. The regex only sets the private
+  flag and cannot move a stance, so the stance drift comes from the prompt
+  change.
+- Regex only: `REGEX_ONLY_P32` and `HELDOUT_REGEX_ONLY_P32` run the new
+  `_PRIVATE_INFO_RE` with the old prompt. All 211 calls were cache hits, so
+  they replay exactly the BEFORE LLM replies and used no quota. Every
+  non-private class is identical to BEFORE_P32. Corpus private-info is
+  1.000 / 1.000. Held-out precision is 0.882 (< 0.9) because the LLM flags
+  hn01 / hn11 by itself; under the "LLM flag OR regex" rule a regex cannot
+  remove an LLM false positive. (Its `git` field shows `b385a42`; the prompt
+  was reverted in the working tree for that run.)
+- **Gate: FAIL for both variants.** Prompt + regex fails the 0.03 F1 rule
+  (stance=reject, stance=accept). Regex only fails held-out precision.
+  **The fix is reverted**; `app/agent/nlu.py` and `app/llm/prompts.py` are
+  the same as before Phase 32. The cue tests stay in
+  `tests/unit/test_nlu_repairs.py` as strict `xfail` (`_P32_XFAIL`). The
+  near-miss tests pass on the current regex and stay as plain tests.
+- Quota: Gemini `_4` hit its free-tier cap (500 requests/day/model,
+  `retryDelay` about 21.5 h) at AFTER_P32 line 163. The run stopped there
+  rather than fail over. The runner exited 2 as designed and wrote no section;
+  the `AFTER_P32` section below was rendered by hand from
+  `nlu_corpus_after_p32_partial.jsonl`.
+- On Gemini, BEFORE private-info recall is already 0.971. The Groq-day drift
+  that motivated this phase (0.824 in FILLER_BEFORE: p03, p08, p11, p24, p27)
+  has not been re-measured on Groq. The partial Groq BEFORE attempt (157
+  lines) was discarded, not scored.
+- Commands (scratch launcher sets `Settings.model_config["env_file"]` to a
+  copy of `.env` that holds only `GEMINI_API_KEY=<_4 value>`, with the shell's
+  `GEMINI_API_KEY` / `GROQ_API_KEY` unset):
+  `python -m eval.nlu_corpus --label BEFORE_P32 --profile eval --min-interval-s 6`,
+  the same with `--corpus tests/nlu_corpus_heldout.jsonl --label HELDOUT_BEFORE_P32`,
+  then `--label AFTER_P32` / `HELDOUT_AFTER_P32` on `b385a42`.
+
 ## FILLER_BEFORE
 
 - git: `9998a65`  profile=`demo`  ref=2026-04-01
@@ -298,4 +369,195 @@ Misses (line ids):
 - hostility: FP -; FN x02, x04
 - stance=reject: FP -; FN x08
 - terms: f01, f16, f17, d04, t11, k05
+- filler false accept: -
+
+## BEFORE_P32
+
+- git: `0bc6d5c`  profile=`eval`  ref=2026-04-01
+- lines: 183  skipped (LLM unavailable): 0
+- model share: gemini/gemini-3.1-flash-lite=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 33 | 0 | 1 | 1.000 | 0.971 |
+| demands_commitment | 13 | 10 | 0 | 3 | 1.000 | 0.769 |
+| firm | 6 | 6 | 3 | 0 | 0.667 | 1.000 |
+| wants_to_end | 6 | 6 | 5 | 0 | 0.545 | 1.000 |
+| hostility | 5 | 3 | 0 | 2 | 1.000 | 0.600 |
+| stance=accept | 11 | 11 | 0 | 0 | 1.000 | 1.000 |
+| stance=reject | 9 | 8 | 2 | 1 | 0.800 | 0.889 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.776 |
+| term exact-match (all lines) | 0.984 |
+| term exact-match (lines with terms, n=66) | 0.955 |
+| filler false accepts (n=31) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP -; FN p08
+- demands_commitment: FP -; FN c06, c09, c11
+- firm: FP i10, e04, k04; FN -
+- wants_to_end: FP i07, x02, e06, e07, e10; FN -
+- hostility: FP -; FN x02, x04
+- stance=reject: FP a13, x02; FN a10
+- terms: n07, f16, f17
+- filler false accept: -
+
+## HELDOUT_BEFORE_P32
+
+- git: `0bc6d5c`  profile=`eval`  ref=2026-04-01
+- lines: 32  skipped (LLM unavailable): 0
+- model share: gemini/gemini-3.1-flash-lite=32
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 16 | 14 | 2 | 2 | 0.875 | 0.875 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 1 | 1 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 1 | 0 | 0.000 | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.969 |
+| term exact-match (all lines) | 1.000 |
+| term exact-match (lines with terms, n=2) | 1.000 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP hn01, hn11; FN hp06, hp09
+- stance=accept: FP hn06; FN -
+- terms: -
+- filler false accept: -
+
+## HELDOUT_AFTER_P32
+
+- git: `b385a42`  profile=`eval`  ref=2026-04-01
+- lines: 32  skipped (LLM unavailable): 0
+- model share: gemini/gemini-3.1-flash-lite=32
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 16 | 16 | 1 | 0 | 0.941 | 1.000 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 1 | 1 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 1 | 0 | 0.000 | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.812 |
+| term exact-match (all lines) | 1.000 |
+| term exact-match (lines with terms, n=2) | 1.000 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP hn05; FN -
+- stance=accept: FP hn06; FN -
+- terms: -
+- filler false accept: -
+
+## REGEX_ONLY_P32
+
+- git: `b385a42`  profile=`eval`  ref=2026-04-01
+- lines: 183  skipped (LLM unavailable): 0
+- model share: gemini/gemini-3.1-flash-lite=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 13 | 10 | 0 | 3 | 1.000 | 0.769 |
+| firm | 6 | 6 | 3 | 0 | 0.667 | 1.000 |
+| wants_to_end | 6 | 6 | 5 | 0 | 0.545 | 1.000 |
+| hostility | 5 | 3 | 0 | 2 | 1.000 | 0.600 |
+| stance=accept | 11 | 11 | 0 | 0 | 1.000 | 1.000 |
+| stance=reject | 9 | 8 | 2 | 1 | 0.800 | 0.889 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.776 |
+| term exact-match (all lines) | 0.984 |
+| term exact-match (lines with terms, n=66) | 0.955 |
+| filler false accepts (n=31) | 0 |
+
+Misses (line ids):
+
+- demands_commitment: FP -; FN c06, c09, c11
+- firm: FP i10, e04, k04; FN -
+- wants_to_end: FP i07, x02, e06, e07, e10; FN -
+- hostility: FP -; FN x02, x04
+- stance=reject: FP a13, x02; FN a10
+- terms: n07, f16, f17
+- filler false accept: -
+
+## HELDOUT_REGEX_ONLY_P32
+
+- git: `b385a42`  profile=`eval`  ref=2026-04-01
+- lines: 32  skipped (LLM unavailable): 0
+- model share: gemini/gemini-3.1-flash-lite=32
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 16 | 15 | 2 | 1 | 0.882 | 0.938 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 1 | 1 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 1 | 0 | 0.000 | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.969 |
+| term exact-match (all lines) | 1.000 |
+| term exact-match (lines with terms, n=2) | 1.000 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP hn01, hn11; FN hp09
+- stance=accept: FP hn06; FN -
+- terms: -
+- filler false accept: -
+
+## AFTER_P32
+
+- git: `b385a42`  profile=`eval`  ref=2026-04-01
+- lines: 183  skipped (LLM unavailable): 20 — **partial, not a valid row**: Gemini `_4` hit its 500 requests/day cap; the runner exited 2 and wrote no section, so this one was rendered by hand from `nlu_corpus_after_p32_partial.jsonl`. Skipped: x05–x08, e01–e10, k01–k06 (scored as absent, not as misses)
+- model share: gemini/gemini-3.1-flash-lite=159, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 13 | 11 | 0 | 2 | 1.000 | 0.846 |
+| firm | 6 | 6 | 1 | 0 | 0.857 | 1.000 |
+| wants_to_end | 0 | 0 | 2 | 0 | 0.000 | n/a |
+| hostility | 4 | 2 | 0 | 2 | 1.000 | 0.500 |
+| stance=accept | 11 | 11 | 1 | 0 | 0.917 | 1.000 |
+| stance=reject | 6 | 5 | 4 | 1 | 0.556 | 0.833 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.736 |
+| term exact-match (all lines) | 0.988 |
+| term exact-match (lines with terms, n=62) | 0.968 |
+| filler false accepts (n=31) | 0 |
+
+Misses (line ids):
+
+- demands_commitment: FP -; FN c09, c11
+- firm: FP i10; FN -
+- wants_to_end: FP i07, x02; FN -
+- hostility: FP -; FN x02, x04
+- stance=accept: FP c11; FN -
+- stance=reject: FP n15, a13, x01, x02; FN a10
+- terms: f16, f17
 - filler false accept: -

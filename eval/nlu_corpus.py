@@ -10,8 +10,13 @@ Each line runs inside ``llm_call_scope("corpus:<id>")`` with an audit hook, so
 every LLM call is written to ``--audit-db`` (default
 ``eval/results/nlu_corpus_audit.db``, git-ignored).
 
+Lines the LLM could not answer (``LLMUnavailable`` or any other error) get one
+more try after a backoff. If any line is still unanswered the CLI exits 2,
+prints the missing ids and writes no report section: a partial run silently
+scores a different denominator (Phase 28 lost 58 lines at concurrency 4).
+
 Not the policy eval (``eval.run_eval``): no orchestrator, no simulator.
-CLI: ``python -m eval.nlu_corpus --label BEFORE [--profile demo]``.
+CLI: ``python -m eval.nlu_corpus --label BEFORE [--profile demo] [--corpus PATH]``.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ import asyncio
 import json
 import re
 import subprocess
+import sys
 from collections import Counter
 from datetime import date
 from pathlib import Path
@@ -37,6 +43,15 @@ CORPUS_PATH = Path("tests/nlu_corpus.jsonl")
 REPORT_PATH = Path("docs/eval/nlu_corpus.md")
 CACHE_PATH = "eval/nlu_corpus_cache.db"
 AUDIT_PATH = Path("eval/results/nlu_corpus_audit.db")
+# One line at a time: free-tier per-key limits (Groq 8K tokens/min, about 7 NLU
+# calls a minute) are the bottleneck, and parallel lines only turn into 429s
+# and fail-overs to slower models. Raise it only with a multi-key pool.
+DEFAULT_CONCURRENCY = 1
+RETRY_BACKOFF_S = 30.0
+# Optional floor on seconds per live line. With one Groq key (8K tokens/min,
+# about 1.3K tokens per NLU call) about 11 s keeps every line on the primary
+# model instead of letting the 6 s NLU timeout fail it over to another model,
+# which would mix models between runs that are meant to be compared.
 REF = date(2026, 4, 1)
 SECTION_ORDER = ("BEFORE", "AFTER", "DEFAULT_EFFORT", "LOW_EFFORT")
 
@@ -256,12 +271,19 @@ async def run_corpus(
     corpus: list[dict[str, Any]],
     *,
     profile: str,
-    concurrency: int = 4,
+    concurrency: int = DEFAULT_CONCURRENCY,
     audit: AuditLog | None = None,
     llm: Any | None = None,
+    retries: int = 1,
+    retry_backoff_s: float = RETRY_BACKOFF_S,
+    min_interval_s: float = 0.0,
 ) -> tuple[list[dict[str, Any]], Counter[str]]:
     """Analyze every line; returns per-line records and answering-model counts.
 
+    Skipped lines (any exception from ``analyze``) are re-run up to ``retries``
+    times, each pass after ``retry_backoff_s`` seconds; a record that still
+    failed keeps ``skipped=True`` and ``error``. A line that made an uncached
+    LLM call holds its slot for at least ``min_interval_s`` (rate pacing).
     With ``audit``, each line's LLM calls are audited under ``corpus:<id>``.
     ``llm`` overrides the client built from ``profile`` (tests).
     """
@@ -276,11 +298,14 @@ async def run_corpus(
     models: Counter[str] = Counter()
     line_models: dict[str, str] = {}
     current: dict[int, str] = {}
+    live_lines: set[str] = set()
 
     def on_call(meta: dict[str, Any]) -> None:
         tid = id(asyncio.current_task())
         if meta.get("model") and tid in current:
             line_models[current[tid]] = f"{meta.get('provider')}/{meta['model']}"
+            if not meta.get("cache_hit"):
+                live_lines.add(current[tid])
 
     hook = audit_llm_calls(audit, then=on_call) if audit is not None else on_call
     owns_llm = llm is None
@@ -292,38 +317,64 @@ async def run_corpus(
 
     async def one(line: dict[str, Any]) -> dict[str, Any]:
         async with sem:
-            current[id(asyncio.current_task())] = line["id"]
-            agent = AGENT_LINES[line.get("agent", "default")]
-            rec: dict[str, Any] = {
-                "id": line["id"],
-                "tags": line.get("tags", []),
-                "text": line["text"],
-                "expected": {
-                    **expected_flags(line),
-                    "stance": line["stance"],
-                    "terms": expected_terms(line),
-                },
-            }
+            started = asyncio.get_running_loop().time()
             try:
-                with llm_call_scope(f"corpus:{line['id']}"):
-                    out = await analyze(
-                        line["text"], agent, line.get("pending"),
-                        llm=llm, settings=settings, ref=REF,
-                    )
-            except LLMUnavailable as e:
-                rec["skipped"] = True
-                rec["error"] = str(e)[:200]
-                return rec
-            rec["predicted"] = {
-                **predicted_flags(out, settings.hostility_threshold),
-                "stance": out.stance,
-                "terms": predicted_terms(out),
-            }
-            rec["model"] = line_models.get(line["id"], "fast_path")
+                return await _analyze_line(line)
+            finally:
+                if line["id"] in live_lines:
+                    live_lines.discard(line["id"])
+                    left = min_interval_s - (asyncio.get_running_loop().time() - started)
+                    if left > 0:
+                        await asyncio.sleep(left)
+
+    async def _analyze_line(line: dict[str, Any]) -> dict[str, Any]:
+        current[id(asyncio.current_task())] = line["id"]
+        agent = AGENT_LINES[line.get("agent", "default")]
+        rec: dict[str, Any] = {
+            "id": line["id"],
+            "tags": line.get("tags", []),
+            "text": line["text"],
+            "expected": {
+                **expected_flags(line),
+                "stance": line["stance"],
+                "terms": expected_terms(line),
+            },
+        }
+        try:
+            with llm_call_scope(f"corpus:{line['id']}"):
+                out = await analyze(
+                    line["text"], agent, line.get("pending"),
+                    llm=llm, settings=settings, ref=REF,
+                )
+        except Exception as e:  # noqa: BLE001 - any failure is a skip, retried below
+            rec["skipped"] = True
+            kind = "" if isinstance(e, LLMUnavailable) else f"{type(e).__name__}: "
+            rec["error"] = (kind + str(e))[:200]
             return rec
+        rec["predicted"] = {
+            **predicted_flags(out, settings.hostility_threshold),
+            "stance": out.stance,
+            "terms": predicted_terms(out),
+        }
+        rec["model"] = line_models.get(line["id"], "fast_path")
+        return rec
 
     try:
-        records = await asyncio.gather(*(one(ln) for ln in corpus))
+        records = list(await asyncio.gather(*(one(ln) for ln in corpus)))
+        by_id = {ln["id"]: ln for ln in corpus}
+        for _ in range(retries):
+            todo = [i for i, r in enumerate(records) if r.get("skipped")]
+            if not todo:
+                break
+            print(
+                f"nlu_corpus: retrying {len(todo)} skipped line(s) after "
+                f"{retry_backoff_s:g}s",
+                file=sys.stderr,
+            )
+            await asyncio.sleep(retry_backoff_s)
+            redo = await asyncio.gather(*(one(by_id[records[i]["id"]]) for i in todo))
+            for i, r in zip(todo, redo, strict=True):
+                records[i] = r
     finally:
         aclose = getattr(llm, "aclose", None)
         if owns_llm and aclose is not None:
@@ -331,7 +382,7 @@ async def run_corpus(
     for r in records:
         if not r.get("skipped"):
             models[r["model"]] += 1
-    return list(records), models
+    return records, models
 
 
 def _git_sha() -> str:
@@ -341,26 +392,53 @@ def _git_sha() -> str:
         return "unknown"
 
 
+def unanswered(records: list[dict[str, Any]]) -> list[str]:
+    """Ids of lines with no prediction (still skipped after the retry pass)."""
+    return [r["id"] for r in records if r.get("skipped")]
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry: run, score, write report section + per-line JSONL."""
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--label", required=True, help="report section, e.g. BEFORE / AFTER")
     ap.add_argument("--profile", default="demo")
-    ap.add_argument("--concurrency", type=int, default=4)
+    ap.add_argument("--corpus", type=Path, default=CORPUS_PATH)
+    ap.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
+    ap.add_argument("--retry-backoff-s", type=float, default=RETRY_BACKOFF_S)
+    ap.add_argument(
+        "--min-interval-s", type=float, default=0.0,
+        help="minimum seconds per uncached line (pace a single free-tier key)",
+    )
     ap.add_argument("--audit-db", type=Path, default=AUDIT_PATH)
     args = ap.parse_args(argv)
 
-    corpus = load_corpus()
+    corpus = load_corpus(args.corpus)
     args.audit_db.parent.mkdir(parents=True, exist_ok=True)
     audit = AuditLog(args.audit_db)
     try:
         records, models = asyncio.run(
             run_corpus(
-                corpus, profile=args.profile, concurrency=args.concurrency, audit=audit
+                corpus,
+                profile=args.profile,
+                concurrency=args.concurrency,
+                audit=audit,
+                retry_backoff_s=args.retry_backoff_s,
+                min_interval_s=args.min_interval_s,
             )
         )
     finally:
         audit.close()
+    missing = unanswered(records)
+    if missing:
+        partial = args.audit_db.parent / f"nlu_corpus_{args.label.lower()}.partial.jsonl"
+        partial.write_text("".join(json.dumps(r, default=str) + "\n" for r in records))
+        print(
+            f"nlu_corpus FAILED: {len(corpus) - len(missing)}/{len(corpus)} lines answered "
+            f"after retry; no report written. Missing: {', '.join(missing)}. "
+            f"Records: {partial}. Rerun to fill gaps from the response cache.",
+            file=sys.stderr,
+        )
+        return 2
     summary = score(records)
     meta = {"git": _git_sha(), "profile": args.profile, "models": models}
     write_report(REPORT_PATH, args.label, render_section(args.label, summary, meta))

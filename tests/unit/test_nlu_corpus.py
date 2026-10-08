@@ -111,3 +111,158 @@ async def test_corpus_lines_are_audited_per_line(tmp_path: Path) -> None:
         rows = audit.for_call(f"corpus:{line['id']}")
         assert [r["type"] for r in rows] == ["llm_call"]
         assert rows[0]["payload"]["role"] == "nlu"
+
+
+# --- Phase 32 (item 28.4): retry skipped lines once, fail loudly on gaps ---
+
+_OK = '{"terms": [], "stance": "info"}'
+
+
+def _lines(n: int) -> list[dict]:
+    return [
+        {"id": f"z{i:02d}", "tags": [], "text": f"Line number {i} about the account.",
+         "stance": "info"}
+        for i in range(n)
+    ]
+
+
+def _flaky_llm(fail_first: dict[str, int]):
+    """FakeLLM whose NLU call fails the first N times for lines containing a key."""
+    from app.llm.client import FakeLLM, LLMUnavailable
+
+    class Flaky(FakeLLM):
+        async def chat_text(self, role, messages, max_tokens, *, json_mode=False):
+            user = messages[-1]["content"]
+            for key, left in fail_first.items():
+                if key in user and left > 0:
+                    fail_first[key] = left - 1
+                    raise LLMUnavailable(f"429 for {key}")
+            self.enqueue(role, _OK)
+            return await super().chat_text(role, messages, max_tokens, json_mode=json_mode)
+
+    return Flaky()
+
+
+def test_runner_defaults_to_one_line_at_a_time() -> None:
+    import inspect
+
+    from eval.nlu_corpus import DEFAULT_CONCURRENCY, run_corpus
+
+    assert DEFAULT_CONCURRENCY == 1
+    assert inspect.signature(run_corpus).parameters["concurrency"].default == 1
+
+
+async def test_skipped_line_is_retried_once_and_recovers() -> None:
+    from eval.nlu_corpus import run_corpus, unanswered
+
+    llm = _flaky_llm({"Line number 1 ": 1})
+    records, models = await run_corpus(
+        _lines(3), profile="offline", llm=llm, retry_backoff_s=0
+    )
+    assert unanswered(records) == []
+    assert [r["id"] for r in records] == ["z00", "z01", "z02"]
+    assert sum(models.values()) == 3
+
+
+async def test_line_failing_twice_stays_skipped() -> None:
+    from eval.nlu_corpus import run_corpus, unanswered
+
+    llm = _flaky_llm({"Line number 2 ": 2})
+    records, _ = await run_corpus(_lines(3), profile="offline", llm=llm, retry_backoff_s=0)
+    assert unanswered(records) == ["z02"]
+    assert "429" in records[2]["error"]
+
+
+async def test_non_llm_error_is_a_skip_not_a_crash() -> None:
+    from app.llm.client import FakeLLM
+    from eval.nlu_corpus import run_corpus, unanswered
+
+    class Boom(FakeLLM):
+        async def chat_text(self, role, messages, max_tokens, *, json_mode=False):
+            raise RuntimeError("provider exploded")
+
+    records, _ = await run_corpus(_lines(2), profile="offline", llm=Boom(), retry_backoff_s=0)
+    assert unanswered(records) == ["z00", "z01"]
+    assert records[0]["error"].startswith("RuntimeError")
+
+
+def test_cli_fails_loudly_when_lines_unanswered(tmp_path: Path, monkeypatch, capsys) -> None:
+    import json
+
+    import eval.nlu_corpus as nc
+
+    corpus = tmp_path / "c.jsonl"
+    corpus.write_text("".join(json.dumps(ln) + "\n" for ln in _lines(2)))
+    report = tmp_path / "report.md"
+    monkeypatch.setattr(nc, "REPORT_PATH", report)
+    monkeypatch.setattr(nc, "CACHE_PATH", str(tmp_path / "cache.db"))
+    # The offline profile's FakeLLM has an empty queue: every call fails.
+    rc = nc.main([
+        "--label", "T", "--profile", "offline", "--corpus", str(corpus),
+        "--retry-backoff-s", "0", "--audit-db", str(tmp_path / "a.db"),
+    ])
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "FAILED: 0/2 lines answered" in err and "z00, z01" in err
+    assert not report.exists()
+    assert (tmp_path / "nlu_corpus_t.partial.jsonl").exists()
+
+
+def test_cli_writes_report_when_all_answered(tmp_path: Path, monkeypatch) -> None:
+    import json
+
+    import eval.nlu_corpus as nc
+
+    corpus = tmp_path / "c.jsonl"
+    corpus.write_text("".join(json.dumps(ln) + "\n" for ln in _lines(2)))
+    report = tmp_path / "report.md"
+    monkeypatch.setattr(nc, "REPORT_PATH", report)
+    real = nc.run_corpus
+
+    async def fake_run(corpus, **kw):
+        return await real(corpus, **{**kw, "llm": _flaky_llm({})})
+
+    monkeypatch.setattr(nc, "run_corpus", fake_run)
+    rc = nc.main([
+        "--label", "T", "--profile", "offline", "--corpus", str(corpus),
+        "--retry-backoff-s", "0", "--audit-db", str(tmp_path / "a.db"),
+    ])
+    assert rc == 0
+    assert "lines: 2  skipped (LLM unavailable): 0" in report.read_text()
+    assert (tmp_path / "nlu_corpus_t.jsonl").exists()
+
+
+def test_heldout_private_set_schema() -> None:
+    """Phase 32 held-out set: written before the private-info fix, never tuned on."""
+    held = load_corpus(Path("tests/nlu_corpus_heldout.jsonl"))
+    main_ids = {ln["id"] for ln in load_corpus()}
+    assert len({ln["id"] for ln in held}) == len(held)
+    assert not main_ids & {ln["id"] for ln in held}
+    pos = [ln for ln in held if ln.get("asks_client_private_info")]
+    neg = [ln for ln in held if "private_neg" in ln["tags"]]
+    assert len(pos) >= 15 and len(neg) >= 15
+    for ln in held:
+        assert "heldout" in ln["tags"], ln["id"]
+        assert ln["stance"] in _STANCES, ln["id"]
+        assert set(ln) <= {"id", "tags", "text", "stance", "terms", "ask_pct", *FLAGS}
+
+
+async def test_min_interval_paces_lines_with_llm_calls(monkeypatch) -> None:
+    import asyncio
+
+    import eval.nlu_corpus as nc
+
+    slept: list[float] = []
+    real_sleep = asyncio.sleep
+
+    async def fake_sleep(s: float) -> None:
+        slept.append(s)
+        await real_sleep(0)
+
+    monkeypatch.setattr(nc.asyncio, "sleep", fake_sleep)
+    lines = _lines(2)
+    records, _ = await nc.run_corpus(
+        lines, profile="offline", llm=_flaky_llm({}), retry_backoff_s=0, min_interval_s=5.0
+    )
+    assert nc.unanswered(records) == []
+    assert len(slept) == 2 and all(4.0 < s <= 5.0 for s in slept)

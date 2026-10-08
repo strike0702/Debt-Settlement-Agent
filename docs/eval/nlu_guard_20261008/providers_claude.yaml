@@ -1,0 +1,17 @@
+# Eval-only providers file for Phase 37 (NLU guard measurement). Not a shipped
+# profile: use with `python -m eval.nlu_corpus --providers <this file> --profile claude_nlu`.
+# One paid target, no fallback: a run that switched model mid-corpus would mix
+# models in a comparison that is meant to measure one model.
+# Effort low matches the Phase 30 judge route; timeout covers adaptive thinking
+# (the shipped 6 s NLU default is tuned for Groq).
+profiles:
+  claude_nlu:
+    nlu:
+      - {target: anthropic/claude-sonnet-5-5, params: {output_config: {effort: low}}, timeout_s: 60}
+
+providers:
+  anthropic: # paid; Messages API via the `anthropic` SDK (not OpenAI-compatible)
+    api: anthropic
+    base_url: "https://api.anthropic.com"
+    key_env: ANTHROPIC_API_KEY
+    rpm: 50

@@ -1,0 +1,12 @@
+{"id": "q01", "tags": ["probe", "31.1"], "agent": "confirm", "text": "Let me check if that works for the client.", "stance": "stall"}
+{"id": "q02", "tags": ["probe", "31.1"], "agent": "confirm", "text": "Is that agreed?", "stance": "question"}
+{"id": "q03", "tags": ["probe", "31.1"], "agent": "confirm", "text": "I need to see whether that works with my manager first.", "stance": "stall"}
+{"id": "q04", "tags": ["probe", "31.1"], "agent": "confirm", "text": "Has the payment schedule been agreed on your end?", "stance": "question"}
+{"id": "q05", "tags": ["probe", "31.1"], "agent": "confirm", "text": "Before anything is agreed, I have to run it by compliance.", "stance": "stall"}
+{"id": "q06", "tags": ["probe", "31.1"], "agent": "counter", "text": "Let me see if that works on our end and call you back.", "stance": "stall"}
+{"id": "q07", "tags": ["probe", "31.2", "ambiguous"], "agent": "counter", "text": "That's not too low.", "stance": "accept"}
+{"id": "q08", "tags": ["probe", "31.2"], "agent": "counter", "text": "Fifty percent is not too low, we can accept that.", "stance": "accept"}
+{"id": "q09", "tags": ["probe", "31.2"], "agent": "counter", "text": "The problem isn't that it's too low, it's the start date.", "stance": "info"}
+{"id": "q10", "tags": ["probe", "31.2"], "agent": "confirm", "text": "No, that schedule doesn't work? Sorry, misread it. It does, we accept.", "stance": "accept"}
+{"id": "q11", "tags": ["probe", "control"], "agent": "counter", "text": "That's too low for us.", "stance": "reject"}
+{"id": "q12", "tags": ["probe", "control"], "agent": "confirm", "text": "Yes, that works for us.", "stance": "accept"}

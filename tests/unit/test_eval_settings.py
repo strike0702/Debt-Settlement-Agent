@@ -24,16 +24,20 @@ from eval.run_eval import (
 from sim.scenarios import TrueRules, generate_one
 
 
-def test_build_settings_passes_close_gap_bp() -> None:
-    """F16: eval must not drop close_gap_bp back to the default 200."""
-    src = Settings(close_gap_bp=500, max_turns=24)
+def test_build_settings_passes_policy_knobs() -> None:
+    """F16 / Phase 45: eval must not drop policy knobs back to their defaults."""
+    src = Settings(
+        accept_line_pct_of_max_bp=8000, max_same_question=3, max_no_progress_turns=5,
+        max_turns=24,
+    )
     out = _build_settings(profile="offline", nlg="template", base=src)
-    assert out.close_gap_bp == 500
+    assert out.accept_line_pct_of_max_bp == 8000
+    assert out.max_same_question == 3 and out.max_no_progress_turns == 5
 
 
 def test_build_settings_preserves_max_turns() -> None:
     """F17: outer loop should follow settings.max_turns (not a hard-coded 30)."""
-    src = Settings(max_turns=24, close_gap_bp=200)
+    src = Settings(max_turns=24)
     out = _build_settings(profile="offline", nlg="template", base=src)
     assert out.max_turns == 24
 

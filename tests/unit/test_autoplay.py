@@ -87,12 +87,14 @@ def test_autoplay_easy_deal_reaches_wrap_with_valid_agreement(tmp_path: Path) ->
     assert not any(f["type"] == "error" for f in frames)
 
 
-def test_autoplay_no_space_ends_no_deal(tmp_path: Path) -> None:
+def test_autoplay_no_space_ends_in_handoff(tmp_path: Path) -> None:
+    # Deal-or-handoff (Phase 45): no feasible schedule is a handoff, not a no-deal end.
+    # The fixture's meta still says "no_deal" (fixtures/ is outside Phase 45 scope).
     with make_client(tmp_path) as client, client.websocket_connect("/ws/call/ap-2") as ws:
         frames = _start(ws, "no_space", autoplay_pause_ms=0)
-    assert frames[-1]["outcome"] == "no_deal" and frames[-1]["phase"] == "END"
+    assert frames[-1]["outcome"] == "escalate" and frames[-1]["phase"] == "ESCALATE"
     assert not any(f["type"] == "agreement" for f in frames)
-    assert any(f["type"] == "phase" and f["intent"] == "NO_DEAL_WRAP" for f in frames)
+    assert any(f["type"] == "phase" and f["intent"] == "ESCALATE" for f in frames)
 
 
 def test_autoplay_rescue_escalate_escalates(tmp_path: Path) -> None:

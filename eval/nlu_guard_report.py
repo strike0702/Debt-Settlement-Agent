@@ -21,7 +21,11 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from app.agent.nlu import _INJECTION_RE, _REJECT_STANCE_RE, _has_unnegated_accept_phrase
+from app.agent.nlu import (
+    _INJECTION_RE,
+    _has_unguarded_accept_phrase,
+    _has_unguarded_reject_phrase,
+)
 
 STANCES = ("offer", "counter", "accept", "reject", "stall", "info", "question", "other")
 RULES = ("injection", "reject_phrase", "accept_phrase", "short_ack")
@@ -105,9 +109,9 @@ def context_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         text = r["text"]
         if _INJECTION_RE.search(text):
             continue  # injection only changes an LLM accept; cannot tell without raw
-        if _REJECT_STANCE_RE.search(text):
+        if _has_unguarded_reject_phrase(text):
             rule = "reject_phrase"
-        elif _has_unnegated_accept_phrase(text):
+        elif _has_unguarded_accept_phrase(text):
             rule = "accept_phrase"
         else:
             continue

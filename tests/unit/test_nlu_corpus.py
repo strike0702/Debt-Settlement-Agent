@@ -310,10 +310,11 @@ def _stance_llm(replies: dict[str, str]):
 
 
 _GUARD_LINES = [
-    # Accept phrase in a question: the guard forces accept over the LLM's question.
-    {"id": "g01", "tags": [], "text": "Is that agreed?", "stance": "question"},
-    # Reject phrase under negation: the guard forces reject over the LLM's accept.
-    {"id": "g02", "tags": [], "text": "That's not too low.", "agent": "counter",
+    # Plain accept phrase: the guard forces accept over the LLM's question
+    # (labelled question so the forced accept scores as a false positive).
+    {"id": "g01", "tags": [], "text": "Agreed, we accept.", "stance": "question"},
+    # Plain reject phrase: the guard forces reject over the LLM's accept.
+    {"id": "g02", "tags": [], "text": "That's too low for us.", "agent": "counter",
      "stance": "accept"},
     # No rule fires: raw and repaired agree.
     {"id": "g03", "tags": [], "text": "Let me look into the file.", "stance": "stall"},
@@ -321,8 +322,8 @@ _GUARD_LINES = [
     {"id": "g04", "tags": [], "text": "Okay, yeah.", "stance": "accept"},
 ]
 _GUARD_REPLIES = {
-    "Is that agreed": "question",
-    "not too low": "accept",
+    "Agreed, we accept": "question",
+    "too low for us": "accept",
     "look into": "stall",
     "Okay, yeah": "info",
 }

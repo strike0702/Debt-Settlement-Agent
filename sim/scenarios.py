@@ -4,6 +4,12 @@ Each scenario packs a synthetic ``CallScenario``, hidden true creditor rules,
 opening ask / floor, persona, and labels: ``zopa``, ``should_escalate``,
 ``stratum`` (deal | rescue | no_fix). ``generate(n, seed)`` is deterministic
 and resamples until strata are balanced. Does not import ``app.agent``.
+
+Phase 45 labels follow the deal-or-handoff policy: a deal is possible
+(``zopa``) only when the rep's floor is a feasible bp at or below the accept
+line (``app.domain.negotiation.accept_line_bp`` of the true ceiling, 75%
+rounded down). Every other case (rescue, no_fix) expects a handoff
+(``should_escalate``), as does the pressuring persona.
 """
 
 from __future__ import annotations
@@ -15,6 +21,7 @@ from typing import Literal
 
 from app.adapter.engine_adapter import affordability, evaluate
 from app.domain.fields import PaymentStructure
+from app.domain.negotiation import accept_line_bp
 from app.domain.scenario import CallScenario
 from feasibility.models import (
     Client,
@@ -280,9 +287,10 @@ def _classify(
     aff = affordability(call, rules, true.first_payment_date)
     true_max = aff.max_bp
     feasible = tuple(aff.feasible_bps)
+    # A deal is possible only at or below the agent's accept line (Phase 45).
     zopa = (
         true_max is not None
-        and floor_bp <= true_max
+        and floor_bp <= accept_line_bp(true_max)
         and floor_bp in aff.feasible_bps
     )
 
@@ -306,7 +314,8 @@ def _classify(
         if true_max is not None:
             rescue_ok = False
 
-    should_escalate = (stratum == "rescue") or (persona == "pressuring")
+    # Deal-or-handoff: every call without a possible deal should end in a handoff.
+    should_escalate = stratum != "deal" or persona == "pressuring"
     return true_max, feasible, zopa, rescue_ok, should_escalate, stratum
 
 

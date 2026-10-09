@@ -826,39 +826,101 @@ _ACCEPT_NEGATOR_RE = re.compile(
     r"|(?:do|does|did|is|are|was|were|ca|wo|would|could|should|has|have|had|ai)nt)\b",
     re.IGNORECASE,
 )
+# Reject phrases: same negators minus a bare "no" ("No that's too low" without
+# a comma still rejects).
+_REJECT_NEGATOR_RE = re.compile(
+    r"\b(?:not|never|nothing|nobody|neither|nor|hardly|cannot"
+    r"|\w+n['\u2019]t"
+    r"|(?:do|does|did|is|are|was|were|ca|wo|would|could|should|has|have|had|ai)nt)\b",
+    re.IGNORECASE,
+)
+# Firm phrases: "can't / cannot / won't" usually belong to the firm statement
+# itself ("we can't go below our floor"), so they do not negate it.
+_FIRM_NEGATOR_RE = re.compile(
+    r"\b(?:not|no|never|nothing|neither|nor"
+    r"|isn['\u2019]?t|aren['\u2019]?t|wasn['\u2019]?t|weren['\u2019]?t"
+    r"|wouldn['\u2019]?t|shouldn['\u2019]?t|couldn['\u2019]?t"
+    r"|don['\u2019]?t|doesn['\u2019]?t|didn['\u2019]?t|ain['\u2019]?t)\b",
+    re.IGNORECASE,
+)
 # Idioms that start with a negator but affirm ("No problem, that works").
 _NEGATOR_IDIOM_RE = re.compile(
     r"\b(?:no (?:problem|problems|worries|doubt)|not a problem)\b", re.IGNORECASE
 )
 # Clause boundaries: sentence / clause punctuation, or a contrastive conjunction.
 _CLAUSE_BREAK_RE = re.compile(r"[.;,:!?]|\b(?:but|though|although|however)\b", re.IGNORECASE)
+# A phrase after one of these in its clause is hypothetical, not a statement
+# ("Let me check if that works", "Before anything is agreed, ...").
+_CONDITIONAL_RE = re.compile(r"\b(?:if|whether|unless|before|until|once)\b", re.IGNORECASE)
+# Sentence end: punctuation followed by space or end (not the dot in "57.5").
+_SENTENCE_END_RE = re.compile(r"[.!?](?=\s|$)")
+# Auxiliary openers that make a sentence a question even when STT drops the "?".
+_QUESTION_OPENER_RE = re.compile(
+    r"^\s*(?:is|are|was|were|does|did|has|have|had|would|could|will|shall|should"
+    r"|(?:do|can) (?:we|you|they|i))\b",
+    re.IGNORECASE,
+)
 
 
-def _has_unnegated_accept_phrase(utterance: str) -> bool:
-    """True when some accept phrase has no negator earlier in its own clause.
+def _in_question(utterance: str, start: int, end: int) -> bool:
+    """True when the sentence holding ``utterance[start:end]`` is a question.
 
-    Only the text before the match counts, so a negator after the phrase or in
-    a later clause ("That works, nothing else to add.") does not cancel it.
+    A question ends in "?" or opens with an auxiliary ("Is that agreed").
     """
-    for m in _ACCEPT_STANCE_RE.finditer(utterance):
-        clause = _CLAUSE_BREAK_RE.split(utterance[: m.start()])[-1]
-        if not _ACCEPT_NEGATOR_RE.search(_NEGATOR_IDIOM_RE.sub(" ", clause)):
-            return True
-    return False
+    head = utterance[:start]
+    stops = list(_SENTENCE_END_RE.finditer(head))
+    sent_start = stops[-1].end() if stops else 0
+    tail = _SENTENCE_END_RE.search(utterance, end)
+    if tail is not None and tail.group() == "?":
+        return True
+    if tail is None and utterance.rstrip().endswith("?"):
+        return True
+    return _QUESTION_OPENER_RE.match(utterance[sent_start:start]) is not None
+
+
+def _phrase_guarded(utterance: str, m: re.Match[str], negators: re.Pattern[str]) -> bool:
+    """True when a phrase match must not decide: question, conditional or negated clause.
+
+    Only the clause text before the match counts for the conditional and the
+    negator, so "That works, nothing else to add." still accepts. The LLM's own
+    reading decides a guarded line (Phase 45, ledger 31.1 / 31.2).
+    """
+    if _in_question(utterance, m.start(), m.end()):
+        return True
+    clause = _CLAUSE_BREAK_RE.split(utterance[: m.start()])[-1]
+    clause = _NEGATOR_IDIOM_RE.sub(" ", clause)
+    return bool(_CONDITIONAL_RE.search(clause) or negators.search(clause))
+
+
+def _has_unguarded_accept_phrase(utterance: str) -> bool:
+    """True when some accept phrase is a plain statement (not asked, conditional or negated)."""
+    return any(
+        not _phrase_guarded(utterance, m, _ACCEPT_NEGATOR_RE)
+        for m in _ACCEPT_STANCE_RE.finditer(utterance)
+    )
+
+
+def _has_unguarded_reject_phrase(utterance: str) -> bool:
+    """True when some reject phrase is a plain statement ("That's not too low" is not)."""
+    return any(
+        not _phrase_guarded(utterance, m, _REJECT_NEGATOR_RE)
+        for m in _REJECT_STANCE_RE.finditer(utterance)
+    )
 
 
 def repair_stance(stance: str, utterance: str, *, has_terms: bool = False) -> str:
     """Override LLM stance when the utterance clearly accepts or rejects.
 
-    Order: injection (never accept) → reject phrase → un-negated accept phrase →
-    short acknowledgement that dominates the line and carries no number or term.
-    A negated accept phrase never forces anything; it falls through to the LLM.
+    Order: injection (never accept) → reject phrase → accept phrase → short
+    acknowledgement that dominates the line and carries no number or term.
+    A phrase inside a question, after a conditional ("if", "whether", "before")
+    or after a negator in its clause never forces anything; the LLM decides.
     """
     if _INJECTION_RE.search(utterance):
         return "other" if stance == "accept" else stance
-    if _REJECT_STANCE_RE.search(utterance):
+    if _has_unguarded_reject_phrase(utterance):
         return "reject"
-    if _has_unnegated_accept_phrase(utterance):
+    if _has_unguarded_accept_phrase(utterance):
         return "accept"
     if not has_terms and _ack_dominant(utterance):
         return "accept"
@@ -900,8 +962,18 @@ def repair_asks_for_schedule(asks: bool, utterance: str) -> bool:
 
 
 def repair_firm(firm: bool, utterance: str) -> bool:
-    """True when the rep says the number is final / floor / cannot go lower."""
-    return _flag_or_regex(firm, _FIRM_RE, utterance)
+    """LLM flag OR a firm phrase stated plainly (floor / final / cannot go lower).
+
+    A phrase inside a question ("Is that your final offer?"), after a
+    conditional ("If that were our floor") or after a negator in its clause
+    ("not the lowest we can go") does not set the flag (Phase 45).
+    """
+    if firm:
+        return True
+    return any(
+        not _phrase_guarded(utterance, m, _FIRM_NEGATOR_RE)
+        for m in _FIRM_RE.finditer(utterance)
+    )
 
 
 # A question needs a "?" or an interrogative opener; a statement is never answered.

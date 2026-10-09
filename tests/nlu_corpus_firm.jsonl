@@ -1,0 +1,20 @@
+{"id": "fm01", "tags": ["firm", "p45"], "agent": "counter", "text": "Fifty-eight percent is as low as we'll go.", "stance": "counter", "firm": true, "ask_pct": 58}
+{"id": "fm02", "tags": ["firm", "p45"], "agent": "counter", "text": "We're not moving on this, it stays at sixty percent.", "stance": "counter", "firm": true, "ask_pct": 60}
+{"id": "fm03", "tags": ["firm", "p45"], "agent": "counter", "text": "Sixty-five percent, that's where we land.", "stance": "counter", "firm": true, "ask_pct": 65}
+{"id": "fm04", "tags": ["firm", "p45"], "agent": "counter", "text": "There's no more room on our side; fifty-two percent is it.", "stance": "counter", "firm": true, "ask_pct": 52}
+{"id": "fm05", "tags": ["firm", "p45"], "agent": "counter", "text": "I've been told sixty is the absolute minimum I'm allowed to accept.", "stance": "counter", "firm": true, "ask_pct": 60}
+{"id": "fm06", "tags": ["firm", "p45"], "agent": "counter", "text": "My hands are tied at fifty-five percent.", "stance": "counter", "firm": true, "ask_pct": 55}
+{"id": "fm07", "tags": ["firm", "p45"], "agent": "counter", "text": "That's our last and best offer: sixty-three percent.", "stance": "counter", "firm": true, "ask_pct": 63}
+{"id": "fm08", "tags": ["firm", "p45"], "agent": "counter", "text": "We won't budge below fifty percent.", "stance": "counter", "firm": true, "ask_pct": 50}
+{"id": "fm09", "tags": ["firm", "p45"], "agent": "counter", "text": "Fifty-seven percent and not a point less.", "stance": "counter", "firm": true, "ask_pct": 57}
+{"id": "fm10", "tags": ["firm", "p45"], "agent": "counter", "text": "I can't do anything under sixty-one percent, period.", "stance": "counter", "firm": true, "ask_pct": 61}
+{"id": "fn01", "tags": ["firm_near_miss", "question", "p45"], "agent": "counter", "text": "Is that your final offer?", "stance": "question"}
+{"id": "fn02", "tags": ["firm_near_miss", "negation", "p45"], "agent": "counter", "text": "Fifty-five isn't our final number, we have some room.", "stance": "counter", "ask_pct": 55}
+{"id": "fn03", "tags": ["firm_near_miss", "hypothetical", "p45"], "agent": "counter", "text": "We might be able to go lower if the first payment comes sooner.", "stance": "counter"}
+{"id": "fn04", "tags": ["firm_near_miss", "negation", "p45"], "agent": "counter", "text": "Sixty is not the lowest we can go, but it's close.", "stance": "counter", "ask_pct": 60}
+{"id": "fn05", "tags": ["firm_near_miss", "question", "p45"], "agent": "counter", "text": "What's the lowest we can go? Let me check with my manager.", "stance": "stall"}
+{"id": "fn06", "tags": ["firm_near_miss", "negation", "p45"], "agent": "counter", "text": "I wouldn't call sixty percent our floor just yet.", "stance": "counter", "ask_pct": 60}
+{"id": "fn07", "tags": ["firm_near_miss", "question", "p45"], "agent": "counter", "text": "Is that the bottom line for your client?", "stance": "question"}
+{"id": "fn08", "tags": ["firm_near_miss", "p45"], "agent": "counter", "text": "We can probably come down a little from sixty-five.", "stance": "counter", "ask_pct": 65}
+{"id": "fn09", "tags": ["firm_near_miss", "negation", "p45"], "agent": "counter", "text": "Nothing here is non-negotiable, so make me an offer.", "stance": "other"}
+{"id": "fn10", "tags": ["firm_near_miss", "hypothetical", "question", "p45"], "agent": "counter", "text": "If fifty-five were our final offer, could your client accept it?", "stance": "question"}

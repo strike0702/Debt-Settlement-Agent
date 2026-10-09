@@ -183,11 +183,12 @@ def test_ws_end_closes_without_unknown_event(tmp_path: Path) -> None:
                 for m in ended
             )
             assert any(m.get("type") == "say" for m in ended)
+            # Deal-or-handoff (Phase 45): the rep leaving without a deal is a handoff.
             assert any(
-                m.get("type") == "phase" and m.get("intent") == "NO_DEAL_WRAP"
+                m.get("type") == "phase" and m.get("intent") == "ESCALATE"
                 for m in ended
             )
-            # Effects (set_phase END) apply on sentence_done; collect that batch.
+            # Effects (set_phase ESCALATE) apply on sentence_done; collect that batch.
             ack_batch: list[dict] = []
             for ev in ended:
                 if ev.get("type") != "say":
@@ -197,7 +198,7 @@ def test_ws_end_closes_without_unknown_event(tmp_path: Path) -> None:
                     _recv_until(ws, lambda m: m.get("type") == "turn_done")
                 )
             assert any(
-                m.get("type") == "phase" and m.get("phase") == "END" for m in ack_batch
+                m.get("type") == "phase" and m.get("phase") == "ESCALATE" for m in ack_batch
             )
 
 

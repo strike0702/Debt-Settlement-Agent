@@ -14,8 +14,12 @@ affordability, the decision with its ``reasons`` sentence, NLG template and
 guard verdicts, timings — never by re-reading the audit log.
 With ``Settings.nlg_h3`` (Phase 24b) the decided move gets optional ack /
 answer acts (``app.agent.acts``) spoken before it, and LLM NLG sees the last
-three public turns. Does not own policy rules or LLM prompts — those live in
-``policy`` / ``acts`` / ``nlu`` / ``nlg``.
+three public turns. Phase 45: before ``decide`` it counts rep turns in a row
+with no progress (``policy.rep_turn_progress``) for the loop guard, runs
+``policy.loop_guard`` on clarifies chosen before ``decide``, and turns a rep
+ending without a deal (``on_rep_end``) or a wrap whose agreement fails to draft
+into a handoff (``ESCALATE``). Does not own policy rules or LLM prompts — those
+live in ``policy`` / ``acts`` / ``nlu`` / ``nlg``.
 """
 
 from __future__ import annotations
@@ -66,8 +70,11 @@ from app.agent.policy import (
     decide,
     draft_agreement,
     field_already_countered,
+    follow_up_action,
+    loop_guard,
     opening_action,
     parse_pending_terms_value,
+    rep_turn_progress,
     speak_schedule_action,
     terms_counter_key,
 )
@@ -388,6 +395,19 @@ def apply_effects(session: CallSession, effects: list[Effect]) -> None:
             # Idempotent: eager emit + barge-in/ack must not double-count.
             if not session.neg.counters_offered or session.neg.counters_offered[-1] != bp:
                 session.neg.counters_offered.append(bp)
+            # Phase 45 ladder bookkeeping: plain sets, so a second apply is a no-op.
+            if "ask_bp" in data:
+                session.neg.ask_at_last_counter = int(data["ask_bp"])
+            if "stage" in data:
+                session.neg.hold_stage = int(data["stage"])
+            if "final_ask" in data:
+                session.neg.final_counter_ask = int(data["final_ask"])
+            turn = data.get("turn")
+            if turn is not None and int(turn) not in session.neg.counter_turns:
+                session.neg.counter_turns.append(int(turn))
+        elif kind == "note_question":
+            key = str(data["key"])
+            session.neg.question_counts[key] = session.neg.question_counts.get(key, 0) + 1
         elif kind == "set_pending_readback":
             session.neg.pending_readback = str(data["field"])
         elif kind == "clear_pending_readback":
@@ -742,9 +762,13 @@ class Orchestrator:
                     self._audit("nlu", "cents_clarify_out_of_range", {})
                 else:
                     pending = session.neg.pending_cents_clarify
-                    action = cents_ambiguity_clarify_action(
-                        field=str(pending["field"]),
-                        bare=int(pending["bare"]),
+                    action = loop_guard(
+                        cents_ambiguity_clarify_action(
+                            field=str(pending["field"]),
+                            bare=int(pending["bare"]),
+                        ),
+                        session.neg,
+                        self.settings,
                     )
                     t_nlg = time.perf_counter()
                     sentences = await self._speak(action, last_rep_line=working)
@@ -757,9 +781,13 @@ class Orchestrator:
                 verified.cents_ambiguity_bare is not None
                 and verified.cents_ambiguity_field is not None
             ):
-                action = cents_ambiguity_clarify_action(
-                    field=verified.cents_ambiguity_field,
-                    bare=verified.cents_ambiguity_bare,
+                action = loop_guard(
+                    cents_ambiguity_clarify_action(
+                        field=verified.cents_ambiguity_field,
+                        bare=verified.cents_ambiguity_bare,
+                    ),
+                    session.neg,
+                    self.settings,
                 )
                 # Eager: so a fast reply still resolves even if TTS ack is late.
                 for eff in action.effects:
@@ -875,10 +903,18 @@ class Orchestrator:
             self._trace_ctx["afford"] = afford
 
             t_pol = time.perf_counter()
+            analysis = verified.to_turn_analysis()
+            # Loop guard (Phase 45): rep turns in a row that added nothing.
+            if rep_turn_progress(
+                analysis, session.neg, belief_changes, accepted_term_alt=accepted_term_alt
+            ):
+                session.neg.no_progress_turns = 0
+            else:
+                session.neg.no_progress_turns += 1
             action = decide(
                 session.belief,
                 session.neg,
-                verified.to_turn_analysis(),
+                analysis,
                 afford,
                 settings=self.settings,
                 rescue_within_guardrail=rescue_ok,
@@ -947,6 +983,7 @@ class Orchestrator:
         belief_changes: list[BeliefChange],
     ) -> Utterance:
         """Speak and emit a move chosen before ``decide`` (a clarify or its escalation)."""
+        action = loop_guard(action, self.session.neg, self.settings)
         t_nlg = time.perf_counter()
         sentences = await self._speak(action, last_rep_line=working)
         timings["policy_ms"] = 0.0
@@ -965,7 +1002,7 @@ class Orchestrator:
         return await self._emit(action, sentences, timings, belief_changes)
 
     def _commit_pending(self, pending: PendingSpeech) -> Agreement | None:
-        """Apply effects + deferred eval; draft agreement or fail WRAP to END."""
+        """Apply effects + deferred eval; draft agreement or fail WRAP to a handoff."""
         apply_effects(self.session, pending.action.effects)
         if pending.pending_eval is not None:
             self.session.last_eval = pending.pending_eval
@@ -980,11 +1017,12 @@ class Orchestrator:
                 and pending.action.reason == "thanks_accept"
             )
         ) and agreement is None:
-            self.session.neg.phase = Phase.END
+            # No valid agreement behind the wrap: hand off (deal-or-handoff, Phase 45).
+            self.session.neg.phase = Phase.ESCALATE
             self._audit(
                 "orchestrator",
                 "wrap_failed_no_deal",
-                {"reason": "draft_failed"},
+                {"reason": "draft_failed", "phase": Phase.ESCALATE.value},
             )
         else:
             self.session.neg.phase = pending.action.next_phase
@@ -1105,7 +1143,7 @@ class Orchestrator:
 
     @_call_scoped
     async def on_rep_end(self) -> Utterance:
-        """Rep ended the chat; speak a short close and move to END."""
+        """Rep ended the chat: close after a proposal, else hand off (a specialist follows up)."""
         async with self._lock:
             t0 = time.perf_counter()
             self._begin_trace(None)
@@ -1117,15 +1155,8 @@ class Orchestrator:
                     reason="rep_ended_after_wrap",
                 )
             else:
-                action = Action(
-                    intent=Intent.NO_DEAL_WRAP,
-                    text_slots={
-                        "no_deal_reason": "Understood — we will end the call here."
-                    },
-                    effects=[Effect(kind="set_phase", data={"phase": Phase.END.value})],
-                    next_phase=Phase.END,
-                    reason="rep_ended",
-                )
+                # No deal on the table: a handoff, never a bare no-deal end (Phase 45).
+                action = follow_up_action(reason="rep_ended")
             with queue_wait_scope() as queue:
                 sentences = await self._speak(action, last_rep_line="")
             timings = {"nlg_ms": _ms_since(t0)}

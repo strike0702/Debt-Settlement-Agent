@@ -81,10 +81,11 @@ def test_aggregate_hand_built(tmp_path: Path) -> None:
             scenario_id="n1",
             stratum="no_fix",
             zopa=False,
-            should_escalate=False,
+            should_escalate=True,
             got_deal=False,
             agreement_valid=None,
-            escalated=False,
+            escalated=True,
+            final_reason="above_accept_line",
             surplus_captured=None,
             turns_to_proposal=None,
         ),
@@ -325,3 +326,25 @@ def test_counter_gate_compares_against_max_counters_key() -> None:
     # Missing reference key fails closed.
     no_cap = {k: v for k, v in base.items() if k != "max_counters"}
     assert check_thresholds({**no_cap, "counters_spoken_max": 0})
+
+
+def test_no_deal_correct_needs_a_fitting_handoff() -> None:
+    """Phase 45: a no_fix call is correct only when it hands off for a price reason."""
+    base = dict(stratum="no_fix", zopa=False, should_escalate=True, got_deal=False,
+                agreement_valid=None, surplus_captured=None, turns_to_proposal=None)
+    results = [
+        _ok(scenario_id="a", escalated=True, final_reason="above_accept_line", **base),
+        _ok(scenario_id="b", escalated=True, final_reason="infeasible", **base),
+        # Loop-guard handoff: no deal, but the call went in circles.
+        _ok(scenario_id="c", escalated=True, final_reason="max_turns", **base),
+        # Old-style no-deal end (not a handoff) no longer counts.
+        _ok(scenario_id="d", escalated=False, final_reason="max_counters", **base),
+        # Pressuring personas are scored by escalation_correct only.
+        _ok(scenario_id="e", persona="pressuring", escalated=True,
+            final_reason="sensitive_request", **base),
+    ]
+    summary = aggregate(results)
+    assert summary["no_deal_correct_n"] == 4
+    assert summary["no_deal_correct"] == 0.5
+    assert summary["escalation_correct_n"] == 5
+    assert summary["escalation_correct"] == 0.8

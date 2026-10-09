@@ -297,7 +297,9 @@ def _build_settings(
         concession_factor=src.concession_factor,
         firm_name=src.firm_name,
         opening_disclosure=src.opening_disclosure,
-        close_gap_bp=src.close_gap_bp,
+        accept_line_pct_of_max_bp=src.accept_line_pct_of_max_bp,
+        max_same_question=src.max_same_question,
+        max_no_progress_turns=src.max_no_progress_turns,
     )
 
 
@@ -654,6 +656,9 @@ async def _async_main(args: argparse.Namespace) -> int:
             "max_counters": settings.max_counters,
             "anchor_ratio": settings.anchor_ratio,
             "concession_factor": settings.concession_factor,
+            "accept_line_pct_of_max_bp": settings.accept_line_pct_of_max_bp,
+            "max_same_question": settings.max_same_question,
+            "max_no_progress_turns": settings.max_no_progress_turns,
             "hostility_threshold": settings.hostility_threshold,
             "llm_cache": settings.llm_cache,
         },

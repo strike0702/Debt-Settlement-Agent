@@ -98,11 +98,12 @@ async def test_barge_in_keeps_eager_counter(tmp_path: Path) -> None:
     assert session.pending is None
     assert session.neg.counters_offered == [bp1]
 
+    # The rep moves down, so the ladder concedes (a flat rep would get a hold).
     counter2 = await orch.on_creditor_text(
-        "Still need seventy percent, that is too low.",
+        "That is too low, we could do sixty-five percent.",
         oracle=TurnAnalysis(
-            settlement_ask_pct=70.0,
-            ask_quote="seventy percent",
+            settlement_ask_pct=65.0,
+            ask_quote="sixty-five percent",
             stance="reject",
         ),
     )
@@ -653,27 +654,25 @@ async def test_screenshot_transcript_revises_terms(tmp_path: Path) -> None:
     assert isinstance(counter_bp, int)
     assert counter_bp < 7000
 
-    # Firm floor closes negotiation at the ask.
-    u = await orch.on_creditor_text(
-        "70 is our floor, we cannot go lower",
-        oracle=TurnAnalysis(
-            settlement_ask_pct=70.0,
-            ask_quote="70",
-            stance="reject",
-            firm=True,
-        ),
-    )
+    # Firm floor at or below the line: one final counter, then the repeat is accepted.
+    firm = TurnAnalysis(settlement_ask_pct=70.0, ask_quote="70", stance="reject", firm=True)
+    u = await orch.on_creditor_text("70 is our floor, we cannot go lower", oracle=firm)
+    assert u.action.intent == Intent.COUNTER
+    assert u.action.reason == "final_counter"
+    u = await orch.on_creditor_text("Still 70, that is our floor", oracle=firm)
     assert u.action.intent == Intent.CONFIRM_SCHEDULE
     assert session.neg.confirmed_bp == 7000
     assert u.action.facts["settlement_pct"].value == 7000
 
     # Revision: 3 payments instead — must not CLARIFY.
+    # Revision to more payments keeps 70% within the accept line (Phase 45: a
+    # revision that drops the line below 70% is a handoff, ``above_accept_line``).
     u = await orch.on_creditor_text(
-        "can we do it in 3 payments instead",
+        "can we do it in 10 payments instead",
         oracle=TurnAnalysis(
             terms=[
                 ExtractedTerm(
-                    field="max_payments", value=3, quote="3 payments", hedged=False
+                    field="max_payments", value=10, quote="10 payments", hedged=False
                 ),
             ],
             stance="offer",
@@ -682,13 +681,13 @@ async def test_screenshot_transcript_revises_terms(tmp_path: Path) -> None:
     assert u.action.intent != Intent.CLARIFY
     assert u.action.intent != Intent.ESCALATE
     assert session.belief.get("max_payments").status == TermStatus.KNOWN
-    assert session.belief.get("max_payments").value == 3
+    assert session.belief.get("max_payments").value == 10
     assert u.action.intent == Intent.CONFIRM_SCHEDULE
     assert u.action.reason == "terms_revised"
     assert u.action.facts["settlement_pct"].value == 7000
     num = u.action.facts.get("num_payments")
     assert num is not None and isinstance(num.value, int)
-    assert num.value <= 3
+    assert num.value <= 10
 
     revise_events = [
         e for e in audit.for_call(session.call_id) if e["type"] == "revise"
@@ -1081,3 +1080,119 @@ async def test_nlu_llm_unavailable_rolls_back_turn(tmp_path: Path) -> None:
     await orch.on_creditor_text("Up to eight payments.")
     assert session.neg.turn_idx == turn0 + 1
     assert [t.text for t in session.history if t.role == "creditor"] == ["Up to eight payments."]
+
+
+def _terms(**values: tuple[object, str]) -> list[ExtractedTerm]:
+    """``field=(value, quote)``; the quote must appear in the utterance (verified)."""
+    return [
+        ExtractedTerm(field=f, value=v, quote=q, hedged=False)  # type: ignore[arg-type]
+        for f, (v, q) in values.items()
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("line", "quote", "want"),
+    [
+        # The A/B wording: "the 100% balance" names the balance, not an ask, and the
+        # NLU verifier drops it (Phase 26), so the agent still asks for the %.
+        (
+            "We require even payments to settle the 100% balance. Let me know if that works.",
+            "100%",
+            Intent.ASK_SETTLEMENT,
+        ),
+        # The policy path behind "Great, 100% is acceptable": an accepting line with
+        # a real first number. Phase 45: countered, never accepted.
+        ("We require even payments and can settle at 100%, that works.", "100%", Intent.COUNTER),
+    ],
+)
+async def test_pair17_first_number_in_discovery_is_countered_not_accepted(
+    tmp_path: Path, line: str, quote: str, want: Intent
+) -> None:
+    """A/B pair 17 (s0007_006) shape: the structure answer arrives with a 100% read
+    as an accepting ask during discovery. Before Phase 45 the agent said "Great,
+    100% is acceptable"; now the rep's first number always gets a counter."""
+    orch, session, audit = _orch(tmp_path)
+    await orch.start()
+    await orch.on_creditor_text(
+        "We can work with up to 7 payments of at least $94 each.",
+        oracle=TurnAnalysis(
+            terms=_terms(max_payments=(7, "7"), min_payment_cents=(9400, "$94")), stance="info"
+        ),
+    )
+    u = await orch.on_creditor_text(
+        line,
+        oracle=TurnAnalysis(
+            terms=_terms(payment_structure=("even", "even")),
+            settlement_ask_pct=100.0,
+            ask_quote=quote,
+            stance="accept",
+        ),
+    )
+    assert u.action.intent == want
+    assert u.action.intent != Intent.CONFIRM_SCHEDULE
+    assert session.agreement is None and session.neg.confirmed_bp is None
+    if want == Intent.COUNTER:
+        bp = u.action.facts["counter_pct"].value
+        assert isinstance(bp, int) and bp < 10000
+    audit.close()
+
+
+@pytest.mark.asyncio
+async def test_rep_turns_without_progress_hand_off(tmp_path: Path) -> None:
+    """Loop guard (B): four rep turns in a row that add nothing → handoff ``no_progress``."""
+    orch, session, audit = _orch(tmp_path)
+    await orch.start()
+    await orch.on_creditor_text(
+        "Up to 6 payments, minimum $25, even payments.",
+        oracle=TurnAnalysis(
+            terms=_terms(
+                max_payments=(6, "6"),
+                min_payment_cents=(2500, "$25"),
+                payment_structure=("even", "even"),
+            ),
+            stance="info",
+        ),
+    )
+    ask = TurnAnalysis(settlement_ask_pct=70.0, ask_quote="70%", stance="offer")
+    await orch.on_creditor_text("We are looking for 70%.", oracle=ask)
+    intents = []
+    for _ in range(4):
+        u = await orch.on_creditor_text("Hmm, let me think about it.", oracle=TurnAnalysis())
+        intents.append(u.action.intent)
+    assert session.neg.no_progress_turns == 4
+    assert intents[-1] == Intent.ESCALATE
+    assert u.action.reason == "no_progress"
+    assert Intent.ESCALATE not in intents[:-1]
+    audit.close()
+
+
+@pytest.mark.asyncio
+async def test_rep_end_without_deal_is_a_handoff(tmp_path: Path) -> None:
+    orch, session, audit = _orch(tmp_path)
+    await orch.start()
+    u = await orch.on_rep_end()
+    assert u.action.intent == Intent.ESCALATE
+    assert u.action.reason == "rep_ended"
+    assert session.neg.phase == Phase.ESCALATE
+    assert "specialist from our side will follow up" in " ".join(t for _, t in u.sentences)
+    audit.close()
+
+
+def test_offer_counter_ladder_bookkeeping_is_idempotent(tmp_path: Path) -> None:
+    from app.agent.orchestrator import apply_effects
+    from app.agent.policy import Effect
+
+    _, session, audit = _orch(tmp_path)
+    eff = Effect(
+        kind="offer_counter",
+        data={"bp": 3000, "ask_bp": 6000, "turn": 4, "stage": 1, "final_ask": 5500},
+    )
+    apply_effects(session, [eff])
+    apply_effects(session, [eff])  # eager emit, then speech ack
+    neg = session.neg
+    assert neg.counters_offered == [3000] and neg.counter_turns == [4]
+    assert (neg.ask_at_last_counter, neg.hold_stage, neg.final_counter_ask) == (6000, 1, 5500)
+    apply_effects(session, [Effect(kind="note_question", data={"key": "ASK:max_payments"})])
+    assert neg.question_counts == {"ASK:max_payments": 1}
+    audit.close()

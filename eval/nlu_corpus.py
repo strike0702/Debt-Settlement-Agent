@@ -20,7 +20,11 @@ uses) and the raw LLM stance (``predicted.stance_raw``, parsed from the same
 reply before ``repair_stance``), plus which guard rule decided
 (``stance_rule``). ``--no-repair-stance`` scores the raw stance instead; with
 ``--from-records`` it rescores a saved JSONL without any LLM call, so one paid
-pass yields both variants (Phase 37). Eval-only: ``app/`` is unchanged.
+pass yields both variants (Phase 37). Records also keep the raw LLM ``firm``
+flag (``predicted.firm_raw``) and ``has_terms``; ``--from-records
+--rescore-guards`` re-runs the current ``repair_stance`` / ``repair_firm`` on
+the saved raw values, so a guard change is measured without new calls
+(Phase 45). Eval-only: ``app/`` is unchanged.
 ``--providers`` swaps ``config/providers.yaml`` for this run (like
 ``eval.run_eval``). Without it, paid ``budgeted: true`` targets (the demo NLU's
 Claude, Phase 41) are dropped unless ``--allow-budgeted`` is passed, so the
@@ -40,7 +44,7 @@ Lines may also label ``ask_total_cents`` (a dollar-total ask) and
 
 Not the policy eval (``eval.run_eval``): no orchestrator, no simulator.
 CLI: ``python -m eval.nlu_corpus --label BEFORE [--profile demo] [--corpus PATH]
-[--providers PATH] [--no-repair-stance] [--from-records PATH]
+[--providers PATH] [--no-repair-stance] [--from-records PATH [--rescore-guards]]
 [--allow-mixed-models]``.
 """
 
@@ -63,12 +67,13 @@ from typing import Any
 # the eval never changes how the agent repairs stance.
 from app.agent.nlu import (
     _INJECTION_RE,
-    _REJECT_STANCE_RE,
     VerifiedAnalysis,
     _ack_dominant,
-    _has_unnegated_accept_phrase,
+    _has_unguarded_accept_phrase,
+    _has_unguarded_reject_phrase,
     _parse_analysis,
     analyze,
+    repair_firm,
     repair_stance,
 )
 from app.config import get_settings
@@ -200,9 +205,9 @@ def stance_rule(utterance: str, *, terms: bool) -> str:
     """
     if _INJECTION_RE.search(utterance):
         return "injection"
-    if _REJECT_STANCE_RE.search(utterance):
+    if _has_unguarded_reject_phrase(utterance):
         return "reject_phrase"
-    if _has_unnegated_accept_phrase(utterance):
+    if _has_unguarded_accept_phrase(utterance):
         return "accept_phrase"
     if not terms and _ack_dominant(utterance):
         return "short_ack"
@@ -248,6 +253,37 @@ def _raw_stance(reply: str) -> str:
         return _parse_analysis(reply).stance
     except Exception:  # noqa: BLE001 - analyze falls back to an empty analysis
         return "other"
+
+
+def _raw_firm(reply: str) -> bool:
+    """``firm`` flag the LLM reply carries before ``repair_firm``; unparseable ⇒ False."""
+    try:
+        return bool(_parse_analysis(reply).firm)
+    except Exception:  # noqa: BLE001 - analyze falls back to an empty analysis
+        return False
+
+
+def rescore_guards(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Deep copies with stance (and firm, when ``firm_raw`` is saved) re-repaired by current code.
+
+    Replays ``repair_stance(stance_raw, …)`` and ``repair_firm(firm_raw, …)`` so a
+    guard change is measured on a saved paid run without new LLM calls (Phase 45).
+    ``has_terms`` comes from the record when saved, else from the predicted terms
+    (which miss only ``tiers_ambiguous``). Fast-path lines are left as they are.
+    """
+    out = copy.deepcopy(records)
+    for r in out:
+        if r.get("skipped") or r.get("stance_source") == "fast_path":
+            continue
+        pred = r["predicted"]
+        if "stance_raw" not in pred:
+            raise ValueError(f"record {r['id']} has no predicted.stance_raw (pre-Phase 37 run)")
+        terms = r.get("has_terms", bool(pred.get("terms")))
+        pred["stance"] = repair_stance(pred["stance_raw"], r["text"], has_terms=terms)
+        r["stance_rule"] = stance_rule(r["text"], terms=terms)
+        if "firm_raw" in pred:
+            pred["firm"] = repair_firm(pred["firm_raw"], r["text"])
+    return out
 
 
 def _pr(tp: int, fp: int, fn: int) -> tuple[float | None, float | None]:
@@ -543,8 +579,10 @@ async def run_corpus(
         reply = recorder.last.pop(tid, None)
         if reply is None:  # fast path: no LLM call, no stance repair
             raw, rule, source = out.stance, "fast_path", "fast_path"
+            firm_raw = out.firm
         else:
             raw, source = _raw_stance(reply), "llm"
+            firm_raw = _raw_firm(reply)
             rule = stance_rule(line["text"], terms=has_terms(out))
             # Guard against this mirror drifting from the shipped repair.
             if repair_stance(raw, line["text"], has_terms=has_terms(out)) != out.stance:
@@ -553,8 +591,10 @@ async def run_corpus(
             **predicted_flags(out, settings.hostility_threshold),
             "stance": out.stance,
             "stance_raw": raw,
+            "firm_raw": firm_raw,
             "terms": predicted_terms(out),
         }
+        rec["has_terms"] = has_terms(out)
         rec["stance_rule"] = rule
         rec["stance_source"] = source
         rec["model"] = line_models.get(line["id"], "fast_path")
@@ -645,6 +685,13 @@ def main(argv: list[str] | None = None) -> int:
         help="rescore a saved nlu_corpus_<label>.jsonl instead of calling the LLM",
     )
     ap.add_argument(
+        "--rescore-guards", action="store_true",
+        help=(
+            "with --from-records: re-run repair_stance / repair_firm (current code) "
+            "on the saved raw LLM stance and firm flag; no LLM call"
+        ),
+    )
+    ap.add_argument(
         "--allow-mixed-models", action="store_true",
         help="write the row even if more than one provider/model answered (noted in it)",
     )
@@ -699,6 +746,10 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+    if args.rescore_guards:
+        if args.from_records is None:
+            ap.error("--rescore-guards needs --from-records")
+        records = rescore_guards(records)
     if args.no_repair_stance:
         records = raw_stance_records(records)
     summary = score(records)
@@ -716,6 +767,8 @@ def main(argv: list[str] | None = None) -> int:
         meta["mixed"] = True
     if args.from_records is not None:
         meta["stance_variant"] += f"; rescored from `{args.from_records}`"
+    if args.rescore_guards:
+        meta["stance_variant"] += "; stance/firm guards re-run with current code"
     write_report(REPORT_PATH, args.label, render_section(args.label, summary, meta))
     raw = REPORT_PATH.parent / f"nlu_corpus_{args.label.lower()}.jsonl"
     raw.write_text("".join(json.dumps(r, default=str) + "\n" for r in records))

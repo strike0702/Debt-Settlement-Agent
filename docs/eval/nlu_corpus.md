@@ -1420,6 +1420,137 @@ Misses (line ids):
 - terms: q08
 - filler false accept: -
 
+## CEREBRAS_P44
+
+- git: `a3bd6e8`  profile=`cerebras_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_cerebras_20261009/providers_cerebras.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 183  skipped (LLM unavailable): 0
+- model share: cerebras/gpt-oss-120b=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 30 | 0 | 4 | 1.000 | 0.882 |
+| demands_commitment | 13 | 10 | 1 | 3 | 0.909 | 0.769 |
+| firm | 6 | 5 | 1 | 1 | 0.833 | 0.833 |
+| wants_to_end | 6 | 6 | 6 | 0 | 0.500 | 1.000 |
+| hostility | 5 | 0 | 0 | 5 | n/a | 0.000 |
+| stance=accept | 11 | 11 | 0 | 0 | 1.000 | 1.000 |
+| stance=reject | 9 | 8 | 0 | 1 | 1.000 | 0.889 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.891 |
+| term exact-match (all lines) | 0.973 |
+| term exact-match (lines with terms, n=66) | 0.939 |
+| filler false accepts (n=31) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP -; FN p05, p11, p14, p18
+- demands_commitment: FP k05; FN c09, c10, c11
+- firm: FP i10; FN n13
+- wants_to_end: FP c06, i07, x02, e06, e07, e10; FN -
+- hostility: FP -; FN x01, x02, x03, x04, x05
+- stance=reject: FP -; FN a10
+- terms: n06, f01, f16, f17, d04
+- filler false accept: -
+
+## AMOUNTS_CEREBRAS_P44
+
+- git: `a3bd6e8`  profile=`cerebras_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_cerebras_20261009/providers_cerebras.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 14  skipped (LLM unavailable): 0
+- model share: cerebras/gpt-oss-120b=14
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 1 | 0 | 0.000 | n/a |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.357 |
+| term exact-match (all lines) | 0.857 |
+| term exact-match (lines with terms, n=13) | 0.846 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- firm: FP am09; FN -
+- terms: am09, am10
+- filler false accept: -
+
+## CEREBRAS_P44_NO_GUARD
+
+- git: `a3bd6e8`  profile=`demo`  ref=2026-04-01
+- stance: raw LLM (repair_stance off, eval-only); rescored from `docs/eval/nlu_corpus_cerebras_p44.jsonl`
+- lines: 183  skipped (LLM unavailable): 0
+- model share: cerebras/gpt-oss-120b=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 30 | 0 | 4 | 1.000 | 0.882 |
+| demands_commitment | 13 | 10 | 1 | 3 | 0.909 | 0.769 |
+| firm | 6 | 5 | 1 | 1 | 0.833 | 0.833 |
+| wants_to_end | 6 | 6 | 6 | 0 | 0.500 | 1.000 |
+| hostility | 5 | 0 | 0 | 5 | n/a | 0.000 |
+| stance=accept | 11 | 9 | 3 | 2 | 0.750 | 0.818 |
+| stance=reject | 9 | 7 | 0 | 2 | 1.000 | 0.778 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.863 |
+| term exact-match (all lines) | 0.973 |
+| term exact-match (lines with terms, n=66) | 0.939 |
+| filler false accepts (n=31) | 1 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP -; FN p05, p11, p14, p18
+- demands_commitment: FP k05; FN c09, c10, c11
+- firm: FP i10; FN n13
+- wants_to_end: FP c06, i07, x02, e06, e07, e10; FN -
+- hostility: FP -; FN x01, x02, x03, x04, x05
+- stance=accept: FP i02, i06, i09; FN f19, f20
+- stance=reject: FP -; FN f18, a10
+- terms: n06, f01, f16, f17, d04
+- filler false accept: i09
+
+## HELDOUT_STANCE_CEREBRAS_P44
+
+- git: `a3bd6e8`  profile=`cerebras_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_cerebras_20261009/providers_cerebras.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 32  skipped (LLM unavailable): 0
+- model share: cerebras/gpt-oss-120b=32
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 6 | 5 | 0 | 1 | 1.000 | 0.833 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.938 |
+| term exact-match (all lines) | 0.938 |
+| term exact-match (lines with terms, n=16) | 0.875 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP -; FN hs28
+- terms: hs08, hs09
+- filler false accept: -
+
 ## Notes
 
 - Both runs used the same model and prompt (Groq `gpt-oss-120b`, temperature 0).
@@ -1789,3 +1920,30 @@ starts with Haiku 5.5.
 - Latency p50 1604 ms / p95 2179 ms (main, 179 live calls). The first pass
   skipped 3 lines on per-minute limits; a rerun of the label replayed the
   cache and filled them. Cerebras not run (no key in this worktree).
+
+### Phase 44b: Cerebras check of the P43 prompt (2026-10-09)
+
+- Rows `CEREBRAS_P44` (183/183), `AMOUNTS_CEREBRAS_P44` (14/14) and
+  `HELDOUT_STANCE_CEREBRAS_P44` (32/32) are Cerebras `gpt-oss-120b` only. They
+  use the eval-only file
+  `docs/eval/nlu_cerebras_20261009/providers_cerebras.yaml`: the demo route's
+  Cerebras entry, no fallback, one key, no Anthropic. Prompt = current `main`
+  (P43). The runs were paced with `--min-interval-s 12.5` (5 RPM) and each
+  finished in one pass: 0 errors, 0 429s.
+- `CEREBRAS_P44_NO_GUARD` rescores the saved records with `--no-repair-stance`
+  (no calls). Full write-up: `docs/eval/nlu_cerebras_20261009/summary.md`.
+- vs `GROQ_P44` / `HAIKU_P43_FIX` (same prompt):
+  - stance accuracy 0.891 (0.885 / 0.869);
+  - private-info recall **0.882**, FN p05, p11, p14, p18 (1.000 / 1.000);
+  - hostility recall **0.000** (0.200 / 0.400);
+  - terms 62/66 (62 / 62);
+  - filler false accepts 0 (1 / 0).
+  - New term FP: n06 balance statement flagged `amount_ambiguous`.
+- Guard on / off: stance 0.891 / 0.863, accept F1 1.000 / 0.783. The guard
+  changed 6 lines, 5 helped and 1 neutral: injection i02, i06, i09;
+  `reject_phrase` f18; short-ack f19, f20.
+- Amounts 12/14. am09 (the user's $420 sentence) and am10 are read as dollar
+  totals, the same as Groq. Held-out stance 0.938, private-info recall 0.833
+  (hs28).
+- Latency p50 702 ms / p95 1132 ms (all 225 live calls), all request time
+  (`queue_ms` 0).

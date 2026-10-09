@@ -1646,6 +1646,41 @@ Every reason sentence, before and after:
 - Open issues: (a) Groq does not flag am09 / am10 ambiguous on the P43 prompt; a verified total with an exact count in the same sentence asks nothing (option in summary: a code-side question trigger, later phase). (b) Groq hostility recall 0.2 on one run. (c) The `nlu_corpus.md` header (from `eval/nlu_corpus.py` `_HEADER`) still says the demo route starts with Sonnet and quotes ~230K tokens per Groq pass; on the P43 prompt it is ~357K (about 2.0K per call), so two Groq keys (400K/day) cover one pass with little margin. (d) Cerebras on the P43 prompt unmeasured. (e) One run only; Groq drifts by several lines between days.
 - Checks: `uv run ruff check .` clean; `uv run pytest -q` 955 passed / 2 skipped / 26 xfailed.
 
+### Phase 44b (Cerebras check of the P43 prompt) (2026-10-09) — free-tier Cerebras `gpt-oss-120b` on the P43 NLU prompt (user-approved; not in REVIEW_PLAN; measurement only)
+
+- Outcome: **measured, no fix.** `app/`, `config/providers.yaml`, prompts, NLU rules, policy, reason codes, thresholds and eval code are unchanged. Full write-up: `docs/eval/nlu_cerebras_20261009/summary.md`.
+- Files:
+  - new `docs/eval/nlu_cerebras_20261009/{providers_cerebras.yaml,summary.md}`;
+  - raw `docs/eval/nlu_corpus_{cerebras_p44,amounts_cerebras_p44,heldout_stance_cerebras_p44,cerebras_p44_no_guard}.jsonl`;
+  - `docs/eval/nlu_corpus.md`: sections `CEREBRAS_P44`, `AMOUNTS_CEREBRAS_P44`, `HELDOUT_STANCE_CEREBRAS_P44`, `CEREBRAS_P44_NO_GUARD`, and the note "Phase 44b".
+  - No code or test change.
+- Interfaces: eval-only providers file `docs/eval/nlu_cerebras_20261009/providers_cerebras.yaml`, profile `cerebras_nlu`, `nlu: [cerebras/gpt-oss-120b]`. That is the demo route's Cerebras entry: no params, 6 s role timeout. The cerebras provider block is copied from `config/providers.yaml` (rpm 5, tpm 30000). No fallback, no Anthropic.
+- Runs:
+  - free tier only, one key, one model per row, $0;
+  - paced with `--min-interval-s 12.5` so the 5 RPM limiter never waits past the 6 s timeout;
+  - all three runs finished in one pass with 0 errors and 0 429s;
+  - 225 live calls, 321,384 in / 131,404 out tokens (453K of the 1M/day), about 47 min.
+- Results (main corpus; vs `GROQ_P44` / `HAIKU_P43_FIX`):
+  - stance accuracy **0.891** (0.885 / 0.869);
+  - private-info recall **0.882**, FN p05, p11, p14, p18 (1.000 / 1.000);
+  - hostility recall **0.000**, x01–x05 (0.200 / 0.400);
+  - terms 62/66 (62 / 62), plus a new `amount_ambiguous` FP on n06 (a balance statement);
+  - accept F1 1.000, filler false accepts 0 (1 / 0);
+  - commitment FN c11 and firm FN n13, both new vs Groq.
+  - Guard on / off (current `main`, before Phase 45): stance 0.891 / 0.863, accept F1 1.000 / 0.783. The guard changed 6 lines (5 helped, 1 neutral, 0 hurt): injection i02, i06, i09; `reject_phrase` f18; short-ack f19, f20.
+  - Held-out stance set: stance 0.938 (both others 0.969; FN hs14, hs15), private-info recall 0.833 (hs28), terms 14/16.
+  - Amounts 12/14: **am09 (the user's $420 sentence) and am10 are read as dollar totals, not ambiguous**, the same as Groq. So Cerebras would still need the planned P46 trigger for am09's shape.
+  - Latency (audit): p50 702 ms, p95 1132 ms (all 225), max 5207 ms (p07). `queue_ms` was 0 on every call, so all of it is request time.
+- Deviations:
+  - (1) `--min-interval-s 12.5` was passed so the 5 RPM limiter could not push lines past the 6 s timeout. This is a pacing flag only; it changes no request.
+  - (2) The guard-off rescore has its own row, `CEREBRAS_P44_NO_GUARD`, as in Phase 44.
+- Open issues:
+  - (a) Cerebras private-info recall 0.882 and hostility recall 0 on one run. These matter only on turns where Haiku and Groq both fail.
+  - (b) On the demo route the client allows Cerebras a burst of 5 calls, then one every 12 s. After about 5 rep turns in a minute, a Cerebras call can wait longer than the 6 s NLU timeout and fail over to Gemini, which cannot finish in 6 s. Not exercised here.
+  - (c) n06 "original balance of $6,000" gets `amount_ambiguous` from Cerebras, so the agent would ask "total or per payment?" about a balance statement.
+  - (d) One run only.
+- Checks: `uv run ruff check .` clean; `uv run pytest -q` 971 passed / 2 skipped / 26 xfailed.
+
 ### Phase 47 (tooling tidy) (2026-10-09) — bank build, budget reservation, judge cost, media size, rep card floor (user decision, clean-slate review; not in REVIEW_PLAN)
 
 - Outcome: **done.** No change to demo behaviour: oracle eval `eval_20261009_012607_s7` thresholds PASS, metrics table identical to `docs/eval/policy_eval_20261006/summary.md` (latency excluded). No paid or network LLM calls.

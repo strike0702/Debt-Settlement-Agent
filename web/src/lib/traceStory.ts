@@ -65,7 +65,7 @@ function ladderTitle(move: LadderMove, bp: number): string {
     case "hold":
       return `Held our offer at ${p}`;
     case "step":
-      return `Took a small step up to ${p}`;
+      return `Took a step up to ${p}`;
     case "concede":
       return `Raised our offer by half their drop, to ${p}`;
     case "final_offer":
@@ -251,6 +251,7 @@ const DROP_WHY: Record<string, string> = {
   rejected_date: "it is not a real date",
   rejected_bare_year: "a year alone is not a payment date",
   rejected_tiers: "the minimum payment rules could not be read",
+  rejected_structure: "the word was not about how the payments are structured",
 };
 
 /** Terms the agent heard but did not use, each with the true reason. */

@@ -375,7 +375,7 @@ def test_ladder_branches_from_decide_events() -> None:
     assert {k: v for k, v in got.items() if v} == {
         "anchor": 1,
         "hold": 1,
-        "quarter_step": 1,
+        "equal_step": 1,
         "concede_half": 1,
         "reanchor_after_term_change": 1,
         "final_counter": 1,

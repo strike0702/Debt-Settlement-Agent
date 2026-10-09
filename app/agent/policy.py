@@ -31,9 +31,10 @@ and accept only at or below it, and only at a bp the engine can schedule.
   may we accept it (``no_lower_counter``).
 - Rep moved down since our last counter: we concede half their move
   (``concession_factor``), and the hold / step count resets.
-- Rep did not move: hold once (restate our offer), then two small steps of a
-  quarter of the gap to min(ask, line); then accept if their ask is at or below
-  the line (``rep_held``), else hand off (``above_accept_line``).
+- Rep did not move: hold once (restate our offer), then two equal steps that
+  split the gap between our held offer and min(ask, line), the second landing on
+  it (Phase 50; was two quarter-gap steps); then accept if their ask is at or
+  below the line (``rep_held``), else hand off (``above_accept_line``).
 - Rep firm: above the line → hand off now; else one final counter halfway
   between our last offer and their number, and accept when they repeat it
   (``rep_firm``).
@@ -121,7 +122,7 @@ class NegotiationState:
     # ``"pct_quote"`` when a disagreeing % ask was held back.
     pending_amount_clarify: dict[str, Any] | None = None
     # Phase 45 price ladder. Rep's ask when our last counter was spoken (did
-    # they move since?), hold / step stage (0 none, 1 held, 2–3 small steps),
+    # they move since?), hold / step stage (0 none, 1 held, 2–3 equal steps),
     # the rep's firm ask when we made our final counter, and the turns that
     # spoke a COUNTER (holds included) for the ``max_counters`` cap.
     ask_at_last_counter: int | None = None
@@ -167,8 +168,14 @@ def _counter_terms_action(
     field: str,
     value: Any,
     effects: list[Effect],
+    rep_stated: bool = True,
 ) -> Action:
-    """Build a field-aware COUNTER_TERMS move with the right Fact + template."""
+    """Build a field-aware COUNTER_TERMS move with the right Fact + template.
+
+    ``rep_stated`` is false when the rep never gave this term (our belief is an
+    ASSUMED default, Phase 50): then we only propose our value as a question and
+    never say "that ... does not fit", which would object to words they never said.
+    """
     key = terms_counter_key(field, value)
     if field == "first_payment_date":
         assert isinstance(value, date)
@@ -183,6 +190,8 @@ def _counter_terms_action(
         template = (
             "That start date does not fit the client's program. "
             "Could payment start on {alt_first_payment_date} instead?"
+            if rep_stated
+            else "Could payment start on {alt_first_payment_date}?"
         )
         pending_value: Any = value.isoformat()
     elif field == "min_payment_cents":
@@ -198,6 +207,8 @@ def _counter_terms_action(
         template = (
             "These terms do not fit the client's program at that minimum. "
             "Could you allow a lower minimum of {alt_min_payment_cents}?"
+            if rep_stated
+            else "Could you allow a minimum payment of {alt_min_payment_cents}?"
         )
         pending_value = value
     elif field == "max_payments":
@@ -213,6 +224,8 @@ def _counter_terms_action(
         template = (
             "These terms do not fit the client's program at that payment count. "
             "Could you allow up to {alt_max_payments} payments?"
+            if rep_stated
+            else "Could you allow up to {alt_max_payments} payments?"
         )
         pending_value = value
     else:
@@ -640,9 +653,7 @@ def _confirm_required(confirm_facts: dict[str, Fact] | None) -> set[str]:
     return set(confirm_facts or {}) & {"offer_total", "num_payments", "first_payment_date"}
 
 
-# Small steps after a hold are a quarter of the gap to min(ask, line).
-_HOLD_STEP_DIVISOR = 4
-# Hold stages: 1 = held once, 2 and 3 = first and second small step taken.
+# Hold stages: 1 = held once, 2 and 3 = first and second equal step taken.
 _LAST_HOLD_STAGE = 3
 
 
@@ -651,7 +662,7 @@ def _negotiate(t: _Turn, ask_bp: int, afford: Affordability) -> Action:
 
     Order: ask within our offer → rep's first number → repeat after our final
     counter → firm → ``max_counters`` cap → rep moved (concede half) → hold →
-    two small steps → accept at or below the line, else hand off.
+    two equal steps to min(ask, line) → accept at or below the line, else hand off.
     """
     neg, cfg, a = t.neg, t.cfg, t.analysis
     assert afford.max_bp is not None
@@ -761,8 +772,10 @@ def _negotiate(t: _Turn, ask_bp: int, afford: Affordability) -> Action:
     if stage == 0:
         return counter(c_prev, 1, reason="hold", template=_HOLD_TEMPLATE)
     if stage < _LAST_HOLD_STAGE:
-        raw = c_prev + max(0, target - c_prev) // _HOLD_STEP_DIVISOR
-        nxt = step_bp(prev=c_prev, raw=raw, ceiling=min(ask_bp, line + 1), legal=legal)
+        # Two equal steps from the held offer: the first goes half the gap, the
+        # second lands on the target itself (highest legal bp at or below it).
+        raw = c_prev + max(0, target - c_prev) // 2 if stage == 1 else target
+        nxt = step_bp(prev=c_prev, raw=raw, ceiling=target + 1, legal=legal)
         if nxt is not None:
             return counter(nxt, stage + 1, reason="step")
     return settle("rep_held")
@@ -1370,7 +1383,15 @@ def _term_alt_action(t: _Turn) -> Action | None:
         t.neg.terms_countered, alt_field
     ):
         return None
-    return _counter_terms_action(field=alt_field, value=alt_value, effects=t.effects)
+    # Only object to a value the rep actually gave; an ASSUMED default is ours.
+    rep_stated = t.belief.get(alt_field).status in _REP_STATED
+    return _counter_terms_action(
+        field=alt_field, value=alt_value, effects=t.effects, rep_stated=rep_stated
+    )
+
+
+# Belief statuses that carry a value the rep said (not our ASSUMED default).
+_REP_STATED = frozenset({TermStatus.KNOWN, TermStatus.TENTATIVE, TermStatus.CONTRADICTED})
 
 
 def _confirm_accepted_counter(t: _Turn, ask_bp: int, afford: Affordability) -> Action | None:

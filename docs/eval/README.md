@@ -13,9 +13,11 @@ python -m eval.run_eval --nlu oracle --nlg template --sim-phrasing template \
   --scenarios 100 --seed 7
 ```
 
-Latest freeze: [`policy_eval_20261009_46a/`](policy_eval_20261009_46a/summary.md)
-(haggling simulated rep, counter cap 6; BEFORE/AFTER and price-ladder branch
-counts). Earlier packs: [`policy_eval_20261009/`](policy_eval_20261009/summary.md)
+Latest freeze: [`policy_eval_20261009_50/`](policy_eval_20261009_50/summary.md)
+(Phase 50: two equal steps to the limit after a hold; BEFORE/AFTER, price-ladder
+branch counts, and the user's manual call replayed). Earlier packs:
+[`policy_eval_20261009_46a/`](policy_eval_20261009_46a/summary.md) (haggling
+simulated rep, counter cap 6), [`policy_eval_20261009/`](policy_eval_20261009/summary.md)
 (Phase 45) and [`policy_eval_20261006/`](policy_eval_20261006/) — `summary.md`,
 `summary.json`, `run.json`, and five transcripts (pressuring × deal / rescue /
 no_fix, plus two former 10-counter no_fix cases capped at `max_counters`).

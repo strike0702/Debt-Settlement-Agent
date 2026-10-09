@@ -5,7 +5,9 @@ acts that are spoken *before* it, without changing the move:
 
 - ``ack``: PUBLIC facts (source ``creditor``) for the terms the rep settled this
   turn, e.g. "Got it, 6 payments at a $250 minimum.", and (Phase 46b) a
-  verified dollar-total ask ("Got it, $420 in total."). A value is echoed only
+  verified dollar-total ask ("Got it, $420 in total."). Since Phase 50 the
+  payment structure is acked too, as a digit-free ``text`` fact ("Got it, a
+  balloon schedule."). A value is echoed only
   if ``rendered_guard`` would already allow it (it is in ``creditor_numbers``)
   and it never collides with the private blocklist.
 - ``answer``: a policy-supplied, number-free talking point for an off-script
@@ -62,6 +64,14 @@ ACK_FIELDS: dict[str, tuple[str, str]] = {
     "max_payments": ("ack_max_payments", "count"),
     "min_payment_cents": ("ack_min_payment", "money"),
     "first_payment_date": ("ack_first_payment_date", "date"),
+    "payment_structure": ("ack_payment_structure", "text"),
+}
+# Spoken phrase per payment structure (Phase 50). Fixed code text, no digits;
+# a value outside this map is never acked.
+STRUCTURE_ACK_PHRASES: dict[str, str] = {
+    "even": "even payments",
+    "balloon": "a balloon schedule",
+    "flexible": "a flexible schedule",
 }
 # A verified dollar-total ask (``VerifiedAnalysis.ask_total_bp`` set) is not a
 # belief term; it is acknowledged from the analysis. Spoken first.
@@ -116,6 +126,15 @@ def ack_facts(
             continue
         fid, kind = spec
         value = ch.new_value
+        if kind == "text":
+            # Structure words are not figures: no creditor-number cross-match, but
+            # only a known structure ever becomes a phrase.
+            phrase = STRUCTURE_ACK_PHRASES.get(str(value))
+            if phrase is not None:
+                out[fid] = Fact(
+                    id=fid, kind="text", value=phrase, visibility="PUBLIC", source="creditor"
+                )
+            continue
         if not isinstance(value, (int, date)) or isinstance(value, bool):
             continue
         if not _cross_match(kind, value, creditor_numbers):
@@ -153,7 +172,14 @@ def ack_total_fact(
 def acked_fields(ack: dict[str, Fact]) -> dict[str, Any]:
     """Belief field → value for the term acks in ``ack`` (the total is not a field)."""
     by_id = {fid: field for field, (fid, _) in ACK_FIELDS.items()}
-    return {by_id[fid]: f.value for fid, f in ack.items() if fid in by_id}
+    by_phrase = {phrase: value for value, phrase in STRUCTURE_ACK_PHRASES.items()}
+    out: dict[str, Any] = {}
+    for fid, f in ack.items():
+        if fid not in by_id:
+            continue
+        # The structure ack holds the spoken phrase; map it back to the belief value.
+        out[by_id[fid]] = by_phrase.get(f.value, f.value) if f.kind == "text" else f.value
+    return out
 
 
 # The rep corrects a value we just acknowledged, i.e. says we misheard. Only an

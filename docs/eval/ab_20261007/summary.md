@@ -112,10 +112,45 @@ behind A:
 D was not judged for naturalness, and it fails every other check of the rule
 (`docs/eval/ab_20261007/partial_D/summary.md`).
 
-**Human check of the judge: pending.** `eval/results/judge_B_vs_A/human_pairs.csv`
-holds 20 pairs, sides shuffled, with the key in `human_pairs_key.csv`. It had not
-been rated when this summary was written, so the agreement between human ratings
-and the judge is not reported.
+## Human check of the judge (added in Phase 50)
+
+The user rated 20 of the 48 B-vs-A pairs blind, with the sides shuffled
+([`human/human_pairs.csv`](human/human_pairs.csv), columns
+`more_natural_1_2_tie` and `notes`; which side was which arm is in
+[`human/human_pairs_key.csv`](human/human_pairs_key.csv)). The judge's file names
+the arms the other way round: its "A" is `run_a`, which is arm **B** (H3).
+
+| | B (H3) preferred | A (policy) preferred | tie |
+|---|---|---|---|
+| user, 20 pairs | 11 | 4 | 5 |
+| judge, same 20 pairs | 5 | 2 | 13 |
+
+- **Human preference for B: 0.73 of decisive pairs (11 of 15).** The judge gave
+  B **0.80** of decisive pairs over all 48 (20–5, 23 ties). Both point the same
+  way.
+- **Exact agreement** (same verdict, ties included): 5 of 20 (0.25). The user
+  was decisive far more often than the judge (15 against 7 of the 20).
+- **When both were decisive**: 4 pairs, the user and the judge agree on 3.
+
+What the user's notes said, in plain words, and what was done:
+
+- *A call must end in a deal or a handoff* (pairs 11, 12, 18: "we can't close
+  conversation without escalation or confirmation… these are the only 2
+  possible outcomes"; escalate when nothing changes for several turns). Done in
+  Phase 45 (deal-or-handoff endings, the loop guard).
+- *Never accept the first number* (pair 17: B agreed to 100% at the first ask,
+  "anyone can guess the private ceiling this way"). Done in Phase 45 (the price
+  ladder always counters the first number; a "100% balance" is not an ask).
+- *Acknowledge what the rep said* (pairs 5, 19: "it acknowledges 'Understood, 5
+  payments…', we need that"). Done in Phase 46b (code-built acks in the default
+  agent), extended in Phase 50 to the payment structure.
+- *Keep the refusal wording* (pairs 2, 3, 19: "share the client's private
+  financial information" sounds good). That is arm A's refusal, which stays the
+  default; nothing changed.
+- *The simulated rep sometimes talks nonsense* (pairs 3, 4, 11: "the client's
+  monthly income of 0", unclear minimums, a rep that "deviated"). Phase 46a added
+  a number and stance check on the rep's rewritten lines and plainer scripted
+  lines; Phase 46c moved the rep to Groq with a bigger token budget.
 
 ## Transcripts (one representative, one worst per arm)
 

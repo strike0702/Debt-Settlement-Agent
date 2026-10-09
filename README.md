@@ -112,7 +112,7 @@ Defaults (set in `.env`):
 | `ACCEPT_LINE_PCT_OF_MAX_BP` | `7500` | The accept line: 75.00% of the client's maximum, rounded down. The agent never offers or accepts more. |
 | `ANCHOR_RATIO` | `0.7` | The first counteroffer is about 70% of the lower of the ask and the accept line. |
 | `CONCESSION_FACTOR` | `0.5` | When the representative comes down, the agent moves up by half as much. |
-| `MAX_COUNTERS` | `4` | At most four counteroffers in a call, including "we are staying at" repeats. |
+| `MAX_COUNTERS` | `6` | At most six counteroffers in a call, including "we are staying at" repeats. |
 | `MAX_SAME_QUESTION` | `2` | The agent hands off instead of asking the same question a third time. |
 | `MAX_NO_PROGRESS_TURNS` | `4` | The agent hands off after four replies in a row that add nothing new. |
 | `MAX_TURNS` | `24` | The hard limit on call length, also a hand-off. |
@@ -125,7 +125,7 @@ On every turn, `decide()` checks the same list in a fixed order: the turn limit,
 - If the representative comes down, the agent moves up by half as much.
 - If the representative does not move, the agent first repeats its offer and asks them to come down, then takes two small steps (a quarter of the remaining gap each). After that it accepts if their number is at or below the accept line, and otherwise hands the call to a person.
 - If the representative says the number is final, and it is above the accept line, the agent hands off at once. If it is at or below the line, the agent makes one last offer halfway between its last offer and their number, and accepts if they repeat their number.
-- After four counteroffers, the agent accepts if their number is at or below the line and otherwise hands off.
+- After six counteroffers, the agent accepts if their number is at or below the line and otherwise hands off.
 - A "yes" that names a percentage the agent never offered is treated as the representative's ask, not as agreement.
 
 Every accept still needs a payment schedule the engine can build for the client.
@@ -158,7 +158,7 @@ Every number below links to the committed file it comes from, and each block nam
 
 ### Policy, offline (no keys, runs in CI)
 
-This run uses perfect understanding (an oracle stands in for the model), fixed reply templates, and the code-based creditor simulator across 100 seeded scenarios. The simulated representatives are flexible, contradictory, or pressuring, and the scenarios are split into calls where a deal is possible, calls that need extra client funds, and calls with no possible deal. This isolates the negotiation logic from language errors.
+This run uses perfect understanding (an oracle stands in for the model), fixed reply templates, and the code-based creditor simulator across 100 seeded scenarios. The simulated representatives are flexible, contradictory, or pressuring; a quarter of them also haggle (they hold their number, concede in varied steps, go firm at a floor between the agent's first counteroffer and its accept line, or stall). The scenarios are split into calls where a deal is possible, calls that need extra client funds, and calls with no possible deal. This isolates the negotiation logic from language errors.
 
 ```bash
 python -m eval.run_eval --nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7
@@ -166,18 +166,18 @@ python -m eval.run_eval --nlu oracle --nlg template --sim-phrasing template --sc
 
 | What I measured | Result | n | 95% CI | Why it matters |
 |---|---|---|---|---|
-| [Valid agreements](docs/eval/policy_eval_20261009/summary.md) | 1.0 | 23 | 0.857–1.000 | Every drafted schedule passed the independent validator under the agreed rules. A wrap-up with no agreement counts as a failure. |
-| [Deals when a deal is possible](docs/eval/policy_eval_20261009/summary.md) | 1.0 | 23 | 0.857–1.000 | When the creditor's floor is at or below the agent's accept line, and the call should not be handed off, the agent reached a deal. |
-| [Correct hand-off on no-deal calls](docs/eval/policy_eval_20261009/summary.md) | 1.0 | 22 | 0.851–1.000 | On calls with no possible deal (and no pressure), the agent handed off for a price or feasibility reason and made no deal. |
-| [Correct hand-off to a person](docs/eval/policy_eval_20261009/summary.md) | 1.0 | 77 | 0.952–1.000 | Every call that should end with a person (pressure, extra funds, or no possible deal) did. |
-| [Creditor rules learned](docs/eval/policy_eval_20261009/summary.md) | 0.670 | 700 | 0.634–0.704 | 7 rules × 100 calls. Hand-offs end before the late read-back of rules, so those rules stay assumed. That is why this is well below 1.0. |
-| [Rules wrongly marked as known](docs/eval/policy_eval_20261009/summary.md) | 0.000 | 469 | 0.000–0.008 | Whenever the agent marked a rule as known, it matched the creditor's real rule. |
-| [Stuck calls](docs/eval/policy_eval_20261009/summary.md) | 0.000 | 100 | 0.000–0.037 | No call hit the turn limit. |
-| [Private figures spoken](docs/eval/policy_eval_20261009/summary.md) | 0 | | | An exact match against a list of private values (balances, fees, the client's maximum, rescue amounts). It does not catch a paraphrase. |
-| [Unverified figures spoken](docs/eval/policy_eval_20261009/summary.md) | 0 | | | No agent line contained a number that was neither a public fact nor a number the representative said. |
-| [Most price counteroffers in one call](docs/eval/policy_eval_20261009/summary.md) | 2 | | | The cap is `MAX_COUNTERS` (4). An earlier bug made 10. |
+| [Valid agreements](docs/eval/policy_eval_20261009_46a/summary.md) | 1.0 | 21 | 0.845–1.000 | Every drafted schedule passed the independent validator under the agreed rules. A wrap-up with no agreement counts as a failure. |
+| [Deals when a deal is possible](docs/eval/policy_eval_20261009_46a/summary.md) | 0.913 | 23 | 0.732–0.976 | When the creditor's floor is at or below the agent's accept line, and the call should not be handed off, the agent reached a deal. The two misses are simulated representatives who stall and never move; the agent hands those to a person. |
+| [Correct hand-off on no-deal calls](docs/eval/policy_eval_20261009_46a/summary.md) | 1.0 | 22 | 0.851–1.000 | On calls with no possible deal (and no pressure), the agent handed off for a price or feasibility reason and made no deal. |
+| [Correct hand-off to a person](docs/eval/policy_eval_20261009_46a/summary.md) | 1.0 | 77 | 0.952–1.000 | Every call that should end with a person (pressure, extra funds, or no possible deal) did. |
+| [Creditor rules learned](docs/eval/policy_eval_20261009_46a/summary.md) | 0.661 | 700 | 0.626–0.696 | 7 rules × 100 calls. Hand-offs end before the late read-back of rules, so those rules stay assumed. That is why this is well below 1.0. |
+| [Rules wrongly marked as known](docs/eval/policy_eval_20261009_46a/summary.md) | 0.000 | 463 | 0.000–0.008 | Whenever the agent marked a rule as known, it matched the creditor's real rule. |
+| [Stuck calls](docs/eval/policy_eval_20261009_46a/summary.md) | 0.000 | 100 | 0.000–0.037 | No call hit the turn limit. |
+| [Private figures spoken](docs/eval/policy_eval_20261009_46a/summary.md) | 0 | | | An exact match against a list of private values (balances, fees, the client's maximum, rescue amounts). It does not catch a paraphrase. |
+| [Unverified figures spoken](docs/eval/policy_eval_20261009_46a/summary.md) | 0 | | | No agent line contained a number that was neither a public fact nor a number the representative said. |
+| [Most price counteroffers in one call](docs/eval/policy_eval_20261009_46a/summary.md) | 6 | | | The cap is `MAX_COUNTERS` (6). An earlier bug made 10. |
 
-On deals, the agent kept a [mean of 0.689 of the available surplus](docs/eval/policy_eval_20261009/summary.md): the share of the gap between the creditor's walk-away point and the client's maximum that it saved by not accepting the first ask. Calls took a [mean of 4.61 rep turns](docs/eval/policy_eval_20261009/summary.md) to reach an outcome (5.12 before the Phase 45 rules; no-deal calls now hand off sooner). The simulated representative accepts any counteroffer at or above its floor, so all 23 deals closed on the first counteroffer, and the hold, small-step and final-offer moves are covered by tests rather than by this run. Two example transcripts sit next to the summary; the older pack is in [`policy_eval_20261006`](docs/eval/policy_eval_20261006/summary.md).
+Calls took a [mean of 5.44 rep turns](docs/eval/policy_eval_20261009_46a/summary.md) to reach an outcome. The run exercises the price ladder (every branch except accepting after a full hold-and-step sequence, which unit tests cover): the agent held its offer 30 times, took 11 small steps, conceded half the representative's move 41 times, made 10 final offers and accepted 10 repeated floors, reached the counteroffer cap 4 times, and its loop guard ended both stalled calls ([branch counts](docs/eval/policy_eval_20261009_46a/summary.md#price-ladder-branches-agent-moves-from-the-audit)). On deals the agent kept a mean of 0.883 of the available surplus, the share of the gap between the creditor's walk-away point and the client's maximum that it saved; this is not comparable with the earlier 0.689 because the haggling representatives' floors were moved up. Four example transcripts sit next to the summary; the Phase 45 pack is in [`policy_eval_20261009`](docs/eval/policy_eval_20261009/summary.md).
 
 ### Latency, before and after (live, demo settings)
 
@@ -262,7 +262,7 @@ uv run python -m eval.run_eval --nlu oracle --nlg template --sim-phrasing templa
 # open http://127.0.0.1:8000, pick "Easy deal", press "Watch a call"
 ```
 
-The eval prints a summary whose metrics table should match [`summary.md`](docs/eval/policy_eval_20261009/summary.md), and it exits with an error if any threshold is missed. "Watch a call" runs the server's code simulator with fixed phrasing, so it makes no model call.
+The eval prints a summary whose metrics table should match [`summary.md`](docs/eval/policy_eval_20261009_46a/summary.md), and it exits with an error if any threshold is missed. "Watch a call" runs the server's code simulator with fixed phrasing, so it makes no model call.
 
 ## Running locally
 

@@ -8,9 +8,11 @@ from pathlib import Path
 import pytest
 
 from eval.metrics import (
+    LADDER_BRANCHES,
     RATE_METRICS,
     aggregate,
     check_thresholds,
+    ladder_branches,
     load_thresholds,
     render_summary_md,
     wilson_interval,
@@ -348,3 +350,65 @@ def test_no_deal_correct_needs_a_fitting_handoff() -> None:
     assert summary["no_deal_correct"] == 0.5
     assert summary["escalation_correct_n"] == 5
     assert summary["escalation_correct"] == 0.8
+
+
+def _decide(intent: str, reason: str) -> dict:
+    return {"type": "decide", "payload": {"intent": intent, "reason": reason}}
+
+
+def test_ladder_branches_from_decide_events() -> None:
+    events = [
+        _decide("ASK_SETTLEMENT", "ask"),
+        _decide("COUNTER", "bp=4800"),
+        _decide("COUNTER", "hold"),
+        _decide("COUNTER", "step"),
+        _decide("COUNTER", "bp=5100"),
+        {"type": "accept_terms_alt", "payload": {}},
+        _decide("COUNTER", "bp=5300"),
+        _decide("COUNTER", "final_counter"),
+        _decide("CONFIRM_SCHEDULE", "rep_firm"),
+        _decide("CONFIRM_SCHEDULE", "bp=5600"),
+        _decide("ESCALATE", "no_progress"),
+    ]
+    got = ladder_branches(events)
+    assert list(got) == list(LADDER_BRANCHES)
+    assert {k: v for k, v in got.items() if v} == {
+        "anchor": 1,
+        "hold": 1,
+        "quarter_step": 1,
+        "concede_half": 1,
+        "reanchor_after_term_change": 1,
+        "final_counter": 1,
+        "accept_on_repeat": 1,
+        "our_counter_accepted": 1,
+        "loop_guard_no_progress": 1,
+    }
+    # A confirm with no counter before it is not a ladder move.
+    assert not any(ladder_branches([_decide("CONFIRM_SCHEDULE", "bp=5000")]).values())
+
+
+def test_ladder_and_rewrite_blocks_aggregate_without_thresholds() -> None:
+    a = _ok(
+        ladder_branches={"anchor": 1, "hold": 2},
+        sim_rewrite={"attempts": 4, "fallbacks": {"figures": 1}},
+    )
+    b = _ok(
+        ladder_branches={"anchor": 1},
+        sim_rewrite={"attempts": 6, "fallbacks": {"figures": 1, "stance": 1}},
+    )
+    s = aggregate([a, b])
+    assert s["ladder_branches"]["anchor"] == 2 and s["ladder_branches"]["hold"] == 2
+    assert s["ladder_branches"]["counters_exhausted"] == 0
+    assert s["sim_rewrite_fallbacks"] == {
+        "attempts": 10,
+        "count": 3,
+        "rate": 0.3,
+        "by_reason": {"figures": 2, "stance": 1},
+    }
+    md = render_summary_md(s)
+    assert "| hold | 2 |" in md
+    assert "3 of 10 LLM rewrites dropped" in md and "figures=2, stance=1" in md
+    assert "ladder_branches" not in load_thresholds()
+    assert "sim_rewrite_fallbacks" not in load_thresholds()
+    # Template phrasing: no attempts, rate is null rather than a vacuous 0.
+    assert aggregate([_ok()])["sim_rewrite_fallbacks"]["rate"] is None

@@ -2,7 +2,8 @@
 
 ``generate(100, 7)`` takes ~20 s because it samples all 100 scenarios. Slot
 ``i`` is just ``generate_one(PERSONAS[i % 3], <stratum of slot i>, sub_seed_i)``
-re-ided, where ``sub_seed_i`` is the i-th draw of ``Random(7)``. Rebuilding one
+re-ided (plus its Phase 46a haggle style, ``apply_haggle``), where
+``sub_seed_i`` is the i-th draw of ``Random(7)``. Rebuilding one
 slot costs tens of ms, so fast tests use these instead of the full set.
 ``tests/e2e/test_policy_invariants.py::test_seed7_slots_match_generate`` (slow)
 checks that this stays identical to ``generate``.
@@ -15,7 +16,7 @@ from functools import cache, lru_cache
 from random import Random
 
 from sim.personas import PERSONAS
-from sim.scenarios import STRATA, Scenario, balanced_quota, generate_one
+from sim.scenarios import STRATA, Scenario, apply_haggle, balanced_quota, generate_one
 
 N = 100
 SEED = 7
@@ -32,13 +33,19 @@ def _plan() -> tuple[tuple[str, int], ...]:
 
 
 @cache
-def slot(i: int) -> Scenario:
-    """``generate(100, 7)[i]``, id included."""
+def easy_slot(i: int) -> Scenario:
+    """Slot ``i`` before its Phase 46a haggle style: the pre-46a easy rep, floor and ask."""
     stratum, sub_seed = _plan()[i]
     persona = PERSONAS[i % len(PERSONAS)]
     sc = generate_one(persona, stratum, seed=sub_seed)  # type: ignore[arg-type]
     sid = f"s{SEED:04d}_{i:03d}_{stratum}_{persona}"
     return replace(sc, id=sid, call=replace(sc.call, id=sid))
+
+
+@cache
+def slot(i: int) -> Scenario:
+    """``generate(100, 7)[i]``, id and haggle style included."""
+    return apply_haggle(easy_slot(i), seed=SEED, index=i)
 
 
 @lru_cache(maxsize=1)

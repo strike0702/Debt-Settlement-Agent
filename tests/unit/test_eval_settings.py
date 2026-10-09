@@ -79,7 +79,6 @@ def test_build_settings_nlu_oracle() -> None:
     "argv",
     [
         ["--nlu", "oracle", "--nlg", "llm", "--sim-phrasing", "template"],
-        ["--nlu", "oracle", "--nlg", "template", "--sim-phrasing", "llm"],
         ["--nlu", "oracle", "--nlg", "template", "--sim-phrasing", "template",
          "--no-oracle-overlay"],
     ],
@@ -88,6 +87,19 @@ def test_cli_oracle_rejects_networked_or_meaningless_flags(argv: list[str]) -> N
     with pytest.raises(SystemExit) as exc:
         main(argv)
     assert exc.value.code == 2
+
+
+def test_cli_oracle_allows_llm_sim_phrasing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase 46a smoke: oracle NLU with the sim's LLM rewrite (only the sim calls a model)."""
+    seen: dict[str, str] = {}
+
+    async def fake_main(args: object) -> int:
+        seen["sim"] = args.sim_phrasing  # type: ignore[attr-defined]
+        return 0
+
+    monkeypatch.setattr("eval.run_eval._async_main", fake_main)
+    assert main(["--nlu", "oracle", "--nlg", "template", "--sim-phrasing", "llm"]) == 0
+    assert seen["sim"] == "llm"
 
 
 def test_leak_scan_engine_private_exempts_spoken_public_facts() -> None:

@@ -109,6 +109,8 @@ beforeEach(() => {
   operatorDetail = null;
   previewStatus = 200;
   localStorage.clear();
+  // Phase 48: the scenario and view live in the URL; each test starts clean.
+  window.history.replaceState(null, "", "/");
   vi.stubGlobal("WebSocket", FakeSocket);
   vi.stubGlobal("fetch", fetchMock);
 });

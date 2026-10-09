@@ -54,6 +54,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 46b | Code-built acks, rep corrections, total-or-per-payment rule (user decisions 2026-10-09) | done |
 | 46a | Simulated rep: number check on LLM rewrites, plainer lines, haggling rep, `max_counters` 6 | done |
 | 46c | Live re-check: Haiku reader, Groq-played rep (user decisions 2026-10-09) | done |
+| 48 | UI follow-ups: handoff outcome, acks and corrections, model badge, ladder words, URL state, haggling demo | done |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -1836,3 +1837,94 @@ Every reason sentence, before and after:
 - **Deviations:** (1) `eval.run_eval._build_settings` drops `anthropic_api_key`, so the paid runs went through a scratch wrapper that copied the key to `ANTHROPIC_API_KEY_1` (pool slot). No repo change. (2) The pilot used `--scenarios 5` (a different 5-call set from the first 5 of the 48), because `run_eval` has no subset option. (3) The NLU target has `timeout_s: 20`, against the demo's 6 s role default.
 - **Open issues:** (a) `sim.figures.stance_flipped` keeps an `info` rewrite with a self-negating tail ("Actually, it isn't.") or an added leading "No,". This caused both `contradiction_unresolved` handoffs (`s0007_019`, `s0007_040`). (b) Those "No, actually it's 6" rewrites trigger the P46b correction path (`acts.is_ack_correction`): the contradicted count goes KNOWN with no CLARIFY (`s0007_028`, `s0007_034`, the 2 false-KNOWN beliefs). No deal call hit it in this run, but one that did would draft an invalid schedule. (c) The `_build_settings` key drop from deviation (1). (d) The rewrite "Sure, we can't move on that yet." (smoke) was kept: an accept-sounding "Sure" on a `reject` hold line passes the stance check. Harmless here, since NLU read the hold, but it is the same class as (a).
 - **Checks:** `uv run ruff check .` clean; `uv run pytest -q` 1136 passed / 2 skipped / 26 xfailed; fast suite (`-m "not slow"`) with `.env` moved aside (restored) 1132 passed / 2 skipped / 4 deselected / 26 xfailed; oracle eval `eval_20261009_063803_s7` thresholds PASS (agreement_valid 1.0 n=21, deal rate 0.913).
+
+### Phase 48 (UI follow-ups) (2026-10-09) — handoffs, acks, model badge, small polish; user decision 2026-10-09 (clean-slate review), not in REVIEW_PLAN
+
+#### Design plan (written before coding)
+
+Brief: an existing product with an established look (Phases 23–36); the audience is someone outside the debt-settlement industry watching a demo. Improve, do not restyle: no new colours, fonts, radii or motion. Sentence case everywhere.
+
+- Colour (kept): `--accent #2a78d6` (our offer), `--series-ask #eb6834` (creditor ask), status tokens good / bad / warn only with a word. A handoff is not a failure, so it uses no red: the handoff card is neutral with a `warn` badge ("Specialist follows up"), the agreement card keeps its `good` border.
+- Type (kept): system sans; mono only for codes. One scale (20 / 16 / 14 / 12 px).
+- Layout: the outcome sits where the eye already goes in each column, not in a new banner.
+
+```
+Conversation                    How the agent decided          State
++-------------------------+     +--------------------------+   +--------------------------+
+| ...bubbles...           |     | > T6 Handed off to a     |   | Handed off to a          |  ← same slot as
+| Agent: Your number is   |     |   specialist   [open]    |   | specialist   [Specialist |    "Agreement drafted"
+|  above what I can ...   |     |   What they said ...     |   |  follows up]             |
+| ── Call ended: handed   |     |   [Read by Claude Haiku] |   | Why (negotiator): reason |
+|    off to a specialist ─|     |   What we heard ...      |   |  sentence from reasons.py|
++-------------------------+     |   Decision / What we said|   | Rep view: what the agent |
+                                | > T5 Made a final offer  |   |  told the rep, verbatim  |
+                                |   of 38%            38%  |   +--------------------------+
+                                | > T4 Took a small step   |
+                                |   to 34%            34%  |
+```
+
+- Outcome, both views: (1) a quiet end-of-call divider at the bottom of the transcript ("Call ended: handed off to a specialist" / "Call ended: deal sent to the client for approval"); (2) a "Handed off to a specialist" card in the agreement slot of the state column. Debt negotiator view: the plain reason sentence (`decide.reason_text` of the ESCALATE turn, from `reasons.py`). Creditor rep view: only what the agent said to the rep ("What the agent told you"), never the reason code or its sentence, since several reasons name the client's limit or savings.
+- Ladder moves in words (trace row titles, number in the right column as now): "Made a first offer of 30%", "Held our offer at 30%", "Took a small step to 32%", "Raised our offer by half their drop, to 36%", "Made a final offer of 38%", "Accepted 40% when they repeated it", "Accepted 40% after they held firm", "Accepted 40%: no counteroffers left", "They took our offer of 36%", "Handed off to a specialist".
+- Model badge (Debt negotiator only): a small neutral badge under "What they said" in an open trace row: "Read by Claude Haiku", "Read by Groq (fallback)", "Budget reached, using Groq", "Read by code (no AI needed)", "Simulated rep: no AI reading". Server adds `turn_trace.reader` from the turn's audit rows (`llm` / `nlu`), so it never reaches the rep socket (which carries no trace).
+- Acks: unchanged in the conversation (the ack is the first sentence of the agent's bubble, so it already reads as one line). In the trace, "What we heard" gains plain lines for corrections, disputes, dropped questions and the total-or-per-payment question with its cause; "How this was worked out" says when code put an acknowledgement in front of the reply. Server adds `turn_trace.notes` from the turn's audit rows.
+- Dropped terms: one sentence per `DroppedTerm.reason` ("those words are not in what the rep said", "the number does not match the rep's words", …); a held-back amount says it was held back and why, not "did not match".
+- Polish: `?scenario=&view=` in the URL (pushState; back/forward restore), `beforeunload` while the case editor has unsaved text, `theme-color` meta following the theme, `touch-action: manipulation`.
+
+Review against the brief: a full-width coloured outcome banner and a "model" pill on every collapsed row were the default reach. Both were rejected: the banner duplicates the notice row and shouts in red-or-green for a neutral outcome; badges on every row turn the compact list back into template chrome. The outcome lives in the two places a viewer already reads, and the badge only inside an open row.
+
+Plan changes made while building (from the Chrome pass): seven cards at 1440 px clamped the new descriptions at three lines, so descriptions were shortened to ≤ 90 characters and the clamp is four lines; "What we heard" said a corrected term twice ("Up to 6 payments. Corrected what we repeated back: up to 6 payments"), so a corrected field's plain line is dropped.
+
+#### What changed
+
+- **1. Handoffs.** `web/src/lib/outcome.ts` (`callOutcome(state, lens)`, `endedLine(state, lens)`): "Handed off to a specialist" card in the agreement slot of `StatePanel` (badge "Specialist follows up"). Debt negotiator: the ESCALATE turn's `decide.reason_text` (from `reasons.py`) plus "The agent told the rep: “…”". Creditor rep: "No deal was agreed on this call…" plus "What the agent told you: “…”" (`escalate.escalate_reason`), never the reason. Transcript closes with "Call ended: handed off to a specialist" / "Call ended: deal sent to the client for approval" (`Conversation.ended`). Trace title for ESCALATE is "Handed off to a specialist"; `NO_DEAL_WRAP` is folded into "Closed the call" (dead since Phase 45, old logs only). `mic.ts`: phase ESCALATE → `call_over`. Autoplay notice and expected label say "specialist". Rep stream (beyond the UI): `app/voice/views.py` now drops the policy's reason code on the rep view (`escalate.reason` → null; `reason` removed from `policy/decide` audit payloads), mirrored in `toRepView`; codes like `above_accept_line` / `out_of_guardrail` told the rep why the agent stopped.
+- Ladder words (`traceStory.ladderMove(t, earlier)`, `turnTitle(t, earlier)`): "Made a first offer of 42%", "Held our offer at 42%", "Took a small step up to 46%", "Raised our offer by half their drop, to 37%", "Made a final offer of 48%", "Accepted 50% when they repeated it" (`rep_firm`), "Accepted 40% after they held firm" (`rep_held`), "Accepted 40%: no counteroffers left", "They accepted our 52% offer" (confirm at our last counter on an accept stance).
+- **2. Acks and corrections.** Server: `TurnTrace.notes: list[TraceNote] | None` (kinds `acked`, `ack_corrected`, `ack_disputed`, `amount_held` (from `nlu_amount_ambiguous`, with `trigger`), `amount_clarify_dropped`, `cents_clarify_dropped`, `amount_clarify_resolved`), built by `app.voice.ws.turn_notes(rows, utt)` from the turn's audit rows plus `utt.action.ack` (skipped when `nlg/act_dropped {act: ack}`). UI: the ack stays the first sentence of the agent's bubble (it already reads as one line); "What we heard" gains "Corrected what we repeated back: up to 6 payments (we had 5)", "Said we misheard the max payments, so we check it with them again", "Held back $420 until they say whether it is the total or each payment, because “pay $420 by” a date can mean the whole amount or each payment" (one cause per trigger: `nlu_flag`, `pct_total_disagree`, `total_exceeds_balance`, `min_exceeds_balance`, `total_cue`, `both_readings`, `total_pay_by`, `total_with_count`), "Moved on with new terms, so we dropped our question about $420", "Raised something more pressing, so we dropped …" (`interrupt`), "Said $420 is the total settlement"; CLARIFY titles "Asked whether $420 is the total or per payment" / "Asked whether they meant dollars or cents". "How this was worked out" says "The reply opens by repeating back what the rep just said (max payments). Code builds that sentence …".
+- **3. Dropped terms.** `ignoredLines` keys on `DroppedTerm.reason`: `rejected_quote` "those words are not in what the rep said", `rejected_amount_value`, `rejected_ask_value`, `rejected_range`, `rejected_date`, `rejected_bare_year`, `rejected_tiers`; `cents_ambiguity` / `tiers_ambiguous` read "Held back … so we ask" (not "did not match"). Section renamed "What the agent set aside". A held-back total-or-per-payment amount is told by its `amount_held` note.
+- **4. Model badge.** `TurnTrace.reader: TraceReader | None` (`kind` llm | code | script, `provider`, `model`, `fallback`, `budget_reached`, `cache_hit`) from `app.voice.ws.turn_reader(rows, nlu_mode=)`: oracle NLU → script; `nlu/fast_readback|fast_field_answer` → code; else the last successful `llm` row with `role=nlu` (`failover_from` → fallback; any `llm_budget_skip` → budget reached). Rows are read with a per-socket cursor (`_ViewSocket.trace_after`), not `audit_after`, which other handlers advance between turns. Badge (`ScanText` icon, title = provider/model) under "What they said" in an open row: "Read by Claude Haiku", "Read by Groq (fallback)", "Budget reached, using Groq", "Read by code (no AI needed)", "Simulated rep: no AI reading". Never on the rep stream (no `turn_trace` there; tested).
+- **5. Polish.** `CaseEditor`: `beforeunload` while the text differs from what it opened with. `?scenario=&view=operator|rep` (`hooks/useUrlState.ts`: replace on first render and after back/forward, push on a visitor's change, refused scenario while a call runs puts the URL back; unknown id → Easy deal). `<meta name="theme-color">` set pre-paint and by `useTheme`; `html { touch-action: manipulation; -webkit-tap-highlight-color }`.
+- **6. Fixtures.** Plain descriptions on every card (≤ 90 chars, no jargon; test). Titles "No deal" → "No room to settle", "Rescue / escalate" → "Needs extra client money". Floor rows: late_start_date 40%, no_space 40%, rescue_escalate 45% (match `sim.json`; test over every card).
+- **7. Haggling demo.** `sim.json` may set `"haggle": {"style", "hold_turns", "steps_bp", "stall_on"}` (`app.autoplay.parse_haggle`, `ValueError` on junk; absent → `EASY`, so older fixtures are unchanged, tested). New `fixtures/scenarios/haggling_rep` (Ridgeline Recovery, $2,000; holder, 2 holds, 10-point step; ask 60%, floor 50%): Watch a call plays first offer 42% → hold 42% → step 46% → rep firm at 50% → final offer 48% → accept 50% on the repeat → deal (same with `max_counters` 4 and 6). Its client deposits are $230 so no running balance equals the public $2,000 balance (the rep-card privacy scan caught $250).
+
+#### Files
+
+New: `fixtures/scenarios/haggling_rep/{client,firm,meta,offer,sim}.json` + `rep_card.md`, `tests/unit/{test_trace_p48,test_fixtures_p48}.py`, `web/src/{lib/outcome.ts, hooks/useUrlState.ts, lib/traceStory.test.ts, phase48.test.tsx}`. Changed: `app/{autoplay.py, voice/ws.py, voice/views.py, schemas/events.py}`, `web/src/types/{events.schema.json, events.ts}` (regenerated), `fixtures/scenarios/*/meta.json`, three rep cards, `tests/unit/test_rep_account.py` (seven cards), `web/{index.html, src/App.tsx, App.test.tsx, components/{AppShell,CaseEditor,Conversation,DecisionTrace,DecisionTrace.test,StatePanel}.tsx, fixtures/index.ts, hooks/useTheme.ts, index.css, lib/{labels,mic,repView,traceStory}.ts}`, `web/README.md`, `README.md` (one UI line).
+
+#### Interfaces
+
+- `app.schemas.events`: `TraceReader`, `TraceNote`, `TraceNoteKind`; `TurnTrace.reader`, `TurnTrace.notes` (optional, operator only).
+- `app.voice.ws`: `turn_reader(rows, *, nlu_mode) -> dict | None`; `turn_notes(rows, utt) -> list[dict]`; `_ViewSocket.trace_after`.
+- `app.autoplay.parse_haggle(raw, *, where="sim.json") -> Haggle`.
+- Web: `lib/outcome.ts` `callOutcome`, `endedLine`, `CallOutcome`; `lib/traceStory.ts` `ladderMove`, `LadderMove`, `turnTitle(t, earlier?)`, `noteLine`, `readerLabel`, `readerDetail`, `modelName`, `ackLine`, `HANDOFF_TITLE`; `hooks/useUrlState.ts` `useUrlState`, `readUrlState`, `urlWith`; `hooks/useTheme.ts` `THEME_COLOR`; `<Conversation ended>`.
+
+#### Decisions and deviations
+
+1. The rep view's handoff card shows what the agent said to the rep, not a `reasons.py` sentence: several reason sentences name the client's limit, savings or extra funds. The negotiator view shows the sentence.
+2. Reader and notes come from audit rows at emit time in the WS layer (orchestrator untouched, as for `needs_info`).
+3. `app/voice/views.py` (allowed path) now drops reason codes on the rep stream; not asked for explicitly, but the task says the rep view must not reveal private reasons.
+4. Two fixture titles were renamed (jargon), not only descriptions.
+5. The ack sentence is not visually split from the move in the bubble; it already reads as one line, and the trace says where it came from.
+
+#### Vercel guidelines audit (changed components)
+
+Fixed: icon in the reader badge and end-of-call rules `aria-hidden`; outcome text in curly quotes; `text-pretty` / `text-balance` on new copy; URL reflects scenario and view; `beforeunload` for unsaved editor text; `theme-color` meta matches `--bg`; `touch-action: manipulation` and an intentional tap highlight; card descriptions `line-clamp-4` (no clipped text at 1440 px); the transcript's `role="log"` announces the end-of-call line. Deliberately skipped: Title Case and "avoid first person" (the brief asks for sentence case, and the trace speaks as "we" by design); `Intl` for money (pre-existing `lib/format.ts` already uses `Intl.NumberFormat`); the selected card is not scrolled into view in the phone card row (pre-existing; DEFERRED).
+
+#### Manual check (Chrome, local uvicorn :8048, demo profile with `.env`, 2026-10-09)
+
+- haggling_rep, Watch a call, Debt negotiator: T2 "Made a first offer of 42%", T3 "Held our offer at 42%", T4 "Took a small step up to 46%", T5 "Made a final offer of 48%", T6 "Accepted 50% when they repeated it", deal at 50% ($1,000); badge "Simulated rep: no AI reading". Creditor rep view: same deal, no trace, "Call ended: deal sent to the client for approval".
+- no_space, Watch a call: negotiator card shows the `infeasible` reason sentence and what the agent told the rep; Creditor rep view card shows only the spoken line; 59 rep frames captured in-page: no `turn_trace`, no `reader`, no reason sentence.
+- Live text call (easy_deal, Claude Haiku NLU; 6 Haiku calls, well under a cent): "We can do up to five payments." → "Understood, a maximum of 5 payments. …"; "No, it's six payments." → "Okay, up to 6 payments. …" with "Corrected what we repeated back: up to 6 payments (we had 5)" and "Read by Claude Haiku"; "You must pay $420 by March 31. We only accept 3 even payments." → "Just to be sure: is $420 the total settlement, or the minimum for each payment?", title "Asked whether $420 is the total or per payment", cause `nlu_flag` (Haiku flagged it). Automated Chrome refused speech ("Speech playback failed; continuing the turn."), the known no-gesture limit.
+- URL: view toggle and card clicks push history; back, back, forward restored rep/no_space, operator/no_space as expected.
+- 390 px (same-origin 390 px iframe; the window does not resize to phone width): `scrollWidth == clientWidth` (388), header and end-of-call line fit.
+- Screenshots: `../dsa-orch-tools/p48-shots/` (`negotiator-live-call-model-badge.jpg`, `negotiator-haggling-ladder.jpg`, `negotiator-handoff-no-space.jpg`, `rep-handoff-no-space.jpg`, `rep-haggling-deal.jpg`, `390-header.png`).
+- Review server: `cd web && npm ci && npm run build && cd .. && uv run uvicorn app.main:app --port 8048`, then open http://127.0.0.1:8048/?scenario=haggling_rep&view=operator.
+
+#### Checks
+
+`uv run ruff check .` clean. `uv run pytest -q` 1174 passed / 2 skipped / 26 xfailed (incl. slow). Fast suite with `.env` moved aside (restored): 1170 passed / 2 skipped / 4 deselected / 26 xfailed. Oracle eval `eval_20261009_084308_s7` thresholds PASS (policy unchanged). Web as CI: `npm ci && npm run gen:types && git diff --exit-code src/types/events.ts && npm run typecheck && npm run lint && npm test && npm run build` green (115 tests).
+
+#### Open issues
+
+- NLG bank says "1 payments" ("We could set 1 payments totaling $500", late_start_date autoplay).
+- Phone card row does not scroll the selected card into view (a URL-selected card can sit off screen).
+- A COUNTER_TERMS row shows the rep's ask as its key number (e.g. 40%), which can read as our offer.
+- `web/README.md` screenshots predate Phases 35, 36 and 48.

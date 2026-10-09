@@ -1424,6 +1424,230 @@
       "title": "TraceBeliefChange",
       "type": "object"
     },
+    "TraceNote": {
+      "additionalProperties": false,
+      "description": "A step of the turn worth telling in words, from its audit row (Phase 48).\n\n``acked``: code acknowledged ``fields`` (and ``total`` cents) before the\nmove. ``ack_corrected`` / ``ack_disputed``: the rep corrected or disputed\nan acked ``field`` (``old_value`` → ``new_value``). ``amount_held``: a dollar\namount (``cents``, ``quote``) was held back for the total-or-per-payment\nquestion, ``trigger`` says why. ``*_dropped``: a pending question was\ndropped, ``reason`` ``new_terms`` | ``interrupt``. ``amount_clarify_resolved``:\nthe rep answered it (``total`` or ``new_value`` = per-payment cents).",
+      "properties": {
+        "cents": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cents"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field"
+        },
+        "fields": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fields"
+        },
+        "kind": {
+          "enum": [
+            "acked",
+            "ack_corrected",
+            "ack_disputed",
+            "cents_clarify_dropped",
+            "amount_held",
+            "amount_clarify_dropped",
+            "amount_clarify_resolved"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "new_value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "New Value"
+        },
+        "old_value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Old Value"
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quote"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "total": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total"
+        },
+        "trigger": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trigger"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "TraceNote",
+      "type": "object"
+    },
+    "TraceReader": {
+      "additionalProperties": false,
+      "description": "Who read the rep's line this turn (Phase 48). Operator only, like the trace.\n\n``kind``: ``llm`` (a model; ``provider`` / ``model`` name it), ``code`` (a\ndeterministic fast path such as a bare \"Correct.\" to a read-back), or\n``script`` (oracle NLU: the simulated rep hands over its own reading).\n``fallback``: the answering model was not the route's first choice;\n``budget_reached``: a paid target was skipped for today's budget first.",
+      "properties": {
+        "budget_reached": {
+          "default": false,
+          "title": "Budget Reached",
+          "type": "boolean"
+        },
+        "cache_hit": {
+          "default": false,
+          "title": "Cache Hit",
+          "type": "boolean"
+        },
+        "fallback": {
+          "default": false,
+          "title": "Fallback",
+          "type": "boolean"
+        },
+        "kind": {
+          "enum": [
+            "llm",
+            "code",
+            "script"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "provider": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "TraceReader",
+      "type": "object"
+    },
     "TraceTerm": {
       "additionalProperties": false,
       "description": "A term NLU extracted and ``post_verify`` kept; ``quote`` is a span of the rep line.",
@@ -1639,6 +1863,32 @@
         },
         "nlg": {
           "$ref": "#/$defs/NlgTrace"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TraceNote"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "reader": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TraceReader"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "spoken": {
           "items": {

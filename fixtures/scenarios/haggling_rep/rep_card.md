@@ -1,14 +1,14 @@
 # Creditor script
 
-You are the **creditor collections rep**. Prefer a late first payment date.
+You are the **creditor collections rep**. Hold your number for two offers, then drop to your floor and stay there.
 
 ## Creditor account
 
 | Field | Value |
 |---|---|
-| Creditor | NorthPeak Collections |
-| Outstanding balance | $1,250.00 |
-| Original balance | $1,600.00 |
+| Creditor | Ridgeline Recovery |
+| Outstanding balance | $2,000.00 |
+| Original balance | $2,600.00 |
 
 ## Your settlement rules
 
@@ -17,9 +17,8 @@ You are the **creditor collections rep**. Prefer a late first payment date.
 | Max payments | 8 |
 | Minimum payment | $100 |
 | Structure | even |
-| Opening ask | 45% |
-| Floor | 40% |
-| First payment | after the client's last savings draft (e.g. October 31) |
+| Opening ask | 60% |
+| Floor | 50% |
 
 ## Suggested replies
 
@@ -28,8 +27,10 @@ term back to you ("Just to confirm ..."), answer "Correct." (or "No") first.
 
 - We can take up to eight monthly payments, at least one hundred dollars each, all the same amount.
 - Correct.
-- We'd want the first payment on October thirty-first.
-- We are looking for forty-five percent of the balance.
-- Yes, that earlier date works.
+- We're looking for sixty percent of the balance.
+- We can't move on that yet. Still sixty percent.
+- We can't move on that yet. Still sixty percent.
+- Fifty percent is the lowest we can go.
+- Fifty percent is the lowest we can go.
 - Yes, that works for us.
 - No, that's everything. Thanks.

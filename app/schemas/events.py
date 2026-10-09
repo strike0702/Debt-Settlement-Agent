@@ -120,6 +120,59 @@ class SpokenSentence(_Model):
     text: str
 
 
+class TraceReader(_Model):
+    """Who read the rep's line this turn (Phase 48). Operator only, like the trace.
+
+    ``kind``: ``llm`` (a model; ``provider`` / ``model`` name it), ``code`` (a
+    deterministic fast path such as a bare "Correct." to a read-back), or
+    ``script`` (oracle NLU: the simulated rep hands over its own reading).
+    ``fallback``: the answering model was not the route's first choice;
+    ``budget_reached``: a paid target was skipped for today's budget first.
+    """
+
+    kind: Literal["llm", "code", "script"]
+    provider: str | None = None
+    model: str | None = None
+    fallback: bool = False
+    budget_reached: bool = False
+    cache_hit: bool = False
+
+
+TraceNoteKind = Literal[
+    "acked",
+    "ack_corrected",
+    "ack_disputed",
+    "cents_clarify_dropped",
+    "amount_held",
+    "amount_clarify_dropped",
+    "amount_clarify_resolved",
+]
+
+
+class TraceNote(_Model):
+    """A step of the turn worth telling in words, from its audit row (Phase 48).
+
+    ``acked``: code acknowledged ``fields`` (and ``total`` cents) before the
+    move. ``ack_corrected`` / ``ack_disputed``: the rep corrected or disputed
+    an acked ``field`` (``old_value`` → ``new_value``). ``amount_held``: a dollar
+    amount (``cents``, ``quote``) was held back for the total-or-per-payment
+    question, ``trigger`` says why. ``*_dropped``: a pending question was
+    dropped, ``reason`` ``new_terms`` | ``interrupt``. ``amount_clarify_resolved``:
+    the rep answered it (``total`` or ``new_value`` = per-payment cents).
+    """
+
+    kind: TraceNoteKind
+    field: str | None = None
+    fields: list[str] | None = None
+    old_value: TermValue = None
+    new_value: TermValue = None
+    cents: int | None = None
+    total: int | None = None
+    quote: str | None = None
+    trigger: str | None = None
+    reason: str | None = None
+
+
 class TurnTrace(_Model):
     """Everything one agent turn did, in pipeline order (``Utterance.trace``)."""
 
@@ -136,6 +189,11 @@ class TurnTrace(_Model):
     # required engine fields still missing (``[]`` = the move did not need the
     # engine). The rep stream carries no ``turn_trace`` at all.
     needs_info: list[str] | None = None
+    # Phase 48, set by the WS layer from the turn's audit rows on rep turns:
+    # who read the rep's line, and notable steps (acks, corrections, held-back
+    # amounts, dropped questions). Absent on older frames and the opening.
+    reader: TraceReader | None = None
+    notes: list[TraceNote] | None = None
     decide: Decide
     # Our counter or confirmed bp when this move speaks one (public once said).
     counter_bp: int | None

@@ -11,6 +11,10 @@
  *
  * Keyboard: Tab indents (two spaces). Esc, then Tab, leaves the editor, so the
  * textarea is never a keyboard trap.
+ *
+ * Phase 48: while the text differs from what the editor opened with, leaving
+ * or reloading the page asks first (`beforeunload`); saving or cancelling
+ * closes the editor and drops the warning.
  */
 import { AlertCircle, CheckCircle2, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
@@ -79,6 +83,18 @@ export function CaseEditor({ mode, initialText, templateText, onSave, onCancel }
   const headingId = useId();
   const helpId = useId();
   const statusId = useId();
+
+  // Unsaved text: let the browser ask before a reload or close throws it away.
+  const dirty = text !== initialText;
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   // Check a moment after typing stops; a newer edit cancels the older request.
   useEffect(() => {

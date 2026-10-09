@@ -36,7 +36,8 @@ describe("DecisionTrace", () => {
     expect(rows[0]).toHaveAccessibleName("Turn 6");
     expect(rows.at(-1)).toHaveAccessibleName("Turn 0");
     const turn2 = within(row(2));
-    expect(turn2.getByText("Countered at 32%")).toBeInTheDocument();
+    expect(turn2.getByText("Made a first offer of 32%")).toBeInTheDocument();
+    expect(within(row(3)).getByText("Raised our offer by half their drop, to 37%")).toBeInTheDocument();
     expect(turn2.getByText("32%")).toBeInTheDocument();
     expect(turn2.getByText("A step toward their ask that the client can afford.")).toBeInTheDocument();
   });
@@ -139,7 +140,8 @@ describe("traceStory", () => {
     const m = byTurn();
     expect(turnTitle(m.get(0)!)).toBe("Opened the call");
     expect(turnTitle(m.get(1)!)).toBe("Asked what they would settle for");
-    expect(turnTitle(m.get(2)!)).toBe("Countered at 32%");
+    expect(turnTitle(m.get(2)!)).toBe("Made a first offer of 32%");
+    expect(turnTitle(m.get(3)!, traces())).toBe("Raised our offer by half their drop, to 37%");
     expect(turnTitle(m.get(4)!)).toBe("Accepted 40%");
     expect(turnTitle(m.get(5)!)).toBe("Sent the deal to the client");
     expect(turnTitle(m.get(6)!)).toBe("Closed the call");

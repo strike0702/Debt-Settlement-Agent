@@ -6,6 +6,8 @@
  * card, and a text box. `onSend` / `onMicToggle` are wired by App to the
  * call socket and `useVoice`; when absent (replay, no call) their controls
  * are disabled. `interim` is the voice cue or a live browser-STT partial.
+ * `ended` (Phase 48) closes the transcript with a quiet line saying how the
+ * call ended ("Call ended: handed off to a specialist").
  */
 import { Mic, MicOff, Send, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -24,6 +26,8 @@ export interface ConversationProps {
   onSend?: (text: string) => void;
   onMicToggle?: () => void;
   emptyHint: string;
+  /** Shown under the last bubble once the call is over (how it ended). */
+  ended?: string | null;
   /** Placeholder for the text box when sending is disabled. */
   idleHint?: string;
   interim?: string;
@@ -48,6 +52,7 @@ export function Conversation({
   onSend,
   onMicToggle,
   emptyHint,
+  ended,
   idleHint = "Replaying a recorded call",
   interim,
   notice,
@@ -61,7 +66,7 @@ export function Conversation({
   useEffect(() => {
     const el = log.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, interim]);
+  }, [messages.length, interim, ended]);
 
   const send = (text: string) => {
     if (!onSend || !text.trim()) return;
@@ -121,6 +126,13 @@ export function Conversation({
         {interim && (
           <p className="self-end text-sm italic text-muted" aria-live="polite" data-testid="interim">
             {interim}
+          </p>
+        )}
+        {ended && messages.length > 0 && (
+          <p className="my-1 flex items-center gap-3 text-sm text-muted" data-testid="call-ended">
+            <span className="h-px flex-1 bg-border" aria-hidden />
+            <span className="text-center text-balance">{ended}</span>
+            <span className="h-px flex-1 bg-border" aria-hidden />
           </p>
         )}
       </div>

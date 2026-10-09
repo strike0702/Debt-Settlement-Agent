@@ -7,6 +7,8 @@
  * rep view in the middle of a Debt negotiator call. The rep stream carries no
  * decision trace, so `turn_trace` is dropped. Components also refuse to render
  * private fields in the creditor lens, so a leak needs both layers to fail.
+ * Phase 48: the policy's reason code (handoff `escalate.reason`, `reason` in
+ * `policy/decide` audit rows) is dropped too, as on the server.
  */
 import type { CallEvent } from "@/lib/callState";
 import type { EvalEvent, ScheduleRow } from "@/types/protocol";
@@ -38,8 +40,14 @@ export function toRepView(ev: CallEvent): CallEvent | null {
     }
     case "turn_trace":
       return null;
-    case "audit":
-      return ev.private ? null : ev;
+    case "escalate":
+      return { ...ev, reason: null };
+    case "audit": {
+      if (ev.private) return null;
+      if (ev.actor !== "policy" || typeof ev.payload !== "object" || ev.payload === null) return ev;
+      const { reason: _code, ...rest } = ev.payload as Record<string, unknown>;
+      return { ...ev, payload: rest };
+    }
     default:
       return ev;
   }

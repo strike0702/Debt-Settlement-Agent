@@ -34,7 +34,7 @@ export const FIXTURE_SCENARIOS: ScenarioMeta[] = [
   {
     id: "easy_deal",
     title: "Easy deal",
-    description: "Even payments, 45% ask, reaches WRAP with the scripted replies.",
+    description: "The rep asks for 45%. The agent offers less, then settles at their lowest number.",
     expected: "deal",
     suggested: [
       "Sure. We can take up to eight monthly payments, at least one hundred dollars each, all the same amount.",

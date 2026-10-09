@@ -177,6 +177,8 @@ export interface TurnTraceEvent {
   dropped: DroppedTerm[];
   needs_info?: string[] | null;
   nlg: NlgTrace;
+  notes?: TraceNote[] | null;
+  reader?: TraceReader | null;
   spoken: SpokenSentence[];
   stance: ("offer" | "counter" | "accept" | "reject" | "stall" | "info" | "question" | "other") | null;
   terms: TraceTerm[];
@@ -241,6 +243,53 @@ export interface GuardResult {
   ok: boolean;
   reason?: string | null;
   stage: "template" | "unfilled" | "rendered";
+}
+/**
+ * A step of the turn worth telling in words, from its audit row (Phase 48).
+ *
+ * ``acked``: code acknowledged ``fields`` (and ``total`` cents) before the
+ * move. ``ack_corrected`` / ``ack_disputed``: the rep corrected or disputed
+ * an acked ``field`` (``old_value`` → ``new_value``). ``amount_held``: a dollar
+ * amount (``cents``, ``quote``) was held back for the total-or-per-payment
+ * question, ``trigger`` says why. ``*_dropped``: a pending question was
+ * dropped, ``reason`` ``new_terms`` | ``interrupt``. ``amount_clarify_resolved``:
+ * the rep answered it (``total`` or ``new_value`` = per-payment cents).
+ */
+export interface TraceNote {
+  cents?: number | null;
+  field?: string | null;
+  fields?: string[] | null;
+  kind:
+    | "acked"
+    | "ack_corrected"
+    | "ack_disputed"
+    | "cents_clarify_dropped"
+    | "amount_held"
+    | "amount_clarify_dropped"
+    | "amount_clarify_resolved";
+  new_value?: number | string | number[][] | null;
+  old_value?: number | string | number[][] | null;
+  quote?: string | null;
+  reason?: string | null;
+  total?: number | null;
+  trigger?: string | null;
+}
+/**
+ * Who read the rep's line this turn (Phase 48). Operator only, like the trace.
+ *
+ * ``kind``: ``llm`` (a model; ``provider`` / ``model`` name it), ``code`` (a
+ * deterministic fast path such as a bare "Correct." to a read-back), or
+ * ``script`` (oracle NLU: the simulated rep hands over its own reading).
+ * ``fallback``: the answering model was not the route's first choice;
+ * ``budget_reached``: a paid target was skipped for today's budget first.
+ */
+export interface TraceReader {
+  budget_reached?: boolean;
+  cache_hit?: boolean;
+  fallback?: boolean;
+  kind: "llm" | "code" | "script";
+  model?: string | null;
+  provider?: string | null;
 }
 export interface SpokenSentence {
   id: string;

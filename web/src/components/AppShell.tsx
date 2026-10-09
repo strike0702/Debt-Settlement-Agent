@@ -197,7 +197,7 @@ function ScenarioCard({
       >
         {/* Only the title makes room for the edit / remove icons in the corner. */}
         <span className={cn("font-semibold break-words", hasActions && "pr-16")}>{s.title}</span>
-        {s.description && <span className="line-clamp-3 text-sm text-muted">{s.description}</span>}
+        {s.description && <span className="line-clamp-4 text-sm text-pretty text-muted">{s.description}</span>}
         <span className="mt-auto flex flex-wrap items-center gap-1.5 pt-2">
           {s.custom && <Badge tone="accent">Custom</Badge>}
           <span className="text-xs text-faint">Expected outcome</span>

@@ -1,5 +1,5 @@
 {
   "title": "Balloon structure",
-  "description": "Rep requires balloon-friendly structure.",
+  "description": "The rep allows a bigger last payment. The agent plans around it and settles.",
   "expected": "deal"
 }

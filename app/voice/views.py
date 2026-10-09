@@ -6,7 +6,11 @@ unchanged except that audit rows carry ``private: true`` when the rep may not
 see them. The rep ("Creditor rep") stream gets no ``turn_trace`` at all (the
 decision trace is the negotiator's tool, Phase 35), and drops ``max_bp``, firm
 fees, the client's savings balances, rescue amounts, ``blocked.offending`` and
-private audit rows. Returns ``None`` when a frame must not be sent at all.
+private audit rows. Phase 48: it also drops the policy's reason code (the
+``escalate.reason`` of a handoff and the ``reason`` of ``policy/decide`` rows),
+since codes such as ``above_accept_line`` or ``out_of_guardrail`` tell the rep
+why the agent stopped; the rep keeps the spoken ``escalate_reason``. Returns
+``None`` when a frame must not be sent at all.
 
 Policy, NLG and the audit log are unchanged; this only filters what leaves the
 socket. Tested by running whole calls on the rep view and scanning every frame
@@ -94,7 +98,11 @@ def redact_for_view(payload: dict[str, Any], view: View) -> dict[str, Any] | Non
         private = is_private_audit(str(payload.get("actor")), str(payload.get("event")))
         if view == "rep" and private:
             return None
-        return {**payload, "private": private}
+        out = {**payload, "private": private}
+        body = out.get("payload")
+        if view == "rep" and payload.get("actor") == "policy" and isinstance(body, dict):
+            out["payload"] = {k: v for k, v in body.items() if k != "reason"}
+        return out
     if view == "operator":
         return payload
 
@@ -109,4 +117,6 @@ def redact_for_view(payload: dict[str, Any], view: View) -> dict[str, Any] | Non
         out["rows"] = _rep_rows(out.get("rows")) or []
     elif kind == "blocked":
         out.pop("offending", None)
+    elif kind == "escalate":
+        out["reason"] = None
     return out

@@ -1,5 +1,5 @@
 {
   "title": "Haggling rep",
-  "description": "The rep holds twice. The agent holds, steps up, offers once more, then accepts.",
+  "description": "The agent holds, steps up, makes a last offer, then accepts the rep's lowest number.",
   "expected": "deal"
 }

@@ -20,9 +20,11 @@ import { MIC_LABEL, type MicState } from "@/lib/mic";
 export interface ConversationProps {
   messages: ChatMessage[];
   mic: MicState;
+  /**
+   * Rep lines to click, shown once each (Phase 50b). All look the same: no "next"
+   * highlight, since a rep who haggles their own way makes the scripted order meaningless.
+   */
   suggested: string[];
-  /** Index of the next suggestion the scripted call would say (highlighted). */
-  nextSuggested?: number;
   onSend?: (text: string) => void;
   onMicToggle?: () => void;
   emptyHint: string;
@@ -48,7 +50,6 @@ export function Conversation({
   messages,
   mic,
   suggested,
-  nextSuggested,
   onSend,
   onMicToggle,
   emptyHint,
@@ -68,6 +69,8 @@ export function Conversation({
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, interim, ended]);
 
+  // Scripts repeat lines (a rep restates their number); the list shows each once, in first order.
+  const unique = [...new Set(suggested)];
   const send = (text: string) => {
     if (!onSend || !text.trim()) return;
     onSend(text.trim());
@@ -148,19 +151,18 @@ export function Conversation({
         </div>
       )}
 
-      {suggested.length > 0 && (
+      {unique.length > 0 && (
         <div className="border-t border-border px-4 pt-3">
           <p className="mb-2 text-sm text-muted">Suggested rep replies</p>
           <ul className="flex flex-col gap-1.5">
-            {suggested.map((s, i) => (
+            {unique.map((s) => (
               <li key={s}>
                 <button
                   type="button"
                   disabled={!onSend}
                   onClick={() => send(s)}
                   className={cn(
-                    "w-full rounded-lg border px-3 py-1.5 text-left text-sm",
-                    i === nextSuggested ? "border-accent text-fg" : "border-border text-muted",
+                    "w-full rounded-lg border border-border px-3 py-1.5 text-left text-sm text-muted",
                     onSend ? "cursor-pointer hover:bg-surface-2" : "cursor-default",
                   )}
                 >

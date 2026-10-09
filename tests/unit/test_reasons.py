@@ -148,6 +148,7 @@ _PLACEHOLDERS_BEFORE: dict[str, set[str]] = {
     "counter": {"counter_pct", "offer_total"},
     "counter_no_total": {"counter_pct"},
     "alt_first_payment_date": {"alt_first_payment_date"},
+    "alt_first_payment_date_assumed": {"alt_first_payment_date"},
     "alt_min_payment_cents": {"alt_min_payment_cents"},
     "alt_max_payments": {"alt_max_payments"},
     **{
@@ -176,8 +177,9 @@ def test_rewrite_kept_every_key_and_placeholder() -> None:
         assert names == _PLACEHOLDERS_BEFORE.get(key, set()), key
     # +2 in Phase 39: amount_meaning(_unresolved). Phase 45: -2 (gap_small,
     # ladder_stalled), +7 (hold, step, final_counter, rep_held, above_accept_line,
-    # repeated_question, no_progress).
-    assert len(REASON_TEXT) == 52
+    # repeated_question, no_progress). Phase 50b: +1 display variant
+    # (alt_first_payment_date_assumed).
+    assert len(REASON_TEXT) == 53
 
 
 _JARGON = ("ladder", "read back", "read-back", "wrap", "hedged", "engine", "policy", "feasible")
@@ -199,3 +201,40 @@ def test_short_forms_cover_every_reason_and_carry_no_numbers() -> None:
     assert reason_short(Intent.COUNTER, "bp=4900") == REASON_SHORT["counter"]
     assert reason_short(Intent.ASK, "max_payments") == REASON_SHORT["ask_field"]
     assert reason_short(Intent.CLOSE, "brand_new_code") is None
+
+
+def test_step_wording_describes_two_equal_steps() -> None:
+    """Phase 50b: Phase 50's steps are equal halves of the gap, not "small steps"."""
+    pct = Fact(id="counter_pct", kind="pct", value=5900, visibility="PUBLIC", source="engine")
+    step = Action(
+        intent=Intent.COUNTER, facts={"counter_pct": pct}, next_phase=Phase.NEGOTIATE, reason="step"
+    )
+    text = reason_text(step, _REF)
+    assert text.startswith("We move up to 59%")
+    assert "two equal steps" in text and "halfway" in text and "our limit" in text
+    for key in ("step", "rep_held"):
+        assert "small" not in REASON_TEXT[key] and "small" not in REASON_SHORT[key], key
+        assert "little" not in REASON_TEXT[key], key
+    assert "equal steps" in REASON_SHORT["step"]
+    assert "both steps" in REASON_TEXT["rep_held"]
+
+
+@pytest.mark.parametrize("rep_stated", [True, False])
+def test_start_date_alt_reason_does_not_blame_an_assumed_date(rep_stated: bool) -> None:
+    """Phase 50b: the start date the rep never gave is ours, not "their start date"."""
+    from app.agent.policy import _counter_terms_action
+
+    action = _counter_terms_action(
+        field="first_payment_date", value=date(2026, 4, 15), effects=[], rep_stated=rep_stated
+    )
+    text = reason_text(action, _REF)
+    assert "April 15" in text
+    if rep_stated:
+        assert "start date they asked for" in text
+    else:
+        assert text.startswith("We ask whether payment could start on")
+        assert "they asked for" not in text and "their" not in text.lower()
+    # The short form is keyed by code only, so it is neutral for both.
+    short = reason_short(action.intent, action.reason)
+    assert short == "Asked for a start date that fits the client's plan."
+    assert "their" not in short.lower()

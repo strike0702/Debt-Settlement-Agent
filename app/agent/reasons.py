@@ -40,7 +40,8 @@ PUBLIC_PLACEHOLDERS: frozenset[str] = frozenset(
 
 # One full sentence per reason, written for a newcomer reading the trace ("we"
 # is the agent). Phase 36 rewrote the wording; Phase 45 turned every no-deal
-# ending into a handoff (same codes) and added the ladder and loop-guard codes.
+# ending into a handoff (same codes) and added the ladder and loop-guard codes;
+# Phase 50b reworded ``step`` / ``rep_held`` for Phase 50's two equal steps.
 REASON_TEXT: dict[str, str] = {
     # Opening and discovery
     "opening": (
@@ -90,8 +91,9 @@ REASON_TEXT: dict[str, str] = {
         "did not move since our last offer."
     ),
     "step": (
-        "We move up a little to {counter_pct}, because the rep is holding their number "
-        "and we take two small steps before deciding."
+        "We move up to {counter_pct}, because the rep is holding their number. We take two "
+        "equal steps: halfway to their number or our limit, whichever is lower, then the "
+        "rest of the way."
     ),
     "final_counter": (
         "The rep says they cannot go lower, so we make one last offer of {counter_pct}, "
@@ -110,8 +112,8 @@ REASON_TEXT: dict[str, str] = {
         "and it is within our limit for this client."
     ),
     "rep_held": (
-        "We agree to {settlement_pct}: the rep held their number through our pause and two "
-        "small steps, and it is within our limit for this client."
+        "We agree to {settlement_pct}: the rep held their number through our pause and both "
+        "steps, and it is within our limit for this client."
     ),
     "counters_exhausted": (
         "We agree to {settlement_pct} because we have made every counteroffer we are "
@@ -129,6 +131,13 @@ REASON_TEXT: dict[str, str] = {
     "alt_first_payment_date": (
         "We suggest a first payment on {alt_first_payment_date}, because with the start "
         "date they asked for, no payment plan fits the client's savings."
+    ),
+    # Display variant (not a reason code): the rep never gave a start date, so the
+    # date that did not fit was our assumed default, not theirs (Phase 50 item 2).
+    "alt_first_payment_date_assumed": (
+        "We ask whether payment could start on {alt_first_payment_date}, because the rep "
+        "has not given a start date and that one lets a payment plan fit the client's "
+        "savings."
     ),
     "alt_min_payment_cents": (
         "We suggest a lower minimum payment of {alt_min_payment_cents}, because their "
@@ -251,7 +260,7 @@ REASON_SHORT: dict[str, str] = {
     "counter": "A step toward their ask, within our limit.",
     "counter_no_total": "A step toward their ask, within our limit.",
     "hold": "They did not move, so we hold our offer.",
-    "step": "They are holding, so we take a small step.",
+    "step": "They are holding, so we close the gap in two equal steps.",
     "final_counter": "They will not go lower; one last offer halfway.",
     "confirm": "The client can afford it, so we ask for a yes.",
     "ask_within_offer": "Their ask is no more than our own offer.",
@@ -260,7 +269,10 @@ REASON_SHORT: dict[str, str] = {
     "counters_exhausted": "No counteroffers left, and their ask is within our limit.",
     "no_lower_counter": "No lower offer could be scheduled.",
     "terms_revised": "The rules changed since we last confirmed.",
-    "alt_first_payment_date": "Their start date leaves no affordable plan.",
+    # Neutral on purpose: ``app.voice.ws`` keys the short form by reason code only,
+    # and the same code covers a start date the rep gave and one we assumed.
+    "alt_first_payment_date": "Asked for a start date that fits the client's plan.",
+    "alt_first_payment_date_assumed": "Asked for a start date that fits the client's plan.",
     "alt_min_payment_cents": "Their minimum payment blocks every affordable plan.",
     "alt_max_payments": "More payments make a better offer affordable.",
     "confirmed": "The rep agreed; the client approves next.",
@@ -336,11 +348,22 @@ def reason_short(intent: Intent | str, reason: str | None) -> str | None:
     return REASON_SHORT.get(reason_key(intent, reason))
 
 
+def _objects_to_rep_date(action: Action) -> bool:
+    """Whether the start-date alt objects to a date the rep gave (vs our assumed default).
+
+    The reason code is the same either way; ``policy._counter_terms_action`` only
+    says "does not fit" when the rep stated the date, so the spoken template tells.
+    """
+    return "does not fit" in (action.template_override or "does not fit")
+
+
 def reason_text(action: Action, ref: date) -> str:
     """One plain-English sentence for ``action.reason``, filled from PUBLIC facts only."""
     key = reason_key(action.intent, action.reason)
     if key == "counter" and "offer_total" not in action.facts:
         key = "counter_no_total"
+    if key == "alt_first_payment_date" and not _objects_to_rep_date(action):
+        key = "alt_first_payment_date_assumed"
     template = REASON_TEXT.get(key)
     if template is None:
         return _GENERIC.format(intent=action.intent.value.replace("_", " ").lower())

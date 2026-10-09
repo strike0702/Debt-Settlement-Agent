@@ -17,8 +17,8 @@ You are the **creditor collections rep**. Hold your number for two offers, then 
 | Max payments | 8 |
 | Minimum payment | $100 |
 | Structure | even |
-| Opening ask | 60% |
-| Floor | 50% |
+| Opening ask | 70% |
+| Floor | 65% |
 
 ## Suggested replies
 
@@ -27,10 +27,10 @@ term back to you ("Just to confirm ..."), answer "Correct." (or "No") first.
 
 - We can take up to eight monthly payments, at least one hundred dollars each, all the same amount.
 - Correct.
-- We're looking for sixty percent of the balance.
-- We can't move on that yet. Still sixty percent.
-- We can't move on that yet. Still sixty percent.
-- Fifty percent is the lowest we can go.
-- Fifty percent is the lowest we can go.
+- We're looking for seventy percent of the balance.
+- We can't move on that yet. Still seventy percent.
+- We can't move on that yet. Still seventy percent.
+- Sixty-five percent is the lowest we can go.
+- Sixty-five percent is the lowest we can go.
 - Yes, that works for us.
 - No, that's everything. Thanks.

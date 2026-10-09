@@ -1621,3 +1621,20 @@ Every reason sentence, before and after:
   - `uv run pytest -q`: 955 passed / 2 skipped / 26 xfailed;
   - fast suite (`-m "not slow"`) with `.env` moved aside (restored): 952 passed / 2 skipped / 3 deselected / 26 xfailed;
   - oracle eval `eval_20261008_181232_s7` thresholds PASS, metrics unchanged (turns_to_outcome 5.12, surplus_captured 0.689, stuck 0, leaks 0).
+
+### Phase 44 (Groq check of the P43 prompt) (2026-10-09) — free-tier Groq `gpt-oss-120b` on the P43 NLU prompt (user-approved; not in REVIEW_PLAN; measurement only)
+
+- Outcome: **measured, no fix.** `app/`, `config/providers.yaml`, prompts, NLU rules, policy, reason codes and thresholds are unchanged. Full write-up: `docs/eval/nlu_groq_20261009/summary.md`.
+- Files: new `docs/eval/nlu_groq_20261009/{providers_groq.yaml,summary.md}`; raw `docs/eval/nlu_corpus_{groq_p44,amounts_groq_p44,heldout_stance_groq_p44,groq_p44_no_guard}.jsonl`; `docs/eval/nlu_corpus.md` (sections `GROQ_P44`, `AMOUNTS_GROQ_P44`, `HELDOUT_STANCE_GROQ_P44`, `GROQ_P44_NO_GUARD`, note "Phase 44"). No code or test change.
+- Interfaces: eval-only providers file `docs/eval/nlu_groq_20261009/providers_groq.yaml`, profile `groq_nlu`, `nlu: [groq/openai/gpt-oss-120b]` (the demo route's Groq entry, no params, 6 s role timeout), groq provider block copied from `config/providers.yaml`, no fallback, no Anthropic.
+- Runs: free tier only, four Groq keys (`GROQ_API_KEY_1`..`_4`), one model per row, $0. The first main pass answered 180/183 (f15, t03, x04 skipped on per-minute 429s and limiter-wait timeouts); a rerun of the same label replayed the cache and filled them. The daily cap was not hit. 225 live calls, 323,409 in / 124,819 out tokens.
+- Results (main corpus; vs `FILLER_BEFORE` = Groq on the pre-P39 prompt at `9998a65`, and vs `HAIKU_P43_FIX`):
+  - stance accuracy **0.885** (0.672 / 0.869); private-info recall **1.000** (0.824 / 1.000); terms 62/66 (61 / 62); filler false accepts 1, f23 (0 / 0).
+  - F1 drops > 0.03 vs FILLER_BEFORE: hostility 0.750 → 0.333 (FN x01–x04), wants_to_end 0.667 → 0.632 (new FP c05), accept 1.000 → 0.957 (FP f23).
+  - Guard on / off (`--no-repair-stance`, current `main`, before Phase 45): stance 0.885 / 0.863; accept F1 0.957 / 0.762; other 0.754 / 0.698. The phrase rules changed no line; short-ack (f10, f19, f20) and injection (i02) changed 4, all helped.
+  - Held-out stance set: stance 0.969 (Haiku 0.969), private-info recall 0.833 (hs28), terms 14/16.
+  - Amounts: 12/14. **am09 (the user's $420 sentence) is read as a $420 total, not ambiguous**, so no "total or per payment?" question; am10 likewise. Same as `AMOUNTS_P39`.
+  - Latency (audit, successful live calls): main p50 1604 ms, p95 2179 ms; all 225 calls p50 1594 / p95 2177 ms.
+- Deviations: (1) `CEREBRAS_P44` (optional) not run: no `CEREBRAS_API_KEY` in the worktree `.env`. (2) The guard-off rescore is written as its own row `GROQ_P44_NO_GUARD` (like `HAIKU_P40_NO_GUARD`).
+- Open issues: (a) Groq does not flag am09 / am10 ambiguous on the P43 prompt; a verified total with an exact count in the same sentence asks nothing (option in summary: a code-side question trigger, later phase). (b) Groq hostility recall 0.2 on one run. (c) The `nlu_corpus.md` header (from `eval/nlu_corpus.py` `_HEADER`) still says the demo route starts with Sonnet and quotes ~230K tokens per Groq pass; on the P43 prompt it is ~357K (about 2.0K per call), so two Groq keys (400K/day) cover one pass with little margin. (d) Cerebras on the P43 prompt unmeasured. (e) One run only; Groq drifts by several lines between days.
+- Checks: `uv run ruff check .` clean; `uv run pytest -q` 955 passed / 2 skipped / 26 xfailed.

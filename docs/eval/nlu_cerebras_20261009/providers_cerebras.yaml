@@ -1,0 +1,20 @@
+# Eval-only providers file for Phase 44b (Cerebras check of the P43 NLU prompt).
+# Not a shipped profile: use with
+#   python -m eval.nlu_corpus --providers <this file> --profile cerebras_nlu
+# The nlu route is the demo route's Cerebras entry alone (cerebras/gpt-oss-120b,
+# no params, no timeout_s, so the 6 s NLU role timeout applies), with no
+# fallback, so a run cannot mix models. Free tier only: no Anthropic provider.
+# The cerebras provider block is copied from config/providers.yaml.
+profiles:
+  cerebras_nlu:
+    nlu:
+      - cerebras/gpt-oss-120b
+
+providers:
+  cerebras:
+    base_url: "https://api.cerebras.ai/v1"
+    key_env: CEREBRAS_API_KEY
+    # Free tier, gpt-oss-120b: 5 RPM, 30K uncached TPM, 1M tokens/day.
+    rpm: 5
+    tpm: 30000
+    json_mode: true

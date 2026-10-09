@@ -12,6 +12,8 @@ for the orchestrator's decision trace; it never changes what is spoken.
 
 Phase 24b (H3): ``render_acts`` speaks an action's optional ``ack`` and
 ``answer`` acts as short leading sentences, each through the same two guards.
+Phase 46b: the default agent's code-built ack (``Settings.nlg_ack``) uses
+``ack_template`` (2–3 wordings per shape, rotated by turn), never the bank or LLM.
 A guard-failed act is dropped (audited), never replaced by ``SAFE_FALLBACK``,
 so the primary move is spoken unchanged. ``speak_action`` passes the last few
 public turns (``recent_turns``) to the LLM prompt instead of one rep line.
@@ -110,24 +112,86 @@ TEMPLATES: dict[Intent, str] = {
 }
 
 
-# Acknowledgement templates keyed by the sorted ``ack_*`` ids present.
-ACK_TEMPLATES: dict[tuple[str, ...], str] = {
-    ("ack_max_payments",): "Got it, up to {ack_max_payments} payments.",
-    ("ack_min_payment",): "Got it, a {ack_min_payment} minimum payment.",
-    ("ack_first_payment_date",): "Got it, starting {ack_first_payment_date}.",
+# Acknowledgement bodies keyed by the sorted term ``ack_*`` ids present; the
+# first body of each is the H3 wording (Phase 24b). An ack line is
+# "<opener>, <total body>, <term body>." (the total, Phase 46b, leads).
+_ACK_TERM_BODIES: dict[tuple[str, ...], tuple[str, ...]] = {
+    ("ack_max_payments",): (
+        "up to {ack_max_payments} payments",
+        "a maximum of {ack_max_payments} payments",
+    ),
+    ("ack_min_payment",): (
+        "a {ack_min_payment} minimum payment",
+        "at least {ack_min_payment} per payment",
+    ),
+    ("ack_first_payment_date",): (
+        "starting {ack_first_payment_date}",
+        "with payments beginning {ack_first_payment_date}",
+    ),
     ("ack_max_payments", "ack_min_payment"): (
-        "Got it, {ack_max_payments} payments at a {ack_min_payment} minimum."
+        "{ack_max_payments} payments at a {ack_min_payment} minimum",
+        "up to {ack_max_payments} payments, at least {ack_min_payment} each",
     ),
     ("ack_first_payment_date", "ack_max_payments"): (
-        "Got it, {ack_max_payments} payments starting {ack_first_payment_date}."
+        "{ack_max_payments} payments starting {ack_first_payment_date}",
+        "up to {ack_max_payments} payments, beginning {ack_first_payment_date}",
     ),
     ("ack_first_payment_date", "ack_min_payment"): (
-        "Got it, a {ack_min_payment} minimum starting {ack_first_payment_date}."
+        "a {ack_min_payment} minimum starting {ack_first_payment_date}",
+        "at least {ack_min_payment} per payment, starting {ack_first_payment_date}",
     ),
     ("ack_first_payment_date", "ack_max_payments", "ack_min_payment"): (
-        "Got it, {ack_max_payments} payments at a {ack_min_payment} minimum, "
-        "starting {ack_first_payment_date}."
+        "{ack_max_payments} payments at a {ack_min_payment} minimum, "
+        "starting {ack_first_payment_date}",
+        "up to {ack_max_payments} payments of at least {ack_min_payment}, "
+        "starting {ack_first_payment_date}",
     ),
+}
+_ACK_TOTAL_BODIES: tuple[str, ...] = (
+    "{ack_total} in total",
+    "{ack_total} for the whole settlement",
+)
+_ACK_OPENERS: tuple[str, ...] = ("Got it", "Understood", "Okay")
+
+
+def ack_variants(ids: tuple[str, ...]) -> list[str]:
+    """Every code-built ack wording for the sorted ``ack_*`` ids (empty if unknown)."""
+    terms = tuple(i for i in ids if i != "ack_total")
+    if terms and terms not in _ACK_TERM_BODIES:
+        return []
+    term_bodies = _ACK_TERM_BODIES.get(terms, ())
+    if "ack_total" in ids:
+        bodies = [
+            f"{tb}, {b}" if b else tb
+            for tb in _ACK_TOTAL_BODIES
+            for b in (term_bodies or ("",))
+        ]
+    else:
+        bodies = list(term_bodies)
+    return [f"{o}, {b}." for o in _ACK_OPENERS for b in bodies]
+
+
+def ack_template(ids: tuple[str, ...], turn: int) -> str | None:
+    """Deterministic ack wording for this turn; consecutive turns get different lines.
+
+    Opener and body rotate independently so the same shape does not repeat
+    word for word on back-to-back turns.
+    """
+    terms = tuple(i for i in ids if i != "ack_total")
+    if terms and terms not in _ACK_TERM_BODIES:
+        return None
+    term_bodies = _ACK_TERM_BODIES.get(terms, ("",))
+    body = term_bodies[turn % len(term_bodies)]
+    if "ack_total" in ids:
+        total = _ACK_TOTAL_BODIES[turn % len(_ACK_TOTAL_BODIES)]
+        body = f"{total}, {body}" if body else total
+    return f"{_ACK_OPENERS[turn % len(_ACK_OPENERS)]}, {body}."
+
+
+# H3 (Phase 24b) wording: one fixed line per shape ("Got it, " + first body).
+ACK_TEMPLATES: dict[tuple[str, ...], str] = {
+    **{ids: f"Got it, {bodies[0]}." for ids, bodies in _ACK_TERM_BODIES.items()},
+    ("ack_total",): f"Got it, {_ACK_TOTAL_BODIES[0]}.",
 }
 ANSWER_TEMPLATE = TEMPLATES[Intent.ANSWER]
 ACK_BANK_INTENT = "ACK"
@@ -305,11 +369,14 @@ def render_acts(
     call_id: str | None = None,
     blocked_out: list[dict[str, Any]] | None = None,
     turn: int = 0,
+    code_ack: bool = False,
 ) -> list[str]:
     """Sentences for ``action.ack`` then ``action.answer`` (empty when neither is set).
 
     Bank / llm modes take a guard-checked bank variant when one exists (no LLM
     call either way); otherwise ``ACK_TEMPLATES`` / the talking point verbatim.
+    ``code_ack`` (the default agent's ``nlg_ack``) always takes the ack from
+    ``ack_template`` (code variants by turn), never the bank.
     Each act runs ``template_guard`` + ``rendered_guard``; a failing act is
     dropped and audited as ``act_dropped``.
     """
@@ -324,11 +391,16 @@ def render_acts(
             required=set(ids),
             next_phase=action.next_phase,
         )
-        template = (
-            pick_template(sub, call_id=call_id, turn=turn, bank=bank, intent_key=ACK_BANK_INTENT)
-            if use_bank
-            else None
-        ) or ACK_TEMPLATES.get(ids)
+        if code_ack:
+            template = ack_template(ids, turn)
+        else:
+            template = (
+                pick_template(
+                    sub, call_id=call_id, turn=turn, bank=bank, intent_key=ACK_BANK_INTENT
+                )
+                if use_bank
+                else None
+            ) or ACK_TEMPLATES.get(ids) or ack_template(ids, 0)
         if template is not None:
             acts.append(("ack", sub, template))
     if action.answer is not None:

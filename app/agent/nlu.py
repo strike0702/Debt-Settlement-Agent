@@ -1446,6 +1446,34 @@ _COUNT_CAP_RE = re.compile(
     re.IGNORECASE,
 )
 _CLAUSE_SPLIT_RE = re.compile(r"[,.;!?]|\bbut\b", re.IGNORECASE)
+
+# Phase 46b, code-side question for a verified TOTAL (whatever the model said):
+# in the same sentence as an exact payment count ("3 even payments"), or as
+# "pay $X by <date>", the amount may as well be per payment, so ask. An
+# explicit total cue in that sentence ("in total", "altogether") settles it.
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?;])\s+")
+_EXPLICIT_TOTAL_RE = re.compile(
+    r"\b(?:total|altogether|all together|all in|in full|lump[- ]sum|in one payment"
+    r"|settle (?:it |this |the account )?for|settlement of)\b",
+    re.IGNORECASE,
+)
+_NUMBER_WORD = (
+    r"(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
+    r"(?:thir|four|fif|six|seven|eigh|nine)teen|twenty(?:[- ](?:one|two|three|four))?)"
+)
+_EXACT_COUNT_RE = re.compile(
+    rf"\b(?:\d+|{_NUMBER_WORD})\s+(?:(?:even|equal|monthly|separate|fixed)\s+)?"
+    r"(?:payments|installments|instalments)\b",
+    re.IGNORECASE,
+)
+# A sentence that states the debt ("original balance of $6,000", "the client
+# owes $6,000") is not an ask in any shape: the shape question never fires on it.
+_BALANCE_STATEMENT_RE = re.compile(
+    r"\b(?:balance|owes?|owed|owing|outstanding|original amount|debt of|account is at)\b",
+    re.IGNORECASE,
+)
+_PAY_BEFORE_RE = re.compile(r"\bpay\s+$", re.IGNORECASE)
+_BY_AFTER_RE = re.compile(r"^\s+by\b", re.IGNORECASE)
 _NEGATION_RE = re.compile(r"\b(?:not|isn't|isnt|no)\b", re.IGNORECASE)
 
 
@@ -1475,6 +1503,35 @@ def _amount_pending(
     return pending
 
 
+def total_shape_trigger(total_cents: int, utterance: str) -> str | None:
+    """Question trigger for a verified dollar total, or None when it reads as a total.
+
+    Looks only at the sentence(s) that say the amount. ``total_pay_by``: "pay
+    $X by <date>"; ``total_with_count``: an exact payment count in the same
+    sentence (a capped "up to 6 payments" is not exact). An explicit total cue
+    or a balance statement ("original balance of $6,000") in that sentence
+    means nothing is asked.
+    """
+    for sentence in _SENTENCE_SPLIT_RE.split(utterance):
+        hits = [
+            t
+            for t in extract_tokens(sentence)
+            if t.kind == "money" and t.value == total_cents
+        ]
+        if not hits or _EXPLICIT_TOTAL_RE.search(sentence):
+            continue
+        if _BALANCE_STATEMENT_RE.search(sentence):
+            continue
+        for tok in hits:
+            if _PAY_BEFORE_RE.search(sentence[: tok.start]) and _BY_AFTER_RE.search(
+                sentence[tok.end :]
+            ):
+                return "total_pay_by"
+        if _EXACT_COUNT_RE.search(sentence) and not _COUNT_CAP_RE.search(sentence):
+            return "total_with_count"
+    return None
+
+
 def resolve_amounts(
     verified: VerifiedAnalysis,
     utterance: str,
@@ -1490,7 +1547,9 @@ def resolve_amounts(
     "total or per payment?" and ``analysis`` has the doubtful amount (and any
     disagreeing ask) removed so the rest of the turn can still be applied.
     Triggers, first match: NLU ``amount_ambiguous``; % and total disagree;
-    total above the balance; a ``min_payment_cents`` term that is implausible
+    total above the balance; a total with no agreeing % in a per-payment shape
+    (``total_shape_trigger``: "pay $X by", or an exact count in the same
+    sentence); a ``min_payment_cents`` term that is implausible
     (amount × an exact payment count said this turn, else × 1, > balance),
     sits under a total cue with no per-payment cue, or equals a total the NLU
     also gave.
@@ -1538,6 +1597,9 @@ def resolve_amounts(
             return _clarify(total, verified.ask_total_quote, "pct_total_disagree", drop_ask=True)
         if bp > 10000:
             return _clarify(total, verified.ask_total_quote, "total_exceeds_balance")
+        shape = total_shape_trigger(total, utterance) if pct_bp is None else None
+        if shape is not None:
+            return _clarify(total, verified.ask_total_quote, shape)
         chosen = bp if pct_bp is None else max(bp, pct_bp)
         _log(
             "nlu_ask_total_to_bp",

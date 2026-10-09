@@ -108,6 +108,10 @@ class Settings(BaseSettings):
     nlg_bank_path: str = "config/nlg_bank.json"
     # H3 conversational NLG (Phase 24b): ack / answer acts before the decided move.
     nlg_h3: bool = False
+    # Code-built acknowledgements (Phase 46b): "Got it, up to 5 payments." before
+    # the move, from ack_facts + ACK_VARIANTS only (no LLM, no answer act, no
+    # NLG context). Independent of ``nlg_h3``; when both are on, H3 renders.
+    nlg_ack: bool = True
     nlu_mode: str = "llm"
     # Per-request LLM timeouts (s). A timeout fails over to the next route target.
     llm_timeout_nlu_s: float = 6.0

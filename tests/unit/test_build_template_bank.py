@@ -49,8 +49,14 @@ def _rig(
 
 
 def test_shipped_bank_marks_the_phase_33_entries_reviewed() -> None:
-    reviewed = {e["intent"] for e in _shipped()["entries"] if e.get("reviewed") is True}
-    assert reviewed == set(_REVIEWED)
+    reviewed = {
+        (e["intent"], tuple(e["placeholders"]))
+        for e in _shipped()["entries"]
+        if e.get("reviewed") is True
+    }
+    # Phase 46b adds the hand-written ``ack_total`` ACK entry.
+    assert {i for i, _ in reviewed} == set(_REVIEWED) | {"ACK"}
+    assert {p for i, p in reviewed if i == "ACK"} == {("ack_total",)}
 
 
 def test_full_build_keeps_reviewed_entries_acts_and_notes(

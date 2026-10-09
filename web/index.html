@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Browser chrome matches the page background (--bg); updated with the theme. -->
+    <meta name="theme-color" content="#f6f6f4" />
     <meta name="description" content="An AI voice agent negotiates a debt settlement. Ordinary code decides every number and move; the AI only understands and words the conversation." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Settlement call console</title>
@@ -10,8 +12,10 @@
       // Apply the saved theme before first paint to avoid a light flash.
       try {
         var t = localStorage.getItem("dsa-theme");
-        if (t === "dark" || (!t && matchMedia("(prefers-color-scheme: dark)").matches))
+        if (t === "dark" || (!t && matchMedia("(prefers-color-scheme: dark)").matches)) {
           document.documentElement.classList.add("dark");
+          document.querySelector('meta[name="theme-color"]').setAttribute("content", "#121211");
+        }
       } catch (e) {}
     </script>
   </head>

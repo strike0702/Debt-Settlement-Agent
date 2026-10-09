@@ -53,8 +53,8 @@ def _private(scenario_id: str) -> tuple[set[tuple[str, int | date]], date]:
     return {p for p in private if p[1]}, c.as_of_date
 
 
-def test_six_curated_cards() -> None:
-    assert len(CARD_IDS) == 6
+def test_seven_curated_cards() -> None:
+    assert len(CARD_IDS) == 7  # Phase 48 added haggling_rep
 
 
 @pytest.mark.parametrize("scenario_id", CARD_IDS)

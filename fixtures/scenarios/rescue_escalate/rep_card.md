@@ -18,6 +18,7 @@ You are the **creditor collections rep**. Expect the agent may need to escalate.
 | Minimum payment | $110 |
 | Structure | flexible (not even, not balloon) |
 | Opening ask | 45% |
+| Floor | 45% |
 
 ## Suggested replies
 

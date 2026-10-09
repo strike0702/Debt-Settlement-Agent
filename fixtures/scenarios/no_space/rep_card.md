@@ -18,6 +18,7 @@ You are the **creditor collections rep**. Stay firm — a deal may not be possib
 | Minimum payment | $350 |
 | Structure | flexible |
 | Opening ask | 40% |
+| Floor | 40% |
 
 ## Suggested replies
 

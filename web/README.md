@@ -35,6 +35,9 @@ npm run lint
 - The Debt negotiator view's state column has the scenario brief and **Client deposits and credits**: the client's dedicated-account ledger (Date, Description, Credit, Debit, Running balance) anchored at the balance on the as-of date, past rows above it and scheduled rows below. PRIVATE: it comes from the operator brief only.
 - "How the agent decided" (the decision trace, Debt negotiator view only, Phase 36): one row per turn, newest first, with the move in plain words ("Countered at 31%"), its number and a few-word reason (`decide.reason_short`). Opening a row tells the turn as What they said / What we heard / Can the client pay? / Decision / What we said; "How this was worked out" holds the affordability curve, belief changes, the reply template, the safety checks (each once) and the policy code. All its wording comes from `src/lib/traceStory.ts` and the server's reason sentences (`app/agent/reasons.py`).
 - The Creditor rep view shows the conversation, **Your account** and the agreed terms (agreement, public schedule, terms heard); no decision trace, ladder, latency or audit log. Its state column opens with **Your account** (`GET /scenarios/{id}/rep`): the rep's creditor name, outstanding and original balance, and their settlement rules from the rep card. It carries no client or firm data; the scenario brief and ledger stay in the Debt negotiator view.
+- Outcomes (Phase 48): a call ends as a deal or a handoff. "Handed off to a specialist" takes the agreement's slot at the top of the state column; the Debt negotiator view gives the reason sentence from `app/agent/reasons.py` (via the ESCALATE turn's trace), the Creditor rep view only what the agent told the rep (`escalate.escalate_reason`). The transcript closes with "Call ended: …". All of it comes from `src/lib/outcome.ts`. The mic goes to call-over on ESCALATE as on END.
+- Trace words (Phase 48): price moves are titled by their ladder step ("Made a first offer of 42%", "Held our offer at 42%", "Took a small step up to 46%", "Raised our offer by half their drop, to 37%", "Made a final offer of 48%", "Accepted 50% when they repeated it", "They accepted our 52% offer"). An open rep turn carries a badge naming who read the line ("Read by Claude Haiku", "Read by Groq (fallback)", "Budget reached, using Groq", "Read by code (no AI needed)", "Simulated rep: no AI reading") from `turn_trace.reader`, and "What we heard" tells corrections, disputes, held-back amounts ("Held back $420 … because …") and dropped questions from `turn_trace.notes`. Both are built by the server from the turn's audit rows and exist only on the operator stream. Each dropped term gives its real reason (`DroppedTerm.reason`).
+- URL (Phase 48): `?scenario=<id>&view=operator|rep` reflects the picked scenario and view (`src/hooks/useUrlState.ts`); a change pushes history, so back and forward work. A scenario from the URL is refused while a call runs, and an unknown id falls back to Easy deal.
 - **Download log** fetches `/calls/{id}/export?view=rep|operator` for the last call (it survives the end of the call); the rep export drops private audit rows.
 - `?fixture=1` replays `src/fixtures/call_easy_deal.json` with no backend (`&speed=4` to play faster).
 - Node: CI and Render use Node 24 (Vitest and jsdom need ≥ 22.22 or ≥ 24.15).
@@ -69,8 +72,9 @@ src/
     latency.ts             waterfall rows from turn_trace timings
     lens.ts                Lens ("operator" | "creditor") → server view ("operator" | "rep"); shown as "Debt negotiator" | "Creditor rep"
     ledger.ts              client ledger → table rows with running balance (cents)
-    traceStory.ts          a turn trace in plain words: title, what was heard, can the client pay, checks once each
+    traceStory.ts          a turn trace in plain words: ladder-step title, what was heard, model badge, can the client pay, checks once each
     labels.ts              codes → sentence-case words (intent, belief status, guard stage, expected outcome)
+    outcome.ts             deal or handoff in words for both views (handoff reason: Debt negotiator only)
     customCases.ts         custom test cases: localStorage, ScenarioSource, JSON parse errors, path → cursor
   hooks/
     useCall.ts             one call socket: start / autoplay / text / WAV / end, raw frames + subscribers
@@ -78,7 +82,8 @@ src/
     useScenarios.ts        /scenarios catalog; brief + ledger (Debt negotiator view only) and rep account, curated or custom; template
     useOperatorDetail.ts   /calls/{id}/operator backfill for a call streamed in the Creditor rep view
     useFixtureReplay.ts    timed replay of frames
-    useTheme.ts            light/dark toggle (persisted; applied pre-paint in index.html)
+    useTheme.ts            light/dark toggle (persisted; applied pre-paint in index.html; keeps theme-color in step)
+    useUrlState.ts         ?scenario=&view= in the URL, back/forward
   components/
     AppShell.tsx           header, lens + theme toggles, scenario cards (+ custom), 3-column grid
     Conversation.tsx       bubbles, mic state, suggested replies, text box

@@ -1,5 +1,5 @@
 {
   "title": "Counter ladder",
-  "description": "Rep opens at 95%; agent should counter down toward a feasible %.",
+  "description": "The rep opens at 95%. The agent offers about half that, and the rep agrees.",
   "expected": "counter"
 }

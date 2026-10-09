@@ -1,5 +1,5 @@
 {
   "title": "Late start date",
-  "description": "Rep confirms a first payment after the savings horizon; agent proposes an earlier date.",
+  "description": "The rep's start date is too late. The agent asks for an earlier one, then settles.",
   "expected": "deal"
 }

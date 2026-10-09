@@ -86,7 +86,7 @@ flowchart LR
   Orch --> Audit[(SQLite events)]
 ```
 
-- **Browser console.** A React app (`web/`, served at `/`) shows the conversation, "How the agent decided", and the negotiation state side by side. It has a text box, suggested replies, a mic with barge-in, **Watch a call** (a simulated call that needs no keys), and **Add a test case** for your own scenarios.
+- **Browser console.** A React app (`web/`, served at `/`) shows the conversation, "How the agent decided", and the negotiation state side by side. It has a text box, suggested replies, a mic with barge-in, **Watch a call** (a simulated call that needs no keys; "Haggling rep" shows every step of the price ladder), and **Add a test case** for your own scenarios. A call ends as a drafted deal or "Handed off to a specialist", and the Debt negotiator view names the model that read each of the representative's lines.
 - **Speech-to-text.** Server-side Whisper, with the browser's recognizer as the fallback. Voice activity detection runs in the page (`@ricky0123/vad-web`).
 - **Orchestrator.** Runs one turn: understanding, belief update, affordability, policy, reply, and the spoken-sentence confirmation. If the representative keeps talking while the model is still reading the previous line, the new words join that turn and the model reads the combined line again. The WebSocket runs each event as its own task, so this, barge-in, and spoken-sentence confirmations all work while a turn is in progress.
 - **Understanding and verification.** The model returns JSON. Code then checks quotes, numbers, and ranges, and applies a few rule-based repairs.

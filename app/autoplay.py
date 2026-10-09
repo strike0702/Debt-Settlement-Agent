@@ -10,6 +10,9 @@ Autoplay never calls an LLM: ``autoplay_settings`` forces ``nlu_mode=oracle``
 and template (or bank) NLG, and the orchestrator gets ``llm=None``, so it works
 under ``LLM_PROFILE=offline`` with no keys. The creditor's hidden rules come
 from ``fixtures/scenarios/<id>/sim.json`` (mirrors that scenario's rep card).
+Phase 48: ``sim.json`` may also name how the rep haggles (``"haggle"``: a
+``sim.haggle.Haggle`` style and its knobs); without it the rep is the easy
+pre-46a one, so the older fixtures play exactly as before.
 The policy is unchanged; ``sim/`` still never imports ``app.agent``.
 """
 
@@ -18,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from typing import Any
 
@@ -31,6 +34,7 @@ from app.schemas.events import AutoplayOutcome
 from app.store.audit import AuditLog
 from feasibility.models import add_months, end_of_month
 from sim.creditor import CreditorPolicy
+from sim.haggle import EASY, Haggle
 from sim.personas import PERSONA_BY_NAME
 from sim.scenarios import Scenario, TrueRules, scenario_from_truth
 
@@ -75,6 +79,34 @@ def _first_payment_date(spec: str, call: CallScenario) -> date:
     return date.fromisoformat(spec)
 
 
+_HAGGLE_STYLES = ("easy", "holder", "stepper", "staller")
+_STALL_ON = ("ask", "counter")
+
+
+def parse_haggle(raw: Any, *, where: str = "sim.json") -> Haggle:
+    """``sim.json`` ``"haggle"`` → ``Haggle`` (absent → ``EASY``); ``ValueError`` on junk.
+
+    Shape: ``{"style": "holder", "hold_turns": 2, "steps_bp": [1000],
+    "stall_on": null}``; every key but ``style`` is optional.
+    """
+    if raw is None:
+        return EASY
+    if not isinstance(raw, dict) or raw.get("style") not in _HAGGLE_STYLES:
+        raise ValueError(f"haggle in {where} needs a style, one of {', '.join(_HAGGLE_STYLES)}")
+    stall_on = raw.get("stall_on")
+    if stall_on is not None and stall_on not in _STALL_ON:
+        raise ValueError(f"haggle.stall_on in {where} must be one of {', '.join(_STALL_ON)}")
+    steps = tuple(int(x) for x in raw.get("steps_bp", (EASY.steps_bp[0],)))
+    if raw["style"] != "staller" and (not steps or any(x <= 0 for x in steps)):
+        raise ValueError(f"haggle.steps_bp in {where} must be positive basis points")
+    return Haggle(
+        style=raw["style"],
+        hold_turns=int(raw.get("hold_turns", 0)),
+        steps_bp=steps,
+        stall_on=stall_on,
+    )
+
+
 def load_autoplay_scenario(scenario_id: str, call: CallScenario) -> Scenario:
     """Sim ``Scenario`` for curated ``scenario_id``; ``ValueError`` when it has no truth."""
     path = resolve_scenario_dir(scenario_id) / SIM_TRUTH_FILE
@@ -96,13 +128,15 @@ def load_autoplay_scenario(scenario_id: str, call: CallScenario) -> Scenario:
             (int(a), int(b)) for a, b in rules.get("min_payment_tiers", [])
         ),
     )
-    return scenario_from_truth(
+    scenario = scenario_from_truth(
         call,
         truth,
         opening_ask_bp=int(raw["opening_ask_bp"]),
         floor_bp=int(raw["floor_bp"]),
         persona=persona,
     )
+    haggle = parse_haggle(raw.get("haggle"), where=str(path))
+    return scenario if haggle == EASY else replace(scenario, haggle=haggle)
 
 
 def new_autoplay_call(

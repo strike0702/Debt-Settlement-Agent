@@ -24,6 +24,11 @@
  *
  * `?fixture=1` replays `fixtures/call_easy_deal.json` with no backend
  * (`&speed=4` to speed up).
+ *
+ * Phase 48: the selected scenario and view are in the URL
+ * (`?scenario=&view=operator|rep`, `useUrlState`; back and forward work), a
+ * handoff is shown as the call's outcome in both views (`lib/outcome.ts`),
+ * and the transcript ends with a line saying how the call ended.
  */
 import { Download, PhoneCall, PhoneOff } from "lucide-react";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -41,6 +46,7 @@ import { useFixtureReplay } from "@/hooks/useFixtureReplay";
 import { useOperatorDetail } from "@/hooks/useOperatorDetail";
 import { useScenarioBrief, useScenarios, useScenarioTemplate } from "@/hooks/useScenarios";
 import { useTheme } from "@/hooks/useTheme";
+import { readUrlState, useUrlState } from "@/hooks/useUrlState";
 import { useVoice } from "@/hooks/useVoice";
 import { type CallEvent, type CallState, foldCall, isCallOver, withOperatorDetail } from "@/lib/callState";
 import {
@@ -56,6 +62,7 @@ import {
 } from "@/lib/customCases";
 import { type Lens, viewFor } from "@/lib/lens";
 import { micEventFor, micReducer, type MicState } from "@/lib/mic";
+import { endedLine } from "@/lib/outcome";
 import { toRepView } from "@/lib/repView";
 
 // Recharts lives in these two; loading them after first paint keeps the shell fast.
@@ -136,8 +143,12 @@ function Notice({ children }: { children: ReactNode }) {
 
 // ---------------------------------------------------------------- fixture mode
 
+/** Fixture mode has one recorded call, so a scenario in the URL is ignored. */
+const refuseScenario = () => false;
+
 function FixtureApp({ speed }: { speed: number }) {
-  const [lens, setLens] = useState<Lens>("operator");
+  const [lens, setLens] = useState<Lens>(() => readUrlState().lens ?? "operator");
+  useUrlState({ scenario: null, lens, onScenario: refuseScenario, onLens: setLens });
   const [theme, toggleTheme] = useTheme();
   const replay = useFixtureReplay(easyDeal.frames, speed);
   const events = useMemo(() => eventsForLens(replay.events, lens), [replay.events, lens]);
@@ -168,6 +179,7 @@ function FixtureApp({ speed }: { speed: number }) {
           mic={isCallOver(state) ? "off" : micFromEvents(events)}
           suggested={scenario.suggested}
           nextSuggested={replay.playing ? repLines : undefined}
+          ended={endedLine(state, lens)}
           emptyHint="Press “Watch a call” to replay a full negotiation."
         />
       }
@@ -182,17 +194,19 @@ function FixtureApp({ speed }: { speed: number }) {
 const OUTCOME: Record<string, string> = {
   deal: "The simulated call ended with a deal drafted.",
   no_deal: "The simulated call ended with no deal.",
-  escalate: "The simulated call was handed off to a person.",
+  escalate: "The simulated call was handed off to a specialist.",
   incomplete: "The simulated call stopped before it finished.",
 };
 
 type EditorState = { mode: "add" } | { mode: "edit"; key: string };
 
+const DEFAULT_SCENARIO = "easy_deal";
+
 function LiveApp() {
-  const [lens, setLens] = useState<Lens>("operator");
+  const [lens, setLens] = useState<Lens>(() => readUrlState().lens ?? "operator");
   const [theme, toggleTheme] = useTheme();
   const { scenarios: catalog, error: catalogError } = useScenarios(null);
-  const [selected, setSelected] = useState("easy_deal");
+  const [selected, setSelected] = useState(() => readUrlState().scenario ?? DEFAULT_SCENARIO);
   const call = useCall();
 
   // ------------------------------------------------ custom test cases
@@ -273,6 +287,23 @@ function LiveApp() {
   const brief = useScenarioBrief(source, lens, source !== null);
   const inCall = call.status === "connecting" || call.status === "live" || call.status === "ending";
   const callRunning = inCall && !over;
+
+  // A link or back/forward may name a scenario; the picker stays locked while a call runs.
+  const pickLocked = useRef(false);
+  useLayoutEffect(() => {
+    pickLocked.current = inCall && !over;
+  });
+  const pickFromUrl = useCallback((id: string) => {
+    if (pickLocked.current) return false;
+    setSelected(id);
+    return true;
+  }, []);
+  useUrlState({ scenario: selected, lens, onScenario: pickFromUrl, onLens: setLens });
+  // A link to a scenario that does not exist (or a test case this browser lacks) falls back to the
+  // default once the catalog is in (adjusting state while rendering, as React documents).
+  if (catalog.length > 0 && scenario === null) {
+    setSelected(catalog.some((s) => s.id === DEFAULT_SCENARIO) ? DEFAULT_SCENARIO : catalog[0]!.id);
+  }
   const repLines = state.messages.filter((m) => m.role === "creditor").length;
   // Debt negotiator: the private brief and client ledger. Creditor rep: the rep's own account and rules (rep-safe).
   const side =
@@ -306,7 +337,7 @@ function LiveApp() {
     updateCases(cases.filter((c) => c.key !== key));
     setRemoved({ item: cases[index]!, index });
     if (editor?.mode === "edit" && editor.key === key) setEditor(null);
-    if (selected === key) setSelected(catalog[0]?.id ?? "easy_deal");
+    if (selected === key) setSelected(catalog[0]?.id ?? DEFAULT_SCENARIO);
   };
   const undoRemove = () => {
     if (!removed) return;
@@ -411,6 +442,7 @@ function LiveApp() {
           mic={over ? "off" : voice.mic}
           suggested={scenario?.suggested ?? []}
           nextSuggested={live ? repLines : undefined}
+          ended={endedLine(state, lens)}
           onSend={live ? (t) => send(t, scenario?.suggested.includes(t) ? "suggested" : "typed") : undefined}
           onMicToggle={live ? voice.toggleMic : undefined}
           emptyHint={

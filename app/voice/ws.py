@@ -5,7 +5,10 @@ Client events: ``start``, ``end``, binary WAV, ``text``, ``sentence_done``,
 ``transcript``, ``say``, ``belief``, ``eval``, ``blocked``, ``escalate``,
 ``latency``, ``audit``, ``phase``, ``agreement``, ``stt_error``, ``error``,
 ``turn_done``, ``turn_trace`` (one per agent turn, operator only; it gains
-``needs_info`` when the engine did not run, and ``decide.reason_short``),
+``needs_info`` when the engine did not run, ``decide.reason_short``, and on
+rep turns ``reader`` (which model, code path or script read the line) and
+``notes`` (acks, corrections, held-back amounts, dropped questions), both
+built from the turn's audit rows by ``turn_reader`` / ``turn_notes``),
 ``autoplay_done``. Their
 Pydantic models live in ``app.schemas.events``. Speaks through
 ``Orchestrator``; STT via ``app.voice.stt``, run inside
@@ -46,6 +49,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
 from app.adapter.engine_adapter import EvalSummary
+from app.agent.acts import ACK_TOTAL_ID, acked_fields
 from app.agent.nlu_types import TurnAnalysis
 from app.agent.orchestrator import Orchestrator, Utterance
 from app.agent.policy import Agreement, Intent
@@ -238,6 +242,8 @@ class _ViewSocket:
         self.ws = ws
         self.view = view
         self.call_id = call_id
+        # Last audit id already read for a ``turn_trace`` (reader / notes window).
+        self.trace_after = 0
 
     async def send_json(self, payload: dict[str, Any]) -> None:
         _record_operator_detail(self.call_id, payload)
@@ -329,6 +335,105 @@ def _missing_engine_fields(session: CallSession) -> list[str]:
     return [f for f in REQUIRED_FIELDS if not session.belief.usable_for_engine(f)]
 
 
+# Fast paths in ``nlu.analyze`` that read the rep's line without a model.
+_CODE_READ_EVENTS = frozenset({"fast_readback", "fast_field_answer"})
+
+
+def turn_reader(rows: list[dict[str, Any]], *, nlu_mode: str) -> dict[str, Any] | None:
+    """``TraceReader`` for one rep turn from that turn's audit rows (None: nothing read it).
+
+    Oracle NLU (autoplay, tests) is the sim's own script. Otherwise a fast-path
+    row means code read the line; else the last successful ``llm`` NLU call
+    names the model, with ``fallback`` from its ``failover_from`` and
+    ``budget_reached`` when a budget skip came first.
+    """
+    if nlu_mode == "oracle":
+        return {"kind": "script"}
+    if any(r["actor"] == "nlu" and r["type"] in _CODE_READ_EVENTS for r in rows):
+        return {"kind": "code"}
+    calls = [
+        r
+        for r in rows
+        if r["actor"] == "llm"
+        and isinstance(r["payload"], dict)
+        and r["payload"].get("role") == "nlu"
+    ]
+    done = [r["payload"] for r in calls if r["type"] == "llm_call"]
+    if not done:
+        return None
+    last = done[-1]
+    return {
+        "kind": "llm",
+        "provider": last.get("provider"),
+        "model": last.get("model"),
+        "fallback": last.get("failover_from") is not None,
+        "budget_reached": any(r["type"] == "llm_budget_skip" for r in calls),
+        "cache_hit": bool(last.get("cache_hit")),
+    }
+
+
+def turn_notes(rows: list[dict[str, Any]], utt: Utterance) -> list[dict[str, Any]]:
+    """``TraceNote`` dicts for one rep turn, in the order they happened.
+
+    Built from audit rows the orchestrator and NLU already write (corrections,
+    held-back amounts, dropped questions) plus the move's code ack. Operator
+    detail only: the trace never reaches the rep socket.
+    """
+    notes: list[dict[str, Any]] = []
+    for r in rows:
+        actor, event, p = r["actor"], r["type"], r["payload"]
+        if not isinstance(p, dict):
+            continue
+        if actor == "belief" and event in ("ack_corrected", "ack_disputed"):
+            notes.append(
+                {
+                    "kind": event,
+                    "field": p.get("field"),
+                    "old_value": p.get("old_value"),
+                    "new_value": p.get("new_value"),
+                }
+            )
+        elif actor == "nlu" and event == "nlu_amount_ambiguous":
+            notes.append(
+                {
+                    "kind": "amount_held",
+                    "cents": p.get("cents"),
+                    "quote": p.get("quote"),
+                    "trigger": p.get("trigger"),
+                }
+            )
+        elif actor == "nlu" and event == "amount_clarify_dropped":
+            notes.append({"kind": event, "cents": p.get("cents"), "reason": p.get("reason")})
+        elif actor == "nlu" and event == "cents_clarify_dropped":
+            notes.append({"kind": event, "field": p.get("field"), "reason": p.get("reason")})
+        elif actor == "nlu" and event == "amount_clarify_resolved":
+            notes.append(
+                {
+                    "kind": event,
+                    "total": p.get("total_cents"),
+                    "new_value": p.get("min_payment_cents"),
+                }
+            )
+    ack = utt.action.ack or {}
+    ack_dropped = any(
+        r["actor"] == "nlg"
+        and r["type"] == "act_dropped"
+        and isinstance(r["payload"], dict)
+        and r["payload"].get("act") == "ack"
+        for r in rows
+    )
+    if ack and not ack_dropped:
+        total = ack.get(ACK_TOTAL_ID)
+        notes.append(
+            {
+                "kind": "acked",
+                "fields": list(acked_fields(ack)),
+                "total": int(total.value) if total is not None else None,
+            }
+        )
+    return notes
+
+
 async def _emit_utterance(
     ws: _ViewSocket,
     orch: Orchestrator,
@@ -408,6 +513,16 @@ async def _emit_utterance(
             trace["needs_info"] = _missing_engine_fields(session)
         decide = trace["decide"]
         decide["reason_short"] = reason_short(decide["intent"], decide["reason"])
+        if orch.audit is not None:
+            # This turn's rows: everything after the previous trace (its own cursor,
+            # because other handlers advance ``audit_after`` between turns).
+            after = getattr(ws, "trace_after", 0)
+            rows = [r for r in orch.audit.for_call(session.call_id) if int(r["id"]) > after]
+            if rows and isinstance(ws, _ViewSocket):
+                ws.trace_after = int(rows[-1]["id"])
+            if trace.get("creditor_text") is not None:
+                trace["reader"] = turn_reader(rows, nlu_mode=orch.settings.nlu_mode)
+                trace["notes"] = turn_notes(rows, utt)
         await _send(ws, {"type": "turn_trace", **trace})
     # Auto-ack calls (autoplay) commit on emit, so the agreement belongs to this turn.
     if orch.auto_ack and utt.agreement is not None:
@@ -677,6 +792,7 @@ class _CallConnection:
         )
         utt = await self.orch.start()
         self.audit_after = 0
+        self.ws.trace_after = 0
         await self._emit(utt)
 
     async def _start_autoplay(
@@ -696,6 +812,7 @@ class _CallConnection:
             return
         self.orch = orch
         self.audit_after = 0
+        self.ws.trace_after = 0
         pause_ms = clamp_pause_ms(data.get("autoplay_pause_ms"))
         self.audit.append(
             self.call_id,

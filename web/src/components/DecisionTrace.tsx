@@ -15,12 +15,15 @@
  * Creditor rep lens this renders a single lock even if it is handed traces.
  * Phase 36 replaced the seven-step card with this design (user's pick of four
  * mockups); `note` replaces the empty state, e.g. when the server has
- * forgotten a call.
+ * forgotten a call. Phase 48: price moves are titled by their ladder step,
+ * an open rep turn shows which model read the line ("Read by Claude Haiku"),
+ * and the working says when code opened the reply with an acknowledgement.
  */
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, ScanText } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { CurveSparkline } from "@/components/CurveSparkline";
 import { PrivateLock, PrivateTag } from "@/components/PrivateLock";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
 import { fieldLabel, termValue } from "@/lib/format";
@@ -29,11 +32,14 @@ import { STATUS_LABEL } from "@/lib/labels";
 import type { Lens } from "@/lib/lens";
 import {
   type Afford,
+  ackLine,
   affordLine,
   checkSummary,
   heardLines,
   ignoredLines,
   keyNumber,
+  readerDetail,
+  readerLabel,
   spokenText,
   turnTitle,
 } from "@/lib/traceStory";
@@ -110,7 +116,7 @@ function TurnList({ traces }: { traces: TurnTraceEvent[] }) {
                 {t.turn}
               </span>
               <span className="min-w-0">
-                <span className="block font-medium">{turnTitle(t)}</span>
+                <span className="block font-medium">{turnTitle(t, traces)}</span>
                 {!expanded && <span className="line-clamp-2 block text-sm text-muted">{shortReason(t)}</span>}
               </span>
               {num ? <span className="font-semibold num">{num}</span> : <span />}
@@ -158,6 +164,18 @@ function AffordText({ afford }: { afford: NonNullable<Afford> }) {
   );
 }
 
+/** Which model (or code, or the simulated rep's script) read the rep's line. Negotiator view only. */
+function ReaderBadge({ trace }: { trace: TurnTraceEvent }) {
+  const label = readerLabel(trace.reader);
+  if (!label) return null;
+  return (
+    <Badge className="mt-1.5 w-fit" title={readerDetail(trace.reader)} data-testid="reader-badge">
+      <ScanText aria-hidden className="h-3.5 w-3.5" />
+      {label}
+    </Badge>
+  );
+}
+
 /** Five plain lines; a line with nothing to say is left out. */
 function Story({ trace }: { trace: TurnTraceEvent }) {
   const heard = heardLines(trace);
@@ -166,9 +184,12 @@ function Story({ trace }: { trace: TurnTraceEvent }) {
   if (trace.creditor_text) {
     rows.push([
       "What they said",
-      <q key="q" className="before:content-['“'] after:content-['”']">
-        <Quote trace={trace} />
-      </q>,
+      <span key="q" className="flex flex-col items-start">
+        <q className="before:content-['“'] after:content-['”']">
+          <Quote trace={trace} />
+        </q>
+        <ReaderBadge trace={trace} />
+      </span>,
     ]);
   }
   if (heard.length > 0) rows.push(["What we heard", heard.join(". ") + "."]);
@@ -210,6 +231,7 @@ function Disclosure({ summary, children }: { summary: string; children: ReactNod
 function Internals({ trace }: { trace: TurnTraceEvent }) {
   const c = checkSummary(trace);
   const ignored = ignoredLines(trace);
+  const ack = ackLine(trace);
   return (
     <div className="flex flex-col gap-4 text-sm">
       {trace.affordability && (
@@ -238,7 +260,7 @@ function Internals({ trace }: { trace: TurnTraceEvent }) {
       )}
       {ignored.length > 0 && (
         <section>
-          <h5 className="mb-1 font-medium">What the agent ignored</h5>
+          <h5 className="mb-1 font-medium">What the agent set aside</h5>
           <ul className="m-0 flex flex-col gap-0.5 p-0 text-muted">
             {ignored.map((l) => (
               <li key={l} className="list-none">
@@ -250,6 +272,7 @@ function Internals({ trace }: { trace: TurnTraceEvent }) {
       )}
       <section>
         <h5 className="mb-1 font-medium">The reply before the numbers went in</h5>
+        {ack && <p className="m-0 mb-1.5 text-xs text-muted text-pretty">{ack}</p>}
         <p className="m-0 font-mono text-xs leading-relaxed" data-testid="reply-template">
           {splitTemplate(trace.nlg.template).map((s, i) =>
             s.hit ? (

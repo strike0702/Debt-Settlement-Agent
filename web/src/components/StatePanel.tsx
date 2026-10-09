@@ -9,6 +9,11 @@
  * latency waterfall and a collapsible audit log. Creditor rep view (Phase 35):
  * only the agreed terms (agreement, schedule without private columns, terms
  * heard); the ladder, latency and audit are the negotiator's tools.
+ *
+ * Phase 48: a call that ends without a deal is handed off; "Handed off to a
+ * specialist" takes the agreement's slot. The Debt negotiator view says why
+ * (the reason sentence from the server); the Creditor rep view shows only what
+ * the agent told the rep (`lib/outcome.ts`).
  */
 import {
   Bar,
@@ -29,6 +34,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import type { CallState } from "@/lib/callState";
 import { ladderPoints } from "@/lib/callState";
+import { type CallOutcome, callOutcome } from "@/lib/outcome";
 import { fieldLabel, isoDate, money, ms, pct, termValue } from "@/lib/format";
 import { STATUS_LABEL } from "@/lib/labels";
 import { waterfall } from "@/lib/latency";
@@ -46,8 +52,10 @@ const AXIS_TICK = { fill: "var(--muted)", fontSize: 12 };
 
 export function StatePanel({ state, lens, context }: { state: CallState; lens: Lens; context?: ReactNode }) {
   const latestCeiling = lens === "operator" ? (state.traces.at(-1)?.affordability?.max_bp ?? null) : null;
+  const outcome = callOutcome(state, lens);
   return (
     <div className="flex flex-col gap-4">
+      {outcome?.kind === "handoff" && <HandoffCard outcome={outcome} lens={lens} />}
       {state.agreement && (
         <Card className="border-good">
           <CardHeader title="Agreement drafted" aside={<Badge tone="good">Pending client approval</Badge>} />
@@ -66,6 +74,39 @@ export function StatePanel({ state, lens, context }: { state: CallState; lens: L
       {lens === "operator" && <LatencyCard traces={state.traces} />}
       {lens === "operator" && <AuditCard rows={state.audit} lens={lens} />}
     </div>
+  );
+}
+
+function HandoffCard({ outcome, lens }: { outcome: CallOutcome; lens: Lens }) {
+  return (
+    <Card data-testid="handoff-card">
+      <CardHeader title={outcome.title} aside={<Badge tone="warn">Specialist follows up</Badge>} />
+      <CardBody className="flex flex-col gap-2">
+        {lens === "operator" ? (
+          <>
+            <p className="m-0 text-pretty">
+              {outcome.reason ?? "The agent ended the call without a deal and passed it to a person on our side."}
+            </p>
+            {outcome.said && (
+              <p className="m-0 text-sm text-pretty text-muted">
+                The agent told the rep: “{outcome.said}”
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="m-0 text-pretty">
+              No deal was agreed on this call. Someone from the client’s debt settlement firm will follow up.
+            </p>
+            {outcome.said && (
+              <p className="m-0 text-sm text-pretty text-muted">
+                What the agent told you: “{outcome.said}”
+              </p>
+            )}
+          </>
+        )}
+      </CardBody>
+    </Card>
   );
 }
 

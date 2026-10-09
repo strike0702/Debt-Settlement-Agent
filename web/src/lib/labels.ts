@@ -29,7 +29,7 @@ export const EXPECTED_LABEL: Record<string, string> = {
   deal: "Deal",
   counter: "Counters, then deal",
   no_deal: "No deal",
-  escalate: "Hands off to a person",
+  escalate: "Hands off to a specialist",
 };
 
 export function expectedLabel(expected: string): string {

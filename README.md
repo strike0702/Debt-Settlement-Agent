@@ -204,7 +204,7 @@ These runs predate the move of the demo's line reading to Claude. On the shipped
 
 Four versions of the agent ran on the same 48 seeded scenarios, under harder conditions than CI: a live model read every line and a live model phrased the simulated creditor's lines. Source: [`docs/eval/ab_20261007/summary.md`](docs/eval/ab_20261007/summary.md), with the conditions in its [notes](docs/eval/ab_20261007/notes.md) and the reasoning in [`decision.md`](docs/eval/ab_20261007/decision.md).
 
-- **A** is the shipped agent: code policy and fixed reply templates.
+- **A** is the shipped agent: code policy and fixed reply templates. Since Phase 46b (after this A/B) it also opens a reply with a short code-built acknowledgement of the terms it understood ("Understood, up to 5 payments."), with no model involved.
 - **B** keeps the same policy but adds conversational replies (H3): it acknowledges terms the representative just stated and answers their questions.
 - **C** is a ReAct agent: a language model that chooses its own moves through tool calls and is shown the client's private maximum. It exists only for evaluation.
 - **D** is a language model on its own, with no policy. It was stopped after 13 of 48 scenarios and is [reported separately](docs/eval/ab_20261007/partial_D/summary.md).

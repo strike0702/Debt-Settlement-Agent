@@ -14,12 +14,18 @@ affordability, the decision with its ``reasons`` sentence, NLG template and
 guard verdicts, timings — never by re-reading the audit log.
 With ``Settings.nlg_h3`` (Phase 24b) the decided move gets optional ack /
 answer acts (``app.agent.acts``) spoken before it, and LLM NLG sees the last
-three public turns. Phase 45: before ``decide`` it counts rep turns in a row
-with no progress (``policy.rep_turn_progress``) for the loop guard, runs
-``policy.loop_guard`` on clarifies chosen before ``decide``, and turns a rep
-ending without a deal (``on_rep_end``) or a wrap whose agreement fails to draft
-into a handoff (``ESCALATE``). Does not own policy rules or LLM prompts — those
-live in ``policy`` / ``acts`` / ``nlu`` / ``nlg``.
+three public turns. Phase 46b: ``Settings.nlg_ack`` (default on) speaks the
+code-built ack alone; the next rep turn may correct it ("No, it's six
+payments" → the new value replaces the acked one; "that's not what I said" →
+the acked terms go back to TENTATIVE and are read back). A reply to a pending
+cents / amount question that also carries new terms is not just asked again:
+the answer (if any) and the new terms are applied and ``decide`` runs.
+Phase 45: before ``decide`` it counts rep turns in a row with no progress
+(``policy.rep_turn_progress``) for the loop guard, runs ``policy.loop_guard``
+on clarifies chosen before ``decide``, and turns a rep ending without a deal
+(``on_rep_end``) or a wrap whose agreement fails to draft into a handoff
+(``ESCALATE``). Does not own policy rules or LLM prompts — those live in
+``policy`` / ``acts`` / ``nlu`` / ``nlg``.
 """
 
 from __future__ import annotations
@@ -44,7 +50,7 @@ from app.adapter.engine_adapter import (
     evaluate,
 )
 from app.adapter.validator import validate
-from app.agent.acts import attach_acts
+from app.agent.acts import acked_fields, attach_acts, is_ack_correction, is_ack_dispute
 from app.agent.guards import _cross_match
 from app.agent.nlg import SAFE_FALLBACK, render_action, render_acts, speak_action
 from app.agent.nlu import (
@@ -460,22 +466,88 @@ def apply_effects(session: CallSession, effects: list[Effect]) -> None:
             session.neg.phase = Phase(str(data["phase"]))
 
 
-def _merge_amount_answer(
+def _carries_new_terms(verified: VerifiedAnalysis, *, held_cents: int | None = None) -> bool:
+    """True when a reply brings a new ask or terms beyond the amount in question.
+
+    ``held_cents``: the amount a pending "total or per payment?" is about; the
+    NLU filing that same amount again is not news.
+    """
+    terms = [
+        t
+        for t in verified.terms
+        if not (t.field == "min_payment_cents" and t.value == held_cents)
+    ]
+    return (
+        bool(terms)
+        or (verified.settlement_ask_pct is not None and verified.ask_verified)
+        or verified.settlement_ask_total_cents not in (None, held_cents)
+        or verified.amount_ambiguous_cents not in (None, held_cents)
+    )
+
+
+def _merge_cents_answer(
     verified: VerifiedAnalysis, resolved: VerifiedAnalysis
+) -> VerifiedAnalysis:
+    """This turn's analysis with the "dollars or cents?" answer swapped in.
+
+    Only used when the reply also carries new terms: the rep's stance, ask and
+    other terms stay; the answered field's term comes from ``resolved``.
+    """
+    field = resolved.terms[0].field
+    terms = [*resolved.terms, *(t for t in verified.terms if t.field != field)]
+    return verified.model_copy(
+        update={"terms": terms, "cents_ambiguity_bare": None, "cents_ambiguity_field": None}
+    )
+
+
+def _restore_held_pct(verified: VerifiedAnalysis, pending: dict[str, Any]) -> VerifiedAnalysis:
+    """Put back a % ask the dropped amount question held back (unless the rep's
+    reply has its own ask, or the % was the disputed half of the question)."""
+    if (
+        pending.get("pct") is None
+        or pending.get("trigger") == "pct_total_disagree"
+        or (verified.settlement_ask_pct is not None and verified.ask_verified)
+    ):
+        return verified
+    return verified.model_copy(
+        update={
+            "settlement_ask_pct": float(pending["pct"]),
+            "ask_quote": pending.get("pct_quote"),
+            "ask_verified": True,
+        }
+    )
+
+
+def _merge_amount_answer(
+    verified: VerifiedAnalysis, resolved: VerifiedAnalysis, *, held_cents: int | None = None
 ) -> VerifiedAnalysis:
     """This turn's analysis with the "total or per payment?" answer swapped in.
 
     Keeps the rep's stance, flags and other terms; the answer's amount (and
-    any % ask it brings back) replaces the doubtful one.
+    any % ask it brings back) replaces the doubtful one. A new verified % ask in
+    the same reply wins over both ("the total, but we could do 40%").
     """
-    terms = [*resolved.terms, *(t for t in verified.terms if t.field != "min_payment_cents")]
+    answered = {held_cents, *(t.value for t in resolved.terms)}
+    if resolved.settlement_ask_total_cents is not None:
+        answered.add(resolved.settlement_ask_total_cents)
+    terms = [
+        *resolved.terms,
+        *(
+            t
+            for t in verified.terms
+            if not (t.field == "min_payment_cents" and (held_cents is None or t.value in answered))
+        ),
+    ]
+    own_ask = verified.settlement_ask_pct is not None and verified.ask_verified
     update: dict[str, Any] = {
         "terms": terms,
-        "settlement_ask_total_cents": resolved.settlement_ask_total_cents,
-        "ask_total_quote": resolved.ask_total_quote,
+        "settlement_ask_total_cents": None if own_ask else resolved.settlement_ask_total_cents,
+        "ask_total_quote": None if own_ask else resolved.ask_total_quote,
         "amount_ambiguous_cents": None,
         "amount_ambiguous_quote": None,
     }
+    if own_ask:
+        return verified.model_copy(update=update)
     if resolved.settlement_ask_pct is not None:
         update.update(
             settlement_ask_pct=resolved.settlement_ask_pct,
@@ -539,6 +611,9 @@ class Orchestrator:
         self._drained: list[Utterance] = []
         # What the turn in flight computed, for ``Utterance.trace`` (see ``_build_trace``).
         self._trace_ctx: dict[str, Any] = {}
+        # Belief field → value the last emitted move acknowledged (Phase 46b); the
+        # next rep turn may correct it. Cleared when that turn starts.
+        self._last_ack: dict[str, Any] = {}
 
     def _begin_trace(self, creditor_text: str | None) -> None:
         self._trace_ctx = {"creditor_text": creditor_text}
@@ -661,6 +736,7 @@ class Orchestrator:
         """Caller must hold ``self._lock``. Releases it only during NLU await."""
         session = self.session
         t_server = time.perf_counter()
+        acked, self._last_ack = self._last_ack, {}
 
         while True:
             session.neg.turn_idx += 1
@@ -744,8 +820,12 @@ class Orchestrator:
                 resolved = try_resolve_cents_clarify(
                     working, session.neg.pending_cents_clarify, ref=self._ref
                 )
+                moved_on = _carries_new_terms(verified)
                 if resolved is not None and resolved.terms:
-                    verified = resolved
+                    # Answer plus new terms: keep the rep's turn, swap the answer in.
+                    verified = (
+                        _merge_cents_answer(verified, resolved) if moved_on else resolved
+                    )
                     self._trace_ctx["verified"] = verified
                     session.neg.pending_cents_clarify = None
                     self._audit(
@@ -760,6 +840,13 @@ class Orchestrator:
                     # Chose an out-of-range reading — drop pending and re-ask.
                     session.neg.pending_cents_clarify = None
                     self._audit("nlu", "cents_clarify_out_of_range", {})
+                elif moved_on:
+                    # No answer, but a new ask or terms: take the turn, drop the question.
+                    field = str(session.neg.pending_cents_clarify["field"])
+                    session.neg.pending_cents_clarify = None
+                    self._audit(
+                        "nlu", "cents_clarify_dropped", {"field": field, "reason": "new_terms"}
+                    )
                 else:
                     pending = session.neg.pending_cents_clarify
                     action = loop_guard(
@@ -826,9 +913,26 @@ class Orchestrator:
                     or verified.demands_commitment
                     or verified.hostility >= self.settings.hostility_threshold
                 )
+                held_cents = int(pending_amount["cents"])
                 if resolved_amount is None and interrupts:
                     session.neg.pending_amount_clarify = None
-                    self._audit("nlu", "amount_clarify_dropped", {"cents": pending_amount["cents"]})
+                    self._audit(
+                        "nlu",
+                        "amount_clarify_dropped",
+                        {"cents": held_cents, "reason": "interrupt"},
+                    )
+                elif resolved_amount is None and _carries_new_terms(
+                    verified, held_cents=held_cents
+                ):
+                    # No answer, but a new ask or terms: take the turn (resolve_amounts
+                    # still checks them) instead of repeating the question.
+                    session.neg.pending_amount_clarify = None
+                    verified = _restore_held_pct(verified, pending_amount)
+                    self._audit(
+                        "nlu",
+                        "amount_clarify_dropped",
+                        {"cents": held_cents, "reason": "new_terms"},
+                    )
                 elif resolved_amount is None:
                     if session.neg.clarify_counts.get(AMOUNT_CLARIFY_KEY, 0) >= 2:
                         session.neg.pending_amount_clarify = None
@@ -841,7 +945,9 @@ class Orchestrator:
                 else:
                     session.neg.pending_amount_clarify = None
                     check_min_payment = False
-                    verified = _merge_amount_answer(verified, resolved_amount)
+                    verified = _merge_amount_answer(
+                        verified, resolved_amount, held_cents=held_cents
+                    )
                     self._audit(
                         "nlu",
                         "amount_clarify_resolved",
@@ -864,14 +970,16 @@ class Orchestrator:
             if amount_pending is not None:
                 # Eager, like the cents clarify: a fast reply must still resolve.
                 session.neg.pending_amount_clarify = amount_pending
-                belief_changes = self._apply_belief(verified, turn)
+                belief_changes = self._apply_belief(
+                    verified, turn, utterance=working, acked=acked
+                )
                 session.last_belief_changes = belief_changes
                 action = amount_meaning_clarify_action(cents=int(amount_pending["cents"]))
                 return await self._emit_preempted(
                     action, working, timings, t_server, belief_changes
                 )
 
-            belief_changes = self._apply_belief(verified, turn)
+            belief_changes = self._apply_belief(verified, turn, utterance=working, acked=acked)
             session.last_belief_changes = belief_changes
 
             # Accept a pending non-price alternative before affordability.
@@ -922,15 +1030,18 @@ class Orchestrator:
                 accepted_term_alt=accepted_term_alt,
             )
             action = await self._enrich_action(action)
-            if self.settings.nlg_h3:
+            if self.settings.nlg_h3 or self.settings.nlg_ack:
                 # Presentation only: the move, its facts and effects are unchanged.
+                # ``nlg_ack`` alone: the code-built ack, no answer act.
                 action = attach_acts(
                     action,
                     verified,
                     belief_changes,
                     creditor_numbers=session.creditor_numbers,
                     private_blocklist=session.private_blocklist,
+                    with_answer=self.settings.nlg_h3,
                 )
+                self._last_ack = acked_fields(action.ack)
             timings["policy_ms"] = _ms_since(t_pol)
             decide_payload: dict[str, Any] = {
                 "intent": action.intent.value,
@@ -1281,6 +1392,7 @@ class Orchestrator:
             call_id=session.call_id,
             blocked_out=session.last_blocked,
             turn=session.neg.turn_idx,
+            code_ack=not self.settings.nlg_h3,
         )
 
     async def _speak_move(self, action: Action, *, last_rep_line: str) -> list[str]:
@@ -1409,9 +1521,25 @@ class Orchestrator:
             timings={k: float(v) for k, v in timings.items() if isinstance(v, (int, float))},
         )
 
-    def _apply_belief(self, verified: VerifiedAnalysis, turn: int) -> list[BeliefChange]:
+    def _apply_belief(
+        self,
+        verified: VerifiedAnalysis,
+        turn: int,
+        *,
+        utterance: str = "",
+        acked: dict[str, Any] | None = None,
+    ) -> list[BeliefChange]:
+        """Apply this turn's read-back answer and terms to belief.
+
+        ``acked`` is what our previous line acknowledged. A correction of it
+        ("No, it's six payments") replaces the value outright instead of the
+        CONTRADICTED → CLARIFY path; a dispute with no value ("that's not what
+        I said") puts the acked terms back to TENTATIVE so they are read back.
+        """
         session = self.session
         changes: list[BeliefChange] = []
+        acked = acked or {}
+        correcting = bool(acked) and is_ack_correction(utterance)
 
         if session.neg.pending_readback and verified.readback_response in (
             "confirm",
@@ -1430,6 +1558,19 @@ class Orchestrator:
 
         for term in verified.terms:
             cur = session.belief.get(term.field)
+            if (
+                correcting
+                and term.field in acked
+                and term.verified
+                and not term.hedged
+                and cur.status == TermStatus.KNOWN
+                and cur.value == acked[term.field]
+                and cur.value != term.value
+            ):
+                ch = session.belief.accept_alternative(term.field, term.value, term.quote, turn)
+                changes.append(ch)
+                self._audit("belief", "ack_corrected", ch.model_dump(mode="json"))
+                continue
             # Post-proposal revision: accept new value without CONTRADICTED.
             if (
                 session.neg.phase in (Phase.CONFIRM, Phase.NEGOTIATE)
@@ -1458,6 +1599,16 @@ class Orchestrator:
             )
             changes.append(ch)
             self._audit("belief", "observe", ch.model_dump(mode="json"))
+
+        if acked and is_ack_dispute(utterance):
+            told = {t.field for t in verified.terms}
+            for field, value in acked.items():
+                cur = session.belief.get(field)
+                if field in told or cur.status != TermStatus.KNOWN or cur.value != value:
+                    continue
+                ch = session.belief.reopen(field, utterance[:120], turn)
+                changes.append(ch)
+                self._audit("belief", "ack_disputed", ch.model_dump(mode="json"))
 
         return changes
 

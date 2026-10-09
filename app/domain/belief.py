@@ -3,7 +3,8 @@
 Tracks per-field status (UNKNOWN → TENTATIVE/KNOWN/…), evidence quotes, and
 history. Engine adapters only consume fields that are ``usable_for_engine``.
 NLU observations and read-back confirmations flow through ``observe`` /
-``confirm_readback``.
+``confirm_readback``; ``reopen`` (Phase 46b) sends a disputed KNOWN term back
+to TENTATIVE so the policy reads it back.
 """
 
 from __future__ import annotations
@@ -253,6 +254,25 @@ class BeliefState:
             new_status=term.status,
             turn=-1,
             quote=None,
+        )
+
+    def reopen(self, field: str, quote: str, turn: int) -> BeliefChange:
+        """KNOWN → TENTATIVE, value kept: the rep disputed it, so read it back (Phase 46b)."""
+        if field not in self.terms:
+            raise KeyError(field)
+        term = self.terms[field]
+        if term.status != TermStatus.KNOWN:
+            raise ValueError(f"reopen requires KNOWN, got {term.status} for {field}")
+        term.status = TermStatus.TENTATIVE
+        term.evidence.append(Evidence(turn=turn, quote=quote))
+        return BeliefChange(
+            field=field,
+            old_value=term.value,
+            new_value=term.value,
+            old_status=TermStatus.KNOWN,
+            new_status=TermStatus.TENTATIVE,
+            turn=turn,
+            quote=quote,
         )
 
     def _maybe_sync_max_token_pays(self, field: str, value: Any) -> None:

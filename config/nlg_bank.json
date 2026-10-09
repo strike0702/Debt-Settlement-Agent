@@ -291,6 +291,21 @@
       ]
     },
     {
+      "intent": "ACK",
+      "placeholders": [
+        "ack_total"
+      ],
+      "required": [
+        "ack_total"
+      ],
+      "templates": [
+        "Got it, {ack_total} in total.",
+        "Understood, {ack_total} for the whole settlement.",
+        "Okay, {ack_total} in total."
+      ],
+      "reviewed": true
+    },
+    {
       "intent": "ANSWER:why_not_higher",
       "placeholders": [],
       "required": [],

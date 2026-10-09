@@ -54,7 +54,10 @@ policy eval reports 0 unverified figures spoken. Templates can be built offline
 and reused: the demo's `NLG_MODE=bank` serves guard-checked templates with no
 LLM call, which took NLG off the reply path ([latency](eval/latency_20261007.md):
 `nlg_ms` p50 1440 → 0). The price is stiffer wording, and number words like
-"first" must be avoided in copy.
+"first" must be avoided in copy. The short acknowledgement the agent speaks
+before its move ("Understood, up to 5 payments.", Phase 46b) needs no LLM at
+all: code picks the wording from a few fixed variants and fills only terms the
+creditor said, never a private figure, through the same two guards.
 
 ## ADR 3. PUBLIC / PRIVATE facts and role-scoped streams
 

@@ -172,7 +172,7 @@ _FIVE = {
 }
 _SIX = {
     "type": "text",
-    "text": "No, it's six payments.",
+    "text": "No, I said six payments.",
     "oracle": {
         "stance": "info",
         "terms": [{"field": "max_payments", "value": 6, "quote": "six", "hedged": False}],

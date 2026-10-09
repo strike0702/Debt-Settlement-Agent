@@ -53,6 +53,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 47 | Tooling tidy: bank build, budget reservation, judge cost, media size, rep card floor | done |
 | 46b | Code-built acks, rep corrections, total-or-per-payment rule (user decisions 2026-10-09) | done |
 | 46a | Simulated rep: number check on LLM rewrites, plainer lines, haggling rep, `max_counters` 6 | done |
+| 46c | Live re-check: Haiku reader, Groq-played rep (user decisions 2026-10-09) | done |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -1807,3 +1808,31 @@ Every reason sentence, before and after:
 - **Deviations:** (1) the `stall_on` choice comes from the persona, not the RNG (the RNG gave two counter-stallers on seed 7; the persona rule shows both loop guards whenever stallers exist; the RNG draw is still consumed so other draws do not shift). (2) `run_eval` CLI now allows `--nlu oracle --sim-phrasing llm` (needed for the requested smoke). (3) Two e2e tests that pinned slot 0's easy rep now use `easy_slot(0)`. (4) Ladder branch `our_counter_accepted` added to the requested list (a deal on our counter is otherwise uncounted). (5) The 100-slot label test is `@pytest.mark.slow` (~30 s).
 - **Open issues:** local `.env` copies made from the old `.env.example` still set `MAX_COUNTERS=4` (this worktree's does; an eval run with it reports cap 4); the sim route's Cerebras failover returns empty text at `max_tokens=120`; `rep_held` and `max_turns` are not exercised by the oracle eval; fixture `sim.json` cannot set a haggle style (autoplay is in `app/`).
 - **Checks:** `uv run ruff check .` clean; `uv run pytest -q` 1086 passed / 2 skipped / 26 xfailed; fast suite with `.env` moved aside: 1082 passed / 2 skipped / 4 deselected / 26 xfailed; oracle eval PASS.
+
+### Phase 46c (live re-check) (2026-10-09) — Haiku reader, Groq-played rep; user decisions 2026-10-09, not in REVIEW_PLAN
+
+- **Outcome:** A live run of arm A (policy, template NLG, code acks) on the A/B's 48 seed-7 ids had **agreement_valid 1.00 (10/10)**; the A/B's arm A had 0.75. There were 0 invalid calls and thresholds PASS. Summary: `docs/eval/recheck_20261009/summary.md`.
+- **1. Sim route (eval profile only):** `sim` = `groq/openai/gpt-oss-120b` {reasoning_effort: low} → `cerebras/gpt-oss-120b` {reasoning_effort: low} → `gemini/gemini-3.1-flash-lite`. Mistral is dropped from the sim route. `sim.creditor.SIM_MAX_TOKENS = 512` (was 120); the one-or-two-sentence instruction is kept. `demo` is unchanged, and `local` is unchanged because its sim uses Ollama. Tests: `tests/unit/test_sim_route_p46c.py` (route order and params, demo has no sim route, rewrite call passes `SIM_MAX_TOKENS`, empty reply falls back). `test_split_providers_file_halves_every_rate` now carves out the eval sim route, since the frozen A/B file predates it.
+- **2. Smoke** (`--nlu oracle --nlg template --sim-phrasing llm --profile eval --scenarios 5 --seed 7`, `eval_20261009_062152_s7`): fallbacks 5/28 = 0.179 (stance 4, figures 1, **empty 0**), against P46a's 0.571 (empty 8, stance 5, figures 3). All 28 calls went to Groq.
+- **3. Live re-check** (`eval_20261009_062530_s7`; providers `docs/eval/recheck_20261009/providers_recheck.yaml`, nlu = Haiku only, `budgeted`, timeout_s 20). All 255 NLU calls were answered by Haiku (no failover or skip) and all 257 sim calls by Groq.
+
+| metric | A/B arm A | re-check |
+|---|---|---|
+| agreement_valid | 0.75 (n=8) | **1.00 (n=10)** |
+| deal_rate_given_zopa | 0.73 (n=11) | 0.91 (n=11; miss = staller, by design) |
+| no_deal_correct | 0.90 (n=10, old meaning) | 0.90 (n=10; miss `s0007_040` contradiction_unresolved) |
+| escalation_correct | 1.00 (n=27, old meaning) | 1.00 (n=37) |
+| leaks / unverified | 0 / 0 | 0 / 0 |
+| rule_extraction / false_known | 0.574 / 0.059 | 0.619 / 0.010 |
+| sim rewrite fallback rate | n/a | 0.058 (stance 12, figures 3) |
+| turns_to_outcome | 6.06 | 5.35 |
+| server_total p50 / p95 ms | 1957 / 11932 | 1455 / 2563 |
+
+  Handoffs: sensitive_request 16, out_of_guardrail 10, above_accept_line 5, max_counters 2, infeasible 2, contradiction_unresolved 2, repeated_question 1; deals 10. Ladder: anchor 16, hold 12, quarter step 1, concede half 18, final counter 9, our counter accepted 2, accept on repeat 7.
+  Scenario set: Phase 46a reshaped 14 of the 48 (9 deal floors, 4 no-fix asks, 1 staller), including both of the A/B's invalid calls (`s0007_004`, `s0007_015`).
+- **Cost actually spent: $0.0895** of the $0.25 cap, all Haiku: pilot $0.0082 (26 calls), full run $0.0811 (255 calls); 556,315 in / 67,507 out. The budget table agrees (89,511 µ$).
+- **Files:** `config/providers.yaml` (eval sim route + comment), `sim/creditor.py` (`SIM_MAX_TOKENS`, docstring), `tests/unit/test_sim_route_p46c.py` (new), `tests/unit/test_eval_agents.py`, `docs/eval/recheck_20261009/` (new: `providers_recheck.yaml`, `summary.md`, `generated_summary.md`, `summary.json`, two transcripts), `README.md` (one sentence), this file.
+- **Interfaces:** `sim.creditor.SIM_MAX_TOKENS: int = 512`.
+- **Deviations:** (1) `eval.run_eval._build_settings` drops `anthropic_api_key`, so the paid runs went through a scratch wrapper that copied the key to `ANTHROPIC_API_KEY_1` (pool slot). No repo change. (2) The pilot used `--scenarios 5` (a different 5-call set from the first 5 of the 48), because `run_eval` has no subset option. (3) The NLU target has `timeout_s: 20`, against the demo's 6 s role default.
+- **Open issues:** (a) `sim.figures.stance_flipped` keeps an `info` rewrite with a self-negating tail ("Actually, it isn't.") or an added leading "No,". This caused both `contradiction_unresolved` handoffs (`s0007_019`, `s0007_040`). (b) Those "No, actually it's 6" rewrites trigger the P46b correction path (`acts.is_ack_correction`): the contradicted count goes KNOWN with no CLARIFY (`s0007_028`, `s0007_034`, the 2 false-KNOWN beliefs). No deal call hit it in this run, but one that did would draft an invalid schedule. (c) The `_build_settings` key drop from deviation (1). (d) The rewrite "Sure, we can't move on that yet." (smoke) was kept: an accept-sounding "Sure" on a `reject` hold line passes the stance check. Harmless here, since NLU read the hold, but it is the same class as (a).
+- **Checks:** `uv run ruff check .` clean; `uv run pytest -q` 1136 passed / 2 skipped / 26 xfailed; fast suite (`-m "not slow"`) with `.env` moved aside (restored) 1132 passed / 2 skipped / 4 deselected / 26 xfailed; oracle eval `eval_20261009_063803_s7` thresholds PASS (agreement_valid 1.0 n=21, deal rate 0.913).

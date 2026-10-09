@@ -223,6 +223,8 @@ I wrote down the adoption rule before the run: a new version replaces A only if 
 
 **A stays the default.** B's replies were judged more natural, winning 0.80 of the pairs where the judge picked a side. It still fails the rule on two checks. Its one private figure came from the unchanged policy, not from the new replies: the simulated creditor invented a "100%" ask, the live model read it as the creditor's real ask, and the policy accepted it aloud. Its valid-agreement rate is 0.71. A misses that check too (0.75), because the live model sometimes misread a creditor rule and the deal was then built on the wrong rule; every version shares those reading errors, and the offline policy eval above stays at 1.0. C fails on safety, on handing off to a person, and on speed. D, stopped early, was behind A on every check it was measured on. Details are in the [decision](docs/eval/ab_20261007/summary.md#decision).
 
+A later live re-check of A ([Phase 46c](docs/eval/recheck_20261009/summary.md), 2026-10-09) used the current policy, Claude Haiku 5.5 as the only reader, and a Groq-played rep. It ran the same 48 scenario ids, 14 of them reshaped by the haggling rep, and every drafted agreement was valid (10/10, against 0.75 in the A/B), at a p50 / p95 of 1.5 / 2.6 s.
+
 The judge was Claude Sonnet 5.5, shown each pair blind and in both orders; a pair only counts as a win when both orders agree. A human check of the judge is **pending**: 20 pairs are set aside for rating and have not been rated yet.
 
 ### Understanding messy lines (live, needs keys)

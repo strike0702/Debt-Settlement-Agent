@@ -54,9 +54,16 @@ key, ``app.llm.budget.DailyBudget`` is checked: when today's (UTC) spend has
 reached ``Settings.claude_daily_budget_usd`` the target is skipped and the call
 goes down the route (``failover_from`` = the skipped target). The skip emits a
 meta with ``event="llm_budget_skip"`` (and, first time each day,
-``event="llm_budget_exhausted"``), ``error`` set and ``latency_ms`` 0. A live
-success adds ``prompt_tokens`` × input price + ``completion_tokens`` × output
-price to the day; failures and cache hits add nothing.
+``event="llm_budget_exhausted"``), ``error`` set and ``latency_ms`` 0. Phase 47:
+right before the live request an upper-bound estimate (prompt estimate ×
+input price + ``max_tokens`` × output price) is reserved atomically, so
+concurrent calls overshoot the cap by at most one estimate; a failed
+reservation is a skip like the one above. A live success settles the
+reservation to ``prompt_tokens`` × input price + ``completion_tokens`` × output
+price. A timeout settles it at the prompt estimate alone (conservative: the
+request may still be billed); a response the client rejects (refusal, empty
+max_tokens) settles at its reported usage; other failures release it. Cache
+hits add nothing.
 
 Does not own NLU/NLG prompts or policy. SQLite response cache (temp 0 only).
 ``FakeLLM`` is the offline/test stand-in with a per-role response queue.
@@ -85,17 +92,24 @@ from typing import Any, Literal, TypeVar
 import anthropic
 import httpx
 import yaml
-from openai import APIConnectionError, APIStatusError, AsyncOpenAI
+from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI
 from pydantic import BaseModel
 
 from app.config import Settings, get_settings
-from app.llm.budget import DailyBudget, ModelPrice, micros_to_usd, usd_to_micros
+from app.llm.budget import (
+    BudgetReservation,
+    DailyBudget,
+    ModelPrice,
+    micros_to_usd,
+    usd_to_micros,
+)
 
 Role = Literal["nlu", "nlg", "sim", "stt", "agent", "judge"]
 
 # Both SDKs' status / connection errors take the same pool path (cooldown, retry, failover).
 _STATUS_ERRORS = (APIStatusError, anthropic.APIStatusError)
 _CONNECTION_ERRORS = (APIConnectionError, anthropic.APIConnectionError)
+_TIMEOUT_ERRORS = (APITimeoutError, anthropic.APITimeoutError)
 _AnyStatusError = APIStatusError | anthropic.APIStatusError
 # Roles that must not borrow the profile's nlu route when they have none.
 _NO_NLU_FALLBACK: frozenset[str] = frozenset({"judge"})
@@ -818,6 +832,11 @@ class LLMClient:
             )
         return self._budget
 
+    def price_for(self, provider: str, model: str) -> ModelPrice | None:
+        """``prices_usd_per_mtok`` entry for ``provider/model``, or None when unpriced."""
+        cfg = self._providers.get(provider)
+        return cfg.prices.get(model) if cfg is not None else None
+
     def budget_status(self) -> dict[str, Any]:
         """Today's budget as ``{day, spent_usd, limit_usd, remaining_usd}`` (Decimal USD)."""
         b = self._budget_for()
@@ -833,9 +852,16 @@ class LLMClient:
         self, role: Role, target: RouteTarget, failover_from: str | None
     ) -> bool:
         """True (after emitting the budget markers) when ``target`` must be skipped today."""
-        budget = self._budget_for()
-        if not budget.exhausted():
+        if not self._budget_for().exhausted():
             return False
+        await self._emit_budget_skip(role, target, failover_from)
+        return True
+
+    async def _emit_budget_skip(
+        self, role: Role, target: RouteTarget, failover_from: str | None
+    ) -> None:
+        """Emit ``llm_budget_skip`` (and ``llm_budget_exhausted`` once per day)."""
+        budget = self._budget_for()
         status = "daily budget exhausted"
         base: dict[str, Any] = {
             "role": role,
@@ -865,11 +891,24 @@ class LLMClient:
                 }
             )
         await self._emit({**base, "event": "llm_budget_skip"})
-        return True
 
-    def _record_spend(
+    def _reserve_spend(
         self,
         target: RouteTarget,
+        messages: Sequence[Mapping[str, Any]],
+        max_tokens: int | None,
+    ) -> BudgetReservation | None:
+        """Hold an upper-bound cost for one budgeted attempt (None: over budget, skip)."""
+        price = self._providers[target.provider].prices[target.model]
+        estimate = price.cost_micros(
+            _estimate_tokens(messages), max_tokens or _ANTHROPIC_DEFAULT_MAX_TOKENS
+        )
+        return self._budget_for().reserve(estimate)
+
+    def _settle_spend(
+        self,
+        target: RouteTarget,
+        reservation: BudgetReservation,
         messages: Sequence[Mapping[str, Any]],
         max_tokens: int | None,
         pt: int | None,
@@ -879,7 +918,31 @@ class LLMClient:
         price = self._providers[target.provider].prices[target.model]
         pt_n = pt if pt is not None else _estimate_tokens(messages)
         ct_n = ct if ct is not None else (max_tokens or _ANTHROPIC_DEFAULT_MAX_TOKENS)
-        self._budget_for().record(price, pt_n, ct_n)
+        self._budget_for().settle(reservation, price, pt_n, ct_n)
+
+    def _settle_failed_spend(
+        self,
+        target: RouteTarget,
+        reservation: BudgetReservation,
+        messages: Sequence[Mapping[str, Any]],
+        err: _TargetError,
+    ) -> None:
+        """Settle or release the hold of a failed budgeted attempt (see module docstring)."""
+        price = self._providers[target.provider].prices[target.model]
+        budget = self._budget_for()
+        if err.billed is not None:
+            pt, ct = err.billed
+            budget.settle(
+                reservation,
+                price,
+                pt if pt is not None else _estimate_tokens(messages),
+                ct or 0,
+            )
+        elif err.timed_out:
+            # Conservative: the provider may bill a request we stopped waiting for.
+            budget.settle(reservation, price, _estimate_tokens(messages), 0)
+        else:
+            budget.release(reservation)
 
     async def _emit(self, meta: dict[str, Any]) -> None:
         if self.on_call is not None:
@@ -1080,6 +1143,15 @@ class LLMClient:
                     {"role": "system", "content": "Reply with JSON only. No markdown fences."},
                 ]
 
+            reservation: BudgetReservation | None = None
+            if target.budgeted:
+                reservation = self._reserve_spend(target, msgs, max_tokens)
+                if reservation is None:
+                    # Another call took the last of today's budget since the check above.
+                    await self._emit_budget_skip(role, target, failover_from)
+                    failover_from = target.spec
+                    continue
+
             t0 = time.perf_counter()
             queue = QueueWait()
             call = self._call_anthropic if cfg.api == "anthropic" else self._call_chat
@@ -1100,6 +1172,8 @@ class LLMClient:
             except (_TargetExhausted, _TargetFailed) as e:
                 # Only provider / HTTP / timeout failures fail over; anything else
                 # raised by _call_chat is a bug and must surface.
+                if reservation is not None:
+                    self._settle_failed_spend(target, reservation, msgs, e)
                 last_err = e
                 await self._emit_call(
                     role,
@@ -1113,6 +1187,14 @@ class LLMClient:
                 )
                 failover_from = target.spec
                 continue
+            except BaseException:
+                # A bug or a cancelled turn: the request may have been sent, so
+                # charge it like a timeout rather than leak the hold.
+                if reservation is not None:
+                    self._settle_failed_spend(
+                        target, reservation, msgs, _TargetFailed("aborted", timed_out=True)
+                    )
+                raise
 
             if self._cache is not None and temperature == 0.0 and self.settings.llm_cache:
                 self._cache.put(
@@ -1121,8 +1203,8 @@ class LLMClient:
                     pt,
                     ct,
                 )
-            if target.budgeted:
-                self._record_spend(target, messages, max_tokens, pt, ct)
+            if reservation is not None:
+                self._settle_spend(target, reservation, messages, max_tokens, pt, ct)
 
             await self._emit_call(
                 role,
@@ -1176,6 +1258,8 @@ class LLMClient:
         pending: tuple[_ApiKey, str, float] | None = None
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout_s
+        # True while a request is on the wire: a timeout then may still be billed.
+        in_flight = False
         try:
             async with asyncio.timeout(timeout_s):
                 while True:
@@ -1223,9 +1307,11 @@ class LLMClient:
                     finally:
                         queue.ms += (time.perf_counter() - t_q) * 1000.0
                     t0 = time.perf_counter()
+                    in_flight = True
                     try:
                         resp = await send(key.client, max(0.001, deadline - loop.time()))
                     except _STATUS_ERRORS as e:
+                        in_flight = False
                         latency_ms = (time.perf_counter() - t0) * 1000.0
                         status = e.status_code
                         where = f"{provider}/{model} {key.label}"
@@ -1257,12 +1343,14 @@ class LLMClient:
                         raise _TargetFailed(
                             self._redact(f"{provider}/{model} {key.label} connection: {e}"),
                             key.label,
+                            timed_out=isinstance(e, _TIMEOUT_ERRORS),
                         ) from None
                     return resp, (time.perf_counter() - t0) * 1000.0, key
         except TimeoutError:
             raise _TargetFailed(
                 f"{provider}/{model} timed out after {timeout_s}s",
                 key.label if key is not None else None,
+                timed_out=in_flight,
             ) from None
 
     async def _call_chat(
@@ -1393,9 +1481,11 @@ class LLMClient:
         where = f"{provider}/{model} {key.label}"
         # Fail the target rather than hand back an empty or cut-off verdict.
         if resp.stop_reason == "refusal":
-            raise _TargetFailed(f"{where} stop_reason=refusal", key.label)
+            raise _TargetFailed(f"{where} stop_reason=refusal", key.label, billed=(pt, ct))
         if resp.stop_reason == "max_tokens" and not text.strip():
-            raise _TargetFailed(f"{where} stop_reason=max_tokens with no text", key.label)
+            raise _TargetFailed(
+                f"{where} stop_reason=max_tokens with no text", key.label, billed=(pt, ct)
+            )
         return text, pt, ct, latency_ms, key.label
 
     async def transcribe(self, wav_bytes: bytes, prompt: str | None = None) -> str:
@@ -1502,11 +1592,25 @@ class LLMClient:
 
 
 class _TargetError(Exception):
-    """Target-level failure; ``key_id`` is the label of the last key tried (or None)."""
+    """Target-level failure; ``key_id`` is the label of the last key tried (or None).
 
-    def __init__(self, message: str, key_id: str | None = None) -> None:
+    For the daily budget: ``timed_out`` means a request was on the wire when the
+    deadline hit (may be billed); ``billed`` is ``(prompt, completion)`` usage of
+    a response that arrived but was rejected.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        key_id: str | None = None,
+        *,
+        timed_out: bool = False,
+        billed: tuple[int | None, int | None] | None = None,
+    ) -> None:
         super().__init__(message)
         self.key_id = key_id
+        self.timed_out = timed_out
+        self.billed = billed
 
 
 class _TargetExhausted(_TargetError):

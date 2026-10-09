@@ -11,7 +11,7 @@ before, no DB touched), Anthropic failure → fallback and not counted, the eval
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -70,6 +70,11 @@ _HAIKU_YAML = _YAML.replace(
 )
 # 1000 input × $0.10/M + 100 output × $0.50/M = 100 + 50 micro-dollars.
 _HAIKU_CALL_MICROS = 150
+# _estimate_tokens of _MSG plus the JSON-only system line _chat appends:
+# (13 + 3 + 41) chars // 4 + 4 per message × 3 = 26 tokens.
+_PROMPT_ESTIMATE = 26
+# Sonnet reservation: 26 × $2/M + 1024 (default max_tokens) × $10/M.
+_SONNET_RESERVE_MICROS = 26 * 2 + 1024 * 10
 
 
 class _Out(BaseModel):
@@ -398,18 +403,23 @@ async def test_anthropic_error_falls_back_and_is_not_counted(tmp_path: Path) -> 
     await rig.client.aclose()
 
 
-async def test_anthropic_timeout_falls_back_and_is_not_counted(tmp_path: Path) -> None:
+async def test_anthropic_timeout_falls_back_and_charges_the_prompt_estimate(
+    tmp_path: Path,
+) -> None:
+    """Phase 47 [41.4]: a timed-out request may still be billed, so its prompt is charged."""
+
     async def slow(request: httpx2.Request) -> httpx2.Response:
         await asyncio.sleep(2)
         return httpx2.Response(200, json=_anthropic_ok())
 
     clock = _Clock()
-    rig = _Rig(
-        tmp_path, budget=_budget(tmp_path, clock), anthropic=slow, llm_timeout_nlu_s=0.2
-    )
+    budget = _budget(tmp_path, clock)
+    rig = _Rig(tmp_path, budget=budget, anthropic=slow, llm_timeout_nlu_s=0.2)
     assert await rig.nlu() == "free"
     assert "timed out" in rig.metas[0]["error"] or "connection" in rig.metas[0]["error"]
-    assert rig.client.budget_status()["spent_usd"] == Decimal(0)
+    # Prompt as sent (with the JSON-only system line) × $2/M, no output charged.
+    assert budget.spent_micros() == _PROMPT_ESTIMATE * 2
+    assert rig.client.budget_status()["spent_usd"] == Decimal("0.000052")
     await rig.client.aclose()
 
 
@@ -463,4 +473,102 @@ async def test_unreadable_budget_fails_closed_to_the_free_chain(tmp_path: Path) 
     rig = _Rig(tmp_path, budget=budget)
     assert await rig.nlu() == "free"
     assert rig.anthropic_calls == 0
+    await rig.client.aclose()
+
+
+# --- Phase 47: reservation before the call, reconcile after -----------------
+
+
+async def test_concurrent_calls_overshoot_the_cap_by_at_most_one_estimate(
+    tmp_path: Path,
+) -> None:
+    """[41.3] Ten calls in flight at once: holds stop new calls once the cap is reached."""
+    clock = _Clock()
+    limit = 25_000  # between two and three reservations
+    budget = DailyBudget(tmp_path / "app.db", limit_micros=limit, clock=clock)
+    peak = 0
+
+    async def slow_small(request: httpx2.Request) -> httpx2.Response:
+        nonlocal peak
+        peak = max(peak, budget.spent_micros())
+        await asyncio.sleep(0.05)
+        body = _anthropic_ok()
+        body["usage"] = {"input_tokens": 20, "output_tokens": 100}  # under the estimate
+        return httpx2.Response(200, json=body)
+
+    rig = _Rig(tmp_path, budget=budget, anthropic=slow_small)
+    who = await asyncio.gather(*(rig.nlu() for _ in range(10)))
+    # Holds 0, 10292, 20584 are under 25000; the fourth sees 30876 and skips.
+    assert rig.anthropic_calls == 3
+    assert who.count("claude") == 3 and who.count("free") == 7
+    assert peak <= limit + _SONNET_RESERVE_MICROS
+    # Reconciled to actual usage: 3 × (20 × 2 + 100 × 10) micro-dollars, exactly.
+    assert budget.spent_micros() == 3 * 1040
+    row = budget._db().execute(
+        "SELECT calls, input_tokens, output_tokens FROM llm_daily_spend"
+    ).fetchone()
+    assert row == (3, 60, 300)
+    assert rig.events().count("llm_budget_skip") == 7
+    await rig.client.aclose()
+
+
+def test_reserve_settle_release_are_integer_micros(tmp_path: Path) -> None:
+    clock = _Clock()
+    budget = _budget(tmp_path, clock, usd="0.01")  # 10_000 micros
+    price = ModelPrice.from_config({"input": "0.10", "output": "0.50"}, "t")
+    first = budget.reserve(6000)
+    assert first is not None and budget.spent_micros() == 6000
+    second = budget.reserve(6000)  # 6000 < 10000: allowed, may overshoot by one hold
+    assert second is not None and budget.spent_micros() == 12_000
+    assert budget.reserve(1) is None  # at or over the cap: no more holds
+    # 333 × 0.10 + 77 × 0.50 = 33.3 + 38.5 = 71.8 → 72 (ceil, no float drift)
+    assert budget.settle(first, price, 333, 77) == 72
+    budget.release(second)
+    assert budget.spent_micros() == 72
+    assert isinstance(budget.spent_micros(), int)
+
+
+def test_settle_charges_the_reservation_day_after_midnight(tmp_path: Path) -> None:
+    clock = _Clock()  # 23:59 UTC
+    budget = _budget(tmp_path, clock)
+    held = budget.reserve(5000)
+    assert held is not None
+    clock.now += timedelta(minutes=2)
+    budget.settle(held, ModelPrice(2_000_000, 10_000_000), 1000, 100)
+    assert budget.spent_micros(date(2026, 10, 8)) == 3000
+    assert budget.spent_micros() == 0
+
+
+async def test_refused_response_is_charged_its_reported_usage(tmp_path: Path) -> None:
+    clock = _Clock()
+    budget = _budget(tmp_path, clock)
+
+    def refused(request: httpx2.Request) -> httpx2.Response:
+        body = _anthropic_ok()
+        body["stop_reason"] = "refusal"
+        return httpx2.Response(200, json=body)
+
+    rig = _Rig(tmp_path, budget=budget, anthropic=refused)
+    assert await rig.nlu() == "free"
+    assert budget.spent_micros() == _CALL_MICROS
+    await rig.client.aclose()
+
+
+async def test_cancelled_call_charges_the_prompt_estimate(tmp_path: Path) -> None:
+    clock = _Clock()
+    budget = _budget(tmp_path, clock)
+    started = asyncio.Event()
+
+    async def hang(request: httpx2.Request) -> httpx2.Response:
+        started.set()
+        await asyncio.sleep(10)
+        return httpx2.Response(200, json=_anthropic_ok())
+
+    rig = _Rig(tmp_path, budget=budget, anthropic=hang)
+    task = asyncio.create_task(rig.nlu())
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert budget.spent_micros() == _PROMPT_ESTIMATE * 2  # hold not leaked
     await rig.client.aclose()

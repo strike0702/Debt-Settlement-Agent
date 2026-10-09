@@ -31,7 +31,8 @@
         "Which is it for the {field_label}, {clarify_old} or {clarify_new}?",
         "May I ask if the {field_label} is {clarify_old} or {clarify_new}?",
         "I want to get this right: is the {field_label} {clarify_old} or {clarify_new}?"
-      ]
+      ],
+      "reviewed": true
     },
     {
       "intent": "CONFIRM_SCHEDULE",
@@ -120,7 +121,8 @@
         "Would {counter_pct} of the balance, or {offer_total}, be acceptable?",
         "Could you consider {counter_pct} of the balance, amounting to {offer_total}?",
         "We can offer {counter_pct} of the balance, which totals {offer_total}."
-      ]
+      ],
+      "reviewed": true
     },
     {
       "intent": "READ_BACK",
@@ -141,7 +143,8 @@
         "I have {readback_value} for the {field_label}. Is that right?",
         "Okay, so {readback_value} for the {field_label}, correct?",
         "And the {field_label} is {readback_value}, did I get that right?"
-      ]
+      ],
+      "reviewed": true
     },
     {
       "intent": "REFUSE_COMMIT",
@@ -355,5 +358,5 @@
   ],
   "acts_generated": "2026-10-07",
   "acts_reviewed": "2 awkward ACK variants removed by hand",
-  "readback_reviewed": "Phase 33: READ_BACK and CLARIFY hand-written; COUNTER 'equals' wording replaced"
+  "readback_reviewed": "Phase 33: READ_BACK and CLARIFY hand-written; COUNTER 'equals' wording replaced; these three entries carry \"reviewed\": true so scripts/build_template_bank.py keeps them (Phase 47)"
 }

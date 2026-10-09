@@ -21,6 +21,13 @@ existing bank: ``ACK`` for every ``ACK_TEMPLATES`` id set (prompt
 ``ANSWER:<topic>`` paraphrases of each ``ANSWER_POINTS`` talking point (no
 placeholders; the default talking point is always kept as the first entry).
 
+Both builds merge into the existing ``--out`` file (Phase 47): an entry marked
+``"reviewed": true`` (hand-written or hand-edited copy, e.g. the Phase 33
+READ_BACK / CLARIFY / COUNTER lines) is kept as is and its key is not sent to
+the LLM; a full build leaves the act keys alone, ``--acts`` leaves the rest
+alone, and top-level notes in the file are kept. Drop the flag from an entry
+to let the next build regenerate it.
+
 The live call never sees this script; it only reads the JSON
 (``app.agent.nlg_bank``). Usage: ``uv run python scripts/build_template_bank.py
 [--profile demo] [--per-key 8] [--seeds 20] [--acts]``.
@@ -152,6 +159,40 @@ def candidates(text: str) -> list[str]:
     return out
 
 
+def is_act_entry(entry: dict[str, Any]) -> bool:
+    """True for the H3 act keys (``ACK``, ``ANSWER:<topic>``) that ``--acts`` owns."""
+    return entry["intent"] == ACK_BANK_INTENT or entry["intent"].startswith("ANSWER:")
+
+
+def reviewed_keys(bank: dict[str, Any]) -> set[BankKey]:
+    """Keys of entries marked ``reviewed``: never regenerated, never overwritten."""
+    return {
+        bank_key(e["intent"], e["placeholders"])
+        for e in bank.get("entries", [])
+        if e.get("reviewed") is True
+    }
+
+
+def merge_entries(
+    bank: dict[str, Any], fresh: list[dict[str, Any]], *, acts: bool
+) -> list[dict[str, Any]]:
+    """Existing entries outside this build's scope or marked reviewed, then ``fresh``.
+
+    Scope is the act keys for ``--acts`` and every other key for a full build.
+    A fresh entry whose key is reviewed is dropped (the hand copy wins).
+    """
+    keep = [
+        e for e in bank.get("entries", []) if is_act_entry(e) != acts or e.get("reviewed") is True
+    ]
+    held = {bank_key(e["intent"], e["placeholders"]) for e in keep}
+    return keep + [e for e in fresh if bank_key(e["intent"], e["placeholders"]) not in held]
+
+
+def read_bank(path: Path) -> dict[str, Any]:
+    """The existing bank at ``path``, or ``{}`` when there is none yet."""
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+
 async def generate(
     keys: list[BankKey], *, profile: str, per_key: int
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
@@ -210,8 +251,10 @@ _ANSWER_EXTRA_RE = re.compile(
 )
 
 
-async def generate_acts(*, profile: str, per_key: int) -> list[dict[str, Any]]:
-    """Bank entries for the H3 ``ACK`` / ``ANSWER:<topic>`` keys."""
+async def generate_acts(
+    *, profile: str, per_key: int, skip: set[BankKey] | None = None
+) -> list[dict[str, Any]]:
+    """Bank entries for the H3 ``ACK`` / ``ANSWER:<topic>`` keys (``skip``: reviewed keys)."""
     settings = get_settings().model_copy(update={"llm_profile": profile, "llm_cache": False})
     llm = make_client(settings)
     entries: list[dict[str, Any]] = []
@@ -222,6 +265,7 @@ async def generate_acts(*, profile: str, per_key: int) -> list[dict[str, Any]]:
         (answer_bank_intent(topic), (), act_messages("answer", [], talking_point=text), text)
         for topic, text in ANSWER_POINTS.items()
     ]
+    jobs = [j for j in jobs if bank_key(j[0], j[1]) not in (skip or set())]
     try:
         for intent_key, ids, base, default in jobs:
             kept = [default] if default and template_ok(default, ids) else []
@@ -255,13 +299,28 @@ async def generate_acts(*, profile: str, per_key: int) -> list[dict[str, Any]]:
 
 
 def merge_act_entries(bank: dict[str, Any], acts: list[dict[str, Any]]) -> dict[str, Any]:
-    """Replace every ``ACK`` / ``ANSWER:*`` entry in ``bank`` with ``acts``; keep the rest."""
-    kept = [
-        e
-        for e in bank.get("entries", [])
-        if e["intent"] != ACK_BANK_INTENT and not e["intent"].startswith("ANSWER:")
-    ]
-    return {**bank, "entries": kept + acts, "acts_generated": date.today().isoformat()}
+    """Replace the unreviewed ``ACK`` / ``ANSWER:*`` entries in ``bank`` with ``acts``."""
+    entries = merge_entries(bank, acts, acts=True)
+    return {**bank, "entries": entries, "acts_generated": date.today().isoformat()}
+
+
+def merge_full_build(
+    bank: dict[str, Any],
+    entries: list[dict[str, Any]],
+    *,
+    profile: str,
+    per_key: int,
+    stats: dict[str, int],
+) -> dict[str, Any]:
+    """Replace the unreviewed non-act entries in ``bank``; keep its notes and act keys."""
+    return {
+        **bank,
+        "generated": date.today().isoformat(),
+        "profile": profile,
+        "per_key": per_key,
+        "stats": stats,
+        "entries": merge_entries(bank, entries, acts=False),
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -273,24 +332,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--acts", action="store_true", help="only (re)build the H3 act keys")
     args = ap.parse_args(argv)
 
+    bank = read_bank(args.out)
+    skip = reviewed_keys(bank)
     if args.acts:
-        bank = json.loads(args.out.read_text(encoding="utf-8")) if args.out.exists() else {}
-        acts = asyncio.run(generate_acts(profile=args.profile, per_key=args.per_key))
+        acts = asyncio.run(generate_acts(profile=args.profile, per_key=args.per_key, skip=skip))
         args.out.write_text(
             json.dumps(merge_act_entries(bank, acts), indent=2) + "\n", encoding="utf-8"
         )
         return 0
 
-    keys = asyncio.run(collect_keys(args.seeds))
+    keys = [k for k in asyncio.run(collect_keys(args.seeds)) if k not in skip]
     entries, stats = asyncio.run(generate(keys, profile=args.profile, per_key=args.per_key))
-    bank = {
-        "generated": date.today().isoformat(),
-        "profile": args.profile,
-        "per_key": args.per_key,
-        "stats": stats,
-        "entries": entries,
-    }
-    args.out.write_text(json.dumps(bank, indent=2) + "\n", encoding="utf-8")
+    merged = merge_full_build(
+        bank, entries, profile=args.profile, per_key=args.per_key, stats=stats
+    )
+    args.out.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(stats))
     return 0
 

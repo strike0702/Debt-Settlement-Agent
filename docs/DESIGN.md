@@ -133,8 +133,11 @@ unchanged. The Haiku target is `budgeted`: spend is summed per UTC day from
 each live reply's token counts at the prices in `config/providers.yaml`
 ($0.10 / $0.50 per million tokens), as integer micro-dollars in the app DB.
 Once the day reaches `CLAUDE_DAILY_BUDGET_USD` (default $1.00), the target is
-skipped and the call goes to Groq until 00:00 UTC. A budget never blocks a
-call. Phrasing (NLG), speech-to-text and "Watch a call" are unchanged. Sonnet
+skipped and the call goes to Groq until 00:00 UTC. Each call first reserves
+an upper-bound estimate atomically and settles it to the real usage after, so
+concurrent calls overshoot the cap by at most one estimate; a timed-out call
+is charged its prompt estimate, since it may still be billed (Phase 47). A
+budget never blocks a call. Phrasing (NLG), speech-to-text and "Watch a call" are unchanged. Sonnet
 5.5 remains the eval `judge`, which is never budgeted. Without
 `ANTHROPIC_API_KEY` the route behaves exactly as before.
 

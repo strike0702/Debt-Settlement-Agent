@@ -172,3 +172,11 @@ def test_rep_endpoint_unknown_id_is_404(tmp_path: Path) -> None:
     with make_client(tmp_path) as c:
         assert c.get("/scenarios/nope/rep").status_code == 404
         assert c.get("/scenarios/..%2Ffixtures/rep").status_code == 404
+
+
+def test_balloon_structure_card_shows_the_sim_floor() -> None:
+    """[34.1] The human rep sees the same floor the simulated rep holds."""
+    folder = SCENARIOS_ROOT / "balloon_structure"
+    acct = rep_account_from_card((folder / "rep_card.md").read_text(encoding="utf-8"))
+    sim = json.loads((folder / "sim.json").read_text())
+    assert acct["rules"]["floor_bp"] == sim["floor_bp"] == 3500

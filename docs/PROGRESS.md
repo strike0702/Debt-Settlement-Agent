@@ -49,6 +49,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 40 | Haiku NLU measurement (user request, measurement only) | done |
 | 41 | Claude NLU on the demo + daily budget (user request) | done |
 | 42 | NLU prompt for Haiku, gated on Sonnet (user request) | done: Haiku improved, Sonnet gate not run (cost cap), prompt reverted |
+| 47 | Tooling tidy: bank build, budget reservation, judge cost, media size, rep card floor | done |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -225,6 +226,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `common_ids(arms)`, `outcome(r)`, `pick_transcripts(results) -> (representative, worst)`, `arm_row(results)`, `adoption_checks(row, base, win_rate) -> dict[str, bool]` (fails closed), `build_report(arm_dirs, judges, *, decision="", notes="") -> (md, data)`
 
 ### `eval.judge_naturalness` (Phase 24a; not a gate)
+- Phase 47: `class JudgeCallLog(path, price_for)` — `on_call` hook, appends one JSONL row per attempt (`role, provider, model, latency_ms, prompt_tokens, completion_tokens, cache_hit, failover_from, error, cost_usd`) and keeps totals; `.totals() -> {calls, input_tokens, output_tokens, cost_usd (str), unpriced_calls}`; `format_cost(totals) -> str`; `run_judge(..., call_log=None)` adds `summary["cost"]`. The CLI writes `<out>/judge_calls.jsonl` and prints `judge cost: $X over N calls (I in / O out)`.
 - CLI `python -m eval.judge_naturalness RUN_A RUN_B [--profile eval] [--limit N] [--seed 0] [--human-pairs 20] [--out DIR]`
 - `paired_results(run_a, run_b)`, `async judge_pair(llm, text_a, text_b) -> {a_first, b_first, verdict}`, `summarize(verdicts) -> dict` (Wilson CI over decisive pairs), `write_human_pairs(out_dir, pairs, *, n, seed, label_a, label_b)`, `async run_judge(run_a, run_b, *, llm, out_dir, limit=None, seed=0, human_pairs=20) -> dict`
 - Judge calls use role `judge` (Phase 30; was `sim`); a win needs both orders to agree, else tie
@@ -359,7 +361,10 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 ### `app.llm.budget` (Phase 41)
 - `MICROS_PER_USD = 1_000_000`; `usd_to_micros(Decimal | str | int) -> int` (ceil; `TypeError` on float); `micros_to_usd(int) -> Decimal`
 - `@dataclass(frozen) ModelPrice(input_micros_per_mtok, output_micros_per_mtok)`; `.from_config(raw, where)`; `.cost_micros(input_tokens, output_tokens) -> int` (ceil)
+- Phase 47: `@dataclass(frozen) BudgetReservation(day: str, micros: int)`; `DailyBudget.reserve(micros) -> BudgetReservation | None` (one conditional UPDATE: held only while spend incl. holds < limit; None = skip, also on a DB error); `settle(reservation, price, input_tokens, output_tokens) -> int` (replaces the hold with the actual cost on the reservation's day, +1 call, + tokens); `release(reservation)`. `record()` kept.
 - `class DailyBudget(db_path, *, limit_micros, clock=utc_now)` — table `llm_daily_spend(day PK, spent_micros, calls, input_tokens, output_tokens, exhausted_noted)` in the app DB, opened lazily; `today() -> date` (UTC); `spent_micros(day=None)`; `remaining_micros()`; `exhausted() -> bool` (spent ≥ limit; unreadable table → True, fail closed); `record(price, input_tokens, output_tokens) -> int`; `note_exhausted() -> bool` (True once per day); `close()`
+
+- Phase 47: `LLMClient.price_for(provider, model) -> ModelPrice | None`. A budgeted target reserves `price.cost_micros(_estimate_tokens(msgs), max_tokens or 1024)` after the cache check and right before the live request; a failed reservation emits the same `llm_budget_skip` (and once-a-day `llm_budget_exhausted`) markers and fails over. Success settles to usage; timeout with a request on the wire (pool deadline or SDK `APITimeoutError`) or a cancelled task settles at the prompt estimate; a refusal / empty `max_tokens` response settles at its reported usage; other failures release.
 
 ### `app.llm.call_audit`
 - `LLM_CALL_ID: ContextVar[str | None]` (name `"llm_call_id"`) — call id of the turn in progress
@@ -1621,3 +1626,24 @@ Every reason sentence, before and after:
   - `uv run pytest -q`: 955 passed / 2 skipped / 26 xfailed;
   - fast suite (`-m "not slow"`) with `.env` moved aside (restored): 952 passed / 2 skipped / 3 deselected / 26 xfailed;
   - oracle eval `eval_20261008_181232_s7` thresholds PASS, metrics unchanged (turns_to_outcome 5.12, surplus_captured 0.689, stuck 0, leaks 0).
+
+### Phase 47 (tooling tidy) (2026-10-09) — bank build, budget reservation, judge cost, media size, rep card floor (user decision, clean-slate review; not in REVIEW_PLAN)
+
+- Outcome: **done.** No change to demo behaviour: oracle eval `eval_20261009_012607_s7` thresholds PASS, metrics table identical to `docs/eval/policy_eval_20261006/summary.md` (latency excluded). No paid or network LLM calls.
+- Files: `app/llm/prompts.py` (READ_BACK entry only), `app/llm/budget.py`, `app/llm/client.py`, `scripts/build_template_bank.py`, `config/nlg_bank.json` (`"reviewed": true` on READ_BACK / CLARIFY / COUNTER + note), `eval/judge_naturalness.py`, `docs/assets/demo.gif`, `docs/assets/README.md`, `fixtures/scenarios/balloon_structure/rep_card.md`, `docs/DESIGN.md` (ADR 6 budget sentence), tests: new `tests/unit/test_build_template_bank.py`; `tests/unit/{test_llm_budget,test_nlg_bank,test_judge_naturalness,test_rep_account}.py`.
+- Interfaces: see the `app.llm.budget`, `app.llm.client` and `eval.judge_naturalness` entries above (Phase 47 lines). Bank entry key `reviewed: bool` (optional; `app.agent.nlg_bank` ignores it).
+- Carry-over (each with a test):
+  - [33.1] LLM-NLG READ_BACK instruction is now "Ask the rep to confirm {readback_value} for the {field_label}." (bank mode, the demo default, never sends it). No test pins prompt text; the change is one line.
+  - [33.2] `build_template_bank.py` merges into `--out`: entries with `"reviewed": true` are kept and their keys are not sent to the LLM; a full build leaves act keys and top-level notes alone, `--acts` leaves the rest alone and also honours `reviewed`. `test_build_template_bank.py` (FakeLLM, stubbed key collection): full build keeps READ_BACK / CLARIFY / COUNTER / ACK / ANSWER and notes, asks only for the unreviewed key; `--acts` with reviewed acts makes no call; `merge_entries` unit test.
+  - [33.3] **Kept, not removed.** The CLARIFY entry `(clarify_new, clarify_old, field_label)` is live: the contradiction CLARIFY in `_decide_clarify` for a non-tier field (max payments, minimum payment, …) has no `template_override` and keys to it, so bank mode speaks it. Only the cents-ambiguity CLARIFY (`bare_amount` + override) and the tier CLARIFYs bypass it; the Phase 33 note that "no live CLARIFY matches" was wrong. `test_contradiction_clarify_is_spoken_from_the_bank` pins it (max_payments, min_payment_cents).
+  - [41.3] Budget reservation (see interfaces). `test_concurrent_calls_overshoot_the_cap_by_at_most_one_estimate`: 10 concurrent calls under a 25,000-micro cap with 10,292-micro holds → 3 Anthropic calls, peak ≤ cap + one estimate, settled spend exactly 3 × 1,040; before the change all 10 would pass the check. Plus integer reserve/settle/release math, settle on the reservation's day across midnight, refusal settled at usage, cancelled call charged its prompt estimate (no leaked hold).
+  - [41.4] A timed-out budgeted request (request on the wire) is charged its prompt-token estimate, no output (conservative; documented in the module docstrings and ADR 6). `test_anthropic_timeout_falls_back_and_charges_the_prompt_estimate` replaces `..._is_not_counted`. A timeout while still waiting on the local rate limiter is released (nothing was sent).
+  - [24b.8] Judge cost log (see interfaces). Tests: micro-dollar cost per row and totals (cache hit 0, unpriced model counted separately, not guessed), `run_judge` writes one row per ordered judgment and `summary.json["cost"]`, the CLI prints the total, shipped providers price `anthropic/claude-sonnet-5-5`.
+  - [25r.2] `docs/assets/demo.gif` 3,706,364 → 2,330,202 bytes; README media total (GIF + MP4) 4,843,640 → **3,467,478** bytes; cap unchanged. Re-encoded with ffmpeg only from the Phase 25r GIF: 1080 px (was 1200), 6 fps (was 12), 128-colour `stats_mode=full` palette, no dither, `diff_mode=rectangle`. Same duration (33.8 s), same filename, so no README change. Checked frames by eye: text legible; a `stats_mode=diff` palette (and 64 colours) turned the green accents grey, so `full` was used. The original is in git history only. MP4 untouched.
+  - [34.1] `balloon_structure/rep_card.md`: `| Floor | 35% |` after "Opening ask" (counter_ladder's plain style; easy_deal uses "40% (do not go below)"). `test_balloon_structure_card_shows_the_sim_floor`.
+- Deviations: (1) [33.3] kept the entry (see above) instead of removing it. (2) Beyond the item text, a refused / empty `max_tokens` Anthropic reply and a cancelled call also settle the hold (refusal at reported usage, cancel at the prompt estimate), since the same file and leak applied. (3) `LLMClient.price_for` added so the judge prices calls from `prices_usd_per_mtok` without reading private state.
+- Open issues:
+  - The reservation's prompt side is the `chars/4` estimate, so if a real prompt is much longer than estimated, the settled spend can pass the cap by more than one estimate (output is bounded by `max_tokens`). For Haiku at $1/day this is fractions of a cent.
+  - `late_start_date`, `no_space` and `rescue_escalate` rep cards still have no Floor row while their `sim.json` has `floor_bp` (out of scope; item named balloon only).
+  - Render's ephemeral disk still resets the day's spend on restart (unchanged from Phase 41).
+- Checks: `uv run ruff check .` clean. `uv run pytest -q` 971 passed / 2 skipped / 26 xfailed. Fast suite (`-m "not slow"`) with `.env` moved aside (restored): 968 passed / 2 skipped / 3 deselected / 26 xfailed. Oracle eval (`--nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7`) `eval_20261009_012607_s7` thresholds PASS, metrics identical (turns_to_outcome 5.12, surplus_captured 0.689, stuck 0, leaks 0).

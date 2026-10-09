@@ -15,6 +15,13 @@ over decisive scenarios and its Wilson 95% CI. Also writes ``human_pairs.csv``
 ``human_pairs_key.csv`` (which side is which
 arm) so a human can check the judge.
 
+Cost (Phase 47): every judge attempt is logged to ``judge_calls.jsonl`` (role,
+provider, model, tokens, latency, error, ``cost_usd`` from the provider's
+``prices_usd_per_mtok``; cache hits cost 0), totals go into ``summary.json``
+under ``cost`` and the run prints one ``judge cost:`` line. A model with no
+price is counted under ``unpriced_calls`` rather than guessed. Judge spend is
+not the demo's daily budget (``app.llm.budget``); this is a report only.
+
 This reverses ROADMAP §6's "no LLM-as-judge" for this one secondary metric only
 (REVIEW_PLAN §2(c)). It reads run results; it never runs an agent.
 """
@@ -27,12 +34,14 @@ import csv
 import json
 import random
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from app.llm.budget import ModelPrice, micros_to_usd
 from app.llm.client import make_client
 from eval.metrics import load_scenario_results, wilson_interval
 from eval.run_eval import RESULTS_ROOT, _build_settings
@@ -53,6 +62,70 @@ class _JudgeReply(BaseModel):
 
     winner: str
     reason: str = ""
+
+
+class JudgeCallLog:
+    """``on_call`` hook: one JSONL row per judge attempt plus running cost totals."""
+
+    def __init__(
+        self, path: Path, price_for: Callable[[str, str], ModelPrice | None]
+    ) -> None:
+        self.path = path
+        self._price_for = price_for
+        self.calls = 0
+        self.input_tokens = 0
+        self.output_tokens = 0
+        self.cost_micros = 0
+        self.unpriced_calls = 0
+
+    def __call__(self, meta: dict[str, Any]) -> None:
+        pt = meta.get("prompt_tokens") or 0
+        ct = meta.get("completion_tokens") or 0
+        price = self._price_for(str(meta.get("provider")), str(meta.get("model")))
+        cost: int | None = None
+        if meta.get("cache_hit"):
+            cost = 0
+        elif price is not None:
+            cost = price.cost_micros(pt, ct)
+        elif pt or ct:
+            self.unpriced_calls += 1
+        self.calls += 1
+        if not meta.get("cache_hit"):
+            self.input_tokens += pt
+            self.output_tokens += ct
+        self.cost_micros += cost or 0
+        row = {
+            key: meta.get(key)
+            for key in (
+                "role",
+                "provider",
+                "model",
+                "latency_ms",
+                "prompt_tokens",
+                "completion_tokens",
+                "cache_hit",
+                "failover_from",
+                "error",
+            )
+        }
+        row["cost_usd"] = str(micros_to_usd(cost)) if cost is not None else None
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(row) + "\n")
+
+    def totals(self) -> dict[str, Any]:
+        """Calls, tokens and cost so far (``cost_usd`` as an exact decimal string)."""
+        return {
+            "calls": self.calls,
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "cost_usd": str(micros_to_usd(self.cost_micros)),
+            "unpriced_calls": self.unpriced_calls,
+        }
+
+
+def _no_price(provider: str, model: str) -> ModelPrice | None:
+    return None
 
 
 def _transcript(result: dict[str, Any]) -> str:
@@ -160,8 +233,12 @@ async def run_judge(
     limit: int | None = None,
     seed: int = 0,
     human_pairs: int = 20,
+    call_log: JudgeCallLog | None = None,
 ) -> dict[str, Any]:
-    """Judge every shared scenario, write judge / summary / human CSVs; return summary."""
+    """Judge every shared scenario, write judge / summary / human CSVs; return summary.
+
+    With ``call_log`` (already wired as ``llm.on_call``) its totals go in ``cost``.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     pairs = paired_results(run_a, run_b)
     if limit is not None:
@@ -178,12 +255,25 @@ async def run_judge(
         "gate": False,
         **summarize([r["verdict"] for r in rows]),
     }
+    if call_log is not None:
+        summary["cost"] = call_log.totals()
     (out_dir / "judge.json").write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     write_human_pairs(
         out_dir, pairs, n=human_pairs, seed=seed, label_a=run_a.name, label_b=run_b.name
     )
     return summary
+
+
+def format_cost(totals: dict[str, Any]) -> str:
+    """One-line cost total printed at the end of a run."""
+    line = (
+        f"judge cost: ${totals['cost_usd']} over {totals['calls']} calls "
+        f"({totals['input_tokens']} in / {totals['output_tokens']} out)"
+    )
+    if totals["unpriced_calls"]:
+        line += f"; {totals['unpriced_calls']} calls on an unpriced model not counted"
+    return line
 
 
 def _resolve(run: str) -> Path:
@@ -196,6 +286,10 @@ async def _async_main(args: argparse.Namespace) -> int:
     llm = make_client(settings)
     stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     out_dir = Path(args.out) if args.out else RESULTS_ROOT / f"judge_{stamp}"
+    call_log = JudgeCallLog(
+        out_dir / "judge_calls.jsonl", getattr(llm, "price_for", _no_price)
+    )
+    llm.on_call = call_log
     try:
         summary = await run_judge(
             _resolve(args.run_a),
@@ -205,10 +299,12 @@ async def _async_main(args: argparse.Namespace) -> int:
             limit=args.limit,
             seed=args.seed,
             human_pairs=args.human_pairs,
+            call_log=call_log,
         )
     finally:
         await llm.aclose()
     print(json.dumps(summary, indent=2))
+    print(format_cost(call_log.totals()))
     print(f"wrote {out_dir}")
     return 0
 

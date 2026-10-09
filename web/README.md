@@ -6,7 +6,7 @@ The new frontend for the debt settlement agent: a single "call console" screen t
 
 | 1440 px, Debt negotiator view, mid-call | 390 px |
 |---|---|
-| ![The console at 1440 px in the Debt negotiator view, light theme, in the middle of a simulated Haggling rep call. "How the agent decided" has the turn "Took a step up to 51%" open: what the rep said, what the agent heard, whether the client can pay, the decision and what the agent said. The proposed schedule and the scenario brief sit in the right column.](docs/screenshots/console-1440-operator.webp) | ![The console at 390 px: the header, view toggle, call buttons and scenario cards stack above the conversation.](docs/screenshots/console-390.webp) |
+| ![The console at 1440 px in the Debt negotiator view, light theme, after a simulated Haggling rep call that ended in a deal at 65%. "How the agent decided" has the turn "Took a step up to 59%" open: what the rep said, what the agent heard, whether the client can pay, the decision and what the agent said. The rows above it show the final offer of 62% and the accept at 65%. The drafted agreement, proposed schedule and scenario brief sit in the right column.](docs/screenshots/console-1440-operator.webp) | ![The console at 390 px: the header, view toggle, call buttons and scenario cards stack above the conversation.](docs/screenshots/console-390.webp) |
 
 The Creditor rep view after a simulated "No room to settle" call that ends in a handoff. The conversation closes with "Call ended: handed off to a specialist", and the card in the agreement's slot shows only what the agent told the rep, never the reason code. There is no decision trace, and the rep sees their own account and the terms the agent heard.
 

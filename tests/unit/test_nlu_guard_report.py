@@ -50,10 +50,13 @@ def test_context_rows_list_forced_lines_only() -> None:
     old = [
         {"id": "x", "text": "That's too low.", "expected": {"stance": "reject"},
          "predicted": {"stance": "reject"}},
-        {"id": "y", "text": "Is that agreed?", "expected": {"stance": "question"},
+        {"id": "y", "text": "Agreed, we accept.", "expected": {"stance": "question"},
          "predicted": {"stance": "accept"}},
         {"id": "z", "text": "Let me look.", "expected": {"stance": "stall"},
          "predicted": {"stance": "stall"}},
+        # A phrase inside a question no longer forces a label (Phase 45).
+        {"id": "w", "text": "Is that agreed?", "expected": {"stance": "question"},
+         "predicted": {"stance": "question"}},
     ]
     rows = {r["id"]: r for r in context_rows(old)}
     assert set(rows) == {"x", "y"}

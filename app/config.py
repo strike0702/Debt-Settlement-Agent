@@ -2,7 +2,8 @@
 
 API keys, LLM profile and per-role request timeouts, NLG/NLU mode (and the
 NLG template-bank path), DB path,
-negotiation knobs (max turns, anchor ratio, firm disclosure). Call
+negotiation knobs (max turns, anchor ratio, accept line, loop guard, firm
+disclosure). Call
 ``get_settings()``; do not construct ``Settings`` ad hoc in hot paths.
 
 Phase 41: ``claude_daily_budget_usd`` (env ``CLAUDE_DAILY_BUDGET_USD``) caps the
@@ -29,6 +30,8 @@ from pydantic_settings import (
     PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
+
+from app.domain.negotiation import ACCEPT_LINE_PCT_OF_MAX_BP
 
 # NAME or NAME_<n> where NAME ends in _KEY (GROQ_API_KEY, GROQ_API_KEY_2, ...).
 _POOL_VAR_RE = re.compile(r"^[A-Z0-9_]*_KEY(?:_\d+)?$")
@@ -124,8 +127,13 @@ class Settings(BaseSettings):
     anchor_ratio: float = 0.7
     concession_factor: float = 0.5
     max_counters: int = 4
-    # Confirm at ask when gap to next counter is this small or less (bp).
-    close_gap_bp: int = 200
+    # Phase 45: accept only at or below this share of the client's ceiling
+    # (bp of max_bp; 7500 = 75.00%), and never counter above it. Integer math.
+    accept_line_pct_of_max_bp: int = Field(default=ACCEPT_LINE_PCT_OF_MAX_BP, ge=0, le=10000)
+    # Phase 45 loop guard: hand off instead of asking the same question this
+    # many + 1 times, or after this many rep turns in a row with no progress.
+    max_same_question: int = 2
+    max_no_progress_turns: int = 4
 
     firm_name: str = "Synthetic Debt Relief"
     opening_disclosure: str = (

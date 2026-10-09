@@ -1101,6 +1101,195 @@ Misses (line ids):
 - terms: hs08
 - filler false accept: -
 
+## FIRM_HAIKU_P45
+
+- git: `15e0540`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 20  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=20
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 1 | 0 | 0.000 | n/a |
+| firm | 10 | 10 | 8 | 0 | 0.556 | 1.000 |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.950 |
+| term exact-match (all lines) | 0.850 |
+| term exact-match (lines with terms, n=14) | 0.857 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- demands_commitment: FP fn09; FN -
+- firm: FP fn01, fn02, fn04, fn05, fn06, fn07, fn09, fn10; FN -
+- terms: fn04, fn08, fn10
+- filler false accept: -
+
+## PROBES_HAIKU_P45
+
+- git: `15e0540`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 12  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=12
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 1 | 0 | 0.000 | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 4 | 1 | 6 | 3 | 0.143 | 0.250 |
+| stance=reject | 1 | 1 | 4 | 0 | 0.200 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.167 |
+| term exact-match (all lines) | 0.917 |
+| term exact-match (lines with terms, n=0) | n/a |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- demands_commitment: FP q02; FN -
+- stance=accept: FP q01, q02, q03, q04, q05, q06; FN q07, q08, q10
+- stance=reject: FP q07, q08, q09, q10; FN -
+- terms: q08
+- filler false accept: -
+
+## HAIKU_P45_GUARD
+
+- git: `15e0540`  profile=`claude_haiku_nlu`  ref=2026-04-01
+- stance: repaired (repair_stance on, as shipped); rescored from `docs/eval/nlu_corpus_haiku_p43_fix.jsonl`; stance/firm guards re-run with current code
+- lines: 183  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 1 | 0 | 0.971 | 1.000 |
+| demands_commitment | 13 | 13 | 5 | 0 | 0.722 | 1.000 |
+| firm | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 6 | 6 | 4 | 0 | 0.600 | 1.000 |
+| hostility | 5 | 2 | 0 | 3 | 1.000 | 0.400 |
+| stance=accept | 11 | 11 | 1 | 0 | 0.917 | 1.000 |
+| stance=reject | 9 | 9 | 0 | 0 | 1.000 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.869 |
+| term exact-match (all lines) | 0.978 |
+| term exact-match (lines with terms, n=66) | 0.939 |
+| filler false accepts (n=31) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP n10; FN -
+- demands_commitment: FP n08, i09, a11, x03, k05; FN -
+- wants_to_end: FP x02, e06, e07, e10; FN -
+- hostility: FP -; FN x01, x02, x04
+- stance=accept: FP c11; FN -
+- terms: f16, f17, d04, d11
+- filler false accept: -
+
+## HELDOUT_STANCE_HAIKU_P45_GUARD
+
+- git: `15e0540`  profile=`claude_haiku_nlu`  ref=2026-04-01
+- stance: repaired (repair_stance on, as shipped); rescored from `docs/eval/nlu_corpus_heldout_stance_haiku_p43_fix.jsonl`; stance/firm guards re-run with current code
+- lines: 32  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=32
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 5 | 4 | 0 | 1 | 1.000 | 0.800 |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.969 |
+| term exact-match (all lines) | 0.969 |
+| term exact-match (lines with terms, n=16) | 0.938 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- wants_to_end: FP -; FN hs20
+- terms: hs08
+- filler false accept: -
+
+## FIRM_HAIKU_P45_GUARD
+
+- git: `15e0540`  profile=`claude_haiku_nlu`  ref=2026-04-01
+- stance: repaired (repair_stance on, as shipped); rescored from `docs/eval/nlu_corpus_firm_haiku_p45.jsonl`; stance/firm guards re-run with current code
+- lines: 20  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=20
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 1 | 0 | 0.000 | n/a |
+| firm | 10 | 10 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.950 |
+| term exact-match (all lines) | 0.850 |
+| term exact-match (lines with terms, n=14) | 0.857 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- demands_commitment: FP fn09; FN -
+- terms: fn04, fn08, fn10
+- filler false accept: -
+
+## PROBES_HAIKU_P45_GUARD
+
+- git: `15e0540`  profile=`claude_haiku_nlu`  ref=2026-04-01
+- stance: repaired (repair_stance on, as shipped); rescored from `docs/eval/nlu_corpus_probes_haiku_p45.jsonl`; stance/firm guards re-run with current code
+- lines: 12  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=12
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 1 | 0 | 0.000 | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 4 | 3 | 0 | 1 | 1.000 | 0.750 |
+| stance=reject | 1 | 1 | 2 | 0 | 0.333 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.833 |
+| term exact-match (all lines) | 0.917 |
+| term exact-match (lines with terms, n=0) | n/a |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- demands_commitment: FP q02; FN -
+- stance=accept: FP -; FN q07
+- stance=reject: FP q07, q09; FN -
+- terms: q08
+- filler false accept: -
+
 ## Notes
 
 - Both runs used the same model and prompt (Groq `gpt-oss-120b`, temperature 0).

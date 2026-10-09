@@ -12,10 +12,12 @@ from app.agent.policy import (
     Intent,
     NegotiationState,
     Phase,
+    anchor_bp,
     ask_pct_to_bp,
     decide,
     draft_agreement,
-    next_counter,
+    rep_turn_progress,
+    step_bp,
 )
 from app.config import Settings
 from app.domain.belief import BeliefState, TermStatus
@@ -56,7 +58,7 @@ _SETTINGS = Settings(
     max_counters=4,
     anchor_ratio=0.7,
     concession_factor=0.5,
-    close_gap_bp=200,
+
 )
 
 
@@ -74,8 +76,10 @@ def test_rule1_max_turns() -> None:
         _afford(6000),
         settings=_SETTINGS,
     )
-    assert action.intent == Intent.NO_DEAL_WRAP
+    # Deal-or-handoff (Phase 45): the turn cap is a handoff, not a no-deal end.
+    assert action.intent == Intent.ESCALATE
     assert action.reason == "max_turns"
+    assert action.next_phase == Phase.ESCALATE
 
 
 def test_rule2_hostility_escalates() -> None:
@@ -237,8 +241,9 @@ def test_rule9_infeasible_no_rescue_no_deal() -> None:
         settings=_SETTINGS,
         rescue_within_guardrail=False,
     )
-    assert action.intent == Intent.NO_DEAL_WRAP
-    assert "no_deal_reason" in action.text_slots
+    assert action.intent == Intent.ESCALATE
+    assert action.reason == "infeasible"
+    assert "escalate_reason" in action.text_slots
 
 
 def test_rule9_infeasible_with_alt_date_counters_terms() -> None:
@@ -255,7 +260,7 @@ def test_rule9_infeasible_with_alt_date_counters_terms() -> None:
     )
     assert action.intent == Intent.COUNTER_TERMS
     assert action.facts["alt_first_payment_date"].value == alt
-    # Already offered this field → no deal when no further alt.
+    # Already offered this field → hand off when no further alt.
     action2 = decide(
         b,
         _neg(
@@ -269,7 +274,8 @@ def test_rule9_infeasible_with_alt_date_counters_terms() -> None:
         rescue_within_guardrail=False,
         term_alt=("first_payment_date", alt),
     )
-    assert action2.intent == Intent.NO_DEAL_WRAP
+    assert action2.intent == Intent.ESCALATE
+    assert action2.reason == "infeasible"
 
 
 def test_rule9_alt_date_beats_rescue_escalate() -> None:
@@ -558,22 +564,37 @@ def test_negotiate_ask_within_offer_confirms() -> None:
 
 
 def test_negotiate_rep_firm_confirms_ask() -> None:
+    """Firm at or below the line: one final counter halfway, then accept the repeat."""
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
-    action = decide(
+    afford = _afford(6000, list(range(100, 6100, 100)))  # line = 4500
+    final = decide(
+        b,
+        _neg(turn_idx=5, ask_bp=4500, counters_offered=[3100], phase=Phase.NEGOTIATE),
+        TurnAnalysis(stance="reject", firm=True),
+        afford,
+        settings=_SETTINGS,
+    )
+    assert final.intent == Intent.COUNTER
+    assert final.reason == "final_counter"
+    assert final.facts["counter_pct"].value == 3800  # halfway 3100 → 4500
+    offer = next(e for e in final.effects if e.kind == "offer_counter")
+    assert offer.data["final_ask"] == 4500
+    repeat = decide(
         b,
         _neg(
-            turn_idx=5,
+            turn_idx=6,
             ask_bp=4500,
-            counters_offered=[3100],
+            counters_offered=[3100, 3800],
+            final_counter_ask=4500,
             phase=Phase.NEGOTIATE,
         ),
         TurnAnalysis(stance="reject", firm=True),
-        _afford(6000, list(range(100, 6100, 100))),
+        afford,
         settings=_SETTINGS,
     )
-    assert action.intent == Intent.CONFIRM_SCHEDULE
-    assert action.reason == "rep_firm"
-    assert action.facts["settlement_pct"].value == 4500
+    assert repeat.intent == Intent.CONFIRM_SCHEDULE
+    assert repeat.reason == "rep_firm"
+    assert repeat.facts["settlement_pct"].value == 4500
 
 
 def test_negotiate_firm_first_turn_still_counters() -> None:
@@ -587,76 +608,51 @@ def test_negotiate_firm_first_turn_still_counters() -> None:
         settings=_SETTINGS,
     )
     assert action.intent == Intent.COUNTER
+    assert action.reason == "final_counter"
+    assert action.facts["counter_pct"].value < 4500
 
 
 def test_negotiate_counters_exhausted_confirms() -> None:
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    neg = dict(
+        turn_idx=8,
+        counters_offered=[3100, 3800, 4100, 4300],
+        counter_turns=[4, 5, 6, 7],
+        ask_at_last_counter=4600,
+        phase=Phase.NEGOTIATE,
+    )
     action = decide(
         b,
-        _neg(
-            turn_idx=8,
-            ask_bp=4500,
-            counters_offered=[3100, 3800, 4100, 4300],
-            phase=Phase.NEGOTIATE,
-        ),
+        _neg(ask_bp=4500, **neg),
         TurnAnalysis(stance="reject"),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
     assert action.intent == Intent.CONFIRM_SCHEDULE
     assert action.reason == "counters_exhausted"
+    above = decide(
+        b,
+        _neg(ask_bp=5000, **neg),
+        TurnAnalysis(stance="reject"),
+        _afford(6000, list(range(100, 6100, 100))),
+        settings=_SETTINGS,
+    )
+    assert above.intent == Intent.ESCALATE
+    assert above.reason == "max_counters"
 
 
 def test_negotiate_no_lower_counter_confirms() -> None:
-    """Ask is the only feasible point at/under max → confirm ask."""
+    """Ask is the only feasible point at/under the line → accepting the first number is allowed."""
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
     action = decide(
         b,
         _neg(turn_idx=3, ask_bp=4500, phase=Phase.NEGOTIATE),
         TurnAnalysis(stance="offer"),
-        _afford(4500, [4500]),
+        _afford(6000, [4500]),
         settings=_SETTINGS,
     )
     assert action.intent == Intent.CONFIRM_SCHEDULE
     assert action.reason == "no_lower_counter"
-
-
-def test_negotiate_gap_small_confirms() -> None:
-    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
-    # c_prev=4300, ask=4500 → next step gap <= 200 → confirm
-    action = decide(
-        b,
-        _neg(
-            turn_idx=6,
-            ask_bp=4500,
-            counters_offered=[4300],
-            phase=Phase.NEGOTIATE,
-        ),
-        TurnAnalysis(stance="reject"),
-        _afford(6000, list(range(100, 6100, 100))),
-        settings=_SETTINGS,
-    )
-    assert action.intent == Intent.CONFIRM_SCHEDULE
-    assert action.reason == "gap_small"
-
-
-def test_negotiate_ladder_stalled_confirms() -> None:
-    """No legal bp between c_prev and ask → confirm ask."""
-    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
-    action = decide(
-        b,
-        _neg(
-            turn_idx=6,
-            ask_bp=4500,
-            counters_offered=[4400],
-            phase=Phase.NEGOTIATE,
-        ),
-        TurnAnalysis(stance="reject"),
-        _afford(4500, [4400, 4500]),
-        settings=_SETTINGS,
-    )
-    assert action.intent == Intent.CONFIRM_SCHEDULE
-    assert action.reason in ("gap_small", "ladder_stalled", "no_lower_counter")
 
 
 def test_never_counter_below_confirmed_bp_on_restate() -> None:
@@ -737,7 +733,7 @@ def test_rule9_accept_last_counter_confirms() -> None:
             phase=Phase.NEGOTIATE,
         ),
         TurnAnalysis(stance="accept"),
-        _afford(6000),
+        _afford(7000),  # line 5250
         settings=_SETTINGS,
         confirm_facts={
             "offer_total": Fact(
@@ -797,7 +793,7 @@ def test_confirm_accept_with_corrected_pct_does_not_wrap() -> None:
 
 
 def test_term_alt_accept_does_not_lock_stale_low_counter() -> None:
-    """Yes to a term change must not confirm 8% when the ask is still 60%."""
+    """Yes to a term change must not confirm 8% when the ask is still 60%: re-anchor."""
     b = _belief(max_payments=5, min_payment_cents=5000, payment_structure="balloon")
     feasible = list(range(100, 7800, 100))
     action = decide(
@@ -820,32 +816,41 @@ def test_term_alt_accept_does_not_lock_stale_low_counter() -> None:
 
 
 def test_low_confirm_reject_reopens_ladder_when_ask_affordable() -> None:
-    """Rejecting an 8% confirm while 60% fits must counter up, not probe ASSUMED fields."""
+    """Rejecting an 8% confirm with a 60% ask reopens the ladder: hold once, then climb."""
     b = _belief(max_payments=5, min_payment_cents=5000, payment_structure="balloon")
     key = _key(b, 800)
     feasible = list(range(100, 7800, 100))
+    base = dict(
+        turn_idx=8,
+        ask_bp=800,
+        confirmed_bp=800,
+        counters_offered=[800],
+        phase=Phase.CONFIRM,
+        last_confirm_key=key,
+    )
     action = decide(
         b,
-        _neg(
-            turn_idx=8,
-            ask_bp=800,
-            confirmed_bp=800,
-            counters_offered=[800],
-            phase=Phase.CONFIRM,
-            last_confirm_key=key,
-        ),
+        _neg(**base),
         TurnAnalysis(stance="reject", settlement_ask_pct=60.0, ask_quote="sixty percent"),
         _afford(7700, feasible),
         settings=_SETTINGS,
     )
     assert action.intent == Intent.COUNTER
-    bp = action.facts["counter_pct"].value
+    assert action.reason == "hold"
+    climb = decide(
+        b,
+        _neg(**{**base, "hold_stage": 1, "ask_at_last_counter": 6000}),
+        TurnAnalysis(stance="reject", settlement_ask_pct=60.0, ask_quote="sixty percent"),
+        _afford(7700, feasible),
+        settings=_SETTINGS,
+    )
+    bp = climb.facts["counter_pct"].value
     assert isinstance(bp, int)
     assert 800 < bp < 6000
 
 
 def test_low_confirm_other_stance_does_not_repeat_eight_percent() -> None:
-    """A non-reject line after a too-low confirm must climb, not re-read 8%."""
+    """A non-reject line after a too-low confirm holds once, then climbs (no 8% loop)."""
     b = _belief(max_payments=5, min_payment_cents=5000, payment_structure="balloon")
     key = _key(b, 800)
     feasible = list(range(100, 7800, 100))
@@ -859,6 +864,8 @@ def test_low_confirm_other_stance_does_not_repeat_eight_percent() -> None:
             phase=Phase.CONFIRM,
             last_confirm_key=key,
             confirm_rejects=1,
+            hold_stage=1,
+            ask_at_last_counter=6000,
         ),
         TurnAnalysis(stance="other"),
         _afford(7700, feasible),
@@ -888,46 +895,6 @@ def test_accept_confirms_last_counter() -> None:
     assert action.facts["settlement_pct"].value == 7100
 
 
-def test_counters_snap_to_feasible_never_at_or_above_ask_never_decreasing() -> None:
-    # Feasible: 1000, 2000, 3000, 4000, 5000. Ask 5500, max 5000.
-    feasible = [1000, 2000, 3000, 4000, 5000]
-    c0 = next_counter(
-        ask_bp=5500,
-        max_bp=5000,
-        feasible_bps=feasible,
-        c_prev=None,
-        anchor_ratio=0.7,
-        concession_factor=0.5,
-    )
-    # anchor = largest <= 0.7*5000=3500 → 3000
-    assert c0 == 3000
-    assert c0 < 5500
-
-    c1 = next_counter(
-        ask_bp=5500,
-        max_bp=5000,
-        feasible_bps=feasible,
-        c_prev=c0,
-        anchor_ratio=0.7,
-        concession_factor=0.5,
-    )
-    assert c1 in feasible
-    assert c1 >= c0
-    assert c1 < 5500
-
-    c2 = next_counter(
-        ask_bp=5500,
-        max_bp=5000,
-        feasible_bps=feasible,
-        c_prev=c1,
-        anchor_ratio=0.7,
-        concession_factor=0.5,
-    )
-    assert c2 >= c1
-    assert c2 < 5500
-    assert c2 in feasible
-
-
 def test_counter_via_decide_snaps_and_records_effect() -> None:
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
     feasible = [1000, 2000, 3000, 4000, 5000]
@@ -948,21 +915,39 @@ def test_counter_via_decide_snaps_and_records_effect() -> None:
 
 
 def test_no_deal_after_max_counters_at_max_bp() -> None:
+    """Our best offer at the line is on the table, the rep holds above it → hand off."""
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
     action = decide(
         b,
         _neg(
             turn_idx=10,
             ask_bp=8000,
-            counters_offered=[5000],
+            counters_offered=[3700],
+            ask_at_last_counter=8000,
+            hold_stage=1,
             phase=Phase.NEGOTIATE,
         ),
         TurnAnalysis(stance="reject"),
+        _afford(5000, list(range(100, 5100, 100))),  # line 3750 → best legal 3700
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.ESCALATE
+    assert action.reason == "above_accept_line"
+    capped = decide(
+        b,
+        _neg(
+            turn_idx=10,
+            ask_bp=8000,
+            counters_offered=[2600, 3700],
+            counter_turns=[3, 4, 5, 6],
+            ask_at_last_counter=8000,
+            phase=Phase.NEGOTIATE,
+        ),
+        TurnAnalysis(stance="other"),
         _afford(5000, list(range(100, 5100, 100))),
         settings=_SETTINGS,
     )
-    assert action.intent == Intent.NO_DEAL_WRAP
-    assert action.reason == "max_counters"
+    assert (capped.intent, capped.reason) == (Intent.ESCALATE, "max_counters")
 
 
 def test_confirm_reject_asks_assumed_field_not_same_schedule() -> None:
@@ -998,7 +983,7 @@ def test_confirm_reject_asks_assumed_field_not_same_schedule() -> None:
 def test_confirm_assumed_asked_skips_to_next_or_no_deal() -> None:
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
     key = _key(b, 4500)
-    # All assumed fields already probed once → no-deal, not infinite ASK.
+    # All assumed fields already probed once → hand off, not infinite ASK.
     asked = {"first_payment_date", "max_segments", "max_token_pays", "min_payment_tiers"}
     action = decide(
         b,
@@ -1015,7 +1000,7 @@ def test_confirm_assumed_asked_skips_to_next_or_no_deal() -> None:
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
-    assert action.intent == Intent.NO_DEAL_WRAP
+    assert action.intent == Intent.ESCALATE
     assert action.reason == "confirm_rejected"
 
 
@@ -1080,7 +1065,7 @@ def test_confirm_unacked_after_max_soft_retries() -> None:
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
-    assert action.intent == Intent.NO_DEAL_WRAP
+    assert action.intent == Intent.ESCALATE
     assert action.reason == "confirm_unacked"
 
 
@@ -1112,7 +1097,7 @@ def test_confirm_reject_no_assumed_no_deal_after_max() -> None:
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
-    assert action.intent == Intent.NO_DEAL_WRAP
+    assert action.intent == Intent.ESCALATE
     assert action.reason == "confirm_rejected"
 
 
@@ -1152,21 +1137,6 @@ def test_max_segments_change_invalidates_confirm_key() -> None:
     assert not any(e.kind == "inc_confirm_reject" for e in action.effects)
 
 
-def test_next_counter_none_when_no_legal_bp() -> None:
-    # Feasible only above max_bp or at/above ask → no legal counter.
-    assert (
-        next_counter(
-            ask_bp=2000,
-            max_bp=1000,
-            feasible_bps=[1500, 2500, 3000],
-            c_prev=None,
-            anchor_ratio=0.7,
-            concession_factor=0.5,
-        )
-        is None
-    )
-
-
 def test_readback_response_does_not_wrap_in_confirm() -> None:
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
     action = decide(
@@ -1188,8 +1158,10 @@ def test_wants_to_end_no_deal() -> None:
         _afford(6000),
         settings=_SETTINGS,
     )
-    assert action.intent == Intent.NO_DEAL_WRAP
+    assert action.intent == Intent.ESCALATE
     assert action.reason == "wants_to_end"
+    spoken = " ".join(render_action(action, date(2026, 3, 1)))
+    assert "specialist from our side will follow up" in spoken
 
 
 def test_thanks_after_confirm_closes_as_deal() -> None:
@@ -1329,14 +1301,15 @@ def test_post_wrap_schedule_detail_stays_wrap() -> None:
 
 
 def test_confirm_records_key_on_firm_accept() -> None:
-    """After a counter, firm ask confirms and records fingerprint."""
+    """After our final counter, the repeated firm ask confirms and records the fingerprint."""
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
     action = decide(
         b,
         _neg(
             turn_idx=4,
             ask_bp=4500,
-            counters_offered=[3100],
+            counters_offered=[3100, 3800],
+            final_counter_ask=4500,
             phase=Phase.NEGOTIATE,
         ),
         TurnAnalysis(stance="reject", firm=True),
@@ -1357,79 +1330,6 @@ def test_confirm_records_key_on_firm_accept() -> None:
     assert len(rec) == 1
     assert rec[0].data["ask_bp"] == 4500
     assert tuple(rec[0].data["key"]) == _key(b, 4500)
-
-
-def test_identical_counter_without_reject_stance_counts_toward_cap() -> None:
-    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
-    feasible = list(range(100, 5100, 100))
-    action = decide(
-        b,
-        _neg(
-            turn_idx=10,
-            ask_bp=8000,
-            counters_offered=[5000],
-            phase=Phase.NEGOTIATE,
-        ),
-        TurnAnalysis(stance="other"),
-        _afford(5000, feasible),
-        settings=_SETTINGS,
-        counter_offer_total_cents=40_000,
-    )
-    assert action.intent == Intent.NO_DEAL_WRAP
-    assert action.reason == "max_counters"
-
-
-def test_ceiling_reached_never_reoffers_identical_counter() -> None:
-    """At the ceiling with budget left, any non-accept ends — no same-bp COUNTER."""
-    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
-    for stance in ("reject", "other", "question"):
-        action = decide(
-            b,
-            _neg(turn_idx=6, ask_bp=8000, counters_offered=[4300, 5000], phase=Phase.NEGOTIATE),
-            TurnAnalysis(stance=stance),  # type: ignore[arg-type]
-            _afford(5000, list(range(100, 5100, 100))),
-            settings=_SETTINGS,
-        )
-        assert action.intent == Intent.NO_DEAL_WRAP, stance
-        assert action.reason == "max_counters"
-
-
-def test_unreachable_ask_last_counter_jumps_to_ceiling() -> None:
-    """With one counter left, offer the best legal bp instead of a ladder step."""
-    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
-    action = decide(
-        b,
-        _neg(
-            turn_idx=6,
-            ask_bp=8000,
-            counters_offered=[3500, 4300, 4700],
-            phase=Phase.NEGOTIATE,
-        ),
-        TurnAnalysis(stance="reject"),
-        _afford(6200, list(range(100, 6300, 100))),
-        settings=_SETTINGS,
-    )
-    assert action.intent == Intent.COUNTER
-    assert action.facts["counter_pct"].value == 6200
-
-
-def test_unreachable_ask_budget_spent_below_ceiling_no_deal() -> None:
-    """``max_counters`` distinct counters already spoken → stop, even below ceiling."""
-    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
-    action = decide(
-        b,
-        _neg(
-            turn_idx=8,
-            ask_bp=8000,
-            counters_offered=[3500, 4300, 4700, 5000],
-            phase=Phase.NEGOTIATE,
-        ),
-        TurnAnalysis(stance="reject"),
-        _afford(6200, list(range(100, 6300, 100))),
-        settings=_SETTINGS,
-    )
-    assert action.intent == Intent.NO_DEAL_WRAP
-    assert action.reason == "max_counters"
 
 
 def test_ask_known_but_rules_unbuildable_asks_settlement() -> None:
@@ -1478,25 +1378,6 @@ def test_clarify_enum_field_uses_text_slots() -> None:
     assert action.text_slots["clarify_new"] == "balloon"
 
 
-def test_next_counter_always_below_ask_and_within_max() -> None:
-    """Why the ceiling ladder needs no ``no_counter_below_ask`` guard."""
-    grids = [list(range(100, 10001, 100)), [1000, 2500, 4000, 4100, 6000], [3000, 7000]]
-    for feasible in grids:
-        for ask in range(500, 10001, 700):
-            for max_bp in range(500, 10001, 900):
-                for c_prev in (None, 1000, 4000, 6500, 9900):
-                    c = next_counter(
-                        ask_bp=ask,
-                        max_bp=max_bp,
-                        feasible_bps=feasible,
-                        c_prev=c_prev,
-                        anchor_ratio=0.7,
-                        concession_factor=0.5,
-                    )
-                    if c is not None:
-                        assert c < ask and c <= max_bp
-
-
 def test_draft_agreement_pending_and_audited(tmp_path) -> None:
     log = AuditLog(tmp_path / "a.db")
     agr = draft_agreement(
@@ -1520,3 +1401,251 @@ def test_draft_agreement_pending_and_audited(tmp_path) -> None:
     events = log.for_call("call-1")
     assert events[-1]["type"] == "agreement_drafted"
     log.close()
+
+
+def test_negotiate_firm_above_line_hands_off_at_once() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    for counters in ([], [3100]):
+        action = decide(
+            b,
+            _neg(turn_idx=5, ask_bp=5000, counters_offered=counters, phase=Phase.NEGOTIATE),
+            TurnAnalysis(stance="reject", firm=True),
+            _afford(6000, list(range(100, 6100, 100))),  # line 4500 < 5000 ≤ max
+            settings=_SETTINGS,
+        )
+        assert action.intent == Intent.ESCALATE
+        assert action.reason == "above_accept_line"
+
+
+def test_negotiate_first_number_never_accepted_when_a_counter_exists() -> None:
+    """Rule C1: even a tiny gap gets one counter (no gap_small accept)."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(turn_idx=3, ask_bp=4500, phase=Phase.NEGOTIATE),
+        TurnAnalysis(stance="offer"),
+        _afford(6000, [4400, 4500]),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.COUNTER
+    assert action.facts["counter_pct"].value == 4400
+
+
+def test_negotiate_hold_then_two_steps_then_accept_or_hand_off() -> None:
+    """Rule C3: rep does not move → hold, quarter step, quarter step, then decide."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    afford = _afford(6000, list(range(100, 6100, 100)))  # line 4500
+    base = dict(turn_idx=6, ask_at_last_counter=4500, phase=Phase.NEGOTIATE)
+    hold = decide(
+        b,
+        _neg(ask_bp=4500, counters_offered=[3000], hold_stage=0, **base),
+        TurnAnalysis(stance="reject"),
+        afford,
+        settings=_SETTINGS,
+    )
+    assert (hold.intent, hold.reason) == (Intent.COUNTER, "hold")
+    assert hold.facts["counter_pct"].value == 3000
+    assert next(e for e in hold.effects if e.kind == "offer_counter").data["stage"] == 1
+    step1 = decide(
+        b,
+        _neg(ask_bp=4500, counters_offered=[3000], hold_stage=1, **base),
+        TurnAnalysis(stance="reject"),
+        afford,
+        settings=_SETTINGS,
+    )
+    # quarter of (min(4500, 4500) - 3000) = 375 → 3375 → snaps to 3300
+    assert (step1.reason, step1.facts["counter_pct"].value) == ("step", 3300)
+    step2 = decide(
+        b,
+        _neg(ask_bp=4500, counters_offered=[3000, 3300], hold_stage=2, **base),
+        TurnAnalysis(stance="reject"),
+        afford,
+        settings=_SETTINGS,
+    )
+    # quarter of (4500 - 3300) = 300 → 3600
+    assert (step2.reason, step2.facts["counter_pct"].value) == ("step", 3600)
+    done = decide(
+        b,
+        _neg(ask_bp=4500, counters_offered=[3000, 3300, 3600], hold_stage=3, **base),
+        TurnAnalysis(stance="reject"),
+        afford,
+        settings=_SETTINGS,
+    )
+    assert (done.intent, done.reason) == (Intent.CONFIRM_SCHEDULE, "rep_held")
+    above = decide(
+        b,
+        _neg(
+            ask_bp=5000,
+            counters_offered=[3000, 3300, 3600],
+            hold_stage=3,
+            turn_idx=6,
+            ask_at_last_counter=5000,
+            phase=Phase.NEGOTIATE,
+        ),
+        TurnAnalysis(stance="reject"),
+        afford,
+        settings=_SETTINGS,
+    )
+    assert (above.intent, above.reason) == (Intent.ESCALATE, "above_accept_line")
+
+
+def test_negotiate_rep_moves_we_concede_half_and_reset() -> None:
+    """Rule C4: rep drops 1000 bp → we rise 500 bp; hold stage resets to 0."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(
+            turn_idx=6,
+            ask_bp=6000,
+            counters_offered=[3000],
+            ask_at_last_counter=7000,
+            hold_stage=2,
+            phase=Phase.NEGOTIATE,
+        ),
+        TurnAnalysis(stance="reject"),
+        _afford(8000, list(range(100, 8100, 100))),  # line 6000
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.COUNTER
+    assert action.facts["counter_pct"].value == 3500
+    offer = next(e for e in action.effects if e.kind == "offer_counter")
+    assert offer.data["stage"] == 0 and offer.data["ask_bp"] == 6000
+
+
+def test_counters_never_exceed_the_accept_line() -> None:
+    """Rule C2 across ask / ceiling / prior-counter grids."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    for max_bp in (3000, 5000, 8000, 10000):
+        line = max_bp * 7500 // 10000
+        afford = _afford(max_bp, list(range(100, max_bp + 1, 100)))
+        for ask in range(1000, 10001, 900):
+            for prior in ([], [1000], [line - line % 100]):
+                for firm in (False, True):
+                    for stage in (0, 1, 2):
+                        action = decide(
+                            b,
+                            _neg(
+                                turn_idx=5,
+                                ask_bp=ask,
+                                counters_offered=list(prior),
+                                ask_at_last_counter=ask,
+                                hold_stage=stage,
+                                phase=Phase.NEGOTIATE,
+                            ),
+                            TurnAnalysis(stance="reject", firm=firm),
+                            afford,
+                            settings=_SETTINGS,
+                        )
+                        if action.intent == Intent.COUNTER:
+                            bp = action.facts["counter_pct"].value
+                            assert isinstance(bp, int) and bp <= line and bp < ask
+                        if action.intent == Intent.CONFIRM_SCHEDULE:
+                            assert action.facts["settlement_pct"].value <= line
+
+
+def test_anchor_and_step_helpers() -> None:
+    legal = [1000, 2000, 3000, 4000]
+    # anchor = largest legal ≤ 0.7 × min(5500, 4000) = 2800 → 2000
+    assert anchor_bp(ask_bp=5500, line_bp=4000, legal=legal, anchor_ratio=0.7) == 2000
+    # Nothing legal below the ask → None.
+    assert anchor_bp(ask_bp=1000, line_bp=4000, legal=legal, anchor_ratio=0.7) is None
+    # Step: highest legal ≤ raw above prev, else the next legal bp up, never ≥ ceiling.
+    assert step_bp(prev=1000, raw=2500, ceiling=5000, legal=legal) == 2000
+    assert step_bp(prev=1000, raw=1500, ceiling=5000, legal=legal) == 2000
+    assert step_bp(prev=4000, raw=4500, ceiling=5000, legal=legal) is None
+
+
+def test_accept_with_a_new_number_is_their_ask_not_a_deal() -> None:
+    """Pair-17 shape (A/B s0007_006): "even payments to settle the 100% balance" read
+    as accept + 100% during discovery must counter, never confirm the first number."""
+    b = _belief(max_payments=7, min_payment_cents=9400, payment_structure="even")
+    action = decide(
+        b,
+        _neg(turn_idx=2, phase=Phase.DISCOVERY),
+        TurnAnalysis(stance="accept", settlement_ask_pct=100.0, ask_quote="100%"),
+        _afford(10000),
+        settings=_SETTINGS,
+    )
+    assert action.intent == Intent.COUNTER
+    assert action.facts["counter_pct"].value < 7500
+    # Later "proceed with the 10% balance" (accept + 10%) below our counter is
+    # their lower ask: confirmed as ask_within_offer, not a blind accept.
+    later = decide(
+        b,
+        _neg(turn_idx=4, ask_bp=10000, counters_offered=[5200], phase=Phase.NEGOTIATE),
+        TurnAnalysis(stance="accept", settlement_ask_pct=10.0, ask_quote="10%"),
+        _afford(10000),
+        settings=_SETTINGS,
+    )
+    assert later.intent == Intent.CONFIRM_SCHEDULE
+    assert later.reason == "ask_within_offer"
+
+
+def test_same_question_third_time_hands_off() -> None:
+    """Loop guard (B): ASK for one field twice already → hand off, not a third ask."""
+    b = _belief(max_payments=6)
+    first = decide(b, _neg(turn_idx=2), TurnAnalysis(stance="info"), None, settings=_SETTINGS)
+    assert first.intent == Intent.ASK
+    note = next(e for e in first.effects if e.kind == "note_question")
+    key = note.data["key"]
+    again = decide(
+        b, _neg(turn_idx=3, question_counts={key: 1}), TurnAnalysis(stance="info"), None,
+        settings=_SETTINGS,
+    )
+    assert again.intent == Intent.ASK
+    third = decide(
+        b, _neg(turn_idx=4, question_counts={key: 2}), TurnAnalysis(stance="info"), None,
+        settings=_SETTINGS,
+    )
+    assert (third.intent, third.reason) == (Intent.ESCALATE, "repeated_question")
+
+
+def test_no_progress_turns_hand_off() -> None:
+    """Loop guard (B): four rep turns in a row with nothing new → hand off."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    action = decide(
+        b,
+        _neg(turn_idx=8, ask_bp=4500, phase=Phase.NEGOTIATE, no_progress_turns=4),
+        TurnAnalysis(stance="other"),
+        _afford(6000),
+        settings=_SETTINGS,
+    )
+    assert (action.intent, action.reason) == (Intent.ESCALATE, "no_progress")
+
+
+def test_rep_turn_progress_definition() -> None:
+    neg = _neg(ask_bp=4500)
+    assert not rep_turn_progress(TurnAnalysis(stance="other"), neg, [])
+    assert not rep_turn_progress(TurnAnalysis(stance="offer", settlement_ask_pct=45.0), neg, [])
+    assert rep_turn_progress(TurnAnalysis(stance="offer", settlement_ask_pct=40.0), neg, [])
+    assert rep_turn_progress(TurnAnalysis(stance="reject"), neg, [])
+    assert rep_turn_progress(TurnAnalysis(stance="info", readback_response="confirm"), neg, [])
+    b = _belief()
+    change = b.observe("max_payments", 6, "six", 1, verified=True, hedged=False)
+    assert rep_turn_progress(TurnAnalysis(stance="info"), neg, [change])
+    same = b.observe("max_payments", 6, "six", 2, verified=True, hedged=False)
+    if same.old_value == same.new_value and same.old_status == same.new_status:
+        assert not rep_turn_progress(TurnAnalysis(stance="info"), neg, [same])
+
+
+def test_decide_never_emits_no_deal_wrap() -> None:
+    """Deal-or-handoff (A): sweep stances / flags / curves; NO_DEAL_WRAP never appears."""
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    analyses = [
+        TurnAnalysis(stance=s, firm=f, wants_to_end=w)  # type: ignore[arg-type]
+        for s in ("accept", "reject", "other", "offer")
+        for f in (False, True)
+        for w in (False, True)
+    ]
+    for afford in (_afford(None), _afford(3000), _afford(8000)):
+        for turn in (3, 30):
+            for a in analyses:
+                action = decide(
+                    b,
+                    _neg(turn_idx=turn, ask_bp=7000, counters_offered=[2000],
+                         phase=Phase.NEGOTIATE),
+                    a,
+                    afford,
+                    settings=_SETTINGS,
+                )
+                assert action.intent != Intent.NO_DEAL_WRAP

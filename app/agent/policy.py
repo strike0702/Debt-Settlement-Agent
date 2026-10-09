@@ -6,14 +6,39 @@ no LLM; spoken figures ride in PUBLIC ``Action.facts`` and side effects in
 is first-match and its order is load-bearing:
 
 1. ``_decide_interruptions``: turn cap, hostility, private ask, commitment
-   demand, post-proposal phases (``_decide_wrap``), schedule request, end.
+   demand, post-proposal phases (``_decide_wrap``), no-progress loop guard,
+   schedule request, end.
 2. ``_decide_clarify``: "first N payments" tiers / CONTRADICTED → CLARIFY (escalate
    after two); TENTATIVE → READ_BACK.
 3. ``_decide_confirm``: accept of the unchanged CONFIRM on the table → PROPOSE_WRAP.
 4. ``_decide_discovery``: ASK a missing required field, then ASK_SETTLEMENT.
-5. ``_decide_negotiate``: empty curve (term alt / rescue / no-deal), term alt over
-   an unreachable ask, accepted counter, affordable ladder, ceiling ladder
-   (≤ ``max_counters`` COUNTERs, never the same bp twice in a row).
+5. ``_decide_negotiate``: empty curve (term alt / rescue / handoff), term alt over
+   an unreachable ask, accepted counter, the price ladder (``_negotiate``).
+
+After the cascade, ``loop_guard`` turns a question asked twice already into a
+handoff (``repeated_question``).
+
+Call endings (Phase 45): a call ends only as a confirmed deal (PROPOSE_WRAP /
+``thanks_accept``) or a handoff (ESCALATE, with a reason code for the person
+taking over). ``decide`` never emits NO_DEAL_WRAP.
+
+Price ladder (Phase 45, ``_negotiate``). The *accept line* is 75% of the
+client's ceiling (``accept_line_bp``, rounded down); we never offer above it
+and accept only at or below it, and only at a bp the engine can schedule.
+
+- The rep's first number is never accepted: we counter at the anchor
+  (``anchor_ratio`` × min(ask, line)). Only when no lower legal counter exists
+  may we accept it (``no_lower_counter``).
+- Rep moved down since our last counter: we concede half their move
+  (``concession_factor``), and the hold / step count resets.
+- Rep did not move: hold once (restate our offer), then two small steps of a
+  quarter of the gap to min(ask, line); then accept if their ask is at or below
+  the line (``rep_held``), else hand off (``above_accept_line``).
+- Rep firm: above the line → hand off now; else one final counter halfway
+  between our last offer and their number, and accept when they repeat it
+  (``rep_firm``).
+- ``max_counters`` spoken counters (holds included) caps the ladder: accept at
+  or below the line (``counters_exhausted``), else hand off (``max_counters``).
 """
 
 from __future__ import annotations
@@ -21,7 +46,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from math import ceil
 from string import ascii_lowercase
 from typing import Any, Literal
 
@@ -30,9 +54,10 @@ from pydantic import BaseModel
 from app.adapter.engine_adapter import Affordability
 from app.config import Settings, get_settings
 from app.domain.actions import Action, Effect, Intent, Phase
-from app.domain.belief import BeliefState, TermStatus
+from app.domain.belief import BeliefChange, BeliefState, TermStatus
 from app.domain.facts import Fact
 from app.domain.fields import FIELD_REGISTRY, FIELDS_BY_NAME
+from app.domain.negotiation import accept_line_bp
 from app.domain.nlu_types import TurnAnalysis
 from app.store.audit import AuditLog
 from feasibility.engine import ScheduleRow
@@ -47,13 +72,17 @@ __all__ = [
     "Phase",
     "amount_meaning_clarify_action",
     "amount_meaning_escalate_action",
+    "anchor_bp",
     "ask_pct_to_bp",
     "decide",
     "draft_agreement",
     "field_already_countered",
-    "next_counter",
+    "loop_guard",
     "opening_action",
     "parse_pending_terms_value",
+    "question_key",
+    "rep_turn_progress",
+    "step_bp",
     "terms_counter_key",
 ]
 
@@ -91,6 +120,18 @@ class NegotiationState:
     # by the orchestrator: ``{"cents", "quote", "trigger"}`` plus ``"pct"`` /
     # ``"pct_quote"`` when a disagreeing % ask was held back.
     pending_amount_clarify: dict[str, Any] | None = None
+    # Phase 45 price ladder. Rep's ask when our last counter was spoken (did
+    # they move since?), hold / step stage (0 none, 1 held, 2–3 small steps),
+    # the rep's firm ask when we made our final counter, and the turns that
+    # spoke a COUNTER (holds included) for the ``max_counters`` cap.
+    ask_at_last_counter: int | None = None
+    hold_stage: int = 0
+    final_counter_ask: int | None = None
+    counter_turns: list[int] = field(default_factory=list)
+    # Phase 45 loop guard: times each question was asked (``question_key``) and
+    # rep turns in a row that added nothing (``rep_turn_progress``).
+    question_counts: dict[str, int] = field(default_factory=dict)
+    no_progress_turns: int = 0
 
 
 def terms_counter_key(field: str, value: Any) -> str:
@@ -210,52 +251,31 @@ def ask_pct_to_bp(pct: float) -> int:
     )
 
 
-def next_counter(
-    *,
-    ask_bp: int,
-    max_bp: int,
-    feasible_bps: list[int],
-    c_prev: int | None,
-    anchor_ratio: float,
-    concession_factor: float,
-) -> int | None:
-    """Ladder toward ``min(ask, max)``; snap down to feasible; never >= ask.
+def anchor_bp(*, ask_bp: int, line_bp: int, legal: list[int], anchor_ratio: float) -> int | None:
+    """Opening counter: highest legal bp ≤ ``anchor_ratio`` × min(ask, line), below the ask.
 
-    Returns ``None`` when no legal counter exists (caller must NO_DEAL).
+    ``legal`` is the feasible grid at or below the accept line. Falls back to
+    the lowest legal bp below the ask; ``None`` when nothing legal is below it.
     """
-    if not feasible_bps:
-        raise ValueError("next_counter requires at least one feasible bp")
-
-    legal = [bp for bp in feasible_bps if bp <= max_bp and bp < ask_bp]
-    if not legal:
+    below = [bp for bp in legal if bp < ask_bp]
+    if not below:
         return None
+    cap = int(Decimal(str(anchor_ratio)) * Decimal(min(ask_bp, line_bp)))
+    under = [bp for bp in below if bp <= cap]
+    return max(under) if under else min(below)
 
-    target = min(ask_bp, max_bp)
-    ratio_cap = int(Decimal(str(anchor_ratio)) * Decimal(target))
-    under_ratio = [bp for bp in legal if bp <= ratio_cap]
-    anchor = max(under_ratio) if under_ratio else min(legal)
 
-    if c_prev is None:
-        c_next = anchor
-    else:
-        delta = target - c_prev
-        step = ceil(delta * concession_factor) if delta > 0 else 0
-        raw = c_prev + step
-        under = [bp for bp in legal if bp <= raw]
-        c_next = max(under) if under else c_prev
-        if c_next < c_prev:
-            c_next = c_prev
+def step_bp(*, prev: int, raw: int, ceiling: int, legal: list[int]) -> int | None:
+    """Next counter above ``prev``: highest legal bp ≤ ``raw``, else the next legal bp up.
 
-    # Never at or above the rep's ask; never above max_bp.
-    if c_next >= ask_bp or c_next > max_bp:
-        c_next = max(legal)
-        if c_prev is not None and c_next < c_prev:
-            # Cannot advance legally — stall signal for caller.
-            return c_prev if c_prev in legal else None
-
-    if c_next > max_bp or c_next >= ask_bp:
+    Never above ``ceiling`` (exclusive bound = the rep's ask, or the line + 1).
+    ``None`` when no legal bp lies strictly between ``prev`` and ``ceiling``.
+    """
+    room = [bp for bp in legal if prev < bp < ceiling]
+    if not room:
         return None
-    return c_next
+    under = [bp for bp in room if bp <= raw]
+    return max(under) if under else min(room)
 
 
 def draft_agreement(
@@ -546,13 +566,36 @@ def _confirm_action(
     )
 
 
+# COUNTER templates for the Phase 45 ladder moves; ``{offer_total}`` is required
+# because ``Orchestrator._enrich_action`` makes it so for every COUNTER.
+_HOLD_TEMPLATE = (
+    "We are staying at {counter_pct} of the balance, which is {offer_total}. "
+    "Can you come down from your number?"
+)
+_FINAL_COUNTER_TEMPLATE = (
+    "We can meet you partway at {counter_pct} of the balance, which is "
+    "{offer_total}. Would that work?"
+)
+
+
 def _counter_action(
     c_next: int,
     effects: list[Effect],
     *,
     counter_offer_total_cents: int | None = None,
+    ask_bp: int | None = None,
+    turn: int | None = None,
+    stage: int = 0,
+    final_ask: int | None = None,
+    reason: str | None = None,
+    template: str | None = None,
 ) -> Action:
-    """Emit COUNTER at ``c_next`` with optional spoken offer total."""
+    """Emit COUNTER at ``c_next`` with optional spoken offer total.
+
+    ``offer_counter`` carries the ladder bookkeeping (rep's ask now, hold / step
+    stage after this move, final-counter ask, turn), applied idempotently on
+    eager emit and again on speech ack.
+    """
     facts: dict[str, Fact] = {
         "counter_pct": Fact(
             id="counter_pct",
@@ -570,17 +613,25 @@ def _counter_action(
             visibility="PUBLIC",
             source="engine",
         )
+    data: dict[str, Any] = {"bp": c_next, "stage": stage}
+    if ask_bp is not None:
+        data["ask_bp"] = ask_bp
+    if turn is not None:
+        data["turn"] = turn
+    if final_ask is not None:
+        data["final_ask"] = final_ask
     return Action(
         intent=Intent.COUNTER,
         facts=facts,
         required={"counter_pct"},
         effects=effects
         + [
-            Effect(kind="offer_counter", data={"bp": c_next}),
+            Effect(kind="offer_counter", data=data),
             Effect(kind="set_phase", data={"phase": Phase.NEGOTIATE.value}),
         ],
         next_phase=Phase.NEGOTIATE,
-        reason=f"bp={c_next}",
+        reason=reason or f"bp={c_next}",
+        template_override=template,
     )
 
 
@@ -589,18 +640,28 @@ def _confirm_required(confirm_facts: dict[str, Fact] | None) -> set[str]:
     return set(confirm_facts or {}) & {"offer_total", "num_payments", "first_payment_date"}
 
 
-def _negotiate_affordable(t: _Turn, ask_bp: int, afford: Affordability) -> Action:
-    """Counter ladder when the ask is affordable; never NO_DEAL from this path.
+# Small steps after a hold are a quarter of the gap to min(ask, line).
+_HOLD_STEP_DIVISOR = 4
+# Hold stages: 1 = held once, 2 and 3 = first and second small step taken.
+_LAST_HOLD_STAGE = 3
 
-    Order: ask within prior offer → firm → counters exhausted → no lower
-    counter → ladder stall jump → close-gap confirm → COUNTER.
+
+def _negotiate(t: _Turn, ask_bp: int, afford: Affordability) -> Action:
+    """The Phase 45 price ladder (module docstring); every accept is a CONFIRM at a feasible bp.
+
+    Order: ask within our offer → rep's first number → repeat after our final
+    counter → firm → ``max_counters`` cap → rep moved (concede half) → hold →
+    two small steps → accept at or below the line, else hand off.
     """
-    neg, cfg = t.neg, t.cfg
+    neg, cfg, a = t.neg, t.cfg, t.analysis
     assert afford.max_bp is not None
+    line = accept_line_bp(afford.max_bp, cfg.accept_line_pct_of_max_bp)
+    legal = sorted(bp for bp in afford.feasible_bps if bp <= line)
+    acceptable = ask_bp <= line and ask_bp in afford.feasible_bps
 
-    def confirm(reason: str) -> Action:
+    def confirm(bp: int, reason: str) -> Action:
         return _confirm_action(
-            ask_bp=ask_bp,
+            ask_bp=bp,
             belief=t.belief,
             confirm_facts=t.confirm_facts,
             effects=t.effects,
@@ -608,42 +669,103 @@ def _negotiate_affordable(t: _Turn, ask_bp: int, afford: Affordability) -> Actio
             reason=reason,
         )
 
+    def settle(accept_reason: str, over_line_reason: str = "above_accept_line") -> Action:
+        if acceptable:
+            return confirm(ask_bp, accept_reason)
+        reason = over_line_reason if ask_bp > line else "no_legal_counter"
+        return _handoff(t.effects, reason)
+
+    def counter(bp: int, stage: int, **kw: Any) -> Action:
+        return _counter_action(
+            bp,
+            t.effects,
+            counter_offer_total_cents=t.counter_offer_total_cents,
+            ask_bp=ask_bp,
+            turn=neg.turn_idx,
+            stage=stage,
+            **kw,
+        )
+
     prior = list(neg.counters_offered)
     if neg.confirmed_bp is not None:
         prior.append(neg.confirmed_bp)
+    # Rep now asks no more than we already offered: take the lower number.
     if prior and ask_bp <= max(prior):
-        return confirm("ask_within_offer")
-    if t.analysis.firm and neg.counters_offered:
-        return confirm("rep_firm")
-    if len(neg.counters_offered) >= cfg.max_counters:
-        return confirm("counters_exhausted")
+        if acceptable:
+            return confirm(ask_bp, "ask_within_offer")
+        best = max(prior)
+        if best <= line and best in afford.feasible_bps:
+            return confirm(best, "ask_within_offer")
 
     c_prev = neg.counters_offered[-1] if neg.counters_offered else None
-    c_next = next_counter(
-        ask_bp=ask_bp,
-        max_bp=afford.max_bp,
-        feasible_bps=afford.feasible_bps,
-        c_prev=c_prev,
-        anchor_ratio=cfg.anchor_ratio,
-        concession_factor=cfg.concession_factor,
-    )
-    if c_next is None:
-        return confirm("no_lower_counter")
-    # Ladder stalled on a feasibility gap: jump to the best legal bp, else confirm.
-    if c_prev is not None and c_next <= c_prev:
-        jump = [
-            bp
-            for bp in afford.feasible_bps
-            if c_prev < bp <= afford.max_bp and bp < ask_bp
-        ]
-        if not jump:
-            return confirm("ladder_stalled")
-        c_next = max(jump)
-    if ask_bp - c_next <= cfg.close_gap_bp:
-        return confirm("gap_small")
-    return _counter_action(
-        c_next, t.effects, counter_offer_total_cents=t.counter_offer_total_cents
-    )
+    if c_prev is not None and c_prev > line:
+        # Revised terms lowered the line under our last offer: never restate it.
+        return settle("rep_held")
+    if c_prev is not None and t.accepted_term_alt:
+        # A yes to a term change reshaped the curve: re-anchor if that moves us up
+        # (the old counter can be a token percent the new terms made obsolete).
+        fresh = anchor_bp(ask_bp=ask_bp, line_bp=line, legal=legal, anchor_ratio=cfg.anchor_ratio)
+        if fresh is not None and fresh > c_prev:
+            return counter(fresh, 0)
+    if c_prev is None:
+        # The rep's first number is never accepted while a lower legal counter exists.
+        if a.firm and ask_bp > line:
+            return _handoff(t.effects, "above_accept_line")
+        anchor = anchor_bp(
+            ask_bp=ask_bp, line_bp=line, legal=legal, anchor_ratio=cfg.anchor_ratio
+        )
+        if anchor is None:
+            return settle("no_lower_counter", over_line_reason="no_legal_counter")
+        if a.firm:
+            final = step_bp(prev=anchor, raw=(anchor + ask_bp) // 2, ceiling=ask_bp, legal=legal)
+            return counter(
+                final if final is not None else anchor,
+                0,
+                final_ask=ask_bp,
+                reason="final_counter",
+                template=_FINAL_COUNTER_TEMPLATE,
+            )
+        return counter(anchor, 0)
+
+    # They repeated (or bettered) their number after our final counter: accept.
+    if neg.final_counter_ask is not None and ask_bp <= neg.final_counter_ask:
+        return settle("rep_firm")
+    if a.firm:
+        if ask_bp > line:
+            return _handoff(t.effects, "above_accept_line")
+        if len(neg.counter_turns) >= cfg.max_counters:
+            return settle("counters_exhausted", over_line_reason="max_counters")
+        final = step_bp(prev=c_prev, raw=(c_prev + ask_bp) // 2, ceiling=ask_bp, legal=legal)
+        if final is None:
+            return settle("rep_firm")
+        return counter(
+            final, 0, final_ask=ask_bp, reason="final_counter", template=_FINAL_COUNTER_TEMPLATE
+        )
+    if len(neg.counter_turns) >= cfg.max_counters:
+        return settle("counters_exhausted", over_line_reason="max_counters")
+
+    target = min(ask_bp, line)
+    moved = neg.ask_at_last_counter is not None and ask_bp < neg.ask_at_last_counter
+    if moved:
+        assert neg.ask_at_last_counter is not None
+        give = int(
+            Decimal(str(cfg.concession_factor)) * Decimal(neg.ask_at_last_counter - ask_bp)
+        )
+        nxt = step_bp(prev=c_prev, raw=c_prev + give, ceiling=min(ask_bp, line + 1), legal=legal)
+        if nxt is None or nxt > c_prev + give:
+            # Half their move does not reach the next legal bp: restate our offer.
+            return counter(c_prev, 0, reason="hold", template=_HOLD_TEMPLATE)
+        return counter(nxt, 0)
+
+    stage = neg.hold_stage
+    if stage == 0:
+        return counter(c_prev, 1, reason="hold", template=_HOLD_TEMPLATE)
+    if stage < _LAST_HOLD_STAGE:
+        raw = c_prev + max(0, target - c_prev) // _HOLD_STEP_DIVISOR
+        nxt = step_bp(prev=c_prev, raw=raw, ceiling=min(ask_bp, line + 1), legal=legal)
+        if nxt is not None:
+            return counter(nxt, stage + 1, reason="step")
+    return settle("rep_held")
 
 
 def speak_schedule_action(
@@ -711,19 +833,116 @@ def _ask_field(fname: str, effects: list[Effect]) -> Action:
     )
 
 
-def _no_deal(
-    effects: list[Effect],
-    *,
-    reason: str,
-    spoken_reason: str,
+# What the agent says when it hands off (no digits). The reason code goes to
+# the person taking over; ``app.agent.reasons`` explains each one.
+HANDOFF_SPOKEN: dict[str, str] = {
+    "max_turns": "We have gone back and forth for a while, so a specialist will take this over.",
+    "infeasible": (
+        "No payment schedule fits the client's program under these terms, "
+        "so a specialist will review it."
+    ),
+    "max_counters": (
+        "We have made every offer we can on this call, so a specialist will take it from here."
+    ),
+    "no_legal_counter": (
+        "We cannot propose a settlement below your number under these terms, "
+        "so a specialist will review it."
+    ),
+    "above_accept_line": (
+        "Your number is above what I can accept on this call, so a specialist will review it."
+    ),
+    "confirm_unacked": (
+        "We have not been able to confirm a schedule, so a specialist will follow up."
+    ),
+    "confirm_rejected": (
+        "We could not find a schedule that works for both sides, so a specialist will follow up."
+    ),
+    "repeated_question": (
+        "We keep coming back to the same question, so a specialist will sort it out."
+    ),
+    "no_progress": "We do not seem to be moving forward, so a specialist will take this over.",
+}
+# The rep is leaving: no "I need to involve someone" lead-in, just the follow-up.
+_FOLLOW_UP_TEMPLATE = "Understood. A specialist from our side will follow up with you."
+
+
+def _handoff(effects: list[Effect], reason: str) -> Action:
+    """ESCALATE for a Phase 45 handoff code (``HANDOFF_SPOKEN``)."""
+    return _escalate(effects, reason=reason, spoken_reason=HANDOFF_SPOKEN[reason])
+
+
+def follow_up_action(
+    effects: list[Effect] | None = None, *, reason: str = "wants_to_end"
 ) -> Action:
-    """End the call with a speakable reason (no digits)."""
+    """Hand off when the rep wants to end without a deal: a specialist follows up."""
     return Action(
-        intent=Intent.NO_DEAL_WRAP,
-        text_slots={"no_deal_reason": spoken_reason},
-        effects=effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
-        next_phase=Phase.END,
+        intent=Intent.ESCALATE,
+        text_slots={"escalate_reason": "A specialist from our side will follow up with you."},
+        effects=list(effects or [])
+        + [Effect(kind="set_phase", data={"phase": Phase.ESCALATE.value})],
+        next_phase=Phase.ESCALATE,
         reason=reason,
+        template_override=_FOLLOW_UP_TEMPLATE,
+    )
+
+
+# Moves that ask the rep something; the loop guard counts them per key.
+_QUESTION_INTENTS = frozenset(
+    {Intent.ASK, Intent.ASK_SETTLEMENT, Intent.CLARIFY, Intent.READ_BACK}
+)
+
+
+def question_key(action: Action) -> str | None:
+    """``INTENT:reason`` for a question move (same intent + field / template), else None."""
+    if action.intent not in _QUESTION_INTENTS:
+        return None
+    return f"{action.intent.value}:{action.reason or ''}"
+
+
+def loop_guard(action: Action, neg: NegotiationState, cfg: Settings) -> Action:
+    """Hand off instead of asking the same question a third time; else count this ask.
+
+    The count is an ``note_question`` effect, applied when the move is spoken.
+    """
+    key = question_key(action)
+    # ``_decide_wrap`` re-enters ``decide``; count each spoken question once.
+    if key is None or any(e.kind == "note_question" for e in action.effects):
+        return action
+    if neg.question_counts.get(key, 0) >= cfg.max_same_question:
+        kept = [e for e in action.effects if e.kind in ("record_ask", "clear_pending_terms_alt")]
+        return _handoff(kept, "repeated_question")
+    return action.model_copy(
+        update={"effects": [*action.effects, Effect(kind="note_question", data={"key": key})]}
+    )
+
+
+def rep_turn_progress(
+    analysis: TurnAnalysis,
+    neg: NegotiationState,
+    belief_changes: list[BeliefChange],
+    *,
+    accepted_term_alt: bool = False,
+) -> bool:
+    """True when this rep turn added verified information or moved the call.
+
+    Progress: a belief value or status changed, a new ask, an accept or reject,
+    a read-back answer, a firm stance, or a yes to a non-price alternative.
+    A restated ask, a repeated term, a question or small talk is not progress.
+    """
+    if any(
+        c.old_value != c.new_value or c.old_status != c.new_status for c in belief_changes
+    ):
+        return True
+    if (
+        analysis.settlement_ask_pct is not None
+        and ask_pct_to_bp(analysis.settlement_ask_pct) != neg.ask_bp
+    ):
+        return True
+    return (
+        analysis.stance in ("accept", "reject")
+        or analysis.readback_response in ("confirm", "deny")
+        or analysis.firm
+        or accepted_term_alt
     )
 
 
@@ -827,22 +1046,21 @@ def decide(
         term_alt=term_alt,
         accepted_term_alt=accepted_term_alt,
     )
+    action: Action | None = None
     for step in (_decide_interruptions, _decide_clarify, _decide_confirm, _decide_discovery):
         action = step(t)
         if action is not None:
-            return action
-    return _decide_negotiate(t)
+            break
+    if action is None:
+        action = _decide_negotiate(t)
+    return loop_guard(action, neg, t.cfg)
 
 
 def _decide_interruptions(t: _Turn) -> Action | None:
     """Moves that preempt the phase flow, in priority order."""
     a, neg, cfg = t.analysis, t.neg, t.cfg
     if neg.turn_idx > cfg.max_turns:
-        return _no_deal(
-            t.effects,
-            reason="max_turns",
-            spoken_reason="We have reached the limit for this call.",
-        )
+        return _handoff(t.effects, "max_turns")
     if a.hostility >= cfg.hostility_threshold:
         return _escalate(
             t.effects,
@@ -881,6 +1099,8 @@ def _decide_interruptions(t: _Turn) -> Action | None:
         )
     if neg.phase in (Phase.WRAP, Phase.END, Phase.ESCALATE):
         return _decide_wrap(t)
+    if neg.no_progress_turns >= cfg.max_no_progress_turns:
+        return _handoff(t.effects, "no_progress")
     # Schedule detail after a proposal; "payment schedule" often appears in accept lines.
     if a.asks_for_schedule and neg.last_confirm_key is not None and a.stance != "accept":
         return Action(
@@ -900,11 +1120,7 @@ def _decide_interruptions(t: _Turn) -> Action | None:
                 next_phase=Phase.END,
                 reason="thanks_accept",
             )
-        return _no_deal(
-            t.effects,
-            reason="wants_to_end",
-            spoken_reason="Understood — we will end the call here.",
-        )
+        return follow_up_action(t.effects)
     return None
 
 
@@ -1074,7 +1290,7 @@ def _decide_confirm(t: _Turn) -> Action | None:
         if (
             afford is not None
             and afford.max_bp is not None
-            and neg.confirmed_bp <= afford.max_bp
+            and neg.confirmed_bp <= accept_line_bp(afford.max_bp, t.cfg.accept_line_pct_of_max_bp)
             and neg.confirmed_bp in afford.feasible_bps
         ):
             return _confirm_action(
@@ -1127,13 +1343,7 @@ def _decide_negotiate(t: _Turn) -> Action:
                 reason="out_of_guardrail",
                 spoken_reason="This needs client approval for extra funds before we continue.",
             )
-        return _no_deal(
-            t.effects,
-            reason="infeasible",
-            spoken_reason=(
-                "No payment schedule fits within the client's program under these terms."
-            ),
-        )
+        return _handoff(t.effects, "infeasible")
     # A further non-price alt that can raise the ceiling beats a price counter.
     if ask_bp > afford.max_bp:
         alt = _term_alt_action(t)
@@ -1146,8 +1356,7 @@ def _decide_negotiate(t: _Turn) -> Action:
         on_table = _reconfirm_on_table(t, ask_bp, afford)
         if on_table is not None:
             return on_table
-        return _negotiate_affordable(t, ask_bp, afford)
-    return _ladder_unreachable(t, ask_bp, afford)
+    return _negotiate(t, ask_bp, afford)
 
 
 def _term_alt_action(t: _Turn) -> Action | None:
@@ -1165,19 +1374,28 @@ def _term_alt_action(t: _Turn) -> Action | None:
 
 
 def _confirm_accepted_counter(t: _Turn, ask_bp: int, afford: Affordability) -> Action | None:
-    """Rep accepted: confirm a restated % or our last counter, if still feasible.
+    """Rep accepted one of our offers: confirm it, if still feasible and at or below the line.
 
-    A yes to a term alt is not a yes to the previous price — that counter can
-    be a token percent the new terms just made obsolete.
+    A restated % counts only when it is a number we offered; any other number
+    is the rep's own ask and goes through the ladder (never accepted first —
+    Phase 45, the A/B pair-17 "100% balance" accept). A yes to a term alt is
+    not a yes to the previous price — that counter can be a token percent the
+    new terms just made obsolete.
     """
     a, neg = t.analysis, t.neg
     if a.stance != "accept":
         return None
     assert afford.max_bp is not None
-    legal = {bp for bp in afford.feasible_bps if bp <= afford.max_bp}
+    line = accept_line_bp(afford.max_bp, t.cfg.accept_line_pct_of_max_bp)
+    legal = {bp for bp in afford.feasible_bps if bp <= line}
+    ours = set(neg.counters_offered)
+    if neg.confirmed_bp is not None:
+        ours.add(neg.confirmed_bp)
     bp: int | None = None
     if a.settlement_ask_pct is not None:
         stated = ask_pct_to_bp(a.settlement_ask_pct)
+        if stated not in ours:
+            return None
         if stated in legal:
             bp = stated
     if bp is None and neg.counters_offered and not t.accepted_term_alt:
@@ -1212,7 +1430,7 @@ def _reconfirm_on_table(t: _Turn, ask_bp: int, afford: Affordability) -> Action 
     if (
         not new_ask
         and not key_matches
-        and confirmed <= afford.max_bp
+        and confirmed <= accept_line_bp(afford.max_bp, t.cfg.accept_line_pct_of_max_bp)
         and confirmed in afford.feasible_bps
         and ask_bp <= confirmed
     ):
@@ -1232,11 +1450,7 @@ def _reconfirm_on_table(t: _Turn, ask_bp: int, afford: Affordability) -> Action 
         return _propose_wrap(t)
     soft = t.effects + [Effect(kind="inc_confirm_reject")]
     if neg.confirm_rejects + 1 >= t.cfg.max_counters:
-        return _no_deal(
-            soft,
-            reason="confirm_unacked",
-            spoken_reason="We still have not confirmed a schedule.",
-        )
+        return _handoff(soft, "confirm_unacked")
     return _confirm_action(
         ask_bp=confirmed,
         belief=t.belief,
@@ -1247,63 +1461,14 @@ def _reconfirm_on_table(t: _Turn, ask_bp: int, afford: Affordability) -> Action 
 
 
 def _stall_after_confirm(t: _Turn) -> Action:
-    """Rejected identical CONFIRM: verify each ASSUMED field once, else no-deal."""
+    """Rejected identical CONFIRM: verify each ASSUMED field once, else hand off."""
     effects = t.effects + [Effect(kind="inc_confirm_reject")]
     fname = _first_assumed_field(t.belief, already_asked=t.neg.assumed_asked)
     if fname is not None:
         return _ask_field(
             fname, effects + [Effect(kind="note_assumed_asked", data={"field": fname})]
         )
-    return _no_deal(
-        effects,
-        reason="confirm_rejected",
-        spoken_reason="We could not confirm a schedule both sides can accept.",
-    )
-
-
-def _ladder_unreachable(t: _Turn, ask_bp: int, afford: Affordability) -> Action:
-    """Counter ladder when the ask is above the ceiling (or off the grid).
-
-    Ceiling = highest feasible bp <= max_bp and strictly below the ask. At most
-    ``max_counters`` COUNTERs; the last one is the ceiling. Once the ceiling is
-    on the table there is nothing better to say, so any non-accept turn ends
-    (re-offering the same bp was the Phase 12 ten-counter loop).
-    """
-    neg, cfg = t.neg, t.cfg
-    assert afford.max_bp is not None
-    c_prev = neg.counters_offered[-1] if neg.counters_offered else None
-    c_next = next_counter(
-        ask_bp=ask_bp,
-        max_bp=afford.max_bp,
-        feasible_bps=afford.feasible_bps,
-        c_prev=c_prev,
-        anchor_ratio=cfg.anchor_ratio,
-        concession_factor=cfg.concession_factor,
-    )
-    if c_next is None:
-        return _no_deal(
-            t.effects,
-            reason="no_legal_counter",
-            spoken_reason="We cannot propose a settlement under these terms.",
-        )
-    ceiling = max(
-        bp for bp in afford.feasible_bps if bp <= afford.max_bp and bp < ask_bp
-    )
-    if len(neg.counters_offered) >= cfg.max_counters or (
-        c_prev is not None and c_prev >= ceiling
-    ):
-        return _no_deal(
-            t.effects,
-            reason="max_counters",
-            spoken_reason="We have exhausted the settlement options we can propose.",
-        )
-    if len(neg.counters_offered) + 1 >= cfg.max_counters or (
-        c_prev is not None and c_next <= c_prev
-    ):
-        c_next = ceiling
-    return _counter_action(
-        c_next, t.effects, counter_offer_total_cents=t.counter_offer_total_cents
-    )
+    return _handoff(effects, "confirm_rejected")
 
 
 def opening_action(

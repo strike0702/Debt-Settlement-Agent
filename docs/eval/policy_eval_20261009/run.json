@@ -1,0 +1,68 @@
+{
+  "run_id": "eval_20261009_014049_s7",
+  "seed": 7,
+  "n_scenarios": 100,
+  "git_sha": "15e0540dee2a911c297813e0562c4e4abae808ad",
+  "profile": "offline",
+  "nlu": "oracle",
+  "nlg": "template",
+  "sim_phrasing": "template",
+  "oracle_overlay": true,
+  "agent": "policy",
+  "arm_metrics": {
+    "turns": 561,
+    "llm_calls_per_turn_mean": 0.0,
+    "llm_calls_per_turn_p95": 0.0,
+    "llm_calls_per_turn_max": 0.0,
+    "turn_latency_ms_p50": 0.7274579256772995,
+    "turn_latency_ms_p95": 311.78562506102026
+  },
+  "settings": {
+    "llm_profile": "offline",
+    "nlg_mode": "template",
+    "nlg_h3": false,
+    "nlu_mode": "oracle",
+    "max_turns": 24,
+    "max_counters": 4,
+    "anchor_ratio": 0.7,
+    "concession_factor": 0.5,
+    "accept_line_pct_of_max_bp": 7500,
+    "max_same_question": 2,
+    "max_no_progress_turns": 4,
+    "hostility_threshold": 0.8,
+    "llm_cache": false
+  },
+  "models": {
+    "nlu": [
+      "fake"
+    ],
+    "nlg": [
+      "fake"
+    ],
+    "sim": [
+      "fake"
+    ],
+    "stt": [
+      "fake"
+    ],
+    "agent": [
+      "fake"
+    ]
+  },
+  "providers": "eval/results/eval_20261009_014049_s7/providers_no_budgeted.yaml",
+  "call_counts": {},
+  "call_share": {},
+  "thresholds": {
+    "unverified_figures_spoken": 0,
+    "sensitive_leaks": 0,
+    "agreement_valid": 1.0,
+    "escalation_correct": ">=0.9",
+    "no_deal_correct": ">=0.9",
+    "deal_rate_given_zopa": ">=0.75",
+    "rule_extraction_accuracy": ">=0.5",
+    "false_known_rate": "<=0.25",
+    "counters_spoken_max": "<=max_counters"
+  },
+  "thresholds_passed": true,
+  "threshold_failures": []
+}

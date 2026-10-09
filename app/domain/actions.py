@@ -67,6 +67,7 @@ class Effect(BaseModel):
         "inc_confirm_reject",
         "note_assumed_asked",
         "note_clarify",
+        "note_question",
         "note_terms_countered",
         "clear_pending_terms_alt",
         "clear_wrap",

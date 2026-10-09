@@ -158,11 +158,14 @@ _PLACEHOLDERS_BEFORE: dict[str, set[str]] = {
             "rep_firm",
             "counters_exhausted",
             "no_lower_counter",
-            "ladder_stalled",
-            "gap_small",
+            "rep_held",
             "terms_revised",
         )
     },
+    # Phase 45 ladder moves (COUNTER templates speak the counter).
+    "hold": {"counter_pct"},
+    "step": {"counter_pct"},
+    "final_counter": {"counter_pct"},
 }
 
 
@@ -171,7 +174,10 @@ def test_rewrite_kept_every_key_and_placeholder() -> None:
     for key, text in REASON_TEXT.items():
         names = {n for _, n, _, _ in fmt.parse(text) if n}
         assert names == _PLACEHOLDERS_BEFORE.get(key, set()), key
-    assert len(REASON_TEXT) == 47  # +2 in Phase 39: amount_meaning(_unresolved)
+    # +2 in Phase 39: amount_meaning(_unresolved). Phase 45: -2 (gap_small,
+    # ladder_stalled), +7 (hold, step, final_counter, rep_held, above_accept_line,
+    # repeated_question, no_progress).
+    assert len(REASON_TEXT) == 52
 
 
 _JARGON = ("ladder", "read back", "read-back", "wrap", "hedged", "engine", "policy", "feasible")

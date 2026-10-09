@@ -49,6 +49,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 40 | Haiku NLU measurement (user request, measurement only) | done |
 | 41 | Claude NLU on the demo + daily budget (user request) | done |
 | 42 | NLU prompt for Haiku, gated on Sonnet (user request) | done: Haiku improved, Sonnet gate not run (cost cap), prompt reverted |
+| 45 | Deal-or-handoff endings, loop guard, negotiation rules, phrase guards (user decisions 2026-10-09) | done |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -64,6 +65,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - Phase 24b: `nlg_h3: bool = False` (ack / answer acts + 3-turn NLG context); `llm_timeout_agent_s: float = 20.0` (eval A/B agent role).
 - Phase 30: `anthropic_api_key: SecretStr | None` (pool `ANTHROPIC_API_KEY_1..N` via `api_keys`); `llm_timeout_judge_s: float = 60.0`.
 - Phase 41: `claude_daily_budget_usd: Decimal = Decimal("1.00")` (`ge=0`; env `CLAUDE_DAILY_BUDGET_USD`).
+- Phase 45: `accept_line_pct_of_max_bp: int = 7500` (`0..10000`, bp of max_bp; default from `app.domain.negotiation.ACCEPT_LINE_PCT_OF_MAX_BP`), `max_same_question: int = 2`, `max_no_progress_turns: int = 4`. `close_gap_bp` removed (env `CLOSE_GAP_BP` is now ignored).
 - `get_settings() -> Settings`
 
 ### `app.domain.units`
@@ -146,16 +148,16 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `Phase`, `Intent`, `Effect`, `Action` re-exported from `app.domain.actions`
 - `Agreement`, `NegotiationState` (also `last_confirm_key`, `confirm_rejects`, `assumed_asked`, `clarify_counts`; no `rejects` since Phase 14)
 - `ask_pct_to_bp(pct: float) -> int`
-- `next_counter(*, ask_bp, max_bp, feasible_bps, c_prev, anchor_ratio, concession_factor) -> int`
+- Phase 45: `next_counter` removed; `anchor_bp(*, ask_bp, line_bp, legal, anchor_ratio) -> int | None`, `step_bp(*, prev, raw, ceiling, legal) -> int | None`; `loop_guard(action, neg, cfg) -> Action`, `question_key(action) -> str | None`, `rep_turn_progress(analysis, neg, belief_changes, *, accepted_term_alt=False) -> bool`, `follow_up_action(effects=None, *, reason="wants_to_end") -> Action`, `HANDOFF_SPOKEN: dict[str, str]`; `NegotiationState` adds `ask_at_last_counter`, `hold_stage`, `final_counter_ask`, `counter_turns`, `question_counts`, `no_progress_turns`. `decide()` never emits `NO_DEAL_WRAP` (see Phase 45 entry).
 - `decide(belief, neg, analysis, afford, *, settings=None, rescue_within_guardrail=False, confirm_facts=None, counter_offer_total_cents=None) -> Action`
-  - Identical CONFIRM: `reject` → ASK each ASSUMED once then NO_DEAL; other → soft retry then `confirm_unacked`
+  - Identical CONFIRM: `reject` → ASK each ASSUMED once then ESCALATE(`confirm_rejected`); other → soft retry then ESCALATE(`confirm_unacked`) (Phase 45)
   - Unresolved CONTRADICTED after 2 CLARIFY → `ESCALATE(contradiction_unresolved)`
-  - Ceiling ladder (ask above ceiling / off grid): at most `max_counters` COUNTERs, the last one at the ceiling; no same-bp re-offer — any non-accept once the ceiling is on the table → `NO_DEAL(max_counters)`
+  - Price ladder: Phase 45 `_negotiate` (accept line, hold / steps / final counter, `max_counters` cap); superseded the Phase 12 ceiling ladder
   - CONFIRM wrap only on `stance == "accept"` (not `readback_response`); contradiction/tentative before wrap. Exception: a READ_BACK that preempts a CONFIRM accept keeps `Phase.CONFIRM` and emits `note_confirm_accepted` (→ `NegotiationState.accepted_confirm_key`); the readback "confirm" then wraps (fingerprint unchanged) or re-confirms `confirmed_bp` as `terms_revised`
   - Tiers speak via `template_override` over PUBLIC per-tier facts `<prefix>_tier_<a|b|…>_from` (ordinal) / `_min` (money), prefix `readback_value` / `clarify_old` / `clarify_new`: "a minimum of $75 from the 4th payment on" joined by "and"; empty → "no special payment tiers". Ids are lettered because placeholder ids must be digit-free.
   - `TurnAnalysis.tiers_ambiguous` → CLARIFY(`tiers_ambiguous`, number-free ask to restate from which payment); after two (`clarify_counts["min_payment_tiers"]`) → `ESCALATE(tiers_unresolved)`
-  - `wants_to_end` → NO_DEAL when not accepting
-  - `_confirm_key` fingerprints all CreditorRules fields; `next_counter` → `None` when no legal bp
+  - `wants_to_end` → ESCALATE(`wants_to_end`, "a specialist from our side will follow up") when not accepting (Phase 45)
+  - `_confirm_key` fingerprints all CreditorRules fields
 - `draft_agreement(*, creditor, bp, offer_total, rows, assumed_fields, audit=None, call_id=None) -> Agreement`
 - `opening_action(*, settings=None, firm_name=None, opening_disclosure=None) -> Action`
 
@@ -1621,3 +1623,57 @@ Every reason sentence, before and after:
   - `uv run pytest -q`: 955 passed / 2 skipped / 26 xfailed;
   - fast suite (`-m "not slow"`) with `.env` moved aside (restored): 952 passed / 2 skipped / 3 deselected / 26 xfailed;
   - oracle eval `eval_20261008_181232_s7` thresholds PASS, metrics unchanged (turns_to_outcome 5.12, surplus_captured 0.689, stuck 0, leaks 0).
+
+### Phase 45 (deal-or-handoff + negotiation rules) (2026-10-09) — user decisions of 2026-10-09, not in REVIEW_PLAN
+
+- **What changed (A–F as decided):**
+  - A. Calls end only as a confirmed deal or a handoff. `decide()` never emits `NO_DEAL_WRAP`; every former no-deal path is `ESCALATE` with a spoken reason (`policy.HANDOFF_SPOKEN`) and a reason code. `wants_to_end` and `Orchestrator.on_rep_end` (`rep_ended`) say "A specialist from our side will follow up with you." A wrap whose agreement fails to draft now lands in `ESCALATE` (was `END`; audit event name `wrap_failed_no_deal` kept).
+  - B. Loop guard: `loop_guard` turns a question (ASK / ASK_SETTLEMENT / CLARIFY / READ_BACK, keyed `INTENT:reason`) asked twice already into `ESCALATE(repeated_question)`; counts ride a `note_question` effect applied on speech ack. The orchestrator counts rep turns with no progress (`rep_turn_progress`: no belief value/status change, no new ask, no accept/reject, no read-back answer, no firm, no yes to a term alt); at 4 → `ESCALATE(no_progress)` (checked after the post-wrap phases). `max_turns` is a handoff.
+  - C. Price ladder `_negotiate` (module docstring, `docs/DESIGN.md` ADR 7, README): accept line `accept_line_bp(max_bp)` = 75% rounded down; counters never above it; first number always countered (accept only when no lower legal bp: `no_lower_counter`); a stated % the agent never offered is the rep's ask, not an accept (`_confirm_accepted_counter`); rep moved → concede `concession_factor` (½) of their move, stage reset; rep flat → hold (`reason="hold"`, same bp, `_HOLD_TEMPLATE`), two quarter-gap steps (`"step"`), then `rep_held` accept or `above_accept_line` handoff; firm above line → handoff now, else `final_counter` halfway (`_FINAL_COUNTER_TEMPLATE`) and accept the repeat (`rep_firm`); `max_counters` spoken counters (holds included, `counter_turns`) → `counters_exhausted` accept or `max_counters` handoff. Yes to a term alt re-anchors (never below the last counter); a last counter above a lowered line is never restated. `ask_within_offer`, `terms_revised` and `_reconfirm_on_table` also require ≤ line. Removed: `gap_small`, `ladder_stalled`, `_ladder_unreachable`, `next_counter`, `close_gap_bp`.
+  - D / D2. `repair_firm` and `repair_stance`: a firm / accept / reject phrase inside a question, after a conditional (`if|whether|unless|before|until|once`) or after a negator in its clause does not force anything (`_phrase_guarded`, `_in_question`; negator sets `_ACCEPT_NEGATOR_RE`, `_REJECT_NEGATOR_RE` (no bare "no"), `_FIRM_NEGATOR_RE` (no can't/cannot/won't)). Helpers renamed `_has_unguarded_accept_phrase` / `_has_unguarded_reject_phrase` (eval mirrors updated). Firm stays "LLM flag OR phrase list".
+  - E. Scoring: `zopa` = floor feasible and ≤ `accept_line_bp(true_max_bp)`; `should_escalate` = stratum ≠ deal or pressuring. `no_deal_correct` **redefined** (not retired; its threshold stays in force and a retired metric would fail closed): no-fix, non-pressuring calls are correct when they end in a handoff with no deal and a reason in `eval.metrics.NO_DEAL_HANDOFF_REASONS`. `thresholds.yaml` unchanged.
+  - F. Pair 17: tests at policy and orchestrator level. The A/B wording "the 100% balance" is already dropped by the NLU verifier (`_pct_names_non_ask`, Phase 26); the policy path (accept stance + a first number) now counters.
+- **Files:** `app/agent/{policy,orchestrator,reasons,nlu}.py`, `app/config.py`, `app/domain/{negotiation.py (new),actions.py}`, `sim/scenarios.py`, `eval/{metrics,run_eval,nlu_corpus,nlu_guard_report}.py`, `tests/nlu_corpus_firm.jsonl` (new, first commit `15e0540`), `tests/unit/test_nlu_phrase_guards.py` (new), `tests/unit/{test_policy,test_orchestrator,test_metrics,test_reasons,test_ws,test_autoplay,test_eval_settings,test_nlu_corpus,test_nlu_guard_report}.py`, `tests/e2e/{test_policy_invariants,test_text_call}.py`, `tests/data/policy_arm_golden.json` (regenerated: only `s0007_075` changed, to a handoff), `docs/DESIGN.md` (ADR 7), `README.md`, `docs/eval/policy_eval_20261009/` (new), `docs/eval/nlu_phrase_guards_20261009/summary.md` (new), `docs/eval/nlu_corpus.md` + `docs/eval/nlu_corpus_{firm_haiku_p45,probes_haiku_p45,haiku_p45_guard,heldout_stance_haiku_p45_guard,firm_haiku_p45_guard,probes_haiku_p45_guard}.jsonl`.
+- **Interfaces:**
+  - `app.domain.negotiation`: `ACCEPT_LINE_PCT_OF_MAX_BP = 7500`; `accept_line_bp(max_bp: int, pct_of_max_bp: int = 7500) -> int`.
+  - `app.agent.policy`: see the Interfaces section (`anchor_bp`, `step_bp`, `loop_guard`, `question_key`, `rep_turn_progress`, `follow_up_action`, `HANDOFF_SPOKEN`, new `NegotiationState` fields). `offer_counter` effect data: `{"bp", "stage", "ask_bp"?, "turn"?, "final_ask"?}` (plain sets; idempotent on eager + ack apply).
+  - `Effect.kind` adds `note_question` (`{"key"}`); not part of the WS event schema, so `web/src/types` were not regenerated.
+  - `eval.nlu_corpus`: records add `predicted.firm_raw`, `has_terms`; `rescore_guards(records) -> records`; CLI `--from-records PATH --rescore-guards`.
+  - `eval.metrics.NO_DEAL_HANDOFF_REASONS: frozenset[str]`.
+- **Reason codes.** Kept, now naming a handoff: `max_turns`, `infeasible`, `max_counters`, `no_legal_counter`, `confirm_unacked`, `confirm_rejected`, `wants_to_end`, `rep_ended`. Kept with new meaning: `rep_firm` (repeat after our final counter), `counters_exhausted` (cap, ask ≤ line), `no_lower_counter` (first number, nothing lower schedulable). New: `above_accept_line`, `repeated_question`, `no_progress` (handoffs); `hold`, `step`, `final_counter` (COUNTER moves); `rep_held` (accept after hold + steps). Removed: `gap_small`, `ladder_stalled`. `REASON_TEXT` / `REASON_SHORT`: 52 keys each.
+- **Oracle eval BEFORE (main `6ff7d1d`, `eval_20261009_011453_s7`) vs AFTER (`eval_20261009_014049_s7`), seed 7, n=100, thresholds PASS both:**
+
+| metric | BEFORE | AFTER |
+|---|---|---|
+| deal rate given zopa | 1.000 (23) | 1.000 (23) |
+| handoff rate | 0.55 | 0.77 |
+| no-deal endings (not deal, not handoff) | 22 | 0 |
+| escalation_correct | 1.000 (n=55) | 1.000 (n=77) |
+| no_deal_correct | 1.000 (n=22, old meaning) | 1.000 (n=22, new meaning) |
+| agreement_valid | 1.000 (23) | 1.000 (23) |
+| surplus_captured | 0.689 | 0.689 |
+| turns_to_outcome | 5.12 | 4.61 |
+| counters spoken mean / max | 0.95 / 4 | 0.44 / 2 |
+| sensitive_leaks / unverified | 0 / 0 | 0 / 0 |
+
+  Same 100 scenarios in both runs. BEFORE scored with the new definitions: escalation_correct 0.714 (55/77), no_deal_correct 0.000. Summary: `docs/eval/policy_eval_20261009/summary.md`; README results point there.
+- **NLU (Haiku 5.5, D / D2):** firm lines (20): firm precision 0.556 → 1.000, recall 1.000 → 1.000 (Haiku's raw flag 10/10, 0 FP; all 8 FPs came from the phrase list). Probes 31.1/31.2 (12): stance 0.167 → 0.833. Main corpus (183, `HAIKU_P43_FIX` records) stance 0.869 → 0.869 and held-out (32) 0.969 → 0.969, 0 lines changed. Summary: `docs/eval/nlu_phrase_guards_20261009/summary.md`.
+- **Cost spent: $0.0092** of the $0.10 cap, Haiku only (32 calls: 20 firm + 12 probes; 63,651 in / 5,757 out). Rescoring made no calls.
+- **Deviations / interpretations:**
+  1. `max_counters` (4) still caps the ladder and counts holds (so `counters_spoken_max <= max_counters` holds). When the cap is reached the agent settles (accept ≤ line, else `max_counters` handoff) even if a hold / step / final counter would be next; in the e2e floor-at-line run the cap, not the final counter, closed the deal.
+  2. Firm on the rep's first number (≤ line): the "final counter" is halfway between our anchor and their number (no earlier offer exists).
+  3. A rep who raises their ask, or a ladder with no recorded ask at our last counter, is treated as "did not move" (hold first).
+  4. When half of the rep's move does not reach the next legal bp, the agent holds (restates) with the stage reset, rather than over-conceding.
+  5. Accepted term alt → re-anchor (if above our last counter) instead of hold; a last counter above a lowered line → settle (accept ≤ line, else handoff), never restated.
+  6. `rep_turn_progress` counts accept and reject stances as progress (a rejection of a new offer is an answer), so the ladder's own hold / step limits, not the stall guard, end a price standoff.
+  7. `note_question` is applied on speech ack only (like `note_clarify`); a question cut off by barge-in is not counted.
+  8. `on_rep_end` and a failed wrap draft are handoffs too (A says every no-deal path).
+  9. Pair 17: the A/B line's "100% balance" is already rejected by the NLU verifier since Phase 26, so the orchestrator test covers both the original wording (agent asks for the %) and an accepting line with a real first number (agent counters).
+- **Open issues / not done (also in the final message as DEFERRED):**
+  - `fixtures/scenarios/no_space/meta.json` still says `"expected": "no_deal"`; autoplay now reports `escalate` (fixtures outside scope).
+  - `.env.example` still lists `CLOSE_GAP_BP` (ignored) and lacks the three new settings (outside scope).
+  - Web: `mic.ts` only goes to `call_over` on phase `END`, so after a handoff the mic returns to listening; `traceStory.ts` still has a `NO_DEAL_WRAP` label (harmless); the UI has no copy for the new reason codes beyond the trace text (UI out of scope).
+  - Eval-only LLM arms (`eval/agents`) can still `end_no_deal`; their prompts predate the deal-or-handoff rule.
+  - The oracle sim never exercises hold / steps / final counter (see the eval summary); a sim persona that holds its number would.
+  - NLU prompt: the LLM still proposes "the N% balance" style percentages as asks (A/B pair 17, `s0007_006`); the verifier drops "% balance / interest / installment…" but not every variant. Prompt change deferred to a gated prompt phase.
+- **Checks:** see the commit; `uv run ruff check .` clean; `uv run pytest -q`; fast suite with `.env` moved aside; oracle eval PASS; 500-seed invariant sweep.

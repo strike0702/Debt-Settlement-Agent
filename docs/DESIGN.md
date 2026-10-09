@@ -1,6 +1,6 @@
 # Design decisions
 
-Six short architecture decision records (ADRs) and one annotated voice turn.
+Seven short architecture decision records (ADRs) and one annotated voice turn.
 Each ADR is context, decision, consequences. Numbers link to the committed
 evidence in [`docs/eval/`](eval/); nothing here is measured anywhere else.
 
@@ -17,7 +17,7 @@ reads (NLU) and phrases (NLG). The ReAct and LLM-only agents exist, but only as
 eval arms in `eval/agents/` (Phase 24a); nothing in `app/` imports them.
 
 **Consequences.** Policy is unit-testable without a model, and the offline eval
-gates it on every push ([policy eval](eval/policy_eval_20261006/summary.md):
+gates it on every push ([policy eval](eval/policy_eval_20261009/summary.md):
 valid agreements 1.0, n=23). The eval arms must be given private figures to
 work at all, which is the risk this decision avoids. The cost is rigidity: a
 new move needs code and tests, not a prompt edit.
@@ -162,9 +162,63 @@ lets a wrong number through. After the cap the demo reads the rep with the free
 models, so quality can change mid-call; Groq has not been measured on the new
 prompt. The audit shows which model answered each turn (`llm` rows, operator
 view). The rule-based stance guards still run on Claude's output, and Phase 37
-showed they override some correct Claude labels; that is a separate open
-decision. Render's disk is ephemeral, so a restart starts the day's count at
+showed they override some correct Claude labels. Since Phase 45 an accept,
+reject or firm phrase inside a question, after a conditional ("if", "whether")
+or after a negator no longer forces a label (Haiku probes 2/12 → 10/12, corpus
+unchanged; [ADR 7](#adr-7-how-negotiation-decisions-are-made)). Render's disk is ephemeral, so a restart starts the day's count at
 zero; a monthly limit in the Anthropic console is the backstop.
+
+## ADR 7. How negotiation decisions are made
+
+**Context.** Up to Phase 44 the policy accepted any affordable ask: the rep's
+first number could be confirmed without a counter (`gap_small`,
+`no_lower_counter`), and an "accept" stance carrying a new percentage was taken
+as agreement. In the A/B run (pair 17, `s0007_006`) the agent answered "Great,
+100% is acceptable" to a line that only mentioned "the 100% balance". Calls
+could also end with a plain "no deal", leaving nobody to follow up, and a rep
+who kept repeating themselves could keep the agent asking the same question.
+
+**Decision (user decisions of 2026-10-09).** The rules live in
+`_negotiate` in `app/agent/policy.py`; the engine is unchanged.
+
+- *Accept line.* We accept only at or below 75% of the client's ceiling
+  (`accept_line_pct_of_max_bp = 7500`, rounded down to a whole basis point), and
+  we never offer more than that. Any accept still needs a schedule the engine
+  can build.
+- *First number.* We always counter the rep's first number, at 70% of the lower
+  of their ask and the line. Only if no lower percentage can be scheduled may we
+  accept it straight away. A "yes" that names a percentage we never offered is
+  their ask, not an agreement.
+- *They come down.* We move up by half as much as they moved, and the pause
+  count below starts over.
+- *They do not move.* We hold once (repeat our offer and ask them to come down),
+  then take two small steps of a quarter of the remaining gap. After that we
+  accept if their number is at or below the line; otherwise a person takes over.
+- *They say it is final.* Above the line: a person takes over at once. At or
+  below the line: one last offer halfway between our last offer and their
+  number, and if they repeat their number we accept it.
+- *Cap.* After `max_counters` (4) spoken counteroffers, holds included, we
+  accept if their number is at or below the line, else hand off.
+- *Endings.* A call ends only as a confirmed deal or a handoff. Every former
+  no-deal ending is now a handoff with a short spoken reason and a reason code
+  for the person taking over (`infeasible`, `no_legal_counter`, `max_counters`,
+  `above_accept_line`, `confirm_unacked`, `confirm_rejected`, `max_turns`,
+  `wants_to_end`, `rep_ended`). When the rep wants to end, the agent says a
+  specialist from our side will follow up.
+- *Loop guard.* The agent hands off instead of asking the same question a third
+  time (`repeated_question`), or after four rep turns in a row that add nothing
+  new (`no_progress`). The 24-turn cap stays as a backstop.
+
+**Consequences.** On the offline eval (seed 7, 100 calls) the deal calls are
+unchanged (23 deals, surplus 0.689) and the 22 no-fix calls now hand off instead
+of ending; no-fix calls are shorter (138 rep turns against 189) and speak fewer
+counters (44 against 95 over the run)
+([policy eval](eval/policy_eval_20261009/summary.md)). The simulated rep accepts
+any counter at or above its floor and drops 5 points per counter, so the hold,
+step and final-counter moves are covered by unit and end-to-end tests rather
+than by the eval. Deals above 75% of the ceiling, which the old policy could
+reach, are now handed to a person. The scenario labels follow the same line:
+a deal is "possible" only when the rep's floor is at or below it.
 
 ## One voice turn, annotated
 

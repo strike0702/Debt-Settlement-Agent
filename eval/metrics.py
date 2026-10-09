@@ -9,6 +9,12 @@ Deterministic call-quality metrics: counters_spoken_max / _mean (vs
 max_counters), identical_consecutive_agent_moves, turns_to_outcome,
 stuck_calls / stuck_rate (hit max_turns).
 
+Phase 45 (deal-or-handoff): a call ends only in a deal or a handoff, so
+``no_deal_correct`` now scores no_fix calls (non-pressuring) as correct when
+they end in a handoff with a price / feasibility reason
+(``NO_DEAL_HANDOFF_REASONS``) and no deal. ``escalation_correct`` counts every
+``should_escalate`` call, which now includes no_fix and above-the-line floors.
+
 Every rate ships with ``<rate>_n`` and a 95% Wilson interval ``<rate>_ci95``.
 Rule-field rates pool 7 fields per call, so their interval is optimistic
 (fields within a call are correlated). Does not run scenarios — that is
@@ -24,6 +30,21 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+# Handoff reasons that fit a call with no possible deal (Phase 45): no plan fits,
+# nothing to offer below the ask, or the rep stayed above the accept line or
+# rejected the schedule. Loop-guard reasons (max_turns, no_progress,
+# repeated_question) are not "appropriate": they mean the call went in circles.
+NO_DEAL_HANDOFF_REASONS: frozenset[str] = frozenset(
+    {
+        "infeasible",
+        "no_legal_counter",
+        "max_counters",
+        "above_accept_line",
+        "confirm_rejected",
+        "confirm_unacked",
+    }
+)
 
 # Rates reported with n + Wilson CI, in summary.md row order.
 RATE_METRICS: tuple[str, ...] = (
@@ -126,16 +147,18 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
         if r.get("got_deal"):
             zopa_deal_ok += 1
 
-    # --- no_deal_correct ---
+    # --- no_deal_correct (Phase 45: no deal, handed off for a fitting reason) ---
     no_deal_ok = 0
     no_deal_n = 0
     for r in completed:
-        if r.get("stratum") != "no_fix":
-            continue
-        if r.get("should_escalate"):
+        if r.get("stratum") != "no_fix" or r.get("persona") == "pressuring":
             continue
         no_deal_n += 1
-        if not r.get("got_deal") and not r.get("escalated"):
+        if (
+            not r.get("got_deal")
+            and r.get("escalated")
+            and r.get("final_reason") in NO_DEAL_HANDOFF_REASONS
+        ):
             no_deal_ok += 1
 
     # --- escalation_correct ---

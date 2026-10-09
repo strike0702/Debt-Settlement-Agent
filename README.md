@@ -101,37 +101,48 @@ Every model call goes through `app/llm/client.py` by role (`nlu`, `nlg`, `sim`, 
 
 ## How negotiation decisions are made
 
-The policy lives in `app/agent/policy.py`. A normal call moves through `OPENING → DISCOVERY → NEGOTIATE → CONFIRM → WRAP → END`. Hostility, a second request for the client's private information, or a second demand for a commitment sends the call to `ESCALATE`, which hands it to a person. A dead end goes to `NO_DEAL_WRAP` and then `END`.
+The policy lives in `app/agent/policy.py`. A normal call moves through `OPENING → DISCOVERY → NEGOTIATE → CONFIRM → WRAP → END`. A call ends in only two ways: a confirmed deal, or a hand-off to a person (`ESCALATE`). There is no "no deal, goodbye" ending. When the agent hands off, it says why in one short sentence and logs a reason code for the person taking over.
 
-The agent works for the client. The creditor usually opens high. The client's private maximum is a cap, not a talking point: counteroffers stay below the creditor's ask and at or under what the client can fund, and that maximum is never said out loud. The agent also should not give away the whole budget the first time the representative sounds agreeable.
+The agent works for the client. The creditor usually opens high. The client's private maximum is a cap, not a talking point, and it is never said out loud. The agent's own limit is lower still: it accepts only at or below **75% of the client's maximum** (the *accept line*), and it never offers more than that.
 
 Defaults (set in `.env`):
 
 | Setting | Default | What it does |
 |---|---|---|
-| `ANCHOR_RATIO` | `0.7` | The first counteroffer is about 70% of the lower of the ask and the client's maximum. |
-| `CONCESSION_FACTOR` | `0.5` | Each later counteroffer closes half of the remaining gap. |
-| `MAX_COUNTERS` | `4` | At most four price counteroffers; the last one is the client's maximum. |
-| `CLOSE_GAP_BP` | `200` | If the next step would land within 2 points of the ask, the agent confirms instead. |
-| `MAX_TURNS` | `24` | The hard limit on call length. |
+| `ACCEPT_LINE_PCT_OF_MAX_BP` | `7500` | The accept line: 75.00% of the client's maximum, rounded down. The agent never offers or accepts more. |
+| `ANCHOR_RATIO` | `0.7` | The first counteroffer is about 70% of the lower of the ask and the accept line. |
+| `CONCESSION_FACTOR` | `0.5` | When the representative comes down, the agent moves up by half as much. |
+| `MAX_COUNTERS` | `4` | At most four counteroffers in a call, including "we are staying at" repeats. |
+| `MAX_SAME_QUESTION` | `2` | The agent hands off instead of asking the same question a third time. |
+| `MAX_NO_PROGRESS_TURNS` | `4` | The agent hands off after four replies in a row that add nothing new. |
+| `MAX_TURNS` | `24` | The hard limit on call length, also a hand-off. |
 
-On every turn, `decide()` checks the same list in a fixed order: the turn limit, hostility, requests for private information, demands for a commitment, contradictions, tentative values to read back, missing rules, and only then price.
+On every turn, `decide()` checks the same list in a fixed order: the turn limit, hostility, requests for private information, demands for a commitment, replies that add nothing, contradictions, tentative values to read back, missing rules, and only then price.
 
-**When the client can afford the ask.** Early versions accepted any affordable ask on the spot, which left money on the table. The current policy counters first. The first offer is rounded down to a whole percentage the client can fund. Each later offer moves halfway toward the ask, always strictly below it and never above the client's maximum. The agent confirms when the next step would be close enough, when the representative sounds firm after a counteroffer, or when it has used up its counteroffers. It never walks away from an affordable ask just to hold out.
+**The price ladder.**
 
-**When the ask is above what the client can pay.** The agent first tries to change a non-price term: a later start date, a lower minimum payment, or more payments. A "yes" to that change is not taken as a "yes" to the earlier price. Then it makes at most four counteroffers, the last at the highest percentage the client can fund. Anything other than acceptance after that ends the call without a deal.
+- The agent never accepts the representative's first number. It always counters at least once. The only exception is when no lower percentage could be scheduled for the client at all.
+- If the representative comes down, the agent moves up by half as much.
+- If the representative does not move, the agent first repeats its offer and asks them to come down, then takes two small steps (a quarter of the remaining gap each). After that it accepts if their number is at or below the accept line, and otherwise hands the call to a person.
+- If the representative says the number is final, and it is above the accept line, the agent hands off at once. If it is at or below the line, the agent makes one last offer halfway between its last offer and their number, and accepts if they repeat their number.
+- After four counteroffers, the agent accepts if their number is at or below the line and otherwise hands off.
+- A "yes" that names a percentage the agent never offered is treated as the representative's ask, not as agreement.
+
+Every accept still needs a payment schedule the engine can build for the client.
+
+**When the ask is above what the client can pay.** The agent first tries to change a non-price term: a later start date, a lower minimum payment, or more payments. A "yes" to that change is not taken as a "yes" to the earlier price, and the ladder starts again from the new terms.
 
 Whether a percentage is affordable does not rise steadily with the percentage. 40% can fail while 45% works, usually because a smaller offer would make each payment fall under the creditor's minimum. So the adapter checks every whole percentage from 1% to 100% and treats that curve as the ground truth.
 
 **Confirming and wrapping up.** `CONFIRM_SCHEDULE` reads back the percentage, the number of payments, the dates, and the totals, all taken from engine facts. When the representative accepts, `PROPOSE_WRAP` drafts an agreement marked `pending_client_approval`. The agent says it has sent the proposal to the client for approval, and never presents it as a binding commitment. From there the representative can end the call or reopen it with a new ask.
 
-**Handing off versus walking away.** A hostile tone, a second request for private information, or a second demand for a commitment hands the call to a person. If nothing is affordable but a rescue option stays inside the limit, the agent also hands off, saying the client needs to approve extra funds, without naming the amount. If nothing is affordable and no term change helps, or the ask stays above the client's maximum after the last counteroffer, the call ends without a deal.
+**Handing off.** A hostile tone, a second request for private information, or a second demand for a commitment hands the call to a person. So does every dead end: no schedule fits (`infeasible`), nothing below the ask can be offered (`no_legal_counter`), the representative stays above the accept line (`above_accept_line`, `max_counters`), the schedule is never agreed (`confirm_unacked`, `confirm_rejected`), the call goes in circles (`repeated_question`, `no_progress`, `max_turns`), or the representative wants to stop (`wants_to_end`; the agent says a specialist from our side will follow up). If nothing is affordable but a rescue option stays inside the limit, the agent hands off saying the client needs to approve extra funds, without naming the amount.
 
 ## Safety and correctness
 
 I treated the model's output as untrusted input, the same way you would treat a web form.
 
-**Before the decision.** The model's reading is checked against the actual words. A quote must appear in the line, numbers must parse, and out-of-range values are dropped. A short "yeah", "okay" or "fine" only counts as acceptance when it is most of the line and the line has no number in it. A line that looks like an attempt to give the agent instructions never counts as acceptance. The flags for a private-information request and a commitment demand are set when the model says so **or** when a rule-based phrase match fires without a negation, because the model alone missed many of these.
+**Before the decision.** The model's reading is checked against the actual words. A quote must appear in the line, numbers must parse, and out-of-range values are dropped. A short "yeah", "okay" or "fine" only counts as acceptance when it is most of the line and the line has no number in it. A phrase like "that works", "too low" or "our final offer" decides nothing when it sits inside a question ("Is that agreed?"), after "if" or "whether", or after a negation ("That's not too low"); the model's own reading stands. A line that looks like an attempt to give the agent instructions never counts as acceptance. The flags for a private-information request and a commitment demand are set when the model says so **or** when a rule-based phrase match fires without a negation, because the model alone missed many of these.
 
 **During the decision.** The policy and the engine are ordinary Python. The model cannot pick a percentage or mark a schedule as valid.
 
@@ -155,18 +166,18 @@ python -m eval.run_eval --nlu oracle --nlg template --sim-phrasing template --sc
 
 | What I measured | Result | n | 95% CI | Why it matters |
 |---|---|---|---|---|
-| [Valid agreements](docs/eval/policy_eval_20261006/summary.md) | 1.0 | 23 | 0.857–1.000 | Every drafted schedule passed the independent validator under the agreed rules. A wrap-up with no agreement counts as a failure. |
-| [Deals when a deal is possible](docs/eval/policy_eval_20261006/summary.md) | 1.0 | 23 | 0.857–1.000 | When the creditor's ask and the client's budget overlap, and the call should not be handed off, the agent reached a deal. |
-| [Correct no-deal](docs/eval/policy_eval_20261006/summary.md) | 1.0 | 22 | 0.851–1.000 | On calls with no possible deal that should not be handed off, the agent walked away. |
-| [Correct hand-off to a person](docs/eval/policy_eval_20261006/summary.md) | 1.0 | 55 | 0.935–1.000 | Pressure and extra-funds calls that should be handed off were. |
-| [Creditor rules learned](docs/eval/policy_eval_20261006/summary.md) | 0.670 | 700 | 0.634–0.704 | 7 rules × 100 calls. Hand-offs and no-deal calls end before the late read-back of rules, so those rules stay assumed. That is why this is well below 1.0. |
-| [Rules wrongly marked as known](docs/eval/policy_eval_20261006/summary.md) | 0.000 | 469 | 0.000–0.008 | Whenever the agent marked a rule as known, it matched the creditor's real rule. |
-| [Stuck calls](docs/eval/policy_eval_20261006/summary.md) | 0.000 | 100 | 0.000–0.037 | No call hit the turn limit without ending. |
-| [Private figures spoken](docs/eval/policy_eval_20261006/summary.md) | 0 | | | An exact match against a list of private values (balances, fees, the client's maximum, rescue amounts). It does not catch a paraphrase. |
-| [Unverified figures spoken](docs/eval/policy_eval_20261006/summary.md) | 0 | | | No agent line contained a number that was neither a public fact nor a number the representative said. |
-| [Most price counteroffers in one call](docs/eval/policy_eval_20261006/summary.md) | 4 | | | This equals `MAX_COUNTERS`. An earlier bug made 10. |
+| [Valid agreements](docs/eval/policy_eval_20261009/summary.md) | 1.0 | 23 | 0.857–1.000 | Every drafted schedule passed the independent validator under the agreed rules. A wrap-up with no agreement counts as a failure. |
+| [Deals when a deal is possible](docs/eval/policy_eval_20261009/summary.md) | 1.0 | 23 | 0.857–1.000 | When the creditor's floor is at or below the agent's accept line, and the call should not be handed off, the agent reached a deal. |
+| [Correct hand-off on no-deal calls](docs/eval/policy_eval_20261009/summary.md) | 1.0 | 22 | 0.851–1.000 | On calls with no possible deal (and no pressure), the agent handed off for a price or feasibility reason and made no deal. |
+| [Correct hand-off to a person](docs/eval/policy_eval_20261009/summary.md) | 1.0 | 77 | 0.952–1.000 | Every call that should end with a person (pressure, extra funds, or no possible deal) did. |
+| [Creditor rules learned](docs/eval/policy_eval_20261009/summary.md) | 0.670 | 700 | 0.634–0.704 | 7 rules × 100 calls. Hand-offs end before the late read-back of rules, so those rules stay assumed. That is why this is well below 1.0. |
+| [Rules wrongly marked as known](docs/eval/policy_eval_20261009/summary.md) | 0.000 | 469 | 0.000–0.008 | Whenever the agent marked a rule as known, it matched the creditor's real rule. |
+| [Stuck calls](docs/eval/policy_eval_20261009/summary.md) | 0.000 | 100 | 0.000–0.037 | No call hit the turn limit. |
+| [Private figures spoken](docs/eval/policy_eval_20261009/summary.md) | 0 | | | An exact match against a list of private values (balances, fees, the client's maximum, rescue amounts). It does not catch a paraphrase. |
+| [Unverified figures spoken](docs/eval/policy_eval_20261009/summary.md) | 0 | | | No agent line contained a number that was neither a public fact nor a number the representative said. |
+| [Most price counteroffers in one call](docs/eval/policy_eval_20261009/summary.md) | 2 | | | The cap is `MAX_COUNTERS` (4). An earlier bug made 10. |
 
-On deals, the agent kept a [mean of 0.689 of the available surplus](docs/eval/policy_eval_20261006/summary.md): the share of the gap between the creditor's walk-away point and the client's maximum that it saved by not accepting the first ask. Calls took a [mean of 5.12 turns](docs/eval/policy_eval_20261006/summary.md) to reach an outcome. Five example transcripts sit next to the summary; [a note](docs/eval/policy_eval_20261006/NOTE.md) explains that they predate the current opening line.
+On deals, the agent kept a [mean of 0.689 of the available surplus](docs/eval/policy_eval_20261009/summary.md): the share of the gap between the creditor's walk-away point and the client's maximum that it saved by not accepting the first ask. Calls took a [mean of 4.61 rep turns](docs/eval/policy_eval_20261009/summary.md) to reach an outcome (5.12 before the Phase 45 rules; no-deal calls now hand off sooner). The simulated representative accepts any counteroffer at or above its floor, so all 23 deals closed on the first counteroffer, and the hold, small-step and final-offer moves are covered by tests rather than by this run. Two example transcripts sit next to the summary; the older pack is in [`policy_eval_20261006`](docs/eval/policy_eval_20261006/summary.md).
 
 ### Latency, before and after (live, demo settings)
 
@@ -251,7 +262,7 @@ uv run python -m eval.run_eval --nlu oracle --nlg template --sim-phrasing templa
 # open http://127.0.0.1:8000, pick "Easy deal", press "Watch a call"
 ```
 
-The eval prints a summary whose metrics table should match [`summary.md`](docs/eval/policy_eval_20261006/summary.md), and it exits with an error if any threshold is missed. "Watch a call" runs the server's code simulator with fixed phrasing, so it makes no model call.
+The eval prints a summary whose metrics table should match [`summary.md`](docs/eval/policy_eval_20261009/summary.md), and it exits with an error if any threshold is missed. "Watch a call" runs the server's code simulator with fixed phrasing, so it makes no model call.
 
 ## Running locally
 

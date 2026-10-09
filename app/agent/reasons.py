@@ -39,8 +39,8 @@ PUBLIC_PLACEHOLDERS: frozenset[str] = frozenset(
 )
 
 # One full sentence per reason, written for a newcomer reading the trace ("we"
-# is the agent). Phase 36 rewrote the wording only: keys, placeholders and
-# which reason ``decide()`` picks are unchanged.
+# is the agent). Phase 36 rewrote the wording; Phase 45 turned every no-deal
+# ending into a handoff (same codes) and added the ladder and loop-guard codes.
 REASON_TEXT: dict[str, str] = {
     # Opening and discovery
     "opening": (
@@ -77,13 +77,25 @@ REASON_TEXT: dict[str, str] = {
     ),
     # Price moves
     "counter": (
-        "We offer {counter_pct} ({offer_total}). We start below their ask and move up in "
-        "small steps, and we never offer more than the client can afford."
+        "We offer {counter_pct} ({offer_total}). We start well below their ask and, when "
+        "they come down, we move up by half as much, never past our limit for this client."
     ),
     # Display variant (not a reason code): the engine returned no offer total.
     "counter_no_total": (
-        "We offer {counter_pct}. We start below their ask and move up in small steps, "
-        "and we never offer more than the client can afford."
+        "We offer {counter_pct}. We start well below their ask and, when they come down, "
+        "we move up by half as much, never past our limit for this client."
+    ),
+    "hold": (
+        "We repeat our offer of {counter_pct} and ask the rep to come down, because they "
+        "did not move since our last offer."
+    ),
+    "step": (
+        "We move up a little to {counter_pct}, because the rep is holding their number "
+        "and we take two small steps before deciding."
+    ),
+    "final_counter": (
+        "The rep says they cannot go lower, so we make one last offer of {counter_pct}, "
+        "halfway to their number. If they repeat their number, we take it."
     ),
     "confirm": (
         "We agree to {settlement_pct} because the client can afford a payment plan at that "
@@ -94,24 +106,20 @@ REASON_TEXT: dict[str, str] = {
         "already offered."
     ),
     "rep_firm": (
-        "We agree to {settlement_pct}: the rep will not go lower and the client can afford "
-        "it, so there is no reason to keep bargaining."
+        "We agree to {settlement_pct}: the rep repeated their number after our last offer, "
+        "and it is within our limit for this client."
+    ),
+    "rep_held": (
+        "We agree to {settlement_pct}: the rep held their number through our pause and two "
+        "small steps, and it is within our limit for this client."
     ),
     "counters_exhausted": (
         "We agree to {settlement_pct} because we have made every counteroffer we are "
-        "allowed, and the client can afford their ask."
+        "allowed, and their ask is within our limit for this client."
     ),
     "no_lower_counter": (
-        "We agree to {settlement_pct} because there is no lower percentage the client "
-        "could afford to offer instead."
-    ),
-    "ladder_stalled": (
-        "We agree to {settlement_pct} because our next counteroffer would be no better "
-        "than the last one."
-    ),
-    "gap_small": (
-        "We agree to {settlement_pct} because we are already so close to their ask that "
-        "another counteroffer is not worth it."
+        "We agree to {settlement_pct} without countering, because no lower percentage "
+        "could be scheduled for the client."
     ),
     "terms_revised": (
         "We confirm {settlement_pct} again because the payment rules changed after we "
@@ -147,7 +155,10 @@ REASON_TEXT: dict[str, str] = {
         "The rep changed the terms after we sent the proposal, "
         "so we reopen the deal."
     ),
-    "rep_ended": "The rep ended the conversation, so we end the call.",
+    "rep_ended": (
+        "The rep ended the conversation without a deal, so we say a specialist will "
+        "follow up, and the call is handed off."
+    ),
     "rep_ended_after_wrap": (
         "The rep ended the conversation after the proposal was sent, so we close the call."
     ),
@@ -186,29 +197,44 @@ REASON_TEXT: dict[str, str] = {
         "We hand the call to a person, because no payment plan fits these rules unless the "
         "client adds money, and only the client can agree to that."
     ),
-    # No deal
+    # Handoffs (Phase 45: a call ends only as a deal or a handoff)
     "infeasible": (
-        "We end without a deal, because no payment plan fits the client's savings under "
-        "these rules, and changing a term would not help."
+        "We hand the call to a person, because no payment plan fits the client's savings "
+        "under these rules, and changing a term would not help."
     ),
     "no_legal_counter": (
-        "We end without a deal, because there is no percentage below their ask that the "
-        "client can afford."
+        "We hand the call to a person, because there is no percentage below their ask "
+        "that we can offer for this client."
     ),
     "max_counters": (
-        "We end without a deal, because our best affordable offer is already on the table "
-        "and the rep turned it down."
+        "We hand the call to a person, because we have made every counteroffer we are "
+        "allowed and their ask is still above our limit for this client."
+    ),
+    "above_accept_line": (
+        "We hand the call to a person, because the rep's number is above the most we may "
+        "accept for this client and they will not come down."
     ),
     "confirm_unacked": (
-        "We end without a deal, "
+        "We hand the call to a person, "
         "because the rep never agreed to the proposed schedule."
     ),
     "confirm_rejected": (
-        "We end without a deal, because the rep rejected the schedule and we had already "
-        "checked every term we had assumed."
+        "We hand the call to a person, because the rep rejected the schedule and we had "
+        "already checked every term we had assumed."
     ),
-    "max_turns": "We end the call, because it went on too long without an agreement.",
-    "wants_to_end": "We end the call, because the rep wants to stop and has not agreed to a deal.",
+    "max_turns": (
+        "We hand the call to a person, because it went on too long without an agreement."
+    ),
+    "repeated_question": (
+        "We hand the call to a person instead of asking the same question a third time."
+    ),
+    "no_progress": (
+        "We hand the call to a person, because the rep's last few replies added nothing new."
+    ),
+    "wants_to_end": (
+        "The rep wants to stop without a deal, so we say a specialist will follow up, and "
+        "the call is handed off."
+    ),
 }
 
 # The same reasons in a few words, with no numbers (the turn's title carries
@@ -222,15 +248,17 @@ REASON_SHORT: dict[str, str] = {
     "tiers_ambiguous": "Their minimum payment rules were unclear.",
     "cents_ambiguity": "Dollars or cents? We ask before using it.",
     "amount_meaning": "Total or per payment? We ask before using it.",
-    "counter": "A step toward their ask that the client can afford.",
-    "counter_no_total": "A step toward their ask that the client can afford.",
+    "counter": "A step toward their ask, within our limit.",
+    "counter_no_total": "A step toward their ask, within our limit.",
+    "hold": "They did not move, so we hold our offer.",
+    "step": "They are holding, so we take a small step.",
+    "final_counter": "They will not go lower; one last offer halfway.",
     "confirm": "The client can afford it, so we ask for a yes.",
     "ask_within_offer": "Their ask is no more than our own offer.",
-    "rep_firm": "The rep will not go lower, and the client can afford it.",
-    "counters_exhausted": "No counteroffers left, and their ask is affordable.",
-    "no_lower_counter": "No lower offer would be affordable.",
-    "ladder_stalled": "Another counteroffer would not help.",
-    "gap_small": "Too close to their ask to counter again.",
+    "rep_firm": "They repeated their number, and it is within our limit.",
+    "rep_held": "They held their number, and it is within our limit.",
+    "counters_exhausted": "No counteroffers left, and their ask is within our limit.",
+    "no_lower_counter": "No lower offer could be scheduled.",
     "terms_revised": "The rules changed since we last confirmed.",
     "alt_first_payment_date": "Their start date leaves no affordable plan.",
     "alt_min_payment_cents": "Their minimum payment blocks every affordable plan.",
@@ -242,7 +270,7 @@ REASON_SHORT: dict[str, str] = {
     "schedule_detail": "The rep asked for the details.",
     "schedule_detail_post_wrap": "The rep asked to hear the schedule.",
     "wrap_renegotiate": "The rep changed the terms after the proposal.",
-    "rep_ended": "The rep ended the conversation.",
+    "rep_ended": "The rep ended the call; a specialist follows up.",
     "rep_ended_after_wrap": "The rep ended the call after the proposal.",
     "private_info": "They asked about the client's private finances.",
     "sensitive_request": "They kept asking for private information.",
@@ -255,12 +283,15 @@ REASON_SHORT: dict[str, str] = {
     "already_escalated": "Waiting for a specialist to join.",
     "out_of_guardrail": "Only extra money from the client would make a plan work.",
     "infeasible": "No affordable plan fits their rules.",
-    "no_legal_counter": "Nothing below their ask is affordable.",
-    "max_counters": "They turned down our best affordable offer.",
+    "no_legal_counter": "Nothing below their ask is within our limit.",
+    "max_counters": "Out of counteroffers, and their ask is above our limit.",
+    "above_accept_line": "Their number is above our limit.",
     "confirm_unacked": "The rep never agreed to the schedule.",
     "confirm_rejected": "The rep rejected the schedule.",
     "max_turns": "The call ran too long without a deal.",
-    "wants_to_end": "The rep wants to stop.",
+    "repeated_question": "Same question a third time; a person takes over.",
+    "no_progress": "Several replies with nothing new.",
+    "wants_to_end": "The rep wants to stop; a specialist follows up.",
 }
 
 # Intent-level fallback when a code is unknown (new code without an entry).

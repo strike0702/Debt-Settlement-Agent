@@ -162,10 +162,8 @@ async def test_text_call_persona_stratum(
         assert session.agreement is None
         return
 
-    # no_fix
-    assert session.neg.phase == Phase.END
+    # no_fix: deal-or-handoff (Phase 45) — a handoff with no agreement.
+    assert session.neg.phase == Phase.ESCALATE
     assert session.agreement is None
-    # Last agent intent should be no-deal (or escalate only if hostility — not here).
     finals = [t for t in session.history if t.role == "agent"]
     assert finals
-    # Phase END is enough; optionally agreement absent.

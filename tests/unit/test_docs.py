@@ -103,7 +103,8 @@ def test_frozen_transcripts_with_old_opening_carry_a_note() -> None:
 
     opening_head = TEMPLATES[Intent.OPENING].split("{")[0].strip()
     for pack in sorted((ROOT / "docs/eval").glob("policy_eval_*")):
-        transcripts = list(pack.glob("s*.md"))
+        # Transcripts are named after scenario ids (s0007_…); summary.md is not one.
+        transcripts = list(pack.glob("s0*.md"))
         stale = [p.name for p in transcripts if opening_head not in p.read_text(encoding="utf-8")]
         if stale:
             note = pack / "NOTE.md"

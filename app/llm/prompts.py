@@ -37,6 +37,7 @@ PLACEHOLDER_MEANINGS: dict[str, str] = {
     "ack_max_payments": "maximum number of payments the rep just stated",
     "ack_min_payment": "minimum payment amount the rep just stated",
     "ack_first_payment_date": "first payment date the rep just stated",
+    "ack_total": "dollar settlement total the rep just asked for",
     "amount_in_question": "dollar amount the rep said whose meaning we are checking",
 }
 

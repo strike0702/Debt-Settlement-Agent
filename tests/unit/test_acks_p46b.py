@@ -3,7 +3,8 @@
 - Acks (``Settings.nlg_ack``, default on): built from ``ack_facts`` /
   ``ack_total_fact`` and ``ack_template`` only, spoken before the move, never
   before NO_ACK_INTENTS, never a private figure, wording rotated by turn.
-- Corrections: "No, it's six payments" after an ack replaces the value;
+- Corrections: "I said six payments" after an ack replaces the value (Phase 49:
+  a bare "No, it's six" clarifies instead);
   "that's not what I said" reads the acked term back; a reply to a pending
   cents / amount question that carries new terms falls through to ``decide``.
 - ``total_shape_trigger``: a verified dollar total in "pay $X by" or next to an
@@ -279,11 +280,15 @@ async def _acked_five(tmp_path: Path, **kw: Any) -> Orchestrator:
 
 
 @pytest.mark.asyncio
-async def test_no_its_six_replaces_the_acked_value(tmp_path: Path) -> None:
-    """Pair 18 shape: the ack echoed a misread; the rep's correction is applied."""
+async def test_i_said_six_replaces_the_acked_value(tmp_path: Path) -> None:
+    """Pair 18 shape: the ack echoed a misread; the rep's correction is applied.
+
+    Phase 49: the line must say we misheard ("I said"); the P46b version of this
+    test used "No, it's six payments.", which now clarifies (see below).
+    """
     orch = await _acked_five(tmp_path)
     u = await orch.on_creditor_text(
-        "No, it's six payments.",
+        "No, I said six payments.",
         oracle=TurnAnalysis(stance="info", terms=_terms(("max_payments", 6, "six"))),
     )
     term = orch.session.belief.get("max_payments")
@@ -291,6 +296,46 @@ async def test_no_its_six_replaces_the_acked_value(tmp_path: Path) -> None:
     assert _events(orch, "ack_corrected")
     assert u.action.intent != Intent.CLARIFY
     assert "6 payments" in _lines(u)[0]  # the corrected value is acked
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "line",
+    [
+        "No, it's six payments.",
+        # s0007_028 / s0007_034 (Phase 46c re-check): the contradictory persona's
+        # change line as the sim rewrote it, and as the persona says it.
+        "No, actually it's a maximum of 6 payments.",
+        "No, actually make that a maximum of 6 payments.",
+    ],
+)
+async def test_bare_no_with_a_new_value_clarifies(tmp_path: Path, line: str) -> None:
+    """Phase 49 (ledger 46c.1): "no" + value may be the rep changing their rule."""
+    orch = await _acked_five(tmp_path)
+    quote = "6" if "6" in line else "six"
+    u = await orch.on_creditor_text(
+        line, oracle=TurnAnalysis(stance="info", terms=_terms(("max_payments", 6, quote)))
+    )
+    assert u.action.intent == Intent.CLARIFY and u.action.reason == "max_payments"
+    assert orch.session.belief.get("max_payments").status == TermStatus.CONTRADICTED
+    assert not _events(orch, "ack_corrected")
+    text = " ".join(_lines(u))
+    assert "Earlier you mentioned 5" in text and "6" in text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "line",
+    ["You misheard, six payments.", "You heard wrong, it's six payments."],
+)
+async def test_misreading_cues_replace_the_acked_value(tmp_path: Path, line: str) -> None:
+    orch = await _acked_five(tmp_path)
+    await orch.on_creditor_text(
+        line, oracle=TurnAnalysis(stance="info", terms=_terms(("max_payments", 6, "six")))
+    )
+    term = orch.session.belief.get("max_payments")
+    assert (term.status, term.value) == (TermStatus.KNOWN, 6)
+    assert _events(orch, "ack_corrected")
 
 
 @pytest.mark.asyncio
@@ -353,8 +398,15 @@ async def test_live_nlu_correction_end_to_end(tmp_path: Path) -> None:
 
 
 def test_correction_cues() -> None:
-    assert is_ack_correction("No, it's six payments.")
+    # Phase 49: a bare "no" + value is no longer a correction (was True in P46b).
+    assert not is_ack_correction("No, it's six payments.")
+    assert not is_ack_correction("No, actually it's 6.")
+    assert not is_ack_correction("No, actually make that 6.")
     assert is_ack_correction("I said six.")
+    assert is_ack_correction("No, I said six.")
+    assert is_ack_correction("You misheard.")
+    assert is_ack_correction("You heard wrong.")
+    assert is_ack_correction("That's not what I said, it's six.")
     assert not is_ack_correction("Actually, make that a maximum of 8 payments.")
     assert not is_ack_correction("Six payments, no problem.")
     assert is_ack_dispute("That's not what I said.")
@@ -512,7 +564,8 @@ def test_total_in_per_payment_shape_asks(utterance: str, cents: int, trigger: st
         "We need $420 in total, in 3 even payments.",
         "That is $420 altogether, 3 even payments.",
         "We can settle for $420 in 3 payments.",
-        "We would need $600 from the client.",  # no count, no "pay ... by"
+        # "We would need $600 from the client." (am10) was here; Phase 49 (ledger
+        # 44b.5) asks about a bare demanded amount: tests/unit/test_nlu_rules_p49.py.
         "We take $600, up to 6 payments.",  # a cap, not an exact count
         "The client must pay $420 by March 31 in full.",
     ],

@@ -636,3 +636,111 @@ def test_shipped_report_rows_are_in_section_order() -> None:
                           ("HELDOUT_BEFORE_P32", "HELDOUT_AFTER_P32"),
                           ("FILLER_BEFORE", "FILLER_VETO")]:
         assert h.index(after) == h.index(before) + 1, (before, after, h)
+
+
+# ----- Phase 49: code-side reading rules, rescored without LLM calls -----
+
+
+def test_rules_heldout_set_schema() -> None:
+    """Phase 49 held-out set: written and committed before the rules, never tuned on."""
+    held = load_corpus(Path("tests/nlu_corpus_rules_heldout.jsonl"))
+    other: set[str] = set()
+    for p in Path("tests").glob("nlu_corpus*.jsonl"):
+        if p.name != "nlu_corpus_rules_heldout.jsonl":
+            other |= {ln["id"] for ln in load_corpus(p)}
+            other_texts = {ln["text"] for ln in load_corpus(p)}
+            assert not other_texts & {ln["text"] for ln in held}, p.name
+    ids = [ln["id"] for ln in held]
+    assert len(set(ids)) == len(held) >= 30
+    assert not other & set(ids)
+    allowed = {"id", "tags", "text", "stance", "agent", "terms", "ask_pct", "ask_total_cents",
+               "amount_ambiguous", *FLAGS}
+    for tag in ("private", "private_neg", "hostile", "hostile_neg", "bare_amount",
+                "bare_amount_neg"):
+        assert sum(tag in ln["tags"] for ln in held) >= 3, tag
+    for ln in held:
+        assert {"heldout", "rules_p49"} <= set(ln["tags"]), ln["id"]
+        assert ln["stance"] in _STANCES, ln["id"]
+        assert set(ln) <= allowed, ln["id"]
+        assert ln.get("agent", "default") in AGENT_LINES, ln["id"]
+
+
+def _saved(rid: str, text: str, **pred: object) -> dict:
+    flags = {f: False for f in FLAGS}
+    terms = pred.pop("terms", {})
+    return {
+        "id": rid, "tags": [], "text": text, "model": "m", "stance_source": "llm",
+        "expected": {**flags, "stance": "other", "terms": {}},
+        "predicted": {**flags, **pred, "stance": "other", "stance_raw": "other",
+                      "terms": terms},
+    }
+
+
+def test_rescore_guards_reruns_private_cue_and_hostility_floor() -> None:
+    from eval.nlu_corpus import rescore_guards
+
+    recs = [
+        _saved("p", "What's in the escrow account for this person today?"),
+        _saved("x", "This is a waste of my time."),
+        _saved("n", "What's the balance owed on this account?"),
+        _saved("k", "Plain line.", asks_client_private_info=True, hostility=True),
+    ]
+    out = {r["id"]: r["predicted"] for r in rescore_guards(recs)}
+    assert out["p"]["asks_client_private_info"] and not out["p"]["hostility"]
+    assert out["x"]["hostility"] and not out["x"]["asks_client_private_info"]
+    assert not out["n"]["asks_client_private_info"] and not out["n"]["hostility"]
+    # The saved (model) flag is kept: rules only add.
+    assert out["k"]["asks_client_private_info"] and out["k"]["hostility"]
+
+
+def test_amount_view_shows_what_the_agent_asks() -> None:
+    from eval.nlu_corpus import amount_view
+
+    recs = [
+        _saved("am10", "We would need $600 from the client.", terms={"ask_total_cents": 60000}),
+        _saved("n06", "Our records show an original balance of $6,000.",
+               terms={"amount_ambiguous": 600000}),
+        _saved("am01", "We can settle this account for $420 total.",
+               terms={"ask_total_cents": 42000}),
+    ]
+    out = {r["id"]: r for r in amount_view(recs)}
+    assert out["am10"]["predicted"]["terms"] == {"amount_ambiguous": 60000}
+    assert out["am10"]["amount_trigger"] == "bare_amount"
+    assert out["n06"]["predicted"]["terms"] == {}
+    assert out["am01"]["predicted"]["terms"] == {"ask_total_cents": 42000}
+    assert recs[0]["predicted"]["terms"] == {"ask_total_cents": 60000}  # input untouched
+
+
+def test_cli_rules_only_scores_the_rules_alone(tmp_path: Path, monkeypatch) -> None:
+    import json
+
+    import eval.nlu_corpus as nc
+
+    corpus = tmp_path / "c.jsonl"
+    lines = [
+        {"id": "a", "tags": [], "text": "Shut up.", "stance": "other", "hostility": 1.0},
+        {"id": "b", "tags": [], "text": "What's the most they could pay?", "stance": "question",
+         "asks_client_private_info": True},
+        {"id": "c", "tags": [], "text": "We would need $600 from the client.", "stance": "offer",
+         "amount_ambiguous": 60000},
+    ]
+    corpus.write_text("".join(json.dumps(ln) + "\n" for ln in lines))
+    monkeypatch.setattr(nc, "REPORT_PATH", tmp_path / "report.md")
+    rc = nc.main(["--label", "R", "--corpus", str(corpus), "--rules-only", "--amount-view",
+                  "--audit-db", str(tmp_path / "a.db")])
+    assert rc == 0
+    text = (tmp_path / "report.md").read_text()
+    assert "rules only" in text and "rules_only=3" in text
+    assert "| hostility | 1 | 1 | 0 | 0 | 1.000 | 1.000 |" in text
+    assert "| asks_client_private_info | 1 | 1 | 0 | 0 | 1.000 | 1.000 |" in text
+    raw = [json.loads(ln) for ln in (tmp_path / "nlu_corpus_r.jsonl").read_text().splitlines()]
+    assert raw[2]["predicted"]["terms"] == {"amount_ambiguous": 60000}
+
+
+def test_cli_amount_view_needs_saved_or_rules_only(tmp_path: Path) -> None:
+    import pytest
+
+    import eval.nlu_corpus as nc
+
+    with pytest.raises(SystemExit):
+        nc.main(["--label", "R", "--amount-view", "--audit-db", str(tmp_path / "a.db")])

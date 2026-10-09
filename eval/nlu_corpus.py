@@ -45,7 +45,9 @@ Lines may also label ``ask_total_cents`` (a dollar-total ask) and
 Not the policy eval (``eval.run_eval``): no orchestrator, no simulator.
 CLI: ``python -m eval.nlu_corpus --label BEFORE [--profile demo] [--corpus PATH]
 [--providers PATH] [--no-repair-stance] [--from-records PATH [--rescore-guards]]
-[--allow-mixed-models]``.
+[--rules-only] [--amount-view] [--allow-mixed-models]``. ``--rules-only`` and
+``--amount-view`` (Phase 49) make no LLM call: see ``rules_only_records`` and
+``amount_view``.
 """
 
 from __future__ import annotations
@@ -68,14 +70,20 @@ from typing import Any
 from app.agent.nlu import (
     _INJECTION_RE,
     VerifiedAnalysis,
+    VerifiedTerm,
     _ack_dominant,
     _has_unguarded_accept_phrase,
     _has_unguarded_reject_phrase,
     _parse_analysis,
     analyze,
+    hostility_floor_hit,
+    post_verify,
+    repair_asks_client_private_info,
     repair_firm,
     repair_stance,
+    resolve_amounts,
 )
+from app.agent.nlu_types import TurnAnalysis
 from app.config import get_settings
 from app.domain.fields import FIELDS_BY_NAME
 from app.llm.call_audit import audit_llm_calls, llm_call_scope
@@ -270,6 +278,12 @@ def rescore_guards(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     guard change is measured on a saved paid run without new LLM calls (Phase 45).
     ``has_terms`` comes from the record when saved, else from the predicted terms
     (which miss only ``tiers_ambiguous``). Fast-path lines are left as they are.
+
+    Phase 49: the private-info cue and the hostility floor are re-run too. The
+    raw LLM flags are not saved, so this ORs the saved (already repaired) flag
+    with the current rule: exact as long as the rule only adds cues, which the
+    Phase 49 rules do (``_PRIVATE_INFO_RE`` gained alternatives; the floor only
+    lifts hostility).
     """
     out = copy.deepcopy(records)
     for r in out:
@@ -283,7 +297,91 @@ def rescore_guards(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         r["stance_rule"] = stance_rule(r["text"], terms=terms)
         if "firm_raw" in pred:
             pred["firm"] = repair_firm(pred["firm_raw"], r["text"])
+        pred["asks_client_private_info"] = repair_asks_client_private_info(
+            pred["asks_client_private_info"], r["text"]
+        )
+        pred["hostility"] = bool(pred["hostility"]) or hostility_floor_hit(r["text"])
     return out
+
+
+# Large enough that no balance-based amount trigger fires; the corpus has no
+# per-line balance, and the amount view only asks "would the agent ask?".
+_VIEW_BALANCE_CENTS = 10**9
+
+
+def amount_view(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Deep copies whose amount terms show what the agent does, not what NLU read.
+
+    Replays ``resolve_amounts`` (current code) on the saved predicted terms. If
+    it would ask "total or per payment?", the record's terms carry
+    ``amount_ambiguous`` = that amount and lose the dollar total / minimum it
+    replaces; if it drops the model's flag (a balance statement, Phase 49), the
+    flag is removed. Everything else is kept as saved. Eval-only (Phase 49).
+    """
+    out = copy.deepcopy(records)
+    for r in out:
+        if r.get("skipped"):
+            continue
+        terms: dict[str, Any] = r["predicted"]["terms"]
+        verified = VerifiedAnalysis(
+            stance=r["predicted"].get("stance", "other"),
+            terms=[
+                VerifiedTerm(field=f, value=v, quote=str(v), verified=True)
+                for f, v in terms.items()
+                if f in ("max_payments", "min_payment_cents") and isinstance(v, int)
+            ],
+            settlement_ask_total_cents=terms.get("ask_total_cents"),
+            ask_total_quote=None,
+            amount_ambiguous_cents=terms.get("amount_ambiguous"),
+        )
+        resolved, pending = resolve_amounts(
+            verified, r["text"], balance_cents=_VIEW_BALANCE_CENTS
+        )
+        if pending is not None:
+            cents = int(pending["cents"])
+            terms.pop("ask_total_cents", None)
+            if terms.get("min_payment_cents") == cents:
+                terms.pop("min_payment_cents")
+            terms["amount_ambiguous"] = cents
+            r["amount_trigger"] = pending["trigger"]
+        elif resolved.amount_ambiguous_cents is None:
+            terms.pop("amount_ambiguous", None)
+    return out
+
+
+def rules_only_records(
+    corpus: list[dict[str, Any]], hostility_threshold: float
+) -> list[dict[str, Any]]:
+    """Records for a model that flags nothing: only the code-side rules decide.
+
+    Each line goes through ``post_verify`` with an empty ``TurnAnalysis``
+    (stance ``other``, every flag off, no terms), so the scores are the rules'
+    own recall and precision (Phase 49; like ``REGEX_ONLY_P32``). No LLM call.
+    """
+    records: list[dict[str, Any]] = []
+    for line in corpus:
+        out = post_verify(TurnAnalysis(stance="other"), line["text"], ref=REF)
+        records.append({
+            "id": line["id"],
+            "tags": line.get("tags", []),
+            "text": line["text"],
+            "expected": {
+                **expected_flags(line),
+                "stance": line["stance"],
+                "terms": expected_terms(line),
+            },
+            "predicted": {
+                **predicted_flags(out, hostility_threshold),
+                "stance": out.stance,
+                "stance_raw": "other",
+                "terms": predicted_terms(out),
+            },
+            "stance_rule": stance_rule(line["text"], terms=has_terms(out)),
+            "stance_source": "rules_only",
+            "model": "rules_only",
+            "answered_by": [],
+        })
+    return records
 
 
 def _pr(tp: int, fp: int, fn: int) -> tuple[float | None, float | None]:
@@ -427,18 +525,25 @@ Hostility is counted as positive when it reaches the escalation threshold.
 One row is one model: the runner exits 2 without writing a row when a
 fail-over or retry let a second model answer (`--allow-mixed-models` writes it
 anyway and marks it). A Groq `gpt-oss-120b` row needs at least two Groq keys
-from separate organizations (`GROQ_API_KEY_1`, `_2`, ...): one full corpus
-pass is about 230K tokens (about 1.3K per NLU call), above one free-tier
-organization's 200K tokens/day, so one key runs dry near line 157 (Phase 32)
-and the rest of the run would fail over to another model.
+from separate organizations (`GROQ_API_KEY_1`, `_2`, ...): on the Phase 43 NLU
+prompt one full corpus pass is about 357K tokens (about 2.0K per NLU call),
+above one free-tier organization's 200K tokens/day, so two keys (400K/day)
+cover one pass with little margin (Phase 44); with one key the run fails over
+to another model part way through.
 
-Paid targets (Phase 41): the shipped `demo` NLU route starts with Claude Sonnet
-5.5 marked `budgeted: true`. Without `--providers`, the runner drops budgeted
-targets and prints one line saying so, so a default run stays on the free
-chain and spends nothing. `--allow-budgeted` keeps them (and the run then
-counts against the demo's daily budget in the app DB). Approved paid runs use
-an explicit `--providers` file, which is used as is (e.g. the Phase 37 and
-Phase 40 files).
+Paid targets (Phase 41, Phase 43): the shipped `demo` NLU route starts with
+Claude Haiku 5.5 marked `budgeted: true`. Without `--providers`, the runner
+drops budgeted targets and prints one line saying so, so a default run stays
+on the free chain and spends nothing. `--allow-budgeted` keeps them (and the
+run then counts against the demo's daily budget in the app DB). Approved paid
+runs use an explicit `--providers` file, which is used as is (e.g. the Phase
+37, 40 and 43 files).
+
+Rescoring without calls (Phase 49): `--from-records PATH --rescore-guards`
+re-runs the current stance / firm guards, private-info cue and hostility
+floor on a saved run; `--amount-view` scores amounts as the agent acts
+(would it ask "total or per payment?"); `--rules-only` scores the code-side
+rules alone on any labelled file.
 """
 
 
@@ -692,17 +797,36 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     ap.add_argument(
+        "--amount-view", action="store_true",
+        help=(
+            "with --from-records or --rules-only: score amounts as the agent acts "
+            "(resolve_amounts replayed: would it ask total or per payment?)"
+        ),
+    )
+    ap.add_argument(
+        "--rules-only", action="store_true",
+        help="no LLM: an empty analysis through post_verify, so only code-side rules decide",
+    )
+    ap.add_argument(
         "--allow-mixed-models", action="store_true",
         help="write the row even if more than one provider/model answered (noted in it)",
     )
     args = ap.parse_args(argv)
 
+    if args.rules_only and args.from_records is not None:
+        ap.error("--rules-only and --from-records are exclusive")
+    if args.amount_view and not (args.rules_only or args.from_records is not None):
+        ap.error("--amount-view needs --from-records or --rules-only")
     if args.from_records is not None:
         records = load_corpus(args.from_records)
         models: Counter[str] = Counter(
             r["model"] for r in records if not r.get("skipped")
         )
         corpus = records
+    elif args.rules_only:
+        corpus = load_corpus(args.corpus)
+        records = rules_only_records(corpus, get_settings().hostility_threshold)
+        models = Counter({"rules_only": len(records)})
     else:
         corpus = load_corpus(args.corpus)
         args.audit_db.parent.mkdir(parents=True, exist_ok=True)
@@ -752,6 +876,8 @@ def main(argv: list[str] | None = None) -> int:
         records = rescore_guards(records)
     if args.no_repair_stance:
         records = raw_stance_records(records)
+    if args.amount_view:
+        records = amount_view(records)
     summary = score(records)
     meta = {
         "git": _git_sha(),
@@ -768,7 +894,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.from_records is not None:
         meta["stance_variant"] += f"; rescored from `{args.from_records}`"
     if args.rescore_guards:
-        meta["stance_variant"] += "; stance/firm guards re-run with current code"
+        meta["stance_variant"] += (
+            "; stance/firm guards, private-info cue and hostility floor re-run with current code"
+        )
+    if args.rules_only:
+        meta["stance_variant"] = "rules only (empty analysis through post_verify, no LLM)"
+    if args.amount_view:
+        meta["stance_variant"] += "; amounts scored as the agent acts (resolve_amounts replayed)"
     write_report(REPORT_PATH, args.label, render_section(args.label, summary, meta))
     raw = REPORT_PATH.parent / f"nlu_corpus_{args.label.lower()}.jsonl"
     raw.write_text("".join(json.dumps(r, default=str) + "\n" for r in records))

@@ -4,7 +4,10 @@
 Free models invent or change numbers ("the 10% balance", "we cannot go below
 21%") and contradict themselves ("We cannot accept 48%, but we will accept
 48%"). ``rewrite_problem(draft, rewrite, stance=...)`` names the first reason
-to throw the rewrite away and speak the draft instead, or ``None``.
+to throw the rewrite away and speak the draft instead, or ``None``. Phase 49
+adds the self-contradictions the Phase 46c re-check let through: a trailing
+"Actually, it isn't.", a leading "No," on an info line, and a "Sure, ..."
+opener on a refusal (all ``stance``).
 
 This is a small, self-contained figure finder for sim lines, not the agent's
 guard extractor (``app.agent.numbers``, which ``sim/`` must not import). Both
@@ -108,6 +111,29 @@ _NEGATOR_RE = re.compile(
 _IDIOM_RE = re.compile(r"\b(?:no problem|no worries|not a problem|no doubt)\b", re.IGNORECASE)
 _CLAUSE_RE = re.compile(r"[.;,:!?—]|\bbut\b|\bhowever\b|\bthough\b", re.IGNORECASE)
 
+# Phase 49 (ledger 46c.2 / 46c.5): shapes that flip a line without adding a
+# phrase from the lists above. A short sentence that only takes back what came
+# before ("Actually, it isn't.", "Actually, we can't."); a leading "No," on a
+# line that is not a refusal (the agent reads it as a correction); and an
+# accept-sounding opener on a refusal ("Sure, we can't move on that.").
+_SENTENCE_RE = re.compile(r"[^.!?]+[.!?]*")
+_SELF_NEGATION_RE = re.compile(
+    r"^\W*(?:(?:actually|wait|oh|well|sorry|hmm|or)\W+)*"
+    r"(?:no|nope|nah|not really|scratch that|never ?mind"
+    r"|(?:it|that|this|they|we|i)(?:'?s|'re|'m)?\s+"
+    r"(?:is |are |am |was |were |do |does |did |can |will )?"
+    r"(?:not|n't|isn't|aren't|wasn't|weren't|can't|cannot|can not|won't|don't|doesn't|didn't)"
+    r"(?:\s+(?:actually|really|true|right|so|do that|do it|go there|anymore|any more))?"
+    r"|that'?s not (?:right|true|it|correct))\W*$",
+    re.IGNORECASE,
+)
+_LEADING_NO_RE = re.compile(r"^\W*(?:no|nope|nah)\b(?!\s+(?:problem|worries|doubt))", re.I)
+_ACCEPT_OPENER_RE = re.compile(
+    r"^\W*(?:sure|yes|yeah|yep|ok(?:ay)?|absolutely|of course|great|perfect|definitely"
+    r"|certainly|alright|all right|happy to|no problem)\b",
+    re.IGNORECASE,
+)
+
 # Drafts that state these stances must not be rewritten into the other one.
 _ACCEPT_STANCES = frozenset({"accept", "confirm"})
 _REJECT_STANCES = frozenset({"reject", "deny"})
@@ -205,14 +231,30 @@ def _rejects(text: str) -> set[str]:
     return {m.group(0).lower() for m in _REJECT_RE.finditer(_IDIOM_RE.sub(" ", text))}
 
 
+def _self_negations(text: str) -> int:
+    """Sentences that only take back what came before ("Actually, we can't.")."""
+    return sum(1 for m in _SENTENCE_RE.finditer(text) if _SELF_NEGATION_RE.match(m.group(0)))
+
+
 def stance_flipped(draft: str, rewrite: str, stance: str | None) -> bool:
     """True when ``rewrite`` adds a marker of the opposite stance to ``draft``'s.
 
     ``stance`` is the draft's oracle stance (or read-back answer). An accept
     draft must not gain a rejection phrase; a reject draft must not gain an
-    unnegated accept phrase. Other stances also fail when the rewrite adds
-    both an accept and a reject phrase the draft did not have.
+    unnegated accept phrase or an accept-sounding opener ("Sure, ..."). Other
+    stances also fail when the rewrite adds both an accept and a reject phrase
+    the draft did not have, a leading "No,", or a sentence that takes the line
+    back ("Actually, it isn't.").
     """
+    if stance in _REJECT_STANCES:
+        # A refusal may say "No." twice; it must not open like a yes.
+        if _ACCEPT_OPENER_RE.match(rewrite) and not _ACCEPT_OPENER_RE.match(draft):
+            return True
+    else:
+        if _self_negations(rewrite) > _self_negations(draft):
+            return True
+        if _LEADING_NO_RE.match(rewrite) and not _LEADING_NO_RE.match(draft):
+            return True
     new_accept = _unnegated(_ACCEPT_RE, rewrite) - _unnegated(_ACCEPT_RE, draft)
     new_reject = _rejects(rewrite) - _rejects(draft)
     if stance in _ACCEPT_STANCES:

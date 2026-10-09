@@ -153,3 +153,48 @@ def test_cli_default_nlg_template() -> None:
 
     src = Path(run_eval.__file__).read_text(encoding="utf-8")
     assert 'default="template"' in src
+
+
+def test_build_settings_passes_anthropic_key_and_budget() -> None:
+    """Phase 49 (ledger 46c.3): Haiku NLU under run_eval needs the key and the cap."""
+    from decimal import Decimal
+
+    src = Settings(anthropic_api_key="sk-test", claude_daily_budget_usd=Decimal("0.25"))
+    out = _build_settings(profile="eval", nlg="template", base=src)
+    assert out.anthropic_api_key is not None
+    assert out.anthropic_api_key.get_secret_value() == "sk-test"
+    assert out.claude_daily_budget_usd == Decimal("0.25")
+
+
+def test_limit_runs_the_first_n_of_the_full_set() -> None:
+    """Phase 49 (ledger 46c.4): ``--limit 3`` is a prefix of ``--scenarios 12``."""
+    from eval.run_eval import select_scenarios
+    from sim.scenarios import generate
+
+    full = [s.id for s in generate(12, 7)]
+    assert [s.id for s in select_scenarios(12, 7, 3)] == full[:3]
+    assert [s.id for s in select_scenarios(12, 7)] == full
+    # ``--scenarios 3`` alone is a different set (the Phase 46c pilot problem).
+    assert [s.id for s in generate(3, 7)] != full[:3]
+
+
+def test_limit_cli_runs_only_n_scenarios(tmp_path, monkeypatch) -> None:
+    import json
+
+    import eval.run_eval as re_mod
+
+    monkeypatch.setattr(re_mod, "RESULTS_ROOT", tmp_path)
+    rc = main([
+        "--scenarios", "20", "--seed", "7", "--limit", "2", "--nlu", "oracle",
+        "--nlg", "template", "--sim-phrasing", "template",
+    ])
+    assert rc in (0, 1)
+    (run_dir,) = [p for p in tmp_path.iterdir() if p.is_dir()]
+    meta = json.loads((run_dir / "run.json").read_text())
+    assert (meta["n_scenarios"], meta["limit"]) == (20, 2)
+    assert len([p for p in run_dir.glob("s0007_*.json")]) == 2
+
+
+def test_limit_must_be_positive() -> None:
+    with pytest.raises(SystemExit):
+        main(["--limit", "0", "--nlu", "oracle", "--sim-phrasing", "template"])

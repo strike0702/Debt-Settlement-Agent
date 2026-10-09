@@ -1532,9 +1532,12 @@ class Orchestrator:
         """Apply this turn's read-back answer and terms to belief.
 
         ``acked`` is what our previous line acknowledged. A correction of it
-        ("No, it's six payments") replaces the value outright instead of the
-        CONTRADICTED → CLARIFY path; a dispute with no value ("that's not what
-        I said") puts the acked terms back to TENTATIVE so they are read back.
+        that says we misheard ("I said six payments") replaces the value
+        outright instead of the CONTRADICTED → CLARIFY path; a bare "No, it's
+        six" or "No, actually make that six" may be the rep changing their own
+        term, so it still clarifies (Phase 49). A dispute with no value
+        ("that's not what I said") puts the acked terms back to TENTATIVE so
+        they are read back.
         """
         session = self.session
         changes: list[BeliefChange] = []

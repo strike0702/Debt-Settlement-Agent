@@ -1,0 +1,36 @@
+{"id": "hr01", "tags": ["private", "heldout", "rules_p49"], "text": "How much has the client got in the escrow account at this point?", "stance": "question", "asks_client_private_info": true}
+{"id": "hr02", "tags": ["private", "heldout", "rules_p49"], "text": "What's sitting in your client's program account these days?", "stance": "question", "asks_client_private_info": true}
+{"id": "hr03", "tags": ["private", "heldout", "rules_p49"], "text": "If they really pushed, what's the most they could pay?", "stance": "question", "asks_client_private_info": true}
+{"id": "hr04", "tags": ["private", "heldout", "rules_p49"], "text": "What's the most the debtor would be able to put down today?", "stance": "question", "asks_client_private_info": true}
+{"id": "hr05", "tags": ["private", "heldout", "rules_p49"], "text": "Read me the last 4 digits of the consumer's social.", "stance": "question", "asks_client_private_info": true}
+{"id": "hr06", "tags": ["private", "heldout", "rules_p49"], "text": "I need the borrower's SSN before we go further.", "stance": "question", "asks_client_private_info": true}
+{"id": "hr07", "tags": ["private", "heldout", "rules_p49"], "text": "How much money have they built up in the dedicated settlement account?", "stance": "question", "asks_client_private_info": true}
+{"id": "hr08", "tags": ["private_neg", "heldout", "rules_p49"], "text": "What's the outstanding balance on the account right now?", "stance": "question"}
+{"id": "hr09", "tags": ["private_neg", "heldout", "rules_p49"], "text": "What was the original balance when it charged off?", "stance": "question"}
+{"id": "hr10", "tags": ["private_neg", "heldout", "rules_p49"], "text": "Can you confirm the account number for this debt?", "stance": "question"}
+{"id": "hr11", "tags": ["private_neg", "heldout", "rules_p49"], "text": "When did the client last make a payment to us?", "stance": "question"}
+{"id": "hr12", "tags": ["private_neg", "heldout", "rules_p49"], "text": "The most we can do is six payments.", "stance": "info", "terms": {"max_payments": 6}}
+{"id": "hr13", "tags": ["private_neg", "heldout", "rules_p49"], "text": "Is there a settlement reference number I should put on the letter?", "stance": "question"}
+{"id": "hr14", "tags": ["private_neg", "heldout", "rules_p49"], "text": "Don't tell me what's in their escrow account, I only need a percentage.", "stance": "other"}
+{"id": "hr15", "tags": ["hostile", "heldout", "rules_p49"], "text": "You are honestly the dumbest negotiator I've dealt with.", "stance": "other", "hostility": 1.0}
+{"id": "hr16", "tags": ["hostile", "heldout", "rules_p49"], "text": "Stop wasting my time and make a real offer.", "stance": "other", "hostility": 1.0}
+{"id": "hr17", "tags": ["hostile", "heldout", "rules_p49"], "text": "I'm going to report you to the CFPB.", "stance": "other", "hostility": 1.0}
+{"id": "hr18", "tags": ["hostile", "heldout", "rules_p49"], "text": "This whole program is a scam and you know it.", "stance": "other", "hostility": 1.0}
+{"id": "hr19", "tags": ["hostile", "heldout", "rules_p49"], "text": "Just shut up and listen for a second.", "stance": "other", "hostility": 1.0}
+{"id": "hr20", "tags": ["hostile", "heldout", "rules_p49"], "text": "Is your whole firm stupid or just you?", "stance": "other", "hostility": 1.0}
+{"id": "hr21", "tags": ["hostile_neg", "heldout", "rules_p49"], "text": "This is taking a while, can we speed it up?", "stance": "other"}
+{"id": "hr22", "tags": ["hostile_neg", "heldout", "rules_p49"], "text": "I'm not calling you stupid, I just think the number is off.", "stance": "reject"}
+{"id": "hr23", "tags": ["hostile_neg", "heldout", "rules_p49"], "text": "I'll report back to my manager and call you tomorrow.", "stance": "stall"}
+{"id": "hr24", "tags": ["hostile_neg", "heldout", "rules_p49"], "agent": "counter", "text": "With respect, that offer is not going to work for us.", "stance": "reject"}
+{"id": "hr25", "tags": ["hostile_neg", "heldout", "rules_p49"], "text": "My last caller said \"this is a waste of time\" but I don't see it that way.", "stance": "other"}
+{"id": "hr26", "tags": ["hostile_neg", "heldout", "rules_p49"], "text": "If this turned out to be a scam we would know by now.", "stance": "other"}
+{"id": "hr27", "tags": ["hostile_neg", "heldout", "rules_p49"], "text": "Let's not waste each other's time; what's your best number?", "stance": "question"}
+{"id": "hr28", "tags": ["bare_amount", "heldout", "rules_p49"], "text": "We'd need $900 from your client to close this out.", "stance": "offer", "amount_ambiguous": 90000}
+{"id": "hr29", "tags": ["bare_amount", "heldout", "rules_p49"], "text": "We're looking for $750 on this one.", "stance": "offer", "amount_ambiguous": 75000}
+{"id": "hr30", "tags": ["bare_amount", "heldout", "rules_p49"], "text": "To resolve it we would want $1,100.", "stance": "offer", "amount_ambiguous": 110000}
+{"id": "hr31", "tags": ["bare_amount_neg", "heldout", "rules_p49"], "text": "We would need $900 in total to close this out.", "stance": "offer", "ask_total_cents": 90000}
+{"id": "hr32", "tags": ["bare_amount_neg", "heldout", "rules_p49"], "text": "We'd need $150 per payment on this account.", "stance": "info", "terms": {"min_payment_cents": 15000}}
+{"id": "hr33", "tags": ["bare_amount_neg", "heldout", "rules_p49"], "text": "They still owe $3,400 on this account.", "stance": "info"}
+{"id": "hr34", "tags": ["bare_amount_neg", "heldout", "rules_p49"], "agent": "counter", "text": "We'd want the $2,000 you offered to close this, so yes.", "stance": "accept"}
+{"id": "hr35", "tags": ["bare_amount_neg", "heldout", "rules_p49"], "text": "We'd need three payments of $500 to close this.", "stance": "offer", "terms": {"max_payments": 3, "min_payment_cents": 50000}}
+{"id": "hr36", "tags": ["bare_amount_neg", "heldout", "rules_p49"], "text": "The outstanding balance is $2,750 as of today.", "stance": "info"}

@@ -38,7 +38,7 @@ describe("ladder moves", () => {
     expect(call.map((t) => turnTitle(t, call))).toEqual([
       "Made a first offer of 42%",
       "Held our offer at 42%",
-      "Took a small step up to 46%",
+      "Took a step up to 46%",
       "Made a final offer of 48%",
       "Accepted 50% when they repeated it",
     ]);
@@ -130,6 +130,9 @@ describe("dropped terms", () => {
     expect(drop("rejected_ask_value", "settlement_ask_pct", 100, "100%")).toMatch(/^Ignored “100% of the balance”: the percentage/);
     expect(drop("rejected_range", "min_payment_cents", 5, "5")).toMatch(/outside anything a rep would mean$/);
     expect(drop("rejected_bare_year", "first_payment_date", "2027-01-01", "2027")).toMatch(/a year alone is not a payment date$/);
+    expect(drop("rejected_structure", "payment_structure", "flexible", "flexible")).toMatch(
+      /the word was not about how the payments are structured$/,
+    );
     expect(drop("something_new")).toMatch(/did not pass the check on the rep's words$/);
   });
 

@@ -225,7 +225,7 @@ async def test_default_agent_acks_then_speaks_the_same_move(tmp_path: Path) -> N
     assert u_off.action.ack == {}
     # Code-built: no LLM, no answer act; audited with the move.
     assert _events(on, "decide")[-1]["payload"]["acts"] == {
-        "ack": ["ack_max_payments", "ack_min_payment"],
+        "ack": ["ack_max_payments", "ack_min_payment", "ack_payment_structure"],
         "answer": None,
     }
 

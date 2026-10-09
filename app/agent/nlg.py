@@ -14,7 +14,9 @@ Phase 24b (H3): ``render_acts`` speaks an action's optional ``ack`` and
 ``answer`` acts as short leading sentences, each through the same two guards.
 Phase 46b: the default agent's code-built ack (``Settings.nlg_ack``) uses
 ``ack_template`` (2–3 wordings per shape, rotated by turn), never the bank or LLM;
-a count of 1 is acked as "up to 1 payment" (Phase 49).
+a count of 1 is acked as "up to 1 payment" (Phase 49). Phase 50 acks the
+payment structure from a digit-free ``text`` fact ("Got it, a balloon schedule.",
+or ", with even payments" after the other terms).
 A guard-failed act is dropped (audited), never replaced by ``SAFE_FALLBACK``,
 so the primary move is spoken unchanged. ``speak_action`` passes the last few
 public turns (``recent_turns``) to the LLM prompt instead of one rep line.
@@ -22,6 +24,7 @@ public turns (``recent_turns``) to the LLM prompt instead of one rep line.
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from typing import Any, Protocol
 
@@ -152,15 +155,36 @@ _ACK_TOTAL_BODIES: tuple[str, ...] = (
     "{ack_total} in total",
     "{ack_total} for the whole settlement",
 )
+# Payment structure (Phase 50): the fact renders a phrase ("a balloon schedule",
+# "even payments"). Alone it has its own bodies; after other terms it is appended.
+_ACK_STRUCTURE_ID = "ack_payment_structure"
+_ACK_STRUCTURE_BODIES: tuple[str, ...] = (
+    "{ack_payment_structure}",
+    "{ack_payment_structure} it is",
+)
+_ACK_STRUCTURE_TAIL = "with {ack_payment_structure}"
+
+
+def _ack_bodies(ids: tuple[str, ...]) -> tuple[str, ...] | None:
+    """Term bodies (total excluded) for the sorted ids; None when the shape is unknown."""
+    terms = tuple(i for i in ids if i not in ("ack_total", _ACK_STRUCTURE_ID))
+    if terms and terms not in _ACK_TERM_BODIES:
+        return None
+    if _ACK_STRUCTURE_ID not in ids:
+        return _ACK_TERM_BODIES.get(terms, ("",))
+    if not terms:
+        # Alone it gets its own bodies; after a dollar total it is the tail.
+        return (_ACK_STRUCTURE_TAIL,) if "ack_total" in ids else _ACK_STRUCTURE_BODIES
+    return tuple(f"{b}, {_ACK_STRUCTURE_TAIL}" for b in _ACK_TERM_BODIES[terms])
 _ACK_OPENERS: tuple[str, ...] = ("Got it", "Understood", "Okay")
 
 
 def ack_variants(ids: tuple[str, ...]) -> list[str]:
     """Every code-built ack wording for the sorted ``ack_*`` ids (empty if unknown)."""
-    terms = tuple(i for i in ids if i != "ack_total")
-    if terms and terms not in _ACK_TERM_BODIES:
+    found = _ack_bodies(ids)
+    if found is None:
         return []
-    term_bodies = _ACK_TERM_BODIES.get(terms, ())
+    term_bodies = tuple(b for b in found if b)
     if "ack_total" in ids:
         bodies = [
             f"{tb}, {b}" if b else tb
@@ -179,10 +203,9 @@ def ack_template(ids: tuple[str, ...], turn: int, *, singular: bool = False) -> 
     word for word on back-to-back turns. ``singular`` (a payment count of 1)
     says "up to 1 payment", not "1 payments" (Phase 49).
     """
-    terms = tuple(i for i in ids if i != "ack_total")
-    if terms and terms not in _ACK_TERM_BODIES:
+    term_bodies = _ack_bodies(ids)
+    if term_bodies is None:
         return None
-    term_bodies = _ACK_TERM_BODIES.get(terms, ("",))
     body = term_bodies[turn % len(term_bodies)]
     if "ack_total" in ids:
         total = _ACK_TOTAL_BODIES[turn % len(_ACK_TOTAL_BODIES)]
@@ -195,6 +218,7 @@ def ack_template(ids: tuple[str, ...], turn: int, *, singular: bool = False) -> 
 # H3 (Phase 24b) wording: one fixed line per shape ("Got it, " + first body).
 ACK_TEMPLATES: dict[tuple[str, ...], str] = {
     **{ids: f"Got it, {bodies[0]}." for ids, bodies in _ACK_TERM_BODIES.items()},
+    (_ACK_STRUCTURE_ID,): f"Got it, {_ACK_STRUCTURE_BODIES[0]}.",
     ("ack_total",): f"Got it, {_ACK_TOTAL_BODIES[0]}.",
 }
 ANSWER_TEMPLATE = TEMPLATES[Intent.ANSWER]
@@ -219,8 +243,24 @@ def _allowed_ids(action: Action) -> set[str]:
     return set(action.facts.keys()) | set(action.text_slots.keys())
 
 
+def _singular_counts(template: str, action: Action) -> str:
+    """"{n} payments" → "{n} payment" for every count fact equal to 1 (Phase 50).
+
+    Bank and default bodies all say "{num_payments} payments totaling ...";
+    this keeps a one-payment plan from being spoken as "1 payments".
+    """
+    for key, fact in action.facts.items():
+        if fact.kind == "count" and fact.value == 1:
+            template = re.sub(
+                r"\{" + re.escape(key) + r"\} (payment|installment)s\b",
+                lambda m, k=key: "{" + k + "} " + m.group(1),
+                template,
+            )
+    return template
+
+
 def _fill_template(template: str, action: Action, ref: date) -> str:
-    filled = template
+    filled = _singular_counts(template, action)
     for key, value in action.text_slots.items():
         filled = filled.replace("{" + key + "}", value)
     for key, fact in action.facts.items():

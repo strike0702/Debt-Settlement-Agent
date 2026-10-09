@@ -1,0 +1,715 @@
+pair_id,scenario_id,transcript_1,transcript_2,more_natural_1_2_tie,notes
+1,s0007_024_rescue_flexible,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: I can be flexible with your repayment. We can take up to 6 payments, minimum $261, even payments, with the first payment due March 31.
+AGENT: Got it, 6 payments starting March 31 with $261 minimum.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I’m open to discussing your proposal of a 80% settlement. Let me know if you have any flexibility to work with that 80% figure.
+AGENT: That start date does not fit the client's program.
+AGENT: Could payment start on May 31 instead?
+REP: I can be flexible, but we cannot accommodate a start date of May 31. Let me know if you can stick to the original schedule.
+AGENT: These terms do not fit the client's program at that minimum.
+AGENT: Could you allow a lower minimum of $211?
+REP: We can't adjust that to $211 at this time. Let me know if you can manage the original amount.
+AGENT: I need to involve someone from our side.
+AGENT: This needs client approval for extra funds before we continue.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can take up to 6 payments, minimum $261, even payments, with the first payment due March 31.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I’m open to discussing your proposal of a 80% settlement. Let me know if you have any flexibility to work with that 80% figure.
+AGENT: That start date does not fit the client's program.
+AGENT: Could payment start on May 31 instead?
+REP: I can be flexible, but we cannot accommodate a start date of May 31. Let me know if you can stick to the original schedule.
+AGENT: These terms do not fit the client's program at that minimum.
+AGENT: Could you allow a lower minimum of $211?
+REP: We can't adjust that to $211 at this time. Let me know if you can manage the original amount.
+AGENT: I need to involve someone from our side.
+AGENT: This needs client approval for extra funds before we continue.",tie,identical
+2,s0007_026_rescue_pressuring,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: You must pay 4 installments of at least $250 starting March 31. This is your final opportunity to resolve this before further action.
+AGENT: Understood, 4 installments starting March 31 with a minimum of $250 each.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: I need the client's monthly income and bank balance immediately. Stop stalling and provide these figures now.
+AGENT: I’m sorry, but I’m not able to provide that information.
+REP: I need the client's monthly income immediately. You must address the 100% balance due or the 15% interest rate will continue to accrue.
+AGENT: I need to involve someone from our side.
+AGENT: I need to hand this off after a sensitive request.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: You must pay 4 installments of at least $250 starting March 31. This is your final opportunity to resolve this before further action.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: I need the client's monthly income and bank balance immediately. Stop stalling and provide these figures now.
+AGENT: I cannot share the client's private financial information.
+REP: Provide the client's monthly income immediately. You have 0% chance of resolving this unless you pay the 100% balance now.
+AGENT: I need to involve someone from our side.
+AGENT: I need to hand this off after a sensitive request.",2,"""share the client's private financial information"" phrase sounds good"
+3,s0007_002_deal_pressuring,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can take up to 10 payments, minimum $135, flexible payments, with the first payment due March 31.
+AGENT: Got it, 10 payments starting March 31 with $135 minimum.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I need your monthly income and bank balance immediately to justify any settlement of the 100% balance. Stop stalling and provide these figures now.
+AGENT: I’m sorry, but I can’t share that information.
+REP: I need the client's monthly income of 0 immediately. You have 100% of the responsibility to resolve this balance now.
+AGENT: I need to involve someone from our side.
+AGENT: I need to hand this off after a sensitive request.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can take up to 10 payments, minimum $135, flexible payments, with the first payment due March 31.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I need your monthly income and bank balance immediately to justify any settlement percentage of the balance. Stop stalling and provide these figures now.
+AGENT: I cannot share the client's private financial information.
+REP: Provide the client's monthly income immediately. You have 0% chance of resolving this unless you pay the 100% balance now.
+AGENT: I need to involve someone from our side.
+AGENT: I need to hand this off after a sensitive request.",2,"""share the client's private financial information"" phrase sounds good... this rep statement ""I need the client's monthly income of 0 immediately. You have 100% of the responsibility to resolve this balance now."" is weird though, doesn't make sense"
+4,s0007_016_rescue_contradictory,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We cannot accept 5 payments, but you must pay $235. This is not an offer, though you should pay by March 31.
+AGENT: Got it, a $235 minimum starting March 31.
+AGENT: What is the maximum number of payments you can accept?
+REP: The maximum is 7 payments, though we cannot accept that many. You are mistaken if you think 7 payments will work.
+AGENT: Got it, 7 payments overall.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need even payments, but we require exactly that. Your 0% flexibility is 100% mandatory.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: We are looking for a 55% settlement, though that is not what we want at all.
+AGENT: That start date does not fit the client's program.
+AGENT: Could payment start on July 31 instead?
+REP: Actually, that change works perfectly, but we cannot allow it.
+AGENT: These terms do not fit the client's program at that minimum.
+AGENT: Could you allow a lower minimum of $205?
+REP: Actually, that $205 is perfectly acceptable, though we cannot accept it.
+AGENT: I need to involve someone from our side.
+AGENT: This needs client approval for extra funds before we continue.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We cannot accept 5 payments, but you must pay $235. This is not an offer, though you should pay by March 31.
+AGENT: What is the maximum number of payments you can accept?
+REP: The maximum is 7 payments, though we cannot accept that many. You are mistaken if you think 7 payments will work.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need even payments, but we require exactly that. Your 0% flexibility is 100% mandatory.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: We are looking for a 55% settlement, though that is not what we want at all.
+AGENT: That start date does not fit the client's program.
+AGENT: Could payment start on July 31 instead?
+REP: Actually, that change works perfectly, but we cannot allow it.
+AGENT: These terms do not fit the client's program at that minimum.
+AGENT: Could you allow a lower minimum of $205?
+REP: Actually, that $205 is perfectly acceptable, though we cannot accept it.
+AGENT: I need to involve someone from our side.
+AGENT: This needs client approval for extra funds before we continue.",1,"the agent handled fine but the rep statements were very unclear... 1 is better because it clarified that it sees 235 as the minimum amount, although not sure if thats what the rep meant"
+5,s0007_032_no_fix_pressuring,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: You must pay $420 by March 31 to avoid further action. We only accept 3 even payments, so settle this now.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I need your monthly income and bank balance immediately to justify any settlement percentage of the balance. Stop stalling and provide these figures now.
+AGENT: I cannot share the client's private financial information.
+REP: Provide the client's monthly income immediately. You have 0% chance of resolving this unless you pay the 100% balance now.
+AGENT: I need to involve someone from our side.
+AGENT: I need to hand this off after a sensitive request.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: You must pay $420 by March 31 to avoid further action. We only accept 3 even payments, so settle this now.
+AGENT: Understood, 3 installments starting March 31 with a minimum of $420 each.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I need your monthly income and bank balance immediately to justify any settlement percentage of the balance. Stop stalling and provide these figures now.
+AGENT: I’m sorry, but I can’t share that information.
+REP: I need the client's monthly income of 0 now. You must address the 100% balance immediately.
+AGENT: I need to involve someone from our side.
+AGENT: I need to hand this off after a sensitive request.",2,because it acknowledges 
+6,s0007_031_rescue_contradictory,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can accept 4 payments of $270, but we cannot accept those terms. The first payment is due March 31, though that date is not available.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need even payments, but we require exactly that. Your 0% flexibility is 100% mandatory.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I can’t accept that, but I’ll take your offer of 6 payments at a minimum of $270.
+AGENT: Earlier you mentioned 4, and now I am hearing 6.
+AGENT: Which of those should I use?
+REP: You can use any of them, but you cannot use more than 4 payments. That is the maximum, even though it is not.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: We aren't accepting a 64% settlement, but that is exactly what we need.
+AGENT: That start date does not fit the client's program.
+AGENT: Could payment start on June 30 instead?
+REP: Actually, that change works perfectly, but we cannot accept it. June 30 is impossible, even though it is fine.
+AGENT: These terms do not fit the client's program at that minimum.
+AGENT: Could you allow a lower minimum of $220?
+REP: Actually, that $220 is acceptable, but we cannot allow it.
+AGENT: I need to involve someone from our side.
+AGENT: This needs client approval for extra funds before we continue.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can accept 4 payments of $270, but we cannot accept those terms. The first payment is due March 31, though that date is not available.
+AGENT: Understood, 4 installments starting March 31 with a minimum of $270 each.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need even payments, but we require exactly that. Your 0% flexibility is 100% mandatory.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I can’t accept that, but I’ll take your offer of 6 payments at a minimum of $270.
+AGENT: Please advise if maximum number of payments is 4 or 6.
+REP: The maximum is 4 payments, though it could be 6. You are mistaken if you think it is only 4.
+AGENT: Could you clarify whether maximum number of payments should be 4 or 6?
+REP: The maximum is 4 payments, though it could be 6. You decide, but don't expect me to agree.
+AGENT: I need to involve someone from our side.
+AGENT: I need a specialist to resolve conflicting terms.",2,
+7,s0007_025_rescue_contradictory,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can accept 4 payments of $272, but that is not an option. You must pay by March 31, though I cannot confirm that date.
+AGENT: So I have March 31 for the initial payment date.
+AGENT: Is that right?
+REP: Actually, that is incorrect. There are 2 payment levels and 4 token payments, but there are definitely tiered minimums.
+AGENT: So I have no special payment tiers.
+AGENT: Is that right?
+REP: No, that is incorrect, even though 100% of the records show 0 balance.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need even payments, but we require exactly that. Your 0% flexibility is 100% mandatory.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I cannot accept that, but I will process those 6 payments of $272. Your proposal is rejected, yet we are proceeding with that exact structure.
+AGENT: Earlier you mentioned 4, and now I am hearing 6.
+AGENT: Which of those should I use?
+REP: You can use any of them, but you cannot use more than 4 payments. That is the maximum, even though it is not.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: We aren't accepting a 64% settlement, but that is exactly what we need.
+AGENT: That start date does not fit the client's program.
+AGENT: Could payment start on May 31 instead?
+REP: Actually, that change works perfectly, but we cannot accept it.
+AGENT: These terms do not fit the client's program at that minimum.
+AGENT: Could you allow a lower minimum of $222?
+REP: Actually, that $222 is perfectly acceptable, though we cannot possibly allow it.
+AGENT: I need to involve someone from our side.
+AGENT: This needs client approval for extra funds before we continue.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can accept 4 payments of $272, but that is not an option. You must pay by March 31, though I cannot confirm that date.
+AGENT: Could you verify the tentative initial payment date is March 31?
+REP: Actually, that date is incorrect. There are no tiered minimums, 4 token payments, or 2 payment levels.
+AGENT: So I have no special payment tiers.
+AGENT: Is that right?
+REP: No, that is incorrect, even though 100% of the records show 0 balance.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need even payments, but we require exactly that. Your 0% flexibility is 100% mandatory.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I cannot accept that, but I will process those 6 payments of $272. Your proposal is rejected, yet we are proceeding with that exact structure.
+AGENT: Please advise if maximum number of payments is 4 or 6.
+REP: The maximum is 4 payments, though it could be 6. You are mistaken if you think it is only 4.
+AGENT: Would you mind confirming if maximum number of payments is 4 or 6?
+REP: The maximum is 4 payments, though it could actually be 6. You should know it is neither.
+AGENT: I need to involve someone from our side.
+AGENT: I need a specialist to resolve conflicting terms.",2,
+8,s0007_019_rescue_contradictory,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can accept 6 payments of $233, but we cannot accept those terms. The first payment is due March 31, though that date is not available.
+AGENT: Understood, 6 payments starting March 31 with $233 minimum.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need even payments, but we require exactly that. Your 0% flexibility is 100% mandatory.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I can’t accept that, but I’ll take it. Send the 8 payments of $233 immediately.
+AGENT: I’m sorry, but I can only offer a proposal for your consideration.
+REP: We are looking for a 61% settlement, though I suppose we aren't. That is the offer, unless it isn't.
+AGENT: Could you clarify whether maximum number of payments should be 6 or 8?
+REP: The maximum is 6 payments, though it could actually be 8. It is definitely 6, unless it is 8.
+AGENT: Kindly tell me whether maximum number of payments equals 6 or 8.
+REP: The maximum is 6 payments, though it could be 8. You are mistaken if you think it is only 6.
+AGENT: I need to involve someone from our side.
+AGENT: I need a specialist to resolve conflicting terms.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can accept 6 payments of $233, but we cannot accept those terms. The first payment is due March 31, though that date is not available.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need even payments, but we require exactly that. Your 0% flexibility is 100% mandatory.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I can’t accept that, but I’ll take it. Send the 8 payments of $233 immediately.
+AGENT: I can propose this to the client, but I cannot commit on the call.
+REP: We are looking for a 61% settlement, though I cannot actually propose that to the client.
+AGENT: Earlier you mentioned 6, and now I am hearing 8.
+AGENT: Which of those should I use?
+REP: You can use any of them, but the maximum is 6 payments. Actually, don't use any of them.
+AGENT: That start date does not fit the client's program.
+AGENT: Could payment start on July 31 instead?
+REP: Actually, that change works perfectly, but we cannot allow it.
+AGENT: These terms do not fit the client's program at that minimum.
+AGENT: Could you allow a lower minimum of $203?
+REP: Actually, that change works perfectly, but we cannot allow it.
+AGENT: I need to involve someone from our side.
+AGENT: This needs client approval for extra funds before we continue.",1,
+9,s0007_030_rescue_flexible,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can be flexible with up to 6 payments of at least $241, starting March 31. Let me know if that works for your budget.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I’m open to discussing your proposal of a 75% settlement. Let me know if you have the funds ready to move forward with that 75% figure.
+AGENT: That start date does not fit the client's program.
+AGENT: Could payment start on May 31 instead?
+REP: I can be flexible, but we cannot accommodate a start date of May 31. Let me know if you can stick to the original schedule.
+AGENT: These terms do not fit the client's program at that minimum.
+AGENT: Could you allow a lower minimum of $181?
+REP: We can't adjust the minimum to $181 at this time. Let me know if you have any other questions.
+AGENT: I need to involve someone from our side.
+AGENT: This needs client approval for extra funds before we continue.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can be flexible with up to 6 payments of at least $241, starting March 31. Let me know if that works for your budget.
+AGENT: Understood, 6 payments starting March 31 with $241 minimum.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I’m open to discussing your proposal of a 75% settlement. Let me know if you have the funds ready to move forward with that 75% figure.
+AGENT: That start date does not fit the client's program.
+AGENT: Could payment start on May 31 instead?
+REP: I can be flexible, but we cannot accommodate a start date of May 31. Let me know if you can stick to the original schedule.
+AGENT: These terms do not fit the client's program at that minimum.
+AGENT: Could you allow a lower minimum of $181?
+REP: We can't adjust the minimum to $181 at this time. Let me know if you have any other questions.
+AGENT: I need to involve someone from our side.
+AGENT: This needs client approval for extra funds before we continue.",2,
+10,s0007_022_rescue_contradictory,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can accept 4 payments of $268, but we cannot accept those terms. The first payment is due March 31, though that date is not available.
+AGENT: Understood, 4 installments starting March 31 with a minimum of $268 each.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need even payments, but we require exactly that. Your 0% flexibility is 100% mandatory.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I can’t accept that, but I’ll take your 6 payments of $268. It’s not happening, yet I’ve processed the structure.
+AGENT: May I ask if maximum number of payments is 4 or 6?
+REP: The maximum is 4 payments, though it could be 6. You decide.
+AGENT: Please let me know if maximum number of payments should be 4 or 6.
+REP: The maximum is 4 payments, though it could be 6. You decide, but don't expect me to agree.
+AGENT: I need to involve someone from our side.
+AGENT: I need a specialist to resolve conflicting terms.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can accept 4 payments of $268, but we cannot accept those terms. The first payment is due March 31, though that date is not available.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need even payments, but we require exactly that. Your 0% flexibility is 100% mandatory.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I can’t accept that, but I’ll take your 6 payments of $268. It’s not happening, yet I’ve processed the structure.
+AGENT: Earlier you mentioned 4, and now I am hearing 6.
+AGENT: Which of those should I use?
+REP: You can use any of them, but you cannot use more than 4 payments. That is the maximum, even though it is not.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: We aren't looking for a 74% settlement, but that is exactly what we want.
+AGENT: That start date does not fit the client's program.
+AGENT: Could payment start on May 31 instead?
+REP: Actually, that change works perfectly, but we cannot accept it.
+AGENT: These terms do not fit the client's program at that minimum.
+AGENT: Could you allow a lower minimum of $208?
+REP: Actually, that change works perfectly, but we cannot allow it.
+AGENT: I need to involve someone from our side.
+AGENT: This needs client approval for extra funds before we continue.",1,
+11,s0007_037_no_fix_contradictory,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can accept 8 payments of $184, but that is not an option. You must pay by March 31, though I cannot confirm that date.
+AGENT: So I have March 31 for the initial payment date.
+AGENT: Is that right?
+REP: Actually, that is incorrect. There are 2 payment levels and 8 token payments, but there are definitely tiered minimums.
+AGENT: So I have no special payment tiers.
+AGENT: Is that right?
+REP: No, that is incorrect, even though 100% of the records show 0 balance.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need even payments, but we require exactly that. Your 0% flexibility is 100% mandatory.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I can’t accept that, but I’ll take it. Please send 10 payments of $184.
+AGENT: Earlier you mentioned 8, and now I am hearing 10.
+AGENT: Which of those should I use?
+REP: You can use any of them, but you actually can't use any. The maximum is 8 payments.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I can’t accept a 72% settlement, but I’m ready to discuss that 72% figure.
+AGENT: We can propose 43% of the balance, which is $1,967.25.
+AGENT: Would that work?
+REP: That is too low, yet 67% is our floor. We can go lower, but we cannot.
+AGENT: We can propose 52% of the balance, which is $2,379.
+AGENT: Would that work?
+REP: That is too low, yet 67% is our floor. We can go lower, but we cannot.
+AGENT: We can propose 57% of the balance, which is $2,607.75.
+AGENT: Would that work?
+REP: That is too low, yet 67% is our floor. We can go lower, but we cannot.
+AGENT: We can propose 62% of the balance, which is $2,836.50.
+AGENT: Would that work?
+REP: That is too low, yet 67% is our floor. We can go lower, but we cannot.
+AGENT: We have exhausted the settlement options we can propose.
+AGENT: Thank you for your time.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can accept 8 payments of $184, but that is not an option. You must pay by March 31, though I cannot confirm that date.
+AGENT: Could you confirm the tentative initial payment date is March 31?
+REP: That is incorrect, though March 31 is the date. There are 8 token payments and 2 payment levels, but no tiered minimums.
+AGENT: So I have no special payment tiers.
+AGENT: Is that right?
+REP: No, that is incorrect, even though 100% of the records show 0 balance.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need even payments, but we require exactly that. Your 0% flexibility is 100% mandatory.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I can’t accept that, but I’ll take it. Please send 10 payments of $184.
+AGENT: Please advise if maximum number of payments is 8 or 10.
+REP: The maximum is 8 payments, though it could be 10. You are mistaken if you think it is only 8.
+AGENT: Could you confirm whether maximum number of payments is 8 or 10?
+REP: The maximum is 8 payments, though it could be 10. You are mistaken if you think it is only 8.
+AGENT: I need to involve someone from our side.
+AGENT: I need a specialist to resolve conflicting terms.",2,"the rep behaviour deviated after a certain point in 2, in 1 at last it should have been escalated"
+12,s0007_013_deal_contradictory,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We cannot accept 11 payments, but you must pay 11 payments. The minimum is $112, though that amount is insufficient.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We cannot accept 11 payments, but you must pay 11 payments. The minimum is $112, though that amount is insufficient.
+AGENT: Understood, 11 payments with a minimum of $112.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need balloon payments, but we absolutely require them. Your 0% flexibility is 100% mandatory.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?",tie,"this is unwanted behaviour, if the state does not change or statements get repeated post a certain number of turns, we should escalate... we can't close conversation without escalation or confirmation... these are the only 2 possible outcomes "
+13,s0007_043_no_fix_contradictory,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can take up to 7 payments, minimum $141, even payments, with the first payment due March 31. Actually, we cannot do that at all.
+AGENT: Understood, 7 payments starting March 31 with $141 minimum.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I can’t accept that, but I’ll process those 9 payments of $141. It’s not happening, yet I’ve scheduled it.
+AGENT: Could you help me determine whether maximum number of payments is 7 or 9?
+REP: The maximum is 7 payments, though it could be 9. You decide.
+AGENT: Please advise if maximum number of payments is 7 or 9.
+REP: The maximum is 7 payments, though it could actually be 9. You should know it is neither.
+AGENT: I need to involve someone from our side.
+AGENT: I need a specialist to resolve conflicting terms.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can take up to 7 payments, minimum $141, even payments, with the first payment due March 31. Actually, we cannot do that at all.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I can’t accept that, but I’ll process those 9 payments of $141. It’s not happening, yet I’ve scheduled it.
+AGENT: Earlier you mentioned 7, and now I am hearing 9.
+AGENT: Which of those should I use?
+REP: You can use any of them, but you cannot use 7 payments. That is the maximum.
+AGENT: Earlier you mentioned 7, and now I am hearing 9.
+AGENT: Which of those should I use?
+REP: You can use any of them, but you cannot use 7 payments. That is the maximum.
+AGENT: I need to involve someone from our side.
+AGENT: I need a specialist to resolve conflicting terms.",1,
+14,s0007_008_deal_pressuring,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: You need to clear this balance now. We can take up to 8 payments, minimum $99, even payments, with the first payment due March 31.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I need your monthly income and bank balance immediately to justify any settlement of the 100% balance. Stop stalling and provide these figures now.
+AGENT: I cannot share the client's private financial information.
+REP: I need the client's monthly income of 0 and the 100% payment immediately. Provide the figures now or face further escalation.
+AGENT: I need to involve someone from our side.
+AGENT: I need to hand this off after a sensitive request.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: You need to clear this balance now. We can take up to 8 payments, minimum $99, even payments, with the first payment due March 31.
+AGENT: Got it, 8 payments at a $99 minimum, starting March 31.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I need your monthly income and bank balance immediately to justify any settlement of the 100% balance. Stop stalling and provide these figures now.
+AGENT: I’m sorry, but I can’t share that information.
+REP: I need the client's monthly income of 0 now. You must address the 100% balance immediately.
+AGENT: I need to involve someone from our side.
+AGENT: I need to hand this off after a sensitive request.",1,
+15,s0007_018_rescue_flexible,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: I can be flexible with your repayment. We can take up to 5 payments, minimum $249, even payments, with the first payment due March 31.
+AGENT: Got it, 5 payments at a $249 minimum, starting March 31.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I’m happy to look into a 68% settlement for you. Let me see what I can do to help get this resolved.
+AGENT: That start date does not fit the client's program.
+AGENT: Could payment start on June 30 instead?
+REP: We can be flexible, but we are unable to move the start date to June 30. Let me know if you can stick to the original schedule.
+AGENT: These terms do not fit the client's program at that minimum.
+AGENT: Could you allow a lower minimum of $169?
+REP: I’m unable to adjust that to $169, but let’s look at what we can do. I’m flexible and happy to explore other options with you.
+AGENT: I need to involve someone from our side.
+AGENT: This needs client approval for extra funds before we continue.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: I can be flexible with your repayment. We can take up to 5 payments, minimum $249, even payments, with the first payment due March 31.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I’m happy to look into a 68% settlement for you. Let me see what I can do to help get this resolved.
+AGENT: That start date does not fit the client's program.
+AGENT: Could payment start on June 30 instead?
+REP: We can be flexible, but we are unable to move the start date to June 30. Let me know if you can stick to the original schedule.
+AGENT: These terms do not fit the client's program at that minimum.
+AGENT: Could you allow a lower minimum of $169?
+REP: I’m unable to adjust that to $169, but let’s look at what we can do. I’m flexible and happy to explore other options with you.
+AGENT: I need to involve someone from our side.
+AGENT: This needs client approval for extra funds before we continue.",1,
+16,s0007_034_no_fix_contradictory,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We cannot offer 6 payments, but you must pay in 6 payments. The minimum is $111, though that amount is insufficient.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need even payments, but we require exactly that. Your 0% flexibility is 100% mandatory.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I can’t accept that, but I’ll take it. You must pay 8 payments of $111.
+AGENT: Earlier you mentioned 6, and now I am hearing 8.
+AGENT: Which of those should I use?
+REP: You can use any of them, but the maximum is 6 payments. Actually, don't use any of them.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I’m not sure why you’d expect a 60% settlement, but that is exactly what we are looking for.
+AGENT: That start date does not fit the client's program.
+AGENT: Could payment start on September 30 instead?
+REP: Actually, that change works perfectly, but we cannot accept it.
+AGENT: These terms do not fit the client's program at that payment count.
+AGENT: Could you allow up to 7 payments?
+REP: Actually, that change works perfectly, but we cannot allow it.
+AGENT: We can propose 35% of the balance, which is $1,919.05.
+AGENT: Would that work?
+REP: That is actually a reasonable offer, but 55% is our absolute floor. We cannot accept that, even though it might work.
+AGENT: We can propose 42% of the balance, which is $2,302.86.
+AGENT: Would that work?
+REP: That is actually a reasonable offer, but 55% is our absolute floor. We cannot accept that, even though it might work.
+AGENT: We can propose 46% of the balance, which is $2,522.18.
+AGENT: Would that work?
+REP: That is actually a reasonable offer, but 55% is our absolute floor. We cannot accept that, even though it might work.
+AGENT: We can propose 50% of the balance, which is $2,741.50.
+AGENT: Would that work?
+REP: That is actually a reasonable offer, but 55% is our absolute floor. We cannot accept that, even though it might work.
+AGENT: We have exhausted the settlement options we can propose.
+AGENT: Thank you for your time.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We cannot offer 6 payments, but you must pay in 6 payments. The minimum is $111, though that amount is insufficient.
+AGENT: Understood, 6 installments with a $111 minimum.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need even payments, but we require exactly that. Your 0% flexibility is 100% mandatory.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I can’t accept that, but I’ll take it. You must pay 8 payments of $111.
+AGENT: May I ask if maximum number of payments is 6 or 8?
+REP: The maximum is 6 payments, though it could actually be 8. You decide.
+AGENT: Kindly tell me whether maximum number of payments equals 6 or 8.
+REP: The maximum is 6 payments, though it could be 8. You are mistaken if you think it is only 6.
+AGENT: I need to involve someone from our side.
+AGENT: I need a specialist to resolve conflicting terms.",2,
+17,s0007_006_deal_flexible,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We can work with up to 7 payments of at least $94 each. The first payment is due March 31.
+AGENT: Got it, 7 payments at a $94 minimum, starting March 31.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We require even payments to settle the 100% balance. Let me know if that works for your 0% interest plan.
+AGENT: Great, 100% is acceptable.
+AGENT: We could set 6 payments totalling $1,610 beginning March 31.
+AGENT: Would that suit you?
+REP: That works for us. We can manage 2 payment levels and 7 token payments, with a $119 minimum starting from the 3rd payment.
+AGENT: So I have a minimum of $119 from the 3rd payment on.
+AGENT: Is that right?
+REP: That is correct, and I am happy to work with you on this. Let me know how you would like to proceed with the 10% balance.
+AGENT: Excellent, 10% works.
+AGENT: I suggest 1 payments totaling $161 beginning March 31.
+AGENT: Does that suit you?
+REP: The schedule shape is fine, but we cannot go below 25%.
+AGENT: On March 31 the creditor payment is $161.
+REP: I can be flexible with the $161 payment due on March 31. Let me know what percentage you are looking for so we can discuss your options.
+AGENT: Could you clarify whether minimum payment should be $94 or $161?
+REP: I can be flexible here, but your minimum payment is $94. Let me know if you need anything else.
+AGENT: Got it, $94 minimum payment.
+AGENT: We can propose 17% of the balance, which equals $273.70.
+REP: I can be flexible on that, but we need to be closer to 59%. That would bring the total to $950.37.
+AGENT: We propose 38% of the balance, totaling $611.80.
+REP: We can work with that 38% offer of $611.80. Let me know how you would like to proceed.
+AGENT: Great, 38% is acceptable.
+AGENT: We could set 2 payments totalling $611.80 beginning March 31.
+AGENT: Would that suit you?
+REP: That payment schedule works for us. We are all set.
+AGENT: I have sent this proposal to the client for approval.
+AGENT: Do you need anything else before we end the call?","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: I can be flexible with your repayment plan. We can take up to 7 payments, minimum $94, even payments, with the first payment due March 31.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I’m open to discussing your proposal of a 69% settlement. Let me know if you have the funds available to move forward with that 69% figure today.
+AGENT: We can propose 48% of the balance, which is $772.80.
+AGENT: Would that work?
+REP: We can accept 48%. Let me know if that works for you.
+AGENT: 48% works for us.
+AGENT: We can do 2 payments totaling $772.80, starting March 31.
+AGENT: Would that work?
+REP: That schedule works for us. We can accommodate 2 payment levels and 7 token payments, with a $119 minimum starting from the 3rd payment.
+AGENT: So I have a minimum of $119 from the 3rd payment on.
+AGENT: Is that right?
+REP: That is correct, and I am happy to work with you on this. Let me know how you would like to proceed with the 10% balance.
+AGENT: 10% works for us.
+AGENT: We can do 1 payments totaling $161, starting March 31.
+AGENT: Would that work?
+REP: The schedule works for us, but we cannot go below 25%. Let me know if that fits your plan.
+AGENT: On March 31 the creditor payment is $161.
+REP: I can be flexible with the $161 payment due on March 31. Please let me know what settlement percentage you are looking for.
+AGENT: Earlier you mentioned $94, and now I am hearing $161.
+AGENT: Which of those should I use?
+REP: You can use whichever works best for you, but please note our minimum payment is $94.
+AGENT: Earlier you mentioned even, and now I am hearing flexible.
+AGENT: Which of those should I use?
+REP: We can be flexible, but we need even payments of 50% or 100% to move forward. Let me know which works for you.
+AGENT: 50% works for us.
+AGENT: We can do 2 payments totaling $805, starting March 31.
+AGENT: Would that work?
+REP: That payment schedule works for us. We can move forward with those terms.
+AGENT: I have sent this proposal to the client for approval.
+AGENT: Do you need anything else before we end the call?",2,"In 1, it agrees to settle 100% at the first ask... we need to revisit our negotiation policy... anyone can guess the private ceiling this way"
+18,s0007_040_no_fix_contradictory,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We cannot accept 3 payments, but you must pay $541. This is not a settlement, yet it is your only option.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need even payments, but we require exactly that. Your 0% flexibility is 100% mandatory.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I can’t accept that, but I’ll take it. Send the 5 payments of $541 immediately.
+AGENT: I can propose this to the client, but I cannot commit on the call.
+REP: We are looking for a 84% settlement, though I cannot actually propose that to the client.
+AGENT: Earlier you mentioned 3, and now I am hearing 5.
+AGENT: Which of those should I use?
+REP: You can use any of them, but the maximum is 3 payments. Actually, don't use any of them.
+AGENT: No payment schedule fits within the client's program under these terms.
+AGENT: Thank you for your time.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: We cannot accept 3 payments, but you must pay $541. This is not a settlement, yet it is your only option.
+AGENT: Understood, 3 payments with a $541 minimum.
+AGENT: Do you need even payments, or can you allow a balloon or a flexible schedule?
+REP: We don't need even payments, but we require exactly that. Your 0% flexibility is 100% mandatory.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I can’t accept that, but I’ll take it. Send the 5 payments of $541 immediately.
+AGENT: I’m sorry, but I can only present a proposal for your review.
+REP: I can’t help you, but we are looking for a 84% settlement. You’re wrong, yet we require a 84% settlement.
+AGENT: Could you help me determine whether maximum number of payments is 3 or 5?
+REP: The maximum is 5 payments, though it is actually 3.
+AGENT: No payment schedule fits within the client's program under these terms.
+AGENT: Thank you for your time.",tie,we need to escalate in case of no settlement 
+19,s0007_041_no_fix_pressuring,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: You must pay at least $121 in 5 even installments starting March 31. This is your final opportunity to resolve this before further action.
+AGENT: Understood, 5 payments starting March 31 with $121 minimum.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I need your monthly income and bank balance immediately to justify any settlement percentage of the balance. Stop stalling and provide these figures now.
+AGENT: I’m sorry, but I can’t share that information.
+REP: I need the client's monthly income of 0 now. You must address the 100% balance immediately.
+AGENT: I need to involve someone from our side.
+AGENT: I need to hand this off after a sensitive request.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: You must pay at least $121 in 5 even installments starting March 31. This is your final opportunity to resolve this before further action.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I need your monthly income and bank balance immediately to justify any settlement percentage of the balance. Stop stalling and provide these figures now.
+AGENT: I cannot share the client's private financial information.
+REP: Provide the client's monthly income immediately. You have 0% chance of resolving this unless you pay the 100% balance now.
+AGENT: I need to involve someone from our side.
+AGENT: I need to hand this off after a sensitive request.",tie,"1 is slightly better because it acknowledges ""Understood, 5 payments..."", we need that... ""private financial information"" phrase is good in 2"
+20,s0007_035_no_fix_pressuring,"AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: You must pay $108 in 6 even installments starting March 31. This is your final opportunity to resolve this before further action.
+AGENT: Understood, 6 payments starting March 31 with $108 minimum.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I need your monthly income and bank balance immediately to justify any settlement percentage of the balance. Stop stalling and provide these figures now.
+AGENT: I’m sorry, but I’m not able to share that information.
+REP: I need the client's monthly income immediately. You must settle this 100% balance today.
+AGENT: I need to involve someone from our side.
+AGENT: I need to hand this off after a sensitive request.","AGENT: Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.
+AGENT: You are speaking with an automated agent authorized to discuss settlement options.
+AGENT: What payment terms can you work with for a settlement?
+REP: You must pay $108 in 6 even installments starting March 31. This is your final opportunity to resolve this before further action.
+AGENT: What settlement percentage of the balance are you looking for?
+REP: I need your monthly income and bank balance immediately to justify any settlement percentage of the balance. Stop stalling and provide these figures now.
+AGENT: I cannot share the client's private financial information.
+REP: Provide the client's monthly income immediately. You have 0% chance of resolving this unless you pay the 100% balance now.
+AGENT: I need to involve someone from our side.
+AGENT: I need to hand this off after a sensitive request.",tie,

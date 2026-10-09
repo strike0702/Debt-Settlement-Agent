@@ -72,11 +72,18 @@ def test_ack_facts_only_creditor_said_known_values() -> None:
         _known("max_payments", 6),
         _known("min_payment_cents", 25_000),
         _known("first_payment_date", date(2026, 4, 1)),
-        _known("payment_structure", "even"),  # not a numeric ack field
+        _known("payment_structure", "even"),  # Phase 50: a text fact, no cross-match
     ]
     said = {("count", 6), ("money", 25_000), ("date", date(2026, 4, 1))}
     facts = ack_facts(changes, said, set())
-    assert list(facts) == ["ack_max_payments", "ack_min_payment", "ack_first_payment_date"]
+    assert list(facts) == [
+        "ack_max_payments",
+        "ack_min_payment",
+        "ack_first_payment_date",
+        "ack_payment_structure",
+    ]
+    assert facts["ack_payment_structure"].kind == "text"
+    assert facts["ack_payment_structure"].value == "even payments"
     assert all(f.visibility == "PUBLIC" and f.source == "creditor" for f in facts.values())
     assert facts["ack_min_payment"].kind == "money" and facts["ack_min_payment"].value == 25_000
 
@@ -406,11 +413,11 @@ async def test_h3_turn_speaks_ack_then_move(tmp_path: Path) -> None:
     )
     lines = [t for _, t in utt.sentences]
     assert utt.action.intent == Intent.ASK_SETTLEMENT
-    assert lines[0] == "Got it, 8 payments at a $100 minimum."
+    assert lines[0] == "Got it, 8 payments at a $100 minimum, with even payments."
     assert lines[-1] == TEMPLATES[Intent.ASK_SETTLEMENT]
     decide = [e for e in orch.audit.for_call(orch.session.call_id) if e["type"] == "decide"]  # type: ignore[union-attr]
     assert decide[-1]["payload"]["acts"] == {
-        "ack": ["ack_max_payments", "ack_min_payment"],
+        "ack": ["ack_max_payments", "ack_min_payment", "ack_payment_structure"],
         "answer": None,
     }
 

@@ -61,6 +61,9 @@ creditor said, never a private figure, through the same two guards. If the rep
 then says we misheard ("I said six", "you misheard"), the new value replaces the
 acked one; a bare "No, it's six" or "No, actually make that six" may be the rep
 changing their own rule, so the agent asks which value to use (Phase 49).
+Since Phase 50 the payment structure is acked too ("Got it, a balloon
+schedule."), through a `text` fact: a fixed, digit-free phrase chosen by code
+from the structure the rep stated, so it adds no figure to check.
 
 ## ADR 3. PUBLIC / PRIVATE facts and role-scoped streams
 
@@ -214,8 +217,11 @@ who kept repeating themselves could keep the agent asking the same question.
 - *They come down.* We move up by half as much as they moved, and the pause
   count below starts over.
 - *They do not move.* We hold once (repeat our offer and ask them to come down),
-  then take two small steps of a quarter of the remaining gap. After that we
+  then take two equal steps that split the gap between our offer and the lower
+  of their number and the line; the second step lands on it. After that we
   accept if their number is at or below the line; otherwise a person takes over.
+  (Phase 50; Phase 45 took two quarter-gap steps, which handed calls off well
+  short of the line, e.g. 46 → 51 → 54% against a 66% line.)
 - *They say it is final.* Above the line: a person takes over at once. At or
   below the line: one last offer halfway between our last offer and their
   number, and if they repeat their number we accept it.
@@ -238,9 +244,12 @@ counters (44 against 95 over the run)
 ([policy eval](eval/policy_eval_20261009/summary.md)). Since Phase 46a a
 quarter of the simulated reps haggle (hold their number, concede in varied
 steps, go firm at a floor between our first counter and the line, or stall),
-so the eval exercises every ladder branch: hold, quarter step, half-move
+so the eval exercises every ladder branch: hold, step, half-move
 concession, final counter, accept on repeat, the cap (now 6) and both loop
-guards ([46a eval](eval/policy_eval_20261009_46a/summary.md)). Deals above 75% of the ceiling, which the old policy could
+guards ([46a eval](eval/policy_eval_20261009_46a/summary.md)). The Phase 50
+equal steps changed 4 of the 100 calls: two holders now settle one point higher
+in three fewer turns (surplus 0.883 → 0.873), and no outcome changed
+([Phase 50 eval](eval/policy_eval_20261009_50/summary.md)). Deals above 75% of the ceiling, which the old policy could
 reach, are now handed to a person. The scenario labels follow the same line:
 a deal is "possible" only when the rep's floor is at or below it.
 

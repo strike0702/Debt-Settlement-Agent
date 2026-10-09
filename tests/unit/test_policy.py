@@ -1432,7 +1432,7 @@ def test_negotiate_first_number_never_accepted_when_a_counter_exists() -> None:
 
 
 def test_negotiate_hold_then_two_steps_then_accept_or_hand_off() -> None:
-    """Rule C3: rep does not move → hold, quarter step, quarter step, then decide."""
+    """Rule C3 (Phase 50): rep does not move → hold, two equal steps to min(ask, line), decide."""
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
     afford = _afford(6000, list(range(100, 6100, 100)))  # line 4500
     base = dict(turn_idx=6, ask_at_last_counter=4500, phase=Phase.NEGOTIATE)
@@ -1453,30 +1453,41 @@ def test_negotiate_hold_then_two_steps_then_accept_or_hand_off() -> None:
         afford,
         settings=_SETTINGS,
     )
-    # quarter of (min(4500, 4500) - 3000) = 375 → 3375 → snaps to 3300
-    assert (step1.reason, step1.facts["counter_pct"].value) == ("step", 3300)
+    # half of (min(4500, 4500) - 3000) = 750 → 3750 → snaps down to 3700
+    assert (step1.reason, step1.facts["counter_pct"].value) == ("step", 3700)
     step2 = decide(
         b,
-        _neg(ask_bp=4500, counters_offered=[3000, 3300], hold_stage=2, **base),
+        _neg(ask_bp=4500, counters_offered=[3000, 3700], hold_stage=2, **base),
         TurnAnalysis(stance="reject"),
         afford,
         settings=_SETTINGS,
     )
-    # quarter of (4500 - 3300) = 300 → 3600
-    assert (step2.reason, step2.facts["counter_pct"].value) == ("step", 3600)
+    # the second step lands on min(ask, line) itself
+    assert (step2.reason, step2.facts["counter_pct"].value) == ("step", 4500)
     done = decide(
         b,
-        _neg(ask_bp=4500, counters_offered=[3000, 3300, 3600], hold_stage=3, **base),
+        _neg(ask_bp=4500, counters_offered=[3000, 3700, 4500], hold_stage=3, **base),
         TurnAnalysis(stance="reject"),
         afford,
         settings=_SETTINGS,
     )
-    assert (done.intent, done.reason) == (Intent.CONFIRM_SCHEDULE, "rep_held")
+    # Our last step already offered their number, so it is taken as within our offer.
+    assert (done.intent, done.reason) == (Intent.CONFIRM_SCHEDULE, "ask_within_offer")
+    assert done.facts["settlement_pct"].value == 4500
+    # Half the gap is not schedulable: the step takes the next legal bp, never past the target.
+    held = decide(
+        b,
+        _neg(ask_bp=4500, counters_offered=[3000], hold_stage=1, **base),
+        TurnAnalysis(stance="reject"),
+        _afford(6000, [3000, 4500]),
+        settings=_SETTINGS,
+    )
+    assert held.intent == Intent.COUNTER and held.facts["counter_pct"].value == 4500
     above = decide(
         b,
         _neg(
             ask_bp=5000,
-            counters_offered=[3000, 3300, 3600],
+            counters_offered=[3000, 3700, 4500],
             hold_stage=3,
             turn_idx=6,
             ask_at_last_counter=5000,
@@ -1538,7 +1549,9 @@ def test_counters_never_exceed_the_accept_line() -> None:
                         )
                         if action.intent == Intent.COUNTER:
                             bp = action.facts["counter_pct"].value
-                            assert isinstance(bp, int) and bp <= line and bp < ask
+                            # Phase 50: only the second equal step may land on their ask.
+                            ceiling_ok = bp <= ask if action.reason == "step" else bp < ask
+                            assert isinstance(bp, int) and bp <= line and ceiling_ok
                         if action.intent == Intent.CONFIRM_SCHEDULE:
                             assert action.facts["settlement_pct"].value <= line
 

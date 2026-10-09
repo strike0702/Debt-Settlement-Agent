@@ -54,9 +54,9 @@ def test_shipped_bank_marks_the_phase_33_entries_reviewed() -> None:
         for e in _shipped()["entries"]
         if e.get("reviewed") is True
     }
-    # Phase 46b adds the hand-written ``ack_total`` ACK entry.
+    # Phase 46b adds the hand-written ``ack_total`` ACK entry, Phase 50 the structure one.
     assert {i for i, _ in reviewed} == set(_REVIEWED) | {"ACK"}
-    assert {p for i, p in reviewed if i == "ACK"} == {("ack_total",)}
+    assert {p for i, p in reviewed if i == "ACK"} == {("ack_total",), ("ack_payment_structure",)}
 
 
 def test_full_build_keeps_reviewed_entries_acts_and_notes(

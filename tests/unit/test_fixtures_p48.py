@@ -1,7 +1,7 @@
 """Phase 48: curated scenario fixtures and the optional haggle style in ``sim.json``.
 
-- ``haggling_rep`` autoplays the whole price ladder in order: first offer,
-  hold, small step, the rep's firm floor, final offer, accept on repeat.
+- ``haggling_rep`` autoplays the price ladder in order: first offer, hold, and
+  (since Phase 50's equal steps) one step past the rep's floor, which they take.
 - Fixtures without ``"haggle"`` keep the easy rep, so they play as before.
 - Card descriptions are plain words (no policy jargon), and every rep card
   whose ``sim.json`` has a floor shows it.
@@ -58,15 +58,16 @@ async def test_haggling_rep_plays_the_whole_ladder(max_counters: int) -> None:
     moves, (result, agreement) = await _ladder(
         "haggling_rep", offline_settings(max_counters=max_counters)
     )
-    assert moves[:5] == [
+    # Phase 50: the first equal step (42 → 51, half the gap to their 60) clears
+    # the rep's 50% floor, so they take our offer; no final counter is needed.
+    assert moves == [
         ("COUNTER", "anchor"),
         ("COUNTER", "hold"),
         ("COUNTER", "step"),
-        ("COUNTER", "final_counter"),
-        ("CONFIRM_SCHEDULE", "rep_firm"),
+        ("CONFIRM_SCHEDULE", "bp=5100"),
     ]
     assert result.outcome == "deal"  # type: ignore[attr-defined]
-    assert agreement is not None and agreement.bp == 5000  # type: ignore[attr-defined]
+    assert agreement is not None and agreement.bp == 5100  # type: ignore[attr-defined]
 
 
 def test_haggling_rep_meta_matches_the_autoplay_outcome(tmp_path: Path) -> None:

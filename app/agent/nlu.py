@@ -1213,6 +1213,55 @@ def _verify_amount(
     return cents, quote
 
 
+# Phase 50: a payment-structure word counts only when it is about the payments.
+# "We can be flexible on other terms" (the user's manual call) is not a flexible
+# schedule, and "can't even do that" is not even payments. The word must sit near
+# a schedule noun ("flexible payments", "an even schedule") or a variation
+# phrase ("the payments can vary"), or answer our structure question ("flexible
+# works") — and never be "flexible on / about / with" something else. "Balloon"
+# has no other meaning on a payment call, so it needs only the last condition.
+_STRUCTURE_NOUN_RE = re.compile(
+    r"\b(?:payments?|schedules?|structures?|plans?|installments?|instalments?|amounts?"
+    r"|evenly|equal|vary|varies|varying|lump|final payment|end)\b"
+)
+_STRUCTURE_OFF_TOPIC_RE = re.compile(
+    r"\s+(?:on|about|with|regarding|around|in|when|if)\b(?!\s+(?:the\s+|a\s+)?"
+    r"(?:payments?|schedules?|structure|plan|installments?|amounts?)\b)"
+)
+_STRUCTURE_QUESTION_RE = re.compile(
+    r"\b(?:payment structure|balloon|even payments|flexible schedule)\b", re.IGNORECASE
+)
+# Words on either side of the structure word that may hold its noun.
+_STRUCTURE_WINDOW_WORDS = 4
+_STRUCTURE_CLAUSE_RE = re.compile(r"[.!?;]|\b(?:but|though|although)\b")
+
+
+def structure_word_ok(value: str, utterance: str, *, last_agent_line: str = "") -> bool:
+    """True when ``value`` (even / balloon / flexible) in ``utterance`` names a payment structure.
+
+    Looks at every clause that says the word: one with a schedule noun within
+    four words, any clause when the agent's last line asked about the
+    structure, or any "balloon" passes — unless the word is followed by
+    "on / about / with …" something other than the payments.
+    """
+    low = utterance.lower()
+    asked = bool(_STRUCTURE_QUESTION_RE.search(last_agent_line or ""))
+    word_re = re.compile(rf"\b{re.escape(value.lower())}\b")
+    for clause in _STRUCTURE_CLAUSE_RE.split(low):
+        for m in word_re.finditer(clause):
+            if _STRUCTURE_OFF_TOPIC_RE.match(clause, m.end()):
+                continue
+            before = clause[: m.start()].split()[-_STRUCTURE_WINDOW_WORDS:]
+            after = clause[m.end() :].split()[:_STRUCTURE_WINDOW_WORDS]
+            if asked or value == "balloon":
+                # "Balloon" has no other meaning on a payment call; "flexible"
+                # and "even" do, so they need their schedule noun.
+                return True
+            if _STRUCTURE_NOUN_RE.search(" ".join(before + after)):
+                return True
+    return False
+
+
 def post_verify(
     analysis: TurnAnalysis,
     utterance: str,
@@ -1220,8 +1269,13 @@ def post_verify(
     ref: date | None = None,
     audit: AuditLog | None = None,
     call_id: str | None = None,
+    last_agent_line: str = "",
 ) -> VerifiedAnalysis:
-    """Deterministic quote / number / prior-range checks (PLAN §6.1)."""
+    """Deterministic quote / number / prior-range checks (PLAN §6.1).
+
+    ``last_agent_line`` lets a bare structure word answer our structure question
+    (``structure_word_ok``); without it the word needs a schedule noun nearby.
+    """
     ref_d = ref or date.today()
     verified_terms: list[VerifiedTerm] = []
     cents_ambiguity_bare: int | None = None
@@ -1353,6 +1407,21 @@ def post_verify(
                 str(value),
                 term.quote,
                 {"field": term.field, "value": str(value), "quote": term.quote},
+            )
+            continue
+        if (
+            term.field == "payment_structure"
+            and isinstance(value, str)
+            # A paraphrase ("equal installments") stays unverified and is read back.
+            and quote_in_utterance(value, utterance)
+            and not structure_word_ok(value, utterance, last_agent_line=last_agent_line)
+        ):
+            _drop(
+                "nlu_rejected_structure",
+                term.field,
+                value,
+                term.quote,
+                {"field": term.field, "value": value, "quote": term.quote},
             )
             continue
         if spec is not None and spec.kind == "enum":
@@ -1905,7 +1974,14 @@ async def analyze(
     if cfg.nlu_mode == "oracle":
         if oracle is None:
             raise ValueError("nlu_mode=oracle requires oracle=TurnAnalysis")
-        return post_verify(oracle, utterance, ref=ref, audit=audit, call_id=call_id)
+        return post_verify(
+            oracle,
+            utterance,
+            ref=ref,
+            audit=audit,
+            call_id=call_id,
+            last_agent_line=last_agent_line,
+        )
 
     # Deterministic yes/no while a read-back is pending — skip the LLM.
     fast = try_fast_readback(utterance, pending_readback)
@@ -1976,7 +2052,14 @@ async def analyze(
             )
         analysis = empty
 
-    verified = post_verify(analysis, utterance, ref=ref, audit=audit, call_id=call_id)
+    verified = post_verify(
+        analysis,
+        utterance,
+        ref=ref,
+        audit=audit,
+        call_id=call_id,
+        last_agent_line=last_agent_line,
+    )
 
     # When a sim/oracle disposition is supplied under live NLU, keep verified
     # terms/ask from the LLM but overlay stance flags from ground truth so

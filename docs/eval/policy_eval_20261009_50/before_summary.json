@@ -1,0 +1,106 @@
+{
+  "n_scenarios": 100,
+  "n_completed": 100,
+  "n_skipped_quota": 0,
+  "n_error": 0,
+  "agreement_valid": 1.0,
+  "agreement_valid_n": 21,
+  "agreement_valid_ci95": [
+    0.8453561767357979,
+    0.9999999999999999
+  ],
+  "deal_rate_given_zopa": 0.9130434782608695,
+  "deal_rate_given_zopa_n": 23,
+  "deal_rate_given_zopa_ci95": [
+    0.7320359570190598,
+    0.9758205045927666
+  ],
+  "no_deal_correct": 1.0,
+  "no_deal_correct_n": 22,
+  "no_deal_correct_ci95": [
+    0.8513404742740388,
+    1.0
+  ],
+  "escalation_correct": 1.0,
+  "escalation_correct_n": 77,
+  "escalation_correct_ci95": [
+    0.9524799113327793,
+    1.0
+  ],
+  "unverified_figures_spoken": 0,
+  "sensitive_leaks": 0,
+  "guard_blocks": 0,
+  "rule_extraction_accuracy": 0.6614285714285715,
+  "rule_extraction_accuracy_n": 700,
+  "rule_extraction_accuracy_ci95": [
+    0.6255752744070807,
+    0.695519699234716
+  ],
+  "false_known_rate": 0.0,
+  "false_known_rate_n": 463,
+  "false_known_rate_ci95": [
+    0.0,
+    0.008228915332309716
+  ],
+  "readback_count": 0.21,
+  "turns_to_proposal": 6.523809523809524,
+  "surplus_captured": 0.8825142149185211,
+  "surplus_n": 22,
+  "counters_spoken_max": 6,
+  "counters_spoken_mean": 1.32,
+  "max_counters": 6,
+  "identical_consecutive_agent_moves": 0,
+  "turns_to_outcome": 5.44,
+  "stuck_calls": 0,
+  "stuck_rate": 0.0,
+  "stuck_rate_n": 100,
+  "stuck_rate_ci95": [
+    0.0,
+    0.03699480747600191
+  ],
+  "ladder_branches": {
+    "anchor": 40,
+    "hold": 30,
+    "quarter_step": 11,
+    "concede_half": 41,
+    "reanchor_after_term_change": 0,
+    "final_counter": 10,
+    "our_counter_accepted": 9,
+    "accept_on_repeat": 10,
+    "accept_after_holds": 0,
+    "counters_exhausted": 2,
+    "above_accept_line": 16,
+    "max_counters_handoff": 2,
+    "loop_guard_repeated_question": 1,
+    "loop_guard_no_progress": 1,
+    "loop_guard_max_turns": 0
+  },
+  "sim_rewrite_fallbacks": {
+    "attempts": 0,
+    "count": 0,
+    "rate": null,
+    "by_reason": {}
+  },
+  "latency": {
+    "nlu_ms": {
+      "p50": 0.04587508738040924,
+      "p95": 0.21884728921577334,
+      "n": 644
+    },
+    "policy_ms": {
+      "p50": 0.030875555239617825,
+      "p95": 0.9152937680482864,
+      "n": 644
+    },
+    "nlg_ms": {
+      "p50": 0.05737505853176117,
+      "p95": 0.08649375522509217,
+      "n": 644
+    },
+    "server_total_ms": {
+      "p50": 0.8310625562444329,
+      "p95": 288.5385339614004,
+      "n": 644
+    }
+  }
+}

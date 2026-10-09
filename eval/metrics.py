@@ -53,10 +53,11 @@ NO_DEAL_HANDOFF_REASONS: frozenset[str] = frozenset(
 
 # Price-ladder branches (Phase 45 policy), in report order. Counted per agent
 # move from ``policy/decide`` audit events; see ``ladder_branches``.
+# ``equal_step`` was ``quarter_step`` before Phase 50 changed the step size.
 LADDER_BRANCHES: tuple[str, ...] = (
     "anchor",
     "hold",
-    "quarter_step",
+    "equal_step",
     "concede_half",
     "reanchor_after_term_change",
     "final_counter",
@@ -73,7 +74,7 @@ LADDER_BRANCHES: tuple[str, ...] = (
 # (intent, reason) → branch, for moves whose reason names the branch.
 _BRANCH_BY_REASON: dict[tuple[str, str], str] = {
     ("COUNTER", "hold"): "hold",
-    ("COUNTER", "step"): "quarter_step",
+    ("COUNTER", "step"): "equal_step",
     ("COUNTER", "final_counter"): "final_counter",
     ("CONFIRM_SCHEDULE", "rep_firm"): "accept_on_repeat",
     ("CONFIRM_SCHEDULE", "rep_held"): "accept_after_holds",

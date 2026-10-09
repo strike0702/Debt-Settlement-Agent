@@ -306,6 +306,21 @@
       "reviewed": true
     },
     {
+      "intent": "ACK",
+      "placeholders": [
+        "ack_payment_structure"
+      ],
+      "required": [
+        "ack_payment_structure"
+      ],
+      "templates": [
+        "Got it, {ack_payment_structure}.",
+        "Understood, {ack_payment_structure}.",
+        "Okay, {ack_payment_structure} it is."
+      ],
+      "reviewed": true
+    },
+    {
       "intent": "ANSWER:why_not_higher",
       "placeholders": [],
       "required": [],

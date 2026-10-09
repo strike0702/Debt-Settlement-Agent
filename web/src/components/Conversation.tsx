@@ -21,8 +21,8 @@ export interface ConversationProps {
   messages: ChatMessage[];
   mic: MicState;
   /**
-   * Rep lines to click. All look the same (Phase 50b): no "next" highlight, since
-   * a rep who haggles their own way makes the scripted order meaningless.
+   * Rep lines to click, shown once each (Phase 50b). All look the same: no "next"
+   * highlight, since a rep who haggles their own way makes the scripted order meaningless.
    */
   suggested: string[];
   onSend?: (text: string) => void;
@@ -69,6 +69,8 @@ export function Conversation({
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, interim, ended]);
 
+  // Scripts repeat lines (a rep restates their number); the list shows each once, in first order.
+  const unique = [...new Set(suggested)];
   const send = (text: string) => {
     if (!onSend || !text.trim()) return;
     onSend(text.trim());
@@ -149,13 +151,12 @@ export function Conversation({
         </div>
       )}
 
-      {suggested.length > 0 && (
+      {unique.length > 0 && (
         <div className="border-t border-border px-4 pt-3">
           <p className="mb-2 text-sm text-muted">Suggested rep replies</p>
           <ul className="flex flex-col gap-1.5">
-            {suggested.map((s, i) => (
-              // Cards repeat lines (a rep restates their number), so the index keeps keys unique.
-              <li key={`${i}:${s}`}>
+            {unique.map((s) => (
+              <li key={s}>
                 <button
                   type="button"
                   disabled={!onSend}

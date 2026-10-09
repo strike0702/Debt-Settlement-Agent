@@ -1101,6 +1101,136 @@ Misses (line ids):
 - terms: hs08
 - filler false accept: -
 
+## GROQ_P44
+
+- git: `6ff7d1d`  profile=`groq_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_groq_20261009/providers_groq.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 183  skipped (LLM unavailable): 0
+- model share: groq/openai/gpt-oss-120b=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 13 | 11 | 1 | 2 | 0.917 | 0.846 |
+| firm | 6 | 6 | 3 | 0 | 0.667 | 1.000 |
+| wants_to_end | 6 | 6 | 7 | 0 | 0.462 | 1.000 |
+| hostility | 5 | 1 | 0 | 4 | 1.000 | 0.200 |
+| stance=accept | 11 | 11 | 1 | 0 | 0.917 | 1.000 |
+| stance=reject | 9 | 8 | 0 | 1 | 1.000 | 0.889 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.885 |
+| term exact-match (all lines) | 0.973 |
+| term exact-match (lines with terms, n=66) | 0.939 |
+| filler false accepts (n=31) | 1 |
+
+Misses (line ids):
+
+- demands_commitment: FP k05; FN c09, c10
+- firm: FP i10, t12, k05; FN -
+- wants_to_end: FP c05, c06, i07, x02, e06, e07, e10; FN -
+- hostility: FP -; FN x01, x02, x03, x04
+- stance=accept: FP f23; FN -
+- stance=reject: FP -; FN a10
+- terms: f01, f16, f17, d04, k05
+- filler false accept: f23
+
+## AMOUNTS_GROQ_P44
+
+- git: `6ff7d1d`  profile=`groq_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_groq_20261009/providers_groq.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 14  skipped (LLM unavailable): 0
+- model share: groq/openai/gpt-oss-120b=14
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 1 | 0 | 0.000 | n/a |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.357 |
+| term exact-match (all lines) | 0.857 |
+| term exact-match (lines with terms, n=13) | 0.846 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- firm: FP am09; FN -
+- terms: am09, am10
+- filler false accept: -
+
+## HELDOUT_STANCE_GROQ_P44
+
+- git: `6ff7d1d`  profile=`groq_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_groq_20261009/providers_groq.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 32  skipped (LLM unavailable): 0
+- model share: groq/openai/gpt-oss-120b=32
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 6 | 5 | 0 | 1 | 1.000 | 0.833 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.969 |
+| term exact-match (all lines) | 0.938 |
+| term exact-match (lines with terms, n=16) | 0.875 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP -; FN hs28
+- terms: hs08, hs09
+- filler false accept: -
+
+## GROQ_P44_NO_GUARD
+
+- git: `6ff7d1d`  profile=`demo`  ref=2026-04-01
+- stance: raw LLM (repair_stance off, eval-only); rescored from `docs/eval/nlu_corpus_groq_p44.jsonl`
+- lines: 183  skipped (LLM unavailable): 0
+- model share: groq/openai/gpt-oss-120b=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 13 | 11 | 1 | 2 | 0.917 | 0.846 |
+| firm | 6 | 6 | 3 | 0 | 0.667 | 1.000 |
+| wants_to_end | 6 | 6 | 7 | 0 | 0.462 | 1.000 |
+| hostility | 5 | 1 | 0 | 4 | 1.000 | 0.200 |
+| stance=accept | 11 | 8 | 2 | 3 | 0.800 | 0.727 |
+| stance=reject | 9 | 8 | 0 | 1 | 1.000 | 0.889 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.863 |
+| term exact-match (all lines) | 0.973 |
+| term exact-match (lines with terms, n=66) | 0.939 |
+| filler false accepts (n=31) | 1 |
+
+Misses (line ids):
+
+- demands_commitment: FP k05; FN c09, c10
+- firm: FP i10, t12, k05; FN -
+- wants_to_end: FP c05, c06, i07, x02, e06, e07, e10; FN -
+- hostility: FP -; FN x01, x02, x03, x04
+- stance=accept: FP i02, f23; FN f10, f19, f20
+- stance=reject: FP -; FN a10
+- terms: f01, f16, f17, d04, k05
+- filler false accept: f23
+
 ## Notes
 
 - Both runs used the same model and prompt (Groq `gpt-oss-120b`, temperature 0).
@@ -1442,3 +1572,31 @@ starts with Haiku 5.5.
   open issue (d)). The clarify fires on the ambiguous-amount flag, not the
   stance.
 - Cost: **$0.132** for the six runs (450 calls, 877,372 in / 89,226 out).
+
+### Phase 44: Groq check of the P43 prompt (2026-10-09)
+
+- Rows `GROQ_P44` (183/183), `AMOUNTS_GROQ_P44` (14/14),
+  `HELDOUT_STANCE_GROQ_P44` (32/32): Groq `gpt-oss-120b` only, eval-only file
+  `docs/eval/nlu_groq_20261009/providers_groq.yaml` (demo route's Groq entry,
+  no fallback, four Groq keys, no Anthropic). Prompt = current `main` (P43).
+  `GROQ_P44_NO_GUARD` rescores the saved `GROQ_P44` records with
+  `--no-repair-stance` (no calls). Full write-up:
+  `docs/eval/nlu_groq_20261009/summary.md`.
+- vs `FILLER_BEFORE` (Groq, pre-P39 prompt, git `9998a65`): stance accuracy
+  0.672 → 0.885, private-info recall 0.824 → 1.000, terms (lines with terms)
+  61 → 62 of 66. F1 drops > 0.03: hostility 0.750 → 0.333 (new FN x01, x03),
+  wants_to_end 0.667 → 0.632 (new FP c05), accept 1.000 → 0.957 (f23, also a
+  filler false accept: 0 → 1). Firm FPs stay at 3 (k05, t12, i10), so the
+  first-wording "minimum …" firm regression from Phase 39 is not on Groq
+  (P39 open issue e).
+- vs `HAIKU_P43_FIX` (same prompt): stance 0.885 vs 0.869; weaker on firm,
+  wants_to_end, hostility, reject (a10) and question.
+- Guard on / off (current `main`, before Phase 45): stance 0.885 / 0.863,
+  accept F1 0.957 / 0.762. The phrase rules changed no line; the short-ack
+  rule (f10, f19, f20) and the injection rule (i02) changed 4, all helped.
+- Amounts 12/14: am09 (the user's $420 sentence) and am10 are read as dollar
+  totals, not `amount_ambiguous`, as on `AMOUNTS_P39`. Held-out stance 0.969,
+  private-info recall 0.833 (hs28).
+- Latency p50 1604 ms / p95 2179 ms (main, 179 live calls). The first pass
+  skipped 3 lines on per-minute limits; a rerun of the label replayed the
+  cache and filled them. Cerebras not run (no key in this worktree).

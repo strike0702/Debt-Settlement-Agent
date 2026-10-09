@@ -1,0 +1,20 @@
+# Eval-only providers file for Phase 44 (Groq check of the P43 NLU prompt). Not a
+# shipped profile: use with
+#   python -m eval.nlu_corpus --providers <this file> --profile groq_nlu
+# The nlu route is the demo route's Groq entry alone (groq/openai/gpt-oss-120b,
+# no params, no timeout_s, so the 6 s NLU role timeout applies), with no
+# fallback, so a run cannot mix models. Free tier only: no Anthropic provider.
+# The groq provider block is copied from config/providers.yaml; the key pool is
+# GROQ_API_KEY plus GROQ_API_KEY_1.._n (four keys in separate orgs on 2026-10-09).
+profiles:
+  groq_nlu:
+    nlu:
+      - groq/openai/gpt-oss-120b
+
+providers:
+  groq:
+    base_url: "https://api.groq.com/openai/v1"
+    key_env: GROQ_API_KEY
+    rpm: 25
+    tpm: 8000 # free tier, per org (= per key when keys are in separate orgs)
+    json_mode: true

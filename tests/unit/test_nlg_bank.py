@@ -18,9 +18,13 @@ from app.agent.nlg_bank import (
     parse_bank,
     pick_template,
 )
+from app.agent.nlu_types import TurnAnalysis
+from app.agent.policy import NegotiationState, decide
 from app.config import Settings
 from app.domain.actions import Action, Intent, Phase
+from app.domain.belief import BeliefState
 from app.domain.facts import Fact
+from app.domain.scenario import load_scenario
 from app.llm.client import FakeLLM
 from tests.seed7 import slot
 
@@ -163,3 +167,25 @@ def test_read_back_entries_are_confirmation_questions() -> None:
         for t in entry["templates"]:
             assert t.rstrip().endswith("?"), t
             assert t.startswith(("Just to confirm", "So ", "And ", "Let me", "I have", "Okay")), t
+
+
+@pytest.mark.parametrize(
+    ("field", "old", "new"),
+    [("max_payments", 6, 8), ("min_payment_cents", 10000, 12500)],
+)
+def test_contradiction_clarify_is_spoken_from_the_bank(field: str, old: int, new: int) -> None:
+    """[33.3] The bank CLARIFY entry is live: a non-tier contradiction keys to it.
+
+    Only the cents-ambiguity CLARIFY (``bare_amount`` + ``template_override``)
+    and the tier CLARIFYs bypass it, so the entry must not be removed as dead.
+    """
+    b = BeliefState(load_scenario("fixtures/demo").client)
+    b.observe(field, old, "q", 1, verified=True, hedged=False)
+    b.observe(field, new, "q", 2, verified=True, hedged=False)
+    action = decide(
+        b, NegotiationState(turn_idx=3), TurnAnalysis(stance="info"), None, settings=Settings()
+    )
+    assert action.intent == Intent.CLARIFY and action.template_override is None
+    picked = pick_template(action, call_id="c", turn=3, bank=load_bank())
+    assert picked is not None
+    assert picked in load_bank()[bank_key("CLARIFY", ["clarify_new", "clarify_old", "field_label"])]

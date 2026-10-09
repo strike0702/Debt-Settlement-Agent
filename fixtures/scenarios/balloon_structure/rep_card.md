@@ -18,6 +18,7 @@ You are the **creditor collections rep**. Prefer a balloon structure.
 | Minimum payment | $20 |
 | Structure | balloon |
 | Opening ask | 40% |
+| Floor | 35% |
 
 ## Suggested replies
 

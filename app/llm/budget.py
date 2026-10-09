@@ -8,10 +8,14 @@ restart does not reset the day's spend. Money is integer micro-dollars
 
 It does not route or call anything. ``app.llm.client.LLMClient`` asks
 ``exhausted()`` before a route target marked ``budgeted: true`` (only the demo
-``nlu`` route's Anthropic target) and calls ``record()`` after that target
-answers live. Failed or timed-out attempts and cache hits are not recorded.
-If the table cannot be read the budget counts as exhausted (fail closed: the
-call falls back to the free chain, it is never blocked).
+``nlu`` route's Anthropic target). Phase 47: just before the live request it
+``reserve()``s an upper-bound estimate in one atomic UPDATE, so concurrent calls
+can overshoot the cap by at most one reservation; afterwards it ``settle()``s
+the reservation to the actual usage, or ``release()``s it when the attempt was
+not billed. A timed-out attempt is settled at the prompt-token estimate
+(conservative: the provider may bill a request we never saw finish). Cache hits
+are not recorded. If the table cannot be read the budget counts as exhausted
+(fail closed: the call falls back to the free chain, it is never blocked).
 """
 
 from __future__ import annotations
@@ -67,6 +71,14 @@ class ModelPrice:
             + output_tokens * self.output_micros_per_mtok
         )
         return -(-num // _TOKENS_PER_MTOK)
+
+
+@dataclass(frozen=True)
+class BudgetReservation:
+    """Micro-dollars held against ``day`` until settled or released."""
+
+    day: str
+    micros: int
 
 
 def utc_now() -> datetime:
@@ -153,6 +165,72 @@ class DailyBudget:
         except sqlite3.Error as e:
             _log.warning("LLM budget spend not recorded (%s)", e)
         return cost
+
+    def reserve(self, micros: int) -> BudgetReservation | None:
+        """Hold ``micros`` against today if spend (reservations included) is under the limit.
+
+        One conditional UPDATE, so two callers (tasks or processes) cannot both
+        pass a check the first one's hold would have failed: the cap is exceeded
+        by at most one reservation. None means skip the target (also when the
+        table cannot be written: fail closed).
+        """
+        d = self.today().isoformat()
+        try:
+            conn = self._db()
+            conn.execute("INSERT OR IGNORE INTO llm_daily_spend (day) VALUES (?)", (d,))
+            cur = conn.execute(
+                "UPDATE llm_daily_spend SET spent_micros = spent_micros + ? "
+                "WHERE day = ? AND spent_micros < ?",
+                (micros, d, self.limit_micros),
+            )
+            conn.commit()
+        except sqlite3.Error as e:
+            _log.warning("LLM budget reservation failed (%s); skipping budgeted target", e)
+            return None
+        return BudgetReservation(d, micros) if cur.rowcount == 1 else None
+
+    def settle(
+        self,
+        reservation: BudgetReservation,
+        price: ModelPrice,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> int:
+        """Replace a reservation with the call's actual cost; returns that cost.
+
+        Charged to the reservation's day, so a call that straddles 00:00 UTC
+        does not leave a hold behind on the old day.
+        """
+        cost = price.cost_micros(input_tokens, output_tokens)
+        try:
+            conn = self._db()
+            conn.execute(
+                """
+                UPDATE llm_daily_spend SET
+                    spent_micros = spent_micros + ?,
+                    calls = calls + 1,
+                    input_tokens = input_tokens + ?,
+                    output_tokens = output_tokens + ?
+                WHERE day = ?
+                """,
+                (cost - reservation.micros, input_tokens, output_tokens, reservation.day),
+            )
+            conn.commit()
+        except sqlite3.Error as e:
+            _log.warning("LLM budget spend not reconciled (%s)", e)
+        return cost
+
+    def release(self, reservation: BudgetReservation) -> None:
+        """Drop a reservation for an attempt that was not billed."""
+        try:
+            conn = self._db()
+            conn.execute(
+                "UPDATE llm_daily_spend SET spent_micros = spent_micros - ? WHERE day = ?",
+                (reservation.micros, reservation.day),
+            )
+            conn.commit()
+        except sqlite3.Error as e:
+            _log.warning("LLM budget reservation not released (%s)", e)
 
     def note_exhausted(self) -> bool:
         """Mark today as exhausted; True only the first time per day (persisted)."""

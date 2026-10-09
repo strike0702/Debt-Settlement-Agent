@@ -51,7 +51,7 @@ _INTENT_INSTRUCTION: dict[Intent, str] = {
     ),
     Intent.ASK_SETTLEMENT: "Ask what settlement percentage of the balance they want.",
     Intent.READ_BACK: (
-        "Confirm the tentative {field_label} using {readback_value}."
+        "Ask the rep to confirm {readback_value} for the {field_label}."
     ),
     Intent.CLARIFY: "Ask which of {clarify_old} or {clarify_new} is correct.",
     Intent.REFUSE_PRIVATE: "Refuse to share client private financials.",

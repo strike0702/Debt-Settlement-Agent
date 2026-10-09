@@ -10,11 +10,19 @@ Phase 45 labels follow the deal-or-handoff policy: a deal is possible
 line (``app.domain.negotiation.accept_line_bp`` of the true ceiling, 75%
 rounded down). Every other case (rescue, no_fix) expects a handoff
 (``should_escalate``), as does the pressuring persona.
+
+Phase 46a: ``generate`` also gives each scenario a haggle style
+(``sim.haggle``) from its own ``Random(f"haggle:{seed}:{index}")``, so the
+main sampler is untouched. A holder / stepper deal moves its floor to 80–92%
+of min(opening ask, accept line), i.e. between the agent's first counter
+(70% of that) and the line; a holder / stepper no-fix call opens 10–25 points
+above its floor. Labels are recomputed and must not change stratum
+(``apply_haggle``).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from random import Random
 from typing import Literal
@@ -30,6 +38,7 @@ from feasibility.models import (
     add_months,
     end_of_month,
 )
+from sim.haggle import EASY, Haggle, pick_haggle
 from sim.personas import PERSONAS, PersonaName
 
 Stratum = Literal["deal", "rescue", "no_fix"]
@@ -76,6 +85,7 @@ class Scenario:
     rescue_within_guardrail: bool
     should_escalate: bool
     stratum: Stratum
+    haggle: Haggle = EASY
 
 
 def to_creditor_rules(
@@ -496,13 +506,69 @@ def generate(n: int, seed: int) -> list[Scenario]:
                 should_escalate=sc.should_escalate,
                 stratum=sc.stratum,
             )
-            out.append(sc)
+            out.append(apply_haggle(sc, seed=seed, index=len(out)))
             counts[stratum] += 1
 
     for s, t in targets.items():
         if t > 0 and counts[s] == 0:
             raise RuntimeError(f"stratum {s} missing after generate({n}, {seed})")
     return out
+
+
+# Haggling deal floors sit at this share (bp) of min(opening ask, accept line):
+# above the agent's anchor (``anchor_ratio`` 0.7 of the same) and below the line.
+_HAGGLE_FLOOR_LO_BP = 8000
+_HAGGLE_FLOOR_HI_BP = 9200
+# Keep at least this much room between a moved floor and the opening ask.
+_HAGGLE_MIN_ROOM_BP = 600
+
+
+def apply_haggle(sc: Scenario, *, seed: int, index: int) -> Scenario:
+    """Give ``generate(…, seed)[index]`` its haggle style, reshaping floor / ask to fit.
+
+    Deterministic per (seed, index) and independent of the main sampler. Falls
+    back to ``EASY`` (scenario unchanged) when the style cannot apply: an
+    infeasible no-fix call, no feasible floor in the band, or a reshape that
+    would change the stratum.
+    """
+    rng = Random(f"haggle:{seed}:{index}")
+    haggle = pick_haggle(rng, stratum=sc.stratum, persona=sc.persona)
+    if haggle.style == "easy" or sc.true_max_bp is None:
+        return sc
+    if haggle.style == "staller":
+        return replace(sc, haggle=haggle)
+    floor, opening = sc.floor_bp, sc.opening_ask_bp
+    if sc.stratum == "deal":
+        line = accept_line_bp(sc.true_max_bp)
+        top = min(opening, line)
+        lo = top * _HAGGLE_FLOOR_LO_BP // 10000
+        hi = top * _HAGGLE_FLOOR_HI_BP // 10000
+        band = [bp for bp in sc.feasible_bps if lo <= bp <= min(hi, line)]
+        if not band:
+            return sc
+        floor = rng.choice(band)
+        if opening - floor < _HAGGLE_MIN_ROOM_BP:
+            opening = min(8500, floor + 2 * _HAGGLE_MIN_ROOM_BP)
+    else:
+        opening = min(8500, floor + rng.choice((1000, 1500, 2000, 2500)))
+    if opening <= floor:
+        return sc
+    true_max, feasible, zopa, rescue_ok, should_esc, stratum = _classify(
+        sc.call, sc.true_rules, opening, floor, sc.persona
+    )
+    if stratum != sc.stratum:
+        return sc
+    return replace(
+        sc,
+        opening_ask_bp=opening,
+        floor_bp=floor,
+        true_max_bp=true_max,
+        feasible_bps=feasible,
+        zopa=zopa,
+        rescue_within_guardrail=rescue_ok,
+        should_escalate=should_esc,
+        haggle=haggle,
+    )
 
 
 def stratum_counts(scenarios: list[Scenario]) -> dict[Stratum, int]:

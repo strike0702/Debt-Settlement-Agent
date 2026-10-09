@@ -203,7 +203,7 @@ who kept repeating themselves could keep the agent asking the same question.
 - *They say it is final.* Above the line: a person takes over at once. At or
   below the line: one last offer halfway between our last offer and their
   number, and if they repeat their number we accept it.
-- *Cap.* After `max_counters` (4) spoken counteroffers, holds included, we
+- *Cap.* After `max_counters` (6; 4 before Phase 46a) spoken counteroffers, holds included, we
   accept if their number is at or below the line, else hand off.
 - *Endings.* A call ends only as a confirmed deal or a handoff. Every former
   no-deal ending is now a handoff with a short spoken reason and a reason code
@@ -219,10 +219,12 @@ who kept repeating themselves could keep the agent asking the same question.
 unchanged (23 deals, surplus 0.689) and the 22 no-fix calls now hand off instead
 of ending; no-fix calls are shorter (138 rep turns against 189) and speak fewer
 counters (44 against 95 over the run)
-([policy eval](eval/policy_eval_20261009/summary.md)). The simulated rep accepts
-any counter at or above its floor and drops 5 points per counter, so the hold,
-step and final-counter moves are covered by unit and end-to-end tests rather
-than by the eval. Deals above 75% of the ceiling, which the old policy could
+([policy eval](eval/policy_eval_20261009/summary.md)). Since Phase 46a a
+quarter of the simulated reps haggle (hold their number, concede in varied
+steps, go firm at a floor between our first counter and the line, or stall),
+so the eval exercises every ladder branch: hold, quarter step, half-move
+concession, final counter, accept on repeat, the cap (now 6) and both loop
+guards ([46a eval](eval/policy_eval_20261009_46a/summary.md)). Deals above 75% of the ceiling, which the old policy could
 reach, are now handed to a person. The scenario labels follow the same line:
 a deal is "possible" only when the rep's floor is at or below it.
 

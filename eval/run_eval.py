@@ -8,7 +8,9 @@ CLI: ``python -m eval.run_eval --scenarios 12 --seed 7 [--resume RUN_ID]
 Two layers:
 - ``--nlu oracle``: offline policy eval. Sim ground-truth ``TurnAnalysis``
   replaces NLU, ``offline`` profile (FakeLLM), no network or API keys;
-  requires template NLG and template sim phrasing.
+  requires template (or bank) NLG. With ``--sim-phrasing llm`` (Phase 46a
+  smoke of the sim's rewrite check) ``--profile`` is kept, but only the sim
+  role calls a model: the agent still makes no LLM call.
 - ``--nlu llm`` (default): live NLU. By default sim disposition flags are
   overlaid on the LLM result; ``--no-oracle-overlay`` turns that off.
 
@@ -32,7 +34,10 @@ Writes ``eval/results/<run_id>/<scenario_id>.json`` as each finishes; resume
 skips completed ``status=ok`` files and retries ``skipped_quota``. ``run.json``
 records models, call share, seed, git sha, settings. Each scenario's LLM calls
 (agent and sim) land in that scenario's audit db via ``llm_call_scope``. Exits
-non-zero when ``eval/thresholds.yaml`` fails. Does not import voice/UI code.
+non-zero when ``eval/thresholds.yaml`` fails. Per-call results also carry the
+rep's haggle style, ``ladder_branches`` (from the audit) and ``sim_rewrite``
+(LLM rewrite attempts and draft fallbacks by reason); both are summarised,
+informational only. Does not import voice/UI code.
 """
 
 from __future__ import annotations
@@ -64,6 +69,7 @@ from eval.agents.arm_metrics import arm_metrics
 from eval.metrics import (
     aggregate,
     check_thresholds,
+    ladder_branches,
     load_scenario_results,
     load_thresholds,
     write_summaries,
@@ -431,6 +437,7 @@ async def run_one_scenario(
 
     events = audit.for_call(session.call_id)
     guard_blocks = sum(1 for ev in events if ev.get("type") == "blocked")
+    branches = ladder_branches(events)
     audit.close()
 
     truth = creditor.agreed_rules
@@ -504,6 +511,9 @@ async def run_one_scenario(
         "turns_to_outcome": creditor_turns,
         "hit_max_turns": hit_max_turns,
         "final_reason": action.reason,
+        "haggle": scenario.haggle.style,
+        "ladder_branches": branches,
+        "sim_rewrite": creditor.rewrite_stats,
         "agent": agent,
         "transcript": transcript,
         "llm_calls_per_turn": llm_calls_per_turn,
@@ -581,7 +591,8 @@ async def _async_main(args: argparse.Namespace) -> int:
     # Oracle NLU is the offline policy layer: FakeLLM, no network. The LLM arms
     # still need a real model for their moves, so they keep --profile.
     policy_arm = agent in ("policy", "policy_h3")
-    profile = "offline" if nlu == "oracle" and policy_arm else args.profile
+    offline = nlu == "oracle" and policy_arm and sim_phrasing == "template"
+    profile = "offline" if offline else args.profile
 
     run_id = args.resume or _new_run_id(seed)
     run_dir = RESULTS_ROOT / run_id
@@ -666,6 +677,8 @@ async def _async_main(args: argparse.Namespace) -> int:
         "providers": str(providers),
         "call_counts": dict(call_counts),
         "call_share": call_share,
+        # Informational (no threshold): sim LLM rewrites replaced by the draft.
+        "sim_rewrite_fallbacks": summary["sim_rewrite_fallbacks"],
     }
     (run_dir / "run.json").write_text(
         json.dumps(run_meta, indent=2, default=str) + "\n", encoding="utf-8"
@@ -746,8 +759,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
     if args.nlu == "oracle":
-        if args.nlg == "llm" or args.sim_phrasing != "template":
-            p.error("--nlu oracle requires --nlg template|bank --sim-phrasing template")
+        if args.nlg == "llm":
+            p.error("--nlu oracle requires --nlg template|bank")
         if not args.oracle_overlay:
             p.error("--no-oracle-overlay applies to --nlu llm only")
     return asyncio.run(_async_main(args))

@@ -15,6 +15,11 @@ they end in a handoff with a price / feasibility reason
 (``NO_DEAL_HANDOFF_REASONS``) and no deal. ``escalation_correct`` counts every
 ``should_escalate`` call, which now includes no_fix and above-the-line floors.
 
+Phase 46a adds two informational blocks (no threshold): ``ladder_branches``,
+how often each price-ladder branch fired, counted from the audit's
+``policy/decide`` events (``ladder_branches``); and ``sim_rewrite_fallbacks``,
+how often the sim's LLM rewrite was dropped for the code-built draft, by reason.
+
 Every rate ships with ``<rate>_n`` and a 95% Wilson interval ``<rate>_ci95``.
 Rule-field rates pool 7 fields per call, so their interval is optimistic
 (fields within a call are correlated). Does not run scenarios — that is
@@ -45,6 +50,85 @@ NO_DEAL_HANDOFF_REASONS: frozenset[str] = frozenset(
         "confirm_unacked",
     }
 )
+
+# Price-ladder branches (Phase 45 policy), in report order. Counted per agent
+# move from ``policy/decide`` audit events; see ``ladder_branches``.
+LADDER_BRANCHES: tuple[str, ...] = (
+    "anchor",
+    "hold",
+    "quarter_step",
+    "concede_half",
+    "reanchor_after_term_change",
+    "final_counter",
+    "our_counter_accepted",
+    "accept_on_repeat",
+    "accept_after_holds",
+    "counters_exhausted",
+    "above_accept_line",
+    "max_counters_handoff",
+    "loop_guard_repeated_question",
+    "loop_guard_no_progress",
+    "loop_guard_max_turns",
+)
+# (intent, reason) → branch, for moves whose reason names the branch.
+_BRANCH_BY_REASON: dict[tuple[str, str], str] = {
+    ("COUNTER", "hold"): "hold",
+    ("COUNTER", "step"): "quarter_step",
+    ("COUNTER", "final_counter"): "final_counter",
+    ("CONFIRM_SCHEDULE", "rep_firm"): "accept_on_repeat",
+    ("CONFIRM_SCHEDULE", "rep_held"): "accept_after_holds",
+    ("CONFIRM_SCHEDULE", "counters_exhausted"): "counters_exhausted",
+    ("ESCALATE", "above_accept_line"): "above_accept_line",
+    ("ESCALATE", "max_counters"): "max_counters_handoff",
+    ("ESCALATE", "repeated_question"): "loop_guard_repeated_question",
+    ("ESCALATE", "no_progress"): "loop_guard_no_progress",
+    ("ESCALATE", "max_turns"): "loop_guard_max_turns",
+}
+
+
+def ladder_branches(events: list[dict[str, Any]]) -> dict[str, int]:
+    """Count price-ladder branches in one call's audit events (every key, zeros kept).
+
+    A ``COUNTER`` whose reason is ``bp=…`` is the anchor when it is the call's
+    first counter, a re-anchor when the rep just accepted a term change
+    (``belief/accept_terms_alt`` since the last decide), else the half-move
+    concession. A ``CONFIRM_SCHEDULE`` with reason ``bp=…`` after a counter is
+    counted once as ``our_counter_accepted`` (the rep took our number; a later
+    re-confirm of the same schedule is not counted again).
+    """
+    out = dict.fromkeys(LADDER_BRANCHES, 0)
+    countered = False
+    confirmed = False
+    term_change = False
+    for ev in events:
+        etype = ev.get("type")
+        if etype == "accept_terms_alt":
+            term_change = True
+            continue
+        if etype != "decide":
+            continue
+        payload = ev.get("payload") or {}
+        intent = str(payload.get("intent") or "")
+        reason = str(payload.get("reason") or "")
+        branch = _BRANCH_BY_REASON.get((intent, reason))
+        if intent == "COUNTER":
+            if branch is None and reason.startswith("bp="):
+                if not countered:
+                    branch = "anchor"
+                elif term_change:
+                    branch = "reanchor_after_term_change"
+                else:
+                    branch = "concede_half"
+            countered = True
+        elif intent == "CONFIRM_SCHEDULE" and countered and reason.startswith("bp="):
+            if not confirmed:
+                branch = "our_counter_accepted"
+            confirmed = True
+        term_change = False
+        if branch is not None:
+            out[branch] += 1
+    return out
+
 
 # Rates reported with n + Wilson CI, in summary.md row order.
 RATE_METRICS: tuple[str, ...] = (
@@ -209,6 +293,20 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
     ]
     caps = [int(r["max_counters"]) for r in completed if r.get("max_counters") is not None]
 
+    # --- Phase 46a informational: ladder branches, sim rewrite fallbacks ---
+    branches = dict.fromkeys(LADDER_BRANCHES, 0)
+    for r in completed:
+        for k, v in (r.get("ladder_branches") or {}).items():
+            branches[k] = branches.get(k, 0) + int(v)
+    rw_attempts = 0
+    rw_reasons: dict[str, int] = {}
+    for r in completed:
+        rw = r.get("sim_rewrite") or {}
+        rw_attempts += int(rw.get("attempts", 0))
+        for k, v in (rw.get("fallbacks") or {}).items():
+            rw_reasons[k] = rw_reasons.get(k, 0) + int(v)
+    rw_count = sum(rw_reasons.values())
+
     # --- latency ---
     stages = ("nlu_ms", "policy_ms", "nlg_ms", "server_total_ms")
     latency: dict[str, dict[str, float | None]] = {}
@@ -250,6 +348,13 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
         "turns_to_outcome": _mean(outcome_turns),
         "stuck_calls": stuck,
         **_rate_block("stuck_rate", stuck, len(completed)),
+        "ladder_branches": branches,
+        "sim_rewrite_fallbacks": {
+            "attempts": rw_attempts,
+            "count": rw_count,
+            "rate": _rate(rw_count, rw_attempts),
+            "by_reason": dict(sorted(rw_reasons.items())),
+        },
         "latency": latency,
     }
 
@@ -309,6 +414,22 @@ def render_summary_md(summary: dict[str, Any], *, run_meta: dict[str, Any] | Non
     ]
     for name, val in plain:
         lines.append(f"| {name} | {_fmt(val)} | | |")
+
+    branches = summary.get("ladder_branches") or {}
+    if branches:
+        lines += ["", "## Price ladder branches (agent moves, informational)", ""]
+        lines += ["| branch | count |", "|---|---|"]
+        lines += [f"| {k} | {v} |" for k, v in branches.items()]
+    rw = summary.get("sim_rewrite_fallbacks") or {}
+    if rw:
+        reasons = ", ".join(f"{k}={v}" for k, v in (rw.get("by_reason") or {}).items())
+        lines += [
+            "",
+            "## Sim rewrite fallbacks (informational)",
+            "",
+            f"- {rw.get('count', 0)} of {rw.get('attempts', 0)} LLM rewrites dropped for the "
+            f"draft (rate {_fmt(rw.get('rate'))}); by reason: {reasons or 'none'}",
+        ]
 
     lines += ["", "## Latency (ms)", "", "| stage | p50 | p95 | n |", "|---|---|---|---|"]
     for stage, stats in (summary.get("latency") or {}).items():

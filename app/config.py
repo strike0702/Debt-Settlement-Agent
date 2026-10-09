@@ -130,7 +130,7 @@ class Settings(BaseSettings):
     max_turns: int = 24
     anchor_ratio: float = 0.7
     concession_factor: float = 0.5
-    max_counters: int = 4
+    max_counters: int = 6
     # Phase 45: accept only at or below this share of the client's ceiling
     # (bp of max_bp; 7500 = 75.00%), and never counter above it. Integer math.
     accept_line_pct_of_max_bp: int = Field(default=ACCEPT_LINE_PCT_OF_MAX_BP, ge=0, le=10000)

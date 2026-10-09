@@ -1,7 +1,10 @@
 """Phase 48: curated scenario fixtures and the optional haggle style in ``sim.json``.
 
-- ``haggling_rep`` autoplays the price ladder in order: first offer, hold, and
-  (since Phase 50's equal steps) one step past the rep's floor, which they take.
+- ``haggling_rep`` autoplays the price ladder in order: first offer, hold, one
+  step, then (rep firm at their lowest) a final counter, and the agent accepts
+  the repeat. Phase 50b retuned the fixture so the equal step stays below the
+  floor; a second step cannot show up in a deal (it offers min(ask, line), which
+  a rep whose floor is at or below the line simply takes).
 - Fixtures without ``"haggle"`` keep the easy rep, so they play as before.
 - Card descriptions are plain words (no policy jargon), and every rep card
   whose ``sim.json`` has a floor shows it.
@@ -17,6 +20,7 @@ import pytest
 
 from app.autoplay import load_autoplay_scenario, new_autoplay_call, parse_haggle, run_autoplay
 from app.config import Settings
+from app.domain.negotiation import accept_line_bp
 from app.domain.scenario import (
     SCENARIOS_ROOT,
     load_scenario,
@@ -58,16 +62,21 @@ async def test_haggling_rep_plays_the_whole_ladder(max_counters: int) -> None:
     moves, (result, agreement) = await _ladder(
         "haggling_rep", offline_settings(max_counters=max_counters)
     )
-    # Phase 50: the first equal step (42 → 51, half the gap to their 60) clears
-    # the rep's 50% floor, so they take our offer; no final counter is needed.
+    # Phase 50b: ask 70%, floor 65%. Anchor 49, hold, equal step to 59 (below
+    # the floor), the rep drops to 65 and is firm, final counter halfway (62),
+    # the rep repeats 65 and we take it (at or below the accept line).
     assert moves == [
         ("COUNTER", "anchor"),
         ("COUNTER", "hold"),
         ("COUNTER", "step"),
-        ("CONFIRM_SCHEDULE", "bp=5100"),
+        ("COUNTER", "final_counter"),
+        ("CONFIRM_SCHEDULE", "rep_firm"),
     ]
     assert result.outcome == "deal"  # type: ignore[attr-defined]
-    assert agreement is not None and agreement.bp == 5100  # type: ignore[attr-defined]
+    assert agreement is not None and agreement.bp == 6500  # type: ignore[attr-defined]
+    call = load_scenario(resolve_scenario_dir("haggling_rep"), rebase_to=date(2026, 10, 9))
+    true_max_bp = load_autoplay_scenario("haggling_rep", call).true_max_bp
+    assert true_max_bp is not None and 6500 <= accept_line_bp(true_max_bp)
 
 
 def test_haggling_rep_meta_matches_the_autoplay_outcome(tmp_path: Path) -> None:

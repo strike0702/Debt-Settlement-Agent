@@ -1,8 +1,8 @@
 {
-  "_comment": "Hidden creditor truth for autoplay (app/autoplay.py). Mirrors rep_card.md; never sent to the agent. haggle: sim.haggle.Haggle (holds twice, then drops to the floor).",
+  "_comment": "Hidden creditor truth for autoplay (app/autoplay.py). Mirrors rep_card.md; never sent to the agent. haggle: sim.haggle.Haggle (holds twice, then drops to the floor and stays there).",
   "persona": "flexible",
-  "opening_ask_bp": 6000,
-  "floor_bp": 5000,
+  "opening_ask_bp": 7000,
+  "floor_bp": 6500,
   "haggle": {"style": "holder", "hold_turns": 2, "steps_bp": [1000]},
   "rules": {
     "max_payments": 8,

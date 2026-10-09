@@ -27,20 +27,20 @@ function tr(turn: number, intent: Intent, reason: string | null, bp: number | nu
 describe("ladder moves", () => {
   // anchor → hold → step → (rep firm) final counter → accept on repeat, as haggling_rep plays it.
   const call = [
-    tr(2, "COUNTER", "bp=4200", 4200),
-    tr(3, "COUNTER", "hold", 4200),
-    tr(4, "COUNTER", "step", 4600),
-    tr(5, "COUNTER", "final_counter", 4800),
-    tr(6, "CONFIRM_SCHEDULE", "rep_firm", 5000),
+    tr(2, "COUNTER", "bp=4900", 4900),
+    tr(3, "COUNTER", "hold", 4900),
+    tr(4, "COUNTER", "step", 5900),
+    tr(5, "COUNTER", "final_counter", 6200),
+    tr(6, "CONFIRM_SCHEDULE", "rep_firm", 6500),
   ];
 
   it("names every step of the haggling ladder in plain words", () => {
     expect(call.map((t) => turnTitle(t, call))).toEqual([
-      "Made a first offer of 42%",
-      "Held our offer at 42%",
-      "Took a step up to 46%",
-      "Made a final offer of 48%",
-      "Accepted 50% when they repeated it",
+      "Made a first offer of 49%",
+      "Held our offer at 49%",
+      "Took a step up to 59%",
+      "Made a final offer of 62%",
+      "Accepted 65% when they repeated it",
     ]);
   });
 

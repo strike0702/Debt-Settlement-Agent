@@ -154,7 +154,6 @@ function FixtureApp({ speed }: { speed: number }) {
   const events = useMemo(() => eventsForLens(replay.events, lens), [replay.events, lens]);
   const state = useMemo(() => foldCall(events), [events]);
   const scenario = FIXTURE_SCENARIOS[0]!;
-  const repLines = state.messages.filter((m) => m.role === "creditor").length;
 
   const { start } = replay;
   useEffect(() => start(), [start]);
@@ -178,7 +177,6 @@ function FixtureApp({ speed }: { speed: number }) {
           messages={state.messages}
           mic={isCallOver(state) ? "off" : micFromEvents(events)}
           suggested={scenario.suggested}
-          nextSuggested={replay.playing ? repLines : undefined}
           ended={endedLine(state, lens)}
           emptyHint="Press “Watch a call” to replay a full negotiation."
         />
@@ -304,7 +302,6 @@ function LiveApp() {
   if (catalog.length > 0 && scenario === null) {
     setSelected(catalog.some((s) => s.id === DEFAULT_SCENARIO) ? DEFAULT_SCENARIO : catalog[0]!.id);
   }
-  const repLines = state.messages.filter((m) => m.role === "creditor").length;
   // Debt negotiator: the private brief and client ledger. Creditor rep: the rep's own account and rules (rep-safe).
   const side =
     lens === "operator"
@@ -441,7 +438,6 @@ function LiveApp() {
           messages={state.messages}
           mic={over ? "off" : voice.mic}
           suggested={scenario?.suggested ?? []}
-          nextSuggested={live ? repLines : undefined}
           ended={endedLine(state, lens)}
           onSend={live ? (t) => send(t, scenario?.suggested.includes(t) ? "suggested" : "typed") : undefined}
           onMicToggle={live ? voice.toggleMic : undefined}

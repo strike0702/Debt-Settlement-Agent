@@ -13,7 +13,8 @@ acts that are spoken *before* it, without changing the move:
   info ask is never answered: the policy refuses it first (REFUSE_PRIVATE).
 
 Phase 46b also holds the rep-correction cues: ``is_ack_correction`` (the rep
-corrects a term we just acknowledged, "No, it's six payments") and
+says we misheard a term we just acknowledged, "I said six payments"; since
+Phase 49 a bare "No, it's six" is not enough) and
 ``is_ack_dispute`` ("that's not what I said", no value needed). The
 orchestrator applies them to belief; nothing here touches belief.
 
@@ -155,28 +156,31 @@ def acked_fields(ack: dict[str, Fact]) -> dict[str, Any]:
     return {by_id[fid]: f.value for fid, f in ack.items() if fid in by_id}
 
 
-# The rep corrects a value we just acknowledged, i.e. says we misheard. A leading
-# "no" only counts together with a new value for an acked field (the
-# orchestrator checks that); a bare "no" usually answers our question. "Actually,
-# make that 8" is the rep changing their own term, not our misreading: it keeps
-# the CONTRADICTED → CLARIFY path.
+# The rep corrects a value we just acknowledged, i.e. says we misheard. Only an
+# explicit misreading cue counts (Phase 49, ledger 46c.1): "I said 6", "you
+# misheard", "you heard wrong", "that's not what I said", "no, I said ...". A
+# bare "No, it's 6" / "No, actually make that 6" reads just as well as the rep
+# changing their own term, so it keeps the CONTRADICTED -> CLARIFY path; the
+# orchestrator also needs a new value for an acked field.
 _ACK_CORRECTION_RE = re.compile(
-    r"^\W*(?:no|nope|nah)\b"
-    r"|\bI said\b|\bnot what I said\b|\b(?:you )?misheard\b"
-    r"|\bI (?:did not|didn't|never) say\b|\bthat'?s (?:wrong|not right|incorrect)\b",
+    r"\bI (?:said|told you)\b|\bnot what I (?:said|meant)\b"
+    r"|\b(?:you )?(?:misheard|misunderstood)\b"
+    r"|\byou (?:heard|got) (?:(?:that|it|me) )?wrong\b"
+    r"|\bI (?:did not|didn't|never) say\b",
     re.IGNORECASE,
 )
 # The rep says the ack is wrong without giving the value: specific phrases only,
 # so "that's not right for us" about a price does not reopen terms.
 _ACK_DISPUTE_RE = re.compile(
     r"\bnot what I (?:said|meant)\b|\bI (?:did not|didn't|never) say\b"
-    r"|\byou (?:misheard|misunderstood|got (?:that|it) wrong)\b|\bthat'?s not what I\b",
+    r"|\byou (?:misheard|misunderstood|(?:got|heard) (?:(?:that|it|me) )?wrong)\b"
+    r"|\bthat'?s not what I\b",
     re.IGNORECASE,
 )
 
 
 def is_ack_correction(utterance: str) -> bool:
-    """True when the line is phrased as a correction ("No, it's six payments")."""
+    """True when the line says we misheard ("I said six", "you misheard"); a bare "no" is not."""
     return _ACK_CORRECTION_RE.search(utterance) is not None
 
 

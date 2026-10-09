@@ -9,18 +9,25 @@ Hostility is counted as positive when it reaches the escalation threshold.
 One row is one model: the runner exits 2 without writing a row when a
 fail-over or retry let a second model answer (`--allow-mixed-models` writes it
 anyway and marks it). A Groq `gpt-oss-120b` row needs at least two Groq keys
-from separate organizations (`GROQ_API_KEY_1`, `_2`, ...): one full corpus
-pass is about 230K tokens (about 1.3K per NLU call), above one free-tier
-organization's 200K tokens/day, so one key runs dry near line 157 (Phase 32)
-and the rest of the run would fail over to another model.
+from separate organizations (`GROQ_API_KEY_1`, `_2`, ...): on the Phase 43 NLU
+prompt one full corpus pass is about 357K tokens (about 2.0K per NLU call),
+above one free-tier organization's 200K tokens/day, so two keys (400K/day)
+cover one pass with little margin (Phase 44); with one key the run fails over
+to another model part way through.
 
-Paid targets (Phase 41): the shipped `demo` NLU route starts with Claude Sonnet
-5.5 marked `budgeted: true`. Without `--providers`, the runner drops budgeted
-targets and prints one line saying so, so a default run stays on the free
-chain and spends nothing. `--allow-budgeted` keeps them (and the run then
-counts against the demo's daily budget in the app DB). Approved paid runs use
-an explicit `--providers` file, which is used as is (e.g. the Phase 37 and
-Phase 40 files).
+Paid targets (Phase 41, Phase 43): the shipped `demo` NLU route starts with
+Claude Haiku 5.5 marked `budgeted: true`. Without `--providers`, the runner
+drops budgeted targets and prints one line saying so, so a default run stays
+on the free chain and spends nothing. `--allow-budgeted` keeps them (and the
+run then counts against the demo's daily budget in the app DB). Approved paid
+runs use an explicit `--providers` file, which is used as is (e.g. the Phase
+37, 40 and 43 files).
+
+Rescoring without calls (Phase 49): `--from-records PATH --rescore-guards`
+re-runs the current stance / firm guards, private-info cue and hostility
+floor on a saved run; `--amount-view` scores amounts as the agent acts
+(would it ask "total or per payment?"); `--rules-only` scores the code-side
+rules alone on any labelled file.
 
 ## BEFORE
 
@@ -1551,6 +1558,349 @@ Misses (line ids):
 - terms: hs08, hs09
 - filler false accept: -
 
+## RULES_HELDOUT_P49
+
+- git: `4514600`  profile=`offline`  ref=2026-04-01
+- stance: rules only (empty analysis through post_verify, no LLM); amounts scored as the agent acts (resolve_amounts replayed)
+- lines: 36  skipped (LLM unavailable): 0
+- model share: rules_only=36
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 7 | 7 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| stance=accept | 1 | 0 | 0 | 1 | n/a | 0.000 |
+| stance=reject | 2 | 0 | 0 | 2 | n/a | 0.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.278 |
+| term exact-match (all lines) | 0.861 |
+| term exact-match (lines with terms, n=7) | 0.286 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- stance=accept: FP -; FN hr34
+- stance=reject: FP -; FN hr22, hr24
+- terms: hr12, hr29, hr31, hr32, hr35
+- filler false accept: -
+
+## HAIKU_P43_FIX_P49
+
+- git: `4514600`  profile=`demo`  ref=2026-04-01
+- stance: repaired (repair_stance on, as shipped); rescored from `docs/eval/nlu_corpus_haiku_p43_fix.jsonl`; stance/firm guards, private-info cue and hostility floor re-run with current code; amounts scored as the agent acts (resolve_amounts replayed)
+- lines: 183  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 1 | 0 | 0.971 | 1.000 |
+| demands_commitment | 13 | 13 | 5 | 0 | 0.722 | 1.000 |
+| firm | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 6 | 6 | 4 | 0 | 0.600 | 1.000 |
+| hostility | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| stance=accept | 11 | 11 | 1 | 0 | 0.917 | 1.000 |
+| stance=reject | 9 | 9 | 0 | 0 | 1.000 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.869 |
+| term exact-match (all lines) | 0.978 |
+| term exact-match (lines with terms, n=66) | 0.939 |
+| filler false accepts (n=31) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP n10; FN -
+- demands_commitment: FP n08, i09, a11, x03, k05; FN -
+- wants_to_end: FP x02, e06, e07, e10; FN -
+- stance=accept: FP c11; FN -
+- terms: f16, f17, d04, d11
+- filler false accept: -
+
+## HAIKU_P45_GUARD_P49
+
+- git: `4514600`  profile=`demo`  ref=2026-04-01
+- stance: repaired (repair_stance on, as shipped); rescored from `docs/eval/nlu_corpus_haiku_p45_guard.jsonl`; stance/firm guards, private-info cue and hostility floor re-run with current code; amounts scored as the agent acts (resolve_amounts replayed)
+- lines: 183  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 1 | 0 | 0.971 | 1.000 |
+| demands_commitment | 13 | 13 | 5 | 0 | 0.722 | 1.000 |
+| firm | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 6 | 6 | 4 | 0 | 0.600 | 1.000 |
+| hostility | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| stance=accept | 11 | 11 | 1 | 0 | 0.917 | 1.000 |
+| stance=reject | 9 | 9 | 0 | 0 | 1.000 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.869 |
+| term exact-match (all lines) | 0.978 |
+| term exact-match (lines with terms, n=66) | 0.939 |
+| filler false accepts (n=31) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP n10; FN -
+- demands_commitment: FP n08, i09, a11, x03, k05; FN -
+- wants_to_end: FP x02, e06, e07, e10; FN -
+- stance=accept: FP c11; FN -
+- terms: f16, f17, d04, d11
+- filler false accept: -
+
+## GROQ_P44_P49
+
+- git: `4514600`  profile=`demo`  ref=2026-04-01
+- stance: repaired (repair_stance on, as shipped); rescored from `docs/eval/nlu_corpus_groq_p44.jsonl`; stance/firm guards, private-info cue and hostility floor re-run with current code; amounts scored as the agent acts (resolve_amounts replayed)
+- lines: 183  skipped (LLM unavailable): 0
+- model share: groq/openai/gpt-oss-120b=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 13 | 11 | 1 | 2 | 0.917 | 0.846 |
+| firm | 6 | 6 | 3 | 0 | 0.667 | 1.000 |
+| wants_to_end | 6 | 6 | 7 | 0 | 0.462 | 1.000 |
+| hostility | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| stance=accept | 11 | 11 | 1 | 0 | 0.917 | 1.000 |
+| stance=reject | 9 | 8 | 0 | 1 | 1.000 | 0.889 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.885 |
+| term exact-match (all lines) | 0.973 |
+| term exact-match (lines with terms, n=66) | 0.939 |
+| filler false accepts (n=31) | 1 |
+
+Misses (line ids):
+
+- demands_commitment: FP k05; FN c09, c10
+- firm: FP i10, t12, k05; FN -
+- wants_to_end: FP c05, c06, i07, x02, e06, e07, e10; FN -
+- stance=accept: FP f23; FN -
+- stance=reject: FP -; FN a10
+- terms: f01, f16, f17, d04, k05
+- filler false accept: f23
+
+## CEREBRAS_P44_P49
+
+- git: `4514600`  profile=`demo`  ref=2026-04-01
+- stance: repaired (repair_stance on, as shipped); rescored from `docs/eval/nlu_corpus_cerebras_p44.jsonl`; stance/firm guards, private-info cue and hostility floor re-run with current code; amounts scored as the agent acts (resolve_amounts replayed)
+- lines: 183  skipped (LLM unavailable): 0
+- model share: cerebras/gpt-oss-120b=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 13 | 10 | 1 | 3 | 0.909 | 0.769 |
+| firm | 6 | 5 | 1 | 1 | 0.833 | 0.833 |
+| wants_to_end | 6 | 6 | 6 | 0 | 0.500 | 1.000 |
+| hostility | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| stance=accept | 11 | 11 | 0 | 0 | 1.000 | 1.000 |
+| stance=reject | 9 | 8 | 0 | 1 | 1.000 | 0.889 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.891 |
+| term exact-match (all lines) | 0.978 |
+| term exact-match (lines with terms, n=66) | 0.939 |
+| filler false accepts (n=31) | 0 |
+
+Misses (line ids):
+
+- demands_commitment: FP k05; FN c09, c10, c11
+- firm: FP i10; FN n13
+- wants_to_end: FP c06, i07, x02, e06, e07, e10; FN -
+- stance=reject: FP -; FN a10
+- terms: f01, f16, f17, d04
+- filler false accept: -
+
+## AMOUNTS_HAIKU_P43_FIX_P49
+
+- git: `4514600`  profile=`demo`  ref=2026-04-01
+- stance: repaired (repair_stance on, as shipped); rescored from `docs/eval/nlu_corpus_amounts_haiku_p43_fix.jsonl`; stance/firm guards, private-info cue and hostility floor re-run with current code; amounts scored as the agent acts (resolve_amounts replayed)
+- lines: 14  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=14
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.429 |
+| term exact-match (all lines) | 1.000 |
+| term exact-match (lines with terms, n=13) | 1.000 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- terms: -
+- filler false accept: -
+
+## AMOUNTS_GROQ_P44_P49
+
+- git: `4514600`  profile=`demo`  ref=2026-04-01
+- stance: repaired (repair_stance on, as shipped); rescored from `docs/eval/nlu_corpus_amounts_groq_p44.jsonl`; stance/firm guards, private-info cue and hostility floor re-run with current code; amounts scored as the agent acts (resolve_amounts replayed)
+- lines: 14  skipped (LLM unavailable): 0
+- model share: groq/openai/gpt-oss-120b=14
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 1 | 0 | 0.000 | n/a |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.357 |
+| term exact-match (all lines) | 1.000 |
+| term exact-match (lines with terms, n=13) | 1.000 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- firm: FP am09; FN -
+- terms: -
+- filler false accept: -
+
+## AMOUNTS_CEREBRAS_P44_P49
+
+- git: `4514600`  profile=`demo`  ref=2026-04-01
+- stance: repaired (repair_stance on, as shipped); rescored from `docs/eval/nlu_corpus_amounts_cerebras_p44.jsonl`; stance/firm guards, private-info cue and hostility floor re-run with current code; amounts scored as the agent acts (resolve_amounts replayed)
+- lines: 14  skipped (LLM unavailable): 0
+- model share: cerebras/gpt-oss-120b=14
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 1 | 0 | 0.000 | n/a |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.357 |
+| term exact-match (all lines) | 1.000 |
+| term exact-match (lines with terms, n=13) | 1.000 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- firm: FP am09; FN -
+- terms: -
+- filler false accept: -
+
+## HELDOUT_STANCE_GROQ_P44_P49
+
+- git: `4514600`  profile=`demo`  ref=2026-04-01
+- stance: repaired (repair_stance on, as shipped); rescored from `docs/eval/nlu_corpus_heldout_stance_groq_p44.jsonl`; stance/firm guards, private-info cue and hostility floor re-run with current code; amounts scored as the agent acts (resolve_amounts replayed)
+- lines: 32  skipped (LLM unavailable): 0
+- model share: groq/openai/gpt-oss-120b=32
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 6 | 5 | 0 | 1 | 1.000 | 0.833 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.969 |
+| term exact-match (all lines) | 0.938 |
+| term exact-match (lines with terms, n=16) | 0.875 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP -; FN hs28
+- terms: hs08, hs09
+- filler false accept: -
+
+## HELDOUT_STANCE_CEREBRAS_P44_P49
+
+- git: `4514600`  profile=`demo`  ref=2026-04-01
+- stance: repaired (repair_stance on, as shipped); rescored from `docs/eval/nlu_corpus_heldout_stance_cerebras_p44.jsonl`; stance/firm guards, private-info cue and hostility floor re-run with current code; amounts scored as the agent acts (resolve_amounts replayed)
+- lines: 32  skipped (LLM unavailable): 0
+- model share: cerebras/gpt-oss-120b=32
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 6 | 5 | 0 | 1 | 1.000 | 0.833 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.938 |
+| term exact-match (all lines) | 0.938 |
+| term exact-match (lines with terms, n=16) | 0.875 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP -; FN hs28
+- terms: hs08, hs09
+- filler false accept: -
+
+## HELDOUT_STANCE_HAIKU_P45_GUARD_P49
+
+- git: `4514600`  profile=`demo`  ref=2026-04-01
+- stance: repaired (repair_stance on, as shipped); rescored from `docs/eval/nlu_corpus_heldout_stance_haiku_p45_guard.jsonl`; stance/firm guards, private-info cue and hostility floor re-run with current code; amounts scored as the agent acts (resolve_amounts replayed)
+- lines: 32  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=32
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 5 | 4 | 0 | 1 | 1.000 | 0.800 |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.969 |
+| term exact-match (all lines) | 0.969 |
+| term exact-match (lines with terms, n=16) | 0.938 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- wants_to_end: FP -; FN hs20
+- terms: hs08
+- filler false accept: -
+
 ## Notes
 
 - Both runs used the same model and prompt (Groq `gpt-oss-120b`, temperature 0).
@@ -1947,3 +2297,22 @@ starts with Haiku 5.5.
   (hs28).
 - Latency p50 702 ms / p95 1132 ms (all 225 live calls), all request time
   (`queue_ms` 0).
+
+### Phase 49: code-side reading rules, rescored without calls (2026-10-09)
+
+- Rows `*_P49` rescore saved runs (`HAIKU_P43_FIX`, `HAIKU_P45_GUARD`,
+  `GROQ_P44`, `CEREBRAS_P44`, their amounts and held-out stance rows) with
+  `--from-records --rescore-guards --amount-view`. They make no LLM call. The
+  `git` field shows `4514600`, the held-out commit. The rules were in the
+  working tree then and land in the Phase 49 commit. `RULES_HELDOUT_P49`
+  is `--rules-only --amount-view` on the new `tests/nlu_corpus_rules_heldout.jsonl`
+  (36 lines, committed before the rules).
+- `--amount-view` scores amounts as the agent acts (replayed
+  `resolve_amounts`), so amount rows are not comparable to NLU-only rows.
+- Main corpus: hostility recall 0.400 / 0.200 / 0.000 → 1.000 for Haiku /
+  Groq / Cerebras; Cerebras private-info recall 0.882 → 1.000 (p05, p11, p14,
+  p18). No new FP, and stance is unchanged on every row.
+- Amounts: am10 is now asked for Groq and Cerebras (`bare_amount`); Cerebras
+  n06 is no longer asked (balance statement). Rules alone on the held-out set:
+  private 7/7, hostility 6/6, bare amount 2/3 (miss hr29), 0 FP.
+  Write-up: `docs/eval/nlu_rules_20261009/summary.md`.

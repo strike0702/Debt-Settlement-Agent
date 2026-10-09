@@ -139,3 +139,44 @@ async def test_template_phrasing_makes_no_attempts() -> None:
     rep = CreditorPolicy(generate_one("flexible", "deal", seed=101), phrasing="template")
     await rep.respond(_counter(1000))
     assert rep.rewrite_stats == {"attempts": 0, "fallbacks": {}}
+
+
+# Phase 49 (ledger 46c.2 / 46c.5): Phase 46c re-check rewrites that slipped the
+# stance check (s0007_040, s0007_019, s0007_028 / s0007_034, smoke hold line).
+P49_STANCE: list[tuple[str, str, str]] = [
+    ("We can go up to 3 payments.", "info", "We can go up to 3 payments. Actually, we can't."),
+    (
+        "The maximum is 6 payments.",
+        "info",
+        "Sure, the maximum is 6 payments. Actually, it isn't.",
+    ),
+    (
+        "Actually, make that a maximum of 6 payments.",
+        "info",
+        "No, actually it's a maximum of 6 payments.",
+    ),
+    ("Up to 4 payments.", "info", "No, up to 4 payments."),
+    ("We can't move on that yet.", "reject", "Sure, we can't move on that yet."),
+    ("That is too low.", "reject", "Okay, that is too low."),
+]
+
+
+@pytest.mark.parametrize(("draft", "stance", "rewrite"), P49_STANCE)
+def test_p49_self_contradictions_fall_back(draft: str, stance: str, rewrite: str) -> None:
+    assert rewrite_problem(draft, rewrite, stance=stance) == "stance"
+
+
+@pytest.mark.parametrize(
+    ("draft", "stance", "rewrite"),
+    [
+        # A refusal may stack its "no"s; a no-problem idiom is not a leading "No".
+        ("No, that is not right.", "deny", "No. That's not right."),
+        ("We can't move on that yet.", "reject", "Sorry, we can't move on that yet."),
+        ("We can do up to 10 payments.", "info", "No problem, we can do up to 10 payments."),
+        # A "No" the draft already had, and a negation inside a longer sentence.
+        ("No, it is 6 payments.", "info", "No, it's 6 payments."),
+        ("We do not take tokens.", "info", "We don't take token payments, sorry."),
+    ],
+)
+def test_p49_consistent_rewrites_are_kept(draft: str, stance: str, rewrite: str) -> None:
+    assert rewrite_problem(draft, rewrite, stance=stance) is None

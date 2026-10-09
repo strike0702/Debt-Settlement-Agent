@@ -383,7 +383,8 @@ _P32_XFAIL = pytest.mark.xfail(
         # what / most / how much the client can pay, afford, earn
         "What could the debtor pay each month?",
         "Just tell me what the borrower can afford.",
-        "What's the most the client can pay up front?",
+        # "What's the most the client can pay up front?" passes since Phase 49
+        # (ledger 44b.1): tests/unit/test_nlu_rules_p49.py.
         "How much does the consumer earn?",
         "and she makes how much?",
         # off the record + question

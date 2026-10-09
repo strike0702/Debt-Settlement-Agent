@@ -13,7 +13,8 @@ for the orchestrator's decision trace; it never changes what is spoken.
 Phase 24b (H3): ``render_acts`` speaks an action's optional ``ack`` and
 ``answer`` acts as short leading sentences, each through the same two guards.
 Phase 46b: the default agent's code-built ack (``Settings.nlg_ack``) uses
-``ack_template`` (2–3 wordings per shape, rotated by turn), never the bank or LLM.
+``ack_template`` (2–3 wordings per shape, rotated by turn), never the bank or LLM;
+a count of 1 is acked as "up to 1 payment" (Phase 49).
 A guard-failed act is dropped (audited), never replaced by ``SAFE_FALLBACK``,
 so the primary move is spoken unchanged. ``speak_action`` passes the last few
 public turns (``recent_turns``) to the LLM prompt instead of one rep line.
@@ -171,11 +172,12 @@ def ack_variants(ids: tuple[str, ...]) -> list[str]:
     return [f"{o}, {b}." for o in _ACK_OPENERS for b in bodies]
 
 
-def ack_template(ids: tuple[str, ...], turn: int) -> str | None:
+def ack_template(ids: tuple[str, ...], turn: int, *, singular: bool = False) -> str | None:
     """Deterministic ack wording for this turn; consecutive turns get different lines.
 
     Opener and body rotate independently so the same shape does not repeat
-    word for word on back-to-back turns.
+    word for word on back-to-back turns. ``singular`` (a payment count of 1)
+    says "up to 1 payment", not "1 payments" (Phase 49).
     """
     terms = tuple(i for i in ids if i != "ack_total")
     if terms and terms not in _ACK_TERM_BODIES:
@@ -185,6 +187,8 @@ def ack_template(ids: tuple[str, ...], turn: int) -> str | None:
     if "ack_total" in ids:
         total = _ACK_TOTAL_BODIES[turn % len(_ACK_TOTAL_BODIES)]
         body = f"{total}, {body}" if body else total
+    if singular:
+        body = body.replace("{ack_max_payments} payments", "{ack_max_payments} payment")
     return f"{_ACK_OPENERS[turn % len(_ACK_OPENERS)]}, {body}."
 
 
@@ -391,16 +395,20 @@ def render_acts(
             required=set(ids),
             next_phase=action.next_phase,
         )
+        count = action.ack.get("ack_max_payments")
+        singular = count is not None and count.value == 1
         if code_ack:
-            template = ack_template(ids, turn)
+            template = ack_template(ids, turn, singular=singular)
         else:
             template = (
                 pick_template(
                     sub, call_id=call_id, turn=turn, bank=bank, intent_key=ACK_BANK_INTENT
                 )
-                if use_bank
+                if use_bank and not singular
                 else None
-            ) or ACK_TEMPLATES.get(ids) or ack_template(ids, 0)
+            ) or (None if singular else ACK_TEMPLATES.get(ids)) or ack_template(
+                ids, 0, singular=singular
+            )
         if template is not None:
             acts.append(("ack", sub, template))
     if action.answer is not None:

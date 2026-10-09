@@ -10,6 +10,9 @@ ask (that one is refused, not answered). ``NLU_MODE=oracle`` skips the LLM and u
 a caller-supplied ``TurnAnalysis`` (sim/tests). Rejected terms are audited and
 also kept on ``VerifiedAnalysis.dropped`` for the decision trace. Does not
 update belief — that is the orchestrator's job via ``BeliefState.observe``.
+Phase 49 code-side rules apply whatever the model returned: wider private-info
+cues, a hostility floor for clear insults / threats, no amount question on a
+balance statement, and the question for a bare demanded amount.
 """
 
 from __future__ import annotations
@@ -791,6 +794,36 @@ _PRIVATE_INFO_RE = re.compile(
     r"|\b(?:bank balance|monthly income|social security|ssn|routing number)\b"
     r"|\bdraft amount\b"
     r"|\bwhat (?:is|are) (?:the )?client\b"
+    # Phase 49 (ledger 44b.1): money held for the client (escrow / program /
+    # dedicated / savings account), "the most they could pay", SSN digits.
+    # The creditor's own account ("this account", "the account number for this
+    # debt") and the balance owed never match.
+    r"|\bescrow\b"
+    r"|\b(?:dedicated|settlement|program|savings|checking|trust|special[- ]purpose)\s+account\b"
+    r"|\bthe most (?:that )?(?:they|he|she|(?:the|your) (?:client|consumer|debtor|borrower"
+    r"|customer|guy))\s+(?:could|can|would|might)\s+(?:(?:be able to|realistically|really"
+    r"|possibly|actually)\s+)?(?:pay|afford|do|put|offer|manage|come up with)\b"
+    r"|\b(?:client|consumer|debtor|borrower|customer|their|his|her)'?s?\s+social\b(?!\s+media)"
+    r"|\blast (?:four|4)(?: digits)? of (?:the |their |his |her |your )?\w*'?s?\s*(?:social|ssn)\b"
+    r"|\bss#"
+    r")",
+    re.IGNORECASE,
+)
+# Phase 49 (ledger 44b.2): clearly hostile phrases set hostility to the floor
+# (``HOSTILITY_FLOOR``, at or above any escalation threshold) even when the
+# model scores the line low. Negated ("not a waste of time"), quoted ("he said
+# 'shut up'") and hypothetical ("if this is a scam") uses do not count; firm
+# pushback and plain frustration ("this is taking a while") never match.
+HOSTILITY_FLOOR = 1.0
+_HOSTILITY_FLOOR_RE = re.compile(
+    r"(?:"
+    r"\b(?:idiots?|stupid|moron(?:s|ic)?|incompetent|dumb(?:est)?|clowns?|asshole)\b"
+    r"|\bshut up\b"
+    r"|\b(?:waste|wasting) (?:of )?(?:my|our) time\b"
+    r"|\breport (?:you|your (?:firm|company|agency|office|outfit|people))\b"
+    r"|\breport (?:this|it) to the\b"
+    r"|\b(?:is|are|it'?s|this is|what) a scam\b|\bscam(?:ming|mers?)\b"
+    r"|\byou(?:'re| are) (?:crooks|frauds|liars|thieves)\b"
     r")",
     re.IGNORECASE,
 )
@@ -1064,9 +1097,39 @@ def repair_revises_terms(utterance: str) -> bool:
     return _REVISION_RE.search(utterance) is not None
 
 
+_QUOTE_CHARS = "\"\u201c\u201d"
+
+
+def _in_quotes(utterance: str, start: int) -> bool:
+    """True when an odd number of double quotes opens before ``start`` (reported speech)."""
+    return sum(utterance[:start].count(q) for q in _QUOTE_CHARS) % 2 == 1
+
+
+def hostility_floor_hit(utterance: str) -> bool:
+    """True when a floor phrase is said as a plain statement or a direct question.
+
+    Unlike the stance guards, a question still counts ("Are you stupid?"); a
+    negator or a conditional earlier in the clause, or quotes, do not.
+    """
+    for m in _HOSTILITY_FLOOR_RE.finditer(utterance):
+        if _in_quotes(utterance, m.start()):
+            continue
+        clause = _CLAUSE_BREAK_RE.split(utterance[: m.start()])[-1]
+        if _CONDITIONAL_RE.search(clause) or _FIRM_NEGATOR_RE.search(clause):
+            continue
+        return True
+    return False
+
+
 def repair_hostility(hostility: float, utterance: str) -> float:
-    """Keep LLM hostility only when the utterance has hostile cues; else 0."""
+    """Keep LLM hostility only when the utterance has hostile cues; else 0.
+
+    A floor phrase (``hostility_floor_hit``) lifts it to ``HOSTILITY_FLOOR``
+    whatever the model scored (Phase 49).
+    """
     h = max(0.0, min(1.0, float(hostility)))
+    if hostility_floor_hit(utterance):
+        return max(h, HOSTILITY_FLOOR)
     if h <= 0.0:
         return 0.0
     if _HOSTILITY_RE.search(utterance) is None:
@@ -1472,6 +1535,31 @@ _BALANCE_STATEMENT_RE = re.compile(
     r"\b(?:balance|owes?|owed|owing|outstanding|original amount|debt of|account is at)\b",
     re.IGNORECASE,
 )
+# Phase 49 (ledger 44b.5): a bare dollar amount the rep demands for the deal
+# ("We would need $600 from the client.", "We'd want $450 to close this.") with
+# no count, date, % or total / per-payment cue in its sentence asks "total or
+# per payment?" whatever the model returned. Both a demand verb and a deal
+# target are required, so a short answer to our own minimum-payment question
+# ("We'd need $150.") is left to the field it answers.
+_DEMAND_RE = re.compile(
+    r"\b(?:need|needs|want|wants|require|requires|looking for|asking for|expect"
+    r"|(?:would|could|can|will) (?:take|accept|do))\b",
+    re.IGNORECASE,
+)
+_DEAL_TARGET_RE = re.compile(
+    r"\bfrom (?:the |your |their )?(?:client|consumer|debtor|borrower|customer|them|him|her)\b"
+    r"|\bto (?:close|settle|resolve|clear|wrap|finish|end|take care of)\b"
+    r"|\b(?:on|for) (?:this|it|the account|this account|this one|the file|this file)\b",
+    re.IGNORECASE,
+)
+# Amounts the agent named ("the $2,000 you offered") or bounded ones ("more than
+# $600") are not a new ask.
+_NOT_BARE_RE = re.compile(
+    r"\byou(?:'ve| have)? (?:offered|proposed|mentioned|suggested|said)\b"
+    r"|\byour (?:offer|proposal|number|figure)\b"
+    r"|\b(?:more than|over|above|under|below|less than|at least|at most|up to)\s+\$",
+    re.IGNORECASE,
+)
 _PAY_BEFORE_RE = re.compile(r"\bpay\s+$", re.IGNORECASE)
 _BY_AFTER_RE = re.compile(r"^\s+by\b", re.IGNORECASE)
 _NEGATION_RE = re.compile(r"\b(?:not|isn't|isnt|no)\b", re.IGNORECASE)
@@ -1532,6 +1620,73 @@ def total_shape_trigger(total_cents: int, utterance: str) -> str | None:
     return None
 
 
+def _sentences_with_amount(cents: int, utterance: str) -> list[str]:
+    return [
+        sentence
+        for sentence in _SENTENCE_SPLIT_RE.split(utterance)
+        if any(t.kind == "money" and t.value == cents for t in extract_tokens(sentence))
+    ]
+
+
+def balance_statement_amount(cents: int, utterance: str) -> bool:
+    """True when every sentence that says ``cents`` states the debt, not an ask.
+
+    "Our records show an original balance of $6,000." is; "We need $2,000 to
+    clear the balance." is not (a demand verb in the amount's clause makes it
+    an ask, while "The client owes $6,000, and we need 3 payments" is still a
+    statement). Phase 49 uses
+    it to drop a model's ``amount_ambiguous`` flag (ledger 46b.3 / 44b.4).
+    """
+    said = _sentences_with_amount(cents, utterance)
+    return bool(said) and all(
+        _BALANCE_STATEMENT_RE.search(s) and not _DEMAND_RE.search(_clause_with_amount(cents, s))
+        for s in said
+    )
+
+
+# Clause breaks that keep "$6,000" whole (a comma only when a space follows).
+_AMOUNT_CLAUSE_SPLIT_RE = re.compile(r",\s+|;|\bbut\b", re.IGNORECASE)
+
+
+def _clause_with_amount(cents: int, sentence: str) -> str:
+    """The comma / "but" clause of ``sentence`` that says ``cents`` (the sentence if none)."""
+    for clause in _AMOUNT_CLAUSE_SPLIT_RE.split(sentence):
+        if any(t.kind == "money" and t.value == cents for t in extract_tokens(clause)):
+            return clause
+    return sentence
+
+
+def bare_amount_ask(utterance: str) -> tuple[int, str] | None:
+    """``(cents, raw)`` of a bare dollar amount demanded for the deal, else None.
+
+    The sentence holds exactly one figure (a dollar amount: no count, date or
+    %), a demand verb before it and a deal target ("from the client", "to close
+    this"), and no total, per-payment, balance, agent-named or bounded cue, and
+    it is not a question or negated.
+    """
+    for sentence in _SENTENCE_SPLIT_RE.split(utterance):
+        toks = extract_tokens(sentence)
+        if len(toks) != 1 or toks[0].kind != "money":
+            continue
+        tok = toks[0]
+        before = sentence[: tok.start]
+        if not _DEMAND_RE.search(before) or not _DEAL_TARGET_RE.search(sentence):
+            continue
+        if (
+            sentence.rstrip().endswith("?")
+            or _EXPLICIT_TOTAL_RE.search(sentence)
+            or _TOTAL_CUE_RE.search(sentence)
+            or _PER_PAYMENT_CUE_RE.search(sentence)
+            or _BALANCE_STATEMENT_RE.search(sentence)
+            or _NOT_BARE_RE.search(sentence)
+            or _NEGATION_RE.search(before)
+            or re.search(r"n't\b|\bnever\b", before, re.IGNORECASE)
+        ):
+            continue
+        return int(tok.value), tok.raw
+    return None
+
+
 def resolve_amounts(
     verified: VerifiedAnalysis,
     utterance: str,
@@ -1546,7 +1701,10 @@ def resolve_amounts(
     Returns ``(analysis, pending)``. With ``pending`` set, the caller asks
     "total or per payment?" and ``analysis`` has the doubtful amount (and any
     disagreeing ask) removed so the rest of the turn can still be applied.
-    Triggers, first match: NLU ``amount_ambiguous``; % and total disagree;
+    Triggers, first match: NLU ``amount_ambiguous`` (not when the amount's
+    sentence is a balance statement, Phase 49); a bare demanded amount with no
+    count / date / total or per-payment cue (``bare_amount_ask``, Phase 49, not
+    right after the rep answered this question); % and total disagree;
     total above the balance; a total with no agreeing % in a per-payment shape
     (``total_shape_trigger``: "pay $X by", or an exact count in the same
     sentence); a ``min_payment_cents`` term that is implausible
@@ -1581,9 +1739,19 @@ def resolve_amounts(
         return verified.model_copy(update=update), pending
 
     if verified.amount_ambiguous_cents is not None:
-        return _clarify(
-            verified.amount_ambiguous_cents, verified.amount_ambiguous_quote, "nlu_flag"
+        flagged = verified.amount_ambiguous_cents
+        if not balance_statement_amount(flagged, utterance):
+            return _clarify(flagged, verified.amount_ambiguous_quote, "nlu_flag")
+        # A balance statement is never an ask (Phase 49): drop the flag, no question.
+        _log("nlu_amount_flag_dropped", {"cents": flagged, "reason": "balance_statement"})
+        verified = verified.model_copy(
+            update={"amount_ambiguous_cents": None, "amount_ambiguous_quote": None}
         )
+
+    if check_min_payment:
+        bare = bare_amount_ask(utterance)
+        if bare is not None:
+            return _clarify(bare[0], bare[1], "bare_amount")
 
     total = verified.settlement_ask_total_cents
     if total is not None and balance_cents > 0:

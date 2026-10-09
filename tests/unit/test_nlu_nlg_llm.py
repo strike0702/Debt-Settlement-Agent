@@ -240,7 +240,9 @@ def test_post_verify_clears_hostility_without_cues() -> None:
 
 def test_post_verify_keeps_hostility_with_cues() -> None:
     analysis = TurnAnalysis(stance="other", hostility=0.95)
-    out = post_verify(analysis, "this is a waste of time you idiot", ref=_REF)
+    # Phase 49: "waste of my time" / "idiot" are floor phrases (lifted to 1.0),
+    # so this keeps the model's score with a corroborating cue that is not one.
+    out = post_verify(analysis, "this is getting hostile, see you in a lawsuit", ref=_REF)
     assert out.hostility == 0.95
 
 

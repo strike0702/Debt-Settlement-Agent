@@ -1,9 +1,10 @@
 """Sequential eval runner: scenarios → per-scenario JSON → metrics + thresholds.
 
-CLI: ``python -m eval.run_eval --scenarios 12 --seed 7 [--resume RUN_ID]
+CLI: ``python -m eval.run_eval --scenarios 12 --seed 7 [--limit N] [--resume RUN_ID]
 [--profile eval] [--nlu oracle|llm] [--nlg llm|bank|template]
 [--sim-phrasing llm|template] [--no-oracle-overlay]
 [--agent policy|policy_h3|react|llm_only] [--providers PATH] [--allow-budgeted]``.
+``--limit N`` (Phase 49) runs only the first N scenarios of that set.
 
 Two layers:
 - ``--nlu oracle``: offline policy eval. Sim ground-truth ``TurnAnalysis``
@@ -280,6 +281,10 @@ def _build_settings(
         gemini_api_key=src.gemini_api_key,
         openrouter_api_key=src.openrouter_api_key,
         cerebras_api_key=src.cerebras_api_key,
+        # Phase 49 (ledger 46c.3): an unsuffixed ANTHROPIC_API_KEY and the daily
+        # Claude cap were dropped here, so budgeted Haiku NLU was skipped silently.
+        anthropic_api_key=src.anthropic_api_key,
+        claude_daily_budget_usd=src.claude_daily_budget_usd,
         # Suffixed key pools (GROQ_API_KEY_2, ...) and an explicit base pool.
         api_key_pool=src.api_key_pool,
         llm_key_cooldown_s=src.llm_key_cooldown_s,
@@ -580,6 +585,17 @@ def _should_skip_existing(path: Path) -> bool:
     return data.get("status") == "ok"
 
 
+def select_scenarios(n: int, seed: int, limit: int | None = None) -> list[Scenario]:
+    """``generate(n, seed)``, cut to its first ``limit`` scenarios when given.
+
+    A pilot on the first N of a larger set runs the same calls as the full run
+    starts with (Phase 49, ledger 46c.4); ``--scenarios N`` alone generates a
+    different N-call set.
+    """
+    scenarios = generate(n, seed)
+    return scenarios if limit is None else scenarios[:limit]
+
+
 async def _async_main(args: argparse.Namespace) -> int:
     seed = args.seed
     n = args.scenarios
@@ -613,7 +629,8 @@ async def _async_main(args: argparse.Namespace) -> int:
         if mine:
             print(f"skipped budgeted (paid) targets: {', '.join(mine)} (--allow-budgeted keeps)")
     llm = make_client(settings, on_call=on_call, providers_path=providers)
-    scenarios = generate(n, seed)
+    limit: int | None = getattr(args, "limit", None)
+    scenarios = select_scenarios(n, seed, limit)
 
     print(
         f"run_id={run_id} scenarios={len(scenarios)} profile={profile} "
@@ -650,6 +667,7 @@ async def _async_main(args: argparse.Namespace) -> int:
         "run_id": run_id,
         "seed": seed,
         "n_scenarios": n,
+        "limit": limit,
         "git_sha": _git_sha(),
         "profile": profile,
         "nlu": nlu,
@@ -710,6 +728,13 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Debt Settlement Agent eval runner")
     p.add_argument("--scenarios", type=int, default=12)
     p.add_argument("--seed", type=int, default=7)
+    p.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        metavar="N",
+        help="run only the first N scenarios of the --scenarios/--seed set (a pilot)",
+    )
     p.add_argument("--resume", type=str, default=None, metavar="RUN_ID")
     p.add_argument("--profile", type=str, default="eval")
     p.add_argument(
@@ -758,6 +783,8 @@ def main(argv: list[str] | None = None) -> int:
         help="keep paid `budgeted: true` targets of the default providers file",
     )
     args = p.parse_args(argv)
+    if args.limit is not None and args.limit < 1:
+        p.error("--limit must be at least 1")
     if args.nlu == "oracle":
         if args.nlg == "llm":
             p.error("--nlu oracle requires --nlg template|bank")

@@ -57,7 +57,10 @@ LLM call, which took NLG off the reply path ([latency](eval/latency_20261007.md)
 "first" must be avoided in copy. The short acknowledgement the agent speaks
 before its move ("Understood, up to 5 payments.", Phase 46b) needs no LLM at
 all: code picks the wording from a few fixed variants and fills only terms the
-creditor said, never a private figure, through the same two guards.
+creditor said, never a private figure, through the same two guards. If the rep
+then says we misheard ("I said six", "you misheard"), the new value replaces the
+acked one; a bare "No, it's six" or "No, actually make that six" may be the rep
+changing their own rule, so the agent asks which value to use (Phase 49).
 
 ## ADR 3. PUBLIC / PRIVATE facts and role-scoped streams
 
@@ -173,6 +176,19 @@ reject or firm phrase inside a question, after a conditional ("if", "whether")
 or after a negator no longer forces a label (Haiku probes 2/12 → 10/12, corpus
 unchanged; [ADR 7](#adr-7-how-negotiation-decisions-are-made)). Render's disk is ephemeral, so a restart starts the day's count at
 zero; a monthly limit in the Anthropic console is the backstop.
+
+A few reading rules run in code after any model, so a fail-over to a weaker
+model loses less (Phase 49, [rescore](eval/nlu_rules_20261009/summary.md)).
+Questions about money held for the client (escrow, program or settlement
+account), "the most they could pay" and SSN digits count as private asks.
+Clear insults and threats ("shut up", "waste of my time", "report your
+firm", "are you stupid") reach the hostility threshold. The model's "total or
+per payment?" flag is dropped when the sentence only states the balance. A
+bare demanded amount ("We would need $600 from the client.") always gets that
+question. Apart from the balance-statement case, the rules only add a flag
+or a question. When no rule fires, the model decides. On the saved runs they lifted hostility recall to 1.0 for Haiku, Groq
+and Cerebras, and Cerebras private-info recall from 0.882 to 1.0. No line got
+worse.
 
 ## ADR 7. How negotiation decisions are made
 

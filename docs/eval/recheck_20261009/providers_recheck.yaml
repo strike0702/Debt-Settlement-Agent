@@ -1,0 +1,49 @@
+# Eval-only providers file for Phase 46c (live re-check of agreement validity).
+# Not a shipped profile. Use with
+#   python -m eval.run_eval --providers docs/eval/recheck_20261009/providers_recheck.yaml --profile eval ...
+# The profile is named `eval` on purpose: the client uses temperature 0 for the
+# sim under the eval profile, as in the Phase 24b A/B.
+#   nlu: Claude Haiku 5.5 alone (demo params, `budgeted` so spend is priced and
+#        recorded). No fallback, so a run cannot mix NLU models; a failure is an
+#        error row, not a silent switch. timeout_s 20 (the 6 s role default would
+#        turn a slow call into a lost scenario; Haiku p95 was 1.8 s in Phase 43).
+#   nlg: unused (arm A speaks templates); kept so the profile is complete.
+#   sim: the Phase 46c eval sim route (config/providers.yaml).
+profiles:
+  eval:
+    nlu:
+      - {target: anthropic/claude-haiku-5-5, params: {output_config: {effort: low}}, budgeted: true, timeout_s: 20}
+    nlg:
+      - gemini/gemini-3.1-flash-lite
+      - {target: groq/openai/gpt-oss-20b, params: {reasoning_effort: low}}
+    sim:
+      - {target: groq/openai/gpt-oss-120b, params: {reasoning_effort: low}}
+      - {target: cerebras/gpt-oss-120b, params: {reasoning_effort: low}}
+      - gemini/gemini-3.1-flash-lite
+
+providers:
+  groq:
+    base_url: "https://api.groq.com/openai/v1"
+    key_env: GROQ_API_KEY
+    rpm: 25
+    tpm: 8000
+    json_mode: true
+  gemini:
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    key_env: GEMINI_API_KEY
+    rpm: 12
+    json_mode: true
+    quota_as_400: true
+  cerebras:
+    base_url: "https://api.cerebras.ai/v1"
+    key_env: CEREBRAS_API_KEY
+    rpm: 5
+    tpm: 30000
+    json_mode: true
+  anthropic:
+    api: anthropic
+    base_url: "https://api.anthropic.com"
+    key_env: ANTHROPIC_API_KEY
+    rpm: 50
+    prices_usd_per_mtok:
+      claude-haiku-5-5: {input: "0.10", output: "0.50"}

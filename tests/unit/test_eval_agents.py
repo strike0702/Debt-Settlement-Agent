@@ -433,6 +433,8 @@ def test_split_providers_file_halves_every_rate() -> None:
     # Phase 41 budgeted Claude target on the demo NLU, so compare without it.
     for entries in base["profiles"]["demo"].values():
         entries[:] = [e for e in entries if not (isinstance(e, dict) and e.get("budgeted"))]
+    # It also predates the Phase 46c eval sim route (Groq gpt-oss-120b first).
+    base["profiles"]["eval"]["sim"] = split["profiles"]["eval"]["sim"]
     assert split["profiles"] == base["profiles"]
     for name, cfg in base["providers"].items():
         for key in ("rpm", "tpm"):

@@ -57,17 +57,20 @@ profiles:
       - gemini/gemini-3.1-flash-lite
       - {target: groq/openai/gpt-oss-20b, params: {reasoning_effort: low}}
     # Eval-only A/B agent arms (eval/agents): free-tier only, and a different
-    # primary than nlu/sim so the arms do not starve the shared Gemini quota.
+    # primary than nlu so the arms do not starve the shared Gemini quota.
     # Bounded by Settings.llm_timeout_agent_s (20 s) unless overridden here.
     agent:
       - groq/openai/gpt-oss-120b
       - cerebras/gpt-oss-120b
       - {target: gemini/gemini-3.1-flash-lite, timeout_s: 25}
+    # The simulated rep (Phase 46c, user decision 2026-10-09): Groq gpt-oss-120b,
+    # then Cerebras with the same model, then Gemini. Low effort on both gpt-oss
+    # targets so reasoning cannot use up the rewrite's token budget (P46a smoke:
+    # 8 of 28 rewrites came back empty from Cerebras at default effort).
     sim:
+      - {target: groq/openai/gpt-oss-120b, params: {reasoning_effort: low}}
+      - {target: cerebras/gpt-oss-120b, params: {reasoning_effort: low}}
       - gemini/gemini-3.1-flash-lite
-      - cerebras/gpt-oss-120b
-      - groq/openai/gpt-oss-20b
-      - mistral/mistral-small-latest
     # Naturalness judge (eval/judge_naturalness): paid, ONE target on purpose.
     # No free-tier fallback: a judge that switches model mid-run corrupts the
     # metric, so a failure raises instead. Low effort keeps thinking short.

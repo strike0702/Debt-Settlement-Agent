@@ -28,6 +28,8 @@ LLM phrasing (``phrasing="llm"``): the rewrite is kept only when it carries
 exactly the draft's figures, adds no client-private wording, commitment
 language or opposite stance (``sim.figures.rewrite_problem``); otherwise the
 draft is spoken and the fallback is counted by reason (``rewrite_stats``).
+The call allows ``SIM_MAX_TOKENS`` (Phase 46c): reasoning models (gpt-oss) spend
+part of the budget thinking, and at 120 a reply could come back empty.
 
 Must not import ``app.agent``.
 """
@@ -211,6 +213,12 @@ def _spoken_tiers(action: Action, prefix: str) -> list[tuple[int, int]]:
             break
         out.append((int(frm.value), int(cents.value)))  # type: ignore[arg-type]
     return out
+
+
+# Completion budget for one rewrite. The prompt still asks for one or two short
+# sentences; the headroom is for gpt-oss reasoning tokens, which count against
+# max_tokens (P46a smoke: 8 of 28 rewrites empty at 120 on Cerebras).
+SIM_MAX_TOKENS = 512
 
 
 class _SimLLM(Protocol):
@@ -822,7 +830,8 @@ class CreditorPolicy:
         ]
         self.rewrite_attempts += 1
         try:
-            line = (await self.llm.chat_text("sim", messages, max_tokens=120) or "").strip()
+            line = await self.llm.chat_text("sim", messages, max_tokens=SIM_MAX_TOKENS)
+            line = (line or "").strip()
         except LLMUnavailable:
             raise
         except Exception:

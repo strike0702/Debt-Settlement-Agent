@@ -1,6 +1,7 @@
 """A/B report: one table over several ``eval.run_eval`` arm runs, plus the adoption rule.
 
-Phase 24b (REVIEW_PLAN §2(c)). Reads finished run dirs (one per arm) and
+Phase 24b (pre-registered rule: docs/eval/ab_20261007/preregistration.md).
+Reads finished run dirs (one per arm) and
 optional ``eval.judge_naturalness`` output dirs, keeps only the scenarios that
 **every** arm completed (``status=ok``) so the arms are compared on identical
 seeds and scenarios, and writes ``summary.md`` / ``summary.json``:
@@ -116,7 +117,7 @@ def arm_row(results: list[dict[str, Any]]) -> dict[str, Any]:
 def adoption_checks(
     row: dict[str, Any], base: dict[str, Any], win_rate: float | None
 ) -> dict[str, bool]:
-    """REVIEW_PLAN §2(c) rule for one arm vs arm A; a missing input fails closed."""
+    """Pre-registered A/B rule for one arm vs arm A; a missing input fails closed."""
     checks: dict[str, bool] = {
         "zero_leaks_and_unverified": row["sensitive_leaks"] == 0
         and row["unverified_figures_spoken"] == 0,

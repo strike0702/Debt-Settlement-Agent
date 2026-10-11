@@ -1,4 +1,4 @@
-"""Arm C: a ReAct tool-calling negotiator (REVIEW_PLAN §2(c) hybrid H2). EVAL-ONLY.
+"""Arm C: a ReAct tool-calling negotiator (A/B pre-registration, hybrid H2). EVAL-ONLY.
 
 APPROVED RULE BREAK: the LLM chooses every move and writes the spoken line,
 numbers included, and it sees client financials and the private engine ceiling

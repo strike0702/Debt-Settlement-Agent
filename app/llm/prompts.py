@@ -41,7 +41,7 @@ PLACEHOLDER_MEANINGS: dict[str, str] = {
     "amount_in_question": "dollar amount the rep said whose meaning we are checking",
 }
 
-# How many recent public turns the NLG prompt sees (REVIEW_PLAN §2(c), H3).
+# How many recent public turns the NLG prompt sees (A/B pre-registration, H3).
 NLG_CONTEXT_TURNS = 3
 
 _INTENT_INSTRUCTION: dict[Intent, str] = {

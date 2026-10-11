@@ -1,4 +1,4 @@
-"""Role-scoped WS streams (REVIEW_PLAN F7): what ``?view=rep`` may see.
+"""Role-scoped WS streams (Phase 22): what ``?view=rep`` may see.
 
 ``redact_for_view`` is the single choke point: ``app.voice.ws`` passes every
 outgoing frame through it. The operator ("Debt negotiator") stream gets frames

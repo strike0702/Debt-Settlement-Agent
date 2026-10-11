@@ -22,8 +22,9 @@ under ``cost`` and the run prints one ``judge cost:`` line. A model with no
 price is counted under ``unpriced_calls`` rather than guessed. Judge spend is
 not the demo's daily budget (``app.llm.budget``); this is a report only.
 
-This reverses ROADMAP §6's "no LLM-as-judge" for this one secondary metric only
-(REVIEW_PLAN §2(c)). It reads run results; it never runs an agent.
+This reverses the earlier roadmap's "no LLM-as-judge" rule for this one secondary metric only
+(pre-registered rule: docs/eval/ab_20261007/preregistration.md).
+It reads run results; it never runs an agent.
 """
 
 from __future__ import annotations

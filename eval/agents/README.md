@@ -1,6 +1,6 @@
 # A/B arms (Phase 24a handoff)
 
-Eval-only harness for the experiment in `docs/REVIEW_PLAN.md` §2(c). It answers one
+Eval-only harness for the experiment pre-registered in [`docs/eval/ab_20261007/preregistration.md`](../../docs/eval/ab_20261007/preregistration.md). It answers one
 question: does an LLM that picks moves and writes numbers beat the code policy?
 
 > **Approved rule break, eval-only.** Arms `react` and `llm_only` let an LLM choose
@@ -98,6 +98,6 @@ LLM. Only the policy arm is forced onto `offline`.
 - **`coerce_bp`:** the prompts ask for every bp argument as a `"N%"` string. An
   explicit `"N%"` is exact (`"1%"` → 100 bp; before 24b it was wrongly re-scaled
   to 100%). A bare number ≤ 100 is still read as percent (`45` → 4500 bp).
-- **Pre-registered adoption rule** (REVIEW_PLAN §2(c)): zero leaks and zero
+- **Pre-registered adoption rule** (pre-registered): zero leaks and zero
   unverified figures; `agreement_valid` = 1; outcome rates within A's 95% CI;
   p50 latency ≤ A + 0.5 s; naturalness win-rate ≥ 60%.

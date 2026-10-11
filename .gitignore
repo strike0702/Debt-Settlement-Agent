@@ -16,3 +16,6 @@ eval/results/
 dist/
 build/
 tmp/
+
+# Local Claude Code settings
+.claude/settings.local.json

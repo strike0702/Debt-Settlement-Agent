@@ -1,4 +1,4 @@
-Phase 24b A/B (REVIEW_PLAN §2(c)), run 2026-10-07 (arms A, B, D) and 2026-10-08
+Phase 24b A/B ([pre-registration](preregistration.md)), run 2026-10-07 (arms A, B, D) and 2026-10-08
 (arm C finished). Arms on identical seeds and scenarios: **A** policy + template NLG
 (today), **B** policy + H3 (ack / answer acts, 3-turn NLG context, bank NLG), **C**
 ReAct tool-calling agent (eval-only, sees the private ceiling), **D** LLM-only

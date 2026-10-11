@@ -1,6 +1,6 @@
 # A/B: policy vs H3 vs ReAct vs LLM-only (48 common scenarios)
 
-Phase 24b A/B (REVIEW_PLAN §2(c)), run 2026-10-07 (arms A, B, D) and 2026-10-08
+Phase 24b A/B ([pre-registration](preregistration.md)), run 2026-10-07 (arms A, B, D) and 2026-10-08
 (arm C finished). Arms on identical seeds and scenarios: **A** policy + template NLG
 (today), **B** policy + H3 (ack / answer acts, 3-turn NLG context, bank NLG), **C**
 ReAct tool-calling agent (eval-only, sees the private ceiling), **D** LLM-only
@@ -82,7 +82,7 @@ Other pairwise judgements (first arm's win-rate over decisive pairs):
 ## Decision
 
 **Decision: A (policy + template NLG) stays the demo default; `Settings.nlg_h3` stays
-False.** The adoption rule is applied exactly as pre-registered in REVIEW_PLAN §2(c),
+False.** The adoption rule is applied exactly as pre-registered in [preregistration.md](preregistration.md),
 each arm against A. **B fails** on two checks. One is `zero_leaks_and_unverified`: 1
 leak in `s0007_006`, which comes from a policy ACCEPT of a sim-invented "100%" and not
 from an H3 act. The other is `agreement_valid = 1` (0.71). B passes every other check:
@@ -100,7 +100,7 @@ extraction errors and the accept-a-sim-invented-figure path are addressed. That 
 out of scope for 24b.
 
 **Arm D (LLM-only), partial.** D was dropped at 13/48 on 2026-10-07 (user decision;
-the REVIEW_PLAN cut order allows it), so it is left out of the table above, which
+the pre-registered cut order allows it), so it is left out of the table above, which
 would otherwise shrink to n = 13. On the 13 scenarios that A and D share, D is far
 behind A:
 - 1 leak and 9 unverified figures (A: 0 and 0);

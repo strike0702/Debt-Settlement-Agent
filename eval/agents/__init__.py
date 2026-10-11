@@ -1,4 +1,4 @@
-"""Agents under test for the three-arm A/B (REVIEW_PLAN §2(c), Phase 24a).
+"""Agents under test for the three-arm A/B (A/B pre-registration, Phase 24a).
 
 ``protocol`` defines ``AgentUnderTest`` and the ``PolicyAgent`` adapter over the
 production ``Orchestrator`` (arm A). ``react_agent`` (arm C) and

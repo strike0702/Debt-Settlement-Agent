@@ -44,7 +44,7 @@ model's reading stands.
    precision and recall, like `REGEX_ONLY_P32`.
 
 Rows: `docs/eval/nlu_corpus.md` sections `*_P49`; per-line records in
-`docs/eval/nlu_corpus_*_p49.jsonl`.
+`docs/eval/records/nlu_corpus_*_p49.jsonl`.
 
 ## Main corpus (183 lines), before → after
 

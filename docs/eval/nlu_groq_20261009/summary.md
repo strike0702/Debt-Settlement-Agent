@@ -28,8 +28,8 @@ the first free fallback, still acceptable on that prompt?
   uv run python -m eval.nlu_corpus --label GROQ_P44 --providers $P --profile groq_nlu
   uv run python -m eval.nlu_corpus --label AMOUNTS_GROQ_P44 --corpus tests/nlu_corpus_amounts.jsonl --providers $P --profile groq_nlu
   uv run python -m eval.nlu_corpus --label HELDOUT_STANCE_GROQ_P44 --corpus tests/nlu_corpus_heldout_stance.jsonl --providers $P --profile groq_nlu
-  uv run python -m eval.nlu_corpus --label GROQ_P44_NO_GUARD --from-records docs/eval/nlu_corpus_groq_p44.jsonl --no-repair-stance
-  uv run python -m eval.nlu_guard_report docs/eval/nlu_corpus_groq_p44.jsonl
+  uv run python -m eval.nlu_corpus --label GROQ_P44_NO_GUARD --from-records docs/eval/records/nlu_corpus_groq_p44.jsonl --no-repair-stance
+  uv run python -m eval.nlu_guard_report docs/eval/records/nlu_corpus_groq_p44.jsonl
   ```
 
 - Every row is one model (`groq/openai/gpt-oss-120b`, plus 4 fast-path lines on

@@ -1,8 +1,25 @@
 # Design decisions
 
-Seven short architecture decision records (ADRs) and one annotated voice turn.
-Each ADR is context, decision, consequences. Numbers link to the committed
-evidence in [`docs/eval/`](eval/); nothing here is measured anywhere else.
+The agent negotiates a debt settlement over voice or text. Each turn, a
+language model reads the representative's line into structured terms (NLU);
+code checks that reading against the words actually said; a deterministic
+policy picks the next move; the vendored feasibility engine computes every
+number; and the model phrases the move as a template with placeholders that
+code fills from public facts (NLG). Two guards check every sentence before it
+is spoken, and everything is written to an append-only audit log. The records
+below explain why it is built this way. Each ADR is context, decision,
+consequences; numbers link to the committed evidence in [`docs/eval/`](eval/).
+
+| ADR | Decision |
+|---|---|
+| [1](#adr-1-code-owns-the-policy-no-react-agent-in-the-product) | Code owns the policy; no ReAct agent in the product |
+| [2](#adr-2-the-llm-writes-placeholders-never-digits) | The LLM writes placeholders, never digits |
+| [3](#adr-3-public--private-facts-and-role-scoped-streams) | PUBLIC / PRIVATE facts and role-scoped streams |
+| [4](#adr-4-effects-commit-on-the-speech-ack) | Effects commit on the speech ack |
+| [5](#adr-5-feasibility-is-non-monotonic-so-scan-the-curve) | Feasibility is non-monotonic, so scan the curve |
+| [6](#adr-6-claude-reads-the-rep-on-the-demo-under-a-daily-cap) | Claude reads the rep on the demo, under a daily cap |
+| [7](#adr-7-how-negotiation-decisions-are-made) | How negotiation decisions are made |
+| [Voice turn](#one-voice-turn-annotated) | One voice turn, annotated with measured stage timings |
 
 ## ADR 1. Code owns the policy; no ReAct agent in the product
 
@@ -35,7 +52,9 @@ come from live-NLU extraction errors that every arm shares. The ReAct agent (C)
 fails on safety (2 private and 8 unverified figures spoken in its own text),
 escalation (0.22 against 1.00) and latency (10.2 s p50 against 2.0 s). The
 LLM-only arm (D) was stopped at 13 of 48 scenarios and was behind A on every
-check it reached. A human check of the judge is pending (20 pairs).
+check it reached. A blind human check of 20 B-vs-A pairs preferred B in 11 of
+15 decisive pairs, against the judge's 0.80
+([ratings](eval/ab_20261007/summary.md#human-check-of-the-judge-added-in-phase-50)).
 
 ## ADR 2. The LLM writes placeholders, never digits
 
@@ -114,7 +133,7 @@ grid points.
 
 **Consequences.** Correct by construction for any curve shape, at a cost of
 a median 8.3 ms per uncached scan on the demo fixture and under 1 ms on a
-cache hit (`docs/PROGRESS.md`, Environment facts). The policy eval's 0 stuck calls
+cache hit (`docs/history/PROGRESS.md`, Environment facts). The policy eval's 0 stuck calls
 and the invariant sweep (counters never above the private max) rely on it. The
 grid is 1-point granular; finer offers would need a denser scan.
 
@@ -203,8 +222,23 @@ as agreement. In the A/B run (pair 17, `s0007_006`) the agent answered "Great,
 could also end with a plain "no deal", leaving nobody to follow up, and a rep
 who kept repeating themselves could keep the agent asking the same question.
 
-**Decision (user decisions of 2026-10-09).** The rules live in
-`_negotiate` in `app/agent/policy.py`; the engine is unchanged.
+**Decision.** The rules live in `_negotiate` in `app/agent/policy.py`; the
+engine is unchanged. The tunable settings (in `.env`):
+
+| Setting | Default | What it does |
+|---|---|---|
+| `ACCEPT_LINE_PCT_OF_MAX_BP` | `7500` | The accept line: 75.00% of the client's maximum, rounded down. The agent never offers or accepts more. |
+| `ANCHOR_RATIO` | `0.7` | The first counteroffer is about 70% of the lower of the ask and the accept line. |
+| `CONCESSION_FACTOR` | `0.5` | When the representative comes down, the agent moves up by half as much. |
+| `MAX_COUNTERS` | `6` | At most six counteroffers in a call, including "we are staying at" repeats. |
+| `MAX_SAME_QUESTION` | `2` | The agent hands off instead of asking the same question a third time. |
+| `MAX_NO_PROGRESS_TURNS` | `4` | The agent hands off after four replies in a row that add nothing new. |
+| `MAX_TURNS` | `24` | The hard limit on call length, also a hand-off. |
+
+On every turn, `decide()` checks the same list in a fixed order: the turn
+limit, hostility, requests for private information, demands for a
+commitment, replies that add nothing, contradictions, tentative values to
+read back, missing rules, and only then price. The price rules:
 
 - *Accept line.* We accept only at or below 75% of the client's ceiling
   (`accept_line_pct_of_max_bp = 7500`, rounded down to a whole basis point), and

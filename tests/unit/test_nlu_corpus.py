@@ -229,7 +229,7 @@ def test_cli_writes_report_when_all_answered(tmp_path: Path, monkeypatch) -> Non
     ])
     assert rc == 0
     assert "lines: 2  skipped (LLM unavailable): 0" in report.read_text()
-    assert (tmp_path / "nlu_corpus_t.jsonl").exists()
+    assert (tmp_path / "records" / "nlu_corpus_t.jsonl").exists()
 
 
 def test_heldout_private_set_schema() -> None:
@@ -471,7 +471,8 @@ def test_cli_no_repair_stance_rescores_saved_records(tmp_path: Path, monkeypatch
     assert rc == 0
     text = report.read_text()
     assert "stance: raw LLM" in text
-    out = [json.loads(ln) for ln in (tmp_path / "nlu_corpus_raw.jsonl").read_text().splitlines()]
+    saved_raw = (tmp_path / "records" / "nlu_corpus_raw.jsonl").read_text()
+    out = [json.loads(ln) for ln in saved_raw.splitlines()]
     assert [r["predicted"]["stance"] for r in out] == ["question", "accept", "stall", "info"]
 
 
@@ -733,7 +734,8 @@ def test_cli_rules_only_scores_the_rules_alone(tmp_path: Path, monkeypatch) -> N
     assert "rules only" in text and "rules_only=3" in text
     assert "| hostility | 1 | 1 | 0 | 0 | 1.000 | 1.000 |" in text
     assert "| asks_client_private_info | 1 | 1 | 0 | 0 | 1.000 | 1.000 |" in text
-    raw = [json.loads(ln) for ln in (tmp_path / "nlu_corpus_r.jsonl").read_text().splitlines()]
+    saved_raw = (tmp_path / "records" / "nlu_corpus_r.jsonl").read_text()
+    raw = [json.loads(ln) for ln in saved_raw.splitlines()]
     assert raw[2]["predicted"]["terms"] == {"amount_ambiguous": 60000}
 
 

@@ -9,13 +9,13 @@ Deterministic call-quality metrics: counters_spoken_max / _mean (vs
 max_counters), identical_consecutive_agent_moves, turns_to_outcome,
 stuck_calls / stuck_rate (hit max_turns).
 
-Phase 45 (deal-or-handoff): a call ends only in a deal or a handoff, so
-``no_deal_correct`` now scores no_fix calls (non-pressuring) as correct when
+A call ends only in a deal or a handoff, so
+``no_deal_correct`` scores no_fix calls (non-pressuring) as correct when
 they end in a handoff with a price / feasibility reason
 (``NO_DEAL_HANDOFF_REASONS``) and no deal. ``escalation_correct`` counts every
-``should_escalate`` call, which now includes no_fix and above-the-line floors.
+``should_escalate`` call, which includes no_fix and above-the-line floors.
 
-Phase 46a adds two informational blocks (no threshold): ``ladder_branches``,
+Two informational blocks (no threshold): ``ladder_branches``,
 how often each price-ladder branch fired, counted from the audit's
 ``policy/decide`` events (``ladder_branches``); and ``sim_rewrite_fallbacks``,
 how often the sim's LLM rewrite was dropped for the code-built draft, by reason.
@@ -36,7 +36,7 @@ from typing import Any
 
 import yaml
 
-# Handoff reasons that fit a call with no possible deal (Phase 45): no plan fits,
+# Handoff reasons that fit a call with no possible deal: no plan fits,
 # nothing to offer below the ask, or the rep stayed above the accept line or
 # rejected the schedule. Loop-guard reasons (max_turns, no_progress,
 # repeated_question) are not "appropriate": they mean the call went in circles.
@@ -51,9 +51,9 @@ NO_DEAL_HANDOFF_REASONS: frozenset[str] = frozenset(
     }
 )
 
-# Price-ladder branches (Phase 45 policy), in report order. Counted per agent
+# Price-ladder branches, in report order. Counted per agent
 # move from ``policy/decide`` audit events; see ``ladder_branches``.
-# ``equal_step`` was ``quarter_step`` before Phase 50 changed the step size.
+# Older run.json files call ``equal_step`` ``quarter_step`` (the step size changed).
 LADDER_BRANCHES: tuple[str, ...] = (
     "anchor",
     "hold",
@@ -232,7 +232,7 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
         if r.get("got_deal"):
             zopa_deal_ok += 1
 
-    # --- no_deal_correct (Phase 45: no deal, handed off for a fitting reason) ---
+    # --- no_deal_correct (no deal, handed off for a fitting reason) ---
     no_deal_ok = 0
     no_deal_n = 0
     for r in completed:
@@ -294,7 +294,7 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
     ]
     caps = [int(r["max_counters"]) for r in completed if r.get("max_counters") is not None]
 
-    # --- Phase 46a informational: ladder branches, sim rewrite fallbacks ---
+    # --- informational: ladder branches, sim rewrite fallbacks ---
     branches = dict.fromkeys(LADDER_BRANCHES, 0)
     for r in completed:
         for k, v in (r.get("ladder_branches") or {}).items():

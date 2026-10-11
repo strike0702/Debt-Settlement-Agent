@@ -1,0 +1,2 @@
+Raw per-line model answers from `python -m eval.nlu_corpus --label <LABEL>`: one JSON record per corpus line (expected labels, the model's reading before and after the code-side checks, and which model answered). Each file backs the `## <LABEL>` row of the same name in [`../nlu_corpus.md`](../nlu_corpus.md).
+Rescore a saved run without any LLM call: `python -m eval.nlu_corpus --label <NEW_LABEL> --from-records docs/eval/records/nlu_corpus_<label>.jsonl [--rescore-guards] [--amount-view]`.

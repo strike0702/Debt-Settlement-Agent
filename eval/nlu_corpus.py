@@ -4,7 +4,8 @@ Runs every line of ``tests/nlu_corpus.jsonl`` through ``app.agent.nlu.analyze``
 (real LLM, ``demo`` profile by default, ``llm_cache=True`` so reruns per model
 are free) and scores the post-verified output against the hand labels. Writes
 the ``## <LABEL>`` section of ``docs/eval/nlu_corpus.md`` (BEFORE kept above
-AFTER) plus raw per-line predictions in ``docs/eval/nlu_corpus_<label>.jsonl``.
+AFTER) plus raw per-line predictions in
+``docs/eval/records/nlu_corpus_<label>.jsonl``.
 
 Each line runs inside ``llm_call_scope("corpus:<id>")`` with an audit hook, so
 every LLM call is written to ``--audit-db`` (default
@@ -13,21 +14,21 @@ every LLM call is written to ``--audit-db`` (default
 Lines the LLM could not answer (``LLMUnavailable`` or any other error) get one
 more try after a backoff. If any line is still unanswered the CLI exits 2,
 prints the missing ids and writes no report section: a partial run silently
-scores a different denominator (Phase 28 lost 58 lines at concurrency 4).
+scores a different denominator (one past run lost 58 lines at concurrency 4).
 
 Each record keeps the repaired stance (``predicted.stance``, what the agent
 uses) and the raw LLM stance (``predicted.stance_raw``, parsed from the same
 reply before ``repair_stance``), plus which guard rule decided
 (``stance_rule``). ``--no-repair-stance`` scores the raw stance instead; with
 ``--from-records`` it rescores a saved JSONL without any LLM call, so one paid
-pass yields both variants (Phase 37). Records also keep the raw LLM ``firm``
+pass yields both variants. Records also keep the raw LLM ``firm``
 flag (``predicted.firm_raw``) and ``has_terms``; ``--from-records
 --rescore-guards`` re-runs the current ``repair_stance`` / ``repair_firm`` on
-the saved raw values, so a guard change is measured without new calls
-(Phase 45). Eval-only: ``app/`` is unchanged.
+the saved raw values, so a guard change is measured without new calls.
+Eval-only: ``app/`` is unchanged.
 ``--providers`` swaps ``config/providers.yaml`` for this run (like
 ``eval.run_eval``). Without it, paid ``budgeted: true`` targets (the demo NLU's
-Claude, Phase 41) are dropped unless ``--allow-budgeted`` is passed, so the
+Claude) are dropped unless ``--allow-budgeted`` is passed, so the
 default ``demo`` profile never spends money by accident; an explicit
 ``--providers`` file is used as is (that is how approved paid runs are made).
 
@@ -35,18 +36,18 @@ One row must be one model. A fail-over (e.g. the ``demo`` NLU route's 6 s
 timeout to the next provider) or a JSON retry on another model would mix
 models inside a labelled row, so by default the CLI exits 2 when more than one
 ``provider/model`` answered (each record's ``answered_by``) and writes no
-report section; ``--allow-mixed-models`` writes the row and says so in it
-(Phase 38). Fast-path lines (no LLM call) never count as a model.
+report section; ``--allow-mixed-models`` writes the row and says so in it.
+Fast-path lines (no LLM call) never count as a model.
 
 Lines may also label ``ask_total_cents`` (a dollar-total ask) and
 ``amount_ambiguous`` (total vs per payment unclear); both score as terms
-(Phase 39, ``tests/nlu_corpus_amounts.jsonl``).
+(``tests/nlu_corpus_amounts.jsonl``).
 
 Not the policy eval (``eval.run_eval``): no orchestrator, no simulator.
 CLI: ``python -m eval.nlu_corpus --label BEFORE [--profile demo] [--corpus PATH]
 [--providers PATH] [--no-repair-stance] [--from-records PATH [--rescore-guards]]
 [--rules-only] [--amount-view] [--allow-mixed-models]``. ``--rules-only`` and
-``--amount-view`` (Phase 49) make no LLM call: see ``rules_only_records`` and
+``--amount-view`` make no LLM call: see ``rules_only_records`` and
 ``amount_view``.
 """
 
@@ -108,7 +109,7 @@ REF = date(2026, 4, 1)
 # Report rows in reading order; ``Notes`` always goes last. A label not listed
 # here goes right after the last row with the same BEFORE/AFTER pair key
 # (``_pair_key``), else at the end of the rows, so a new AFTER_Pnn lands next
-# to its BEFORE_Pnn instead of after Notes (Phase 38).
+# to its BEFORE_Pnn instead of after Notes.
 SECTION_ORDER = (
     "BEFORE", "AFTER", "DEFAULT_EFFORT", "LOW_EFFORT",
     "FILLER_BEFORE", "FILLER_VETO",
@@ -275,14 +276,14 @@ def rescore_guards(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Deep copies with stance (and firm, when ``firm_raw`` is saved) re-repaired by current code.
 
     Replays ``repair_stance(stance_raw, …)`` and ``repair_firm(firm_raw, …)`` so a
-    guard change is measured on a saved paid run without new LLM calls (Phase 45).
+    guard change is measured on a saved paid run without new LLM calls.
     ``has_terms`` comes from the record when saved, else from the predicted terms
     (which miss only ``tiers_ambiguous``). Fast-path lines are left as they are.
 
-    Phase 49: the private-info cue and the hostility floor are re-run too. The
+    The private-info cue and the hostility floor are re-run too. The
     raw LLM flags are not saved, so this ORs the saved (already repaired) flag
     with the current rule: exact as long as the rule only adds cues, which the
-    Phase 49 rules do (``_PRIVATE_INFO_RE`` gained alternatives; the floor only
+    current rules do (``_PRIVATE_INFO_RE`` gained alternatives; the floor only
     lifts hostility).
     """
     out = copy.deepcopy(records)
@@ -315,8 +316,8 @@ def amount_view(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     Replays ``resolve_amounts`` (current code) on the saved predicted terms. If
     it would ask "total or per payment?", the record's terms carry
     ``amount_ambiguous`` = that amount and lose the dollar total / minimum it
-    replaces; if it drops the model's flag (a balance statement, Phase 49), the
-    flag is removed. Everything else is kept as saved. Eval-only (Phase 49).
+    replaces; if it drops the model's flag (a balance statement), the
+    flag is removed. Everything else is kept as saved. Eval-only.
     """
     out = copy.deepcopy(records)
     for r in out:
@@ -356,7 +357,7 @@ def rules_only_records(
 
     Each line goes through ``post_verify`` with an empty ``TurnAnalysis``
     (stance ``other``, every flag off, no terms), so the scores are the rules'
-    own recall and precision (Phase 49; like ``REGEX_ONLY_P32``). No LLM call.
+    own recall and precision (like the ``REGEX_ONLY_P32`` row). No LLM call.
     """
     records: list[dict[str, Any]] = []
     for line in corpus:
@@ -519,27 +520,27 @@ _HEADER = """\
 Hand-labelled synthetic rep utterances (`tests/nlu_corpus.jsonl`) run through
 `app.agent.nlu.analyze` with a live LLM, scored after post-verification.
 Generated by `python -m eval.nlu_corpus --label <LABEL>`; per-line predictions
-are in `nlu_corpus_<label>.jsonl` next to this file.
+are in `records/nlu_corpus_<label>.jsonl` next to this file.
 Hostility is counted as positive when it reaches the escalation threshold.
 
 One row is one model: the runner exits 2 without writing a row when a
 fail-over or retry let a second model answer (`--allow-mixed-models` writes it
 anyway and marks it). A Groq `gpt-oss-120b` row needs at least two Groq keys
-from separate organizations (`GROQ_API_KEY_1`, `_2`, ...): on the Phase 43 NLU
+from separate organizations (`GROQ_API_KEY_1`, `_2`, ...): on the current NLU
 prompt one full corpus pass is about 357K tokens (about 2.0K per NLU call),
 above one free-tier organization's 200K tokens/day, so two keys (400K/day)
-cover one pass with little margin (Phase 44); with one key the run fails over
+cover one pass with little margin; with one key the run fails over
 to another model part way through.
 
-Paid targets (Phase 41, Phase 43): the shipped `demo` NLU route starts with
+Paid targets: the shipped `demo` NLU route starts with
 Claude Haiku 5.5 marked `budgeted: true`. Without `--providers`, the runner
 drops budgeted targets and prints one line saying so, so a default run stays
 on the free chain and spends nothing. `--allow-budgeted` keeps them (and the
 run then counts against the demo's daily budget in the app DB). Approved paid
-runs use an explicit `--providers` file, which is used as is (e.g. the Phase
-37, 40 and 43 files).
+runs use an explicit `--providers` file, which is used as is (e.g. the
+`providers_*.yaml` files committed next to each eval summary).
 
-Rescoring without calls (Phase 49): `--from-records PATH --rescore-guards`
+Rescoring without calls: `--from-records PATH --rescore-guards`
 re-runs the current stance / firm guards, private-info cue and hostility
 floor on a saved run; `--amount-view` scores amounts as the agent acts
 (would it ask "total or per payment?"); `--rules-only` scores the code-side
@@ -747,7 +748,7 @@ def unanswered(records: list[dict[str, Any]]) -> list[str]:
 def mixed_models(records: list[dict[str, Any]]) -> dict[str, list[str]]:
     """``{model: line ids}`` when more than one model answered the run, else ``{}``.
 
-    Uses each record's ``answered_by`` (Phase 38+), else its last ``model``
+    Uses each record's ``answered_by`` when saved, else its last ``model``
     (older records). Skipped and fast-path lines are ignored.
     """
     by_model: dict[str, list[str]] = {}
@@ -902,7 +903,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.amount_view:
         meta["stance_variant"] += "; amounts scored as the agent acts (resolve_amounts replayed)"
     write_report(REPORT_PATH, args.label, render_section(args.label, summary, meta))
-    raw = REPORT_PATH.parent / f"nlu_corpus_{args.label.lower()}.jsonl"
+    raw = REPORT_PATH.parent / "records" / f"nlu_corpus_{args.label.lower()}.jsonl"
+    raw.parent.mkdir(parents=True, exist_ok=True)
     raw.write_text("".join(json.dumps(r, default=str) + "\n" for r in records))
     print(render_section(args.label, summary, meta))
     return 0

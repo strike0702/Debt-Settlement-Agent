@@ -8,8 +8,8 @@ returns an ``app.agent.orchestrator.Utterance`` (``.action``, ``.sentences``,
 the leak / unverified / validator scans work unchanged for every arm.
 
 ``PolicyAgent`` (arm A) wraps the production ``Orchestrator`` without changing
-it; ``--agent policy`` output is byte-identical to the pre-24a runner.
-``--agent policy_h3`` (arm B, Phase 24b) is the same orchestrator with
+it; ``--agent policy`` output is byte-identical to the runner without arms.
+``--agent policy_h3`` (arm B) is the same orchestrator with
 ``Settings.nlg_h3`` on (ack / answer acts, 3-turn NLG context); the moves are
 identical, only the words change. The LLM arms live in ``react_agent`` /
 ``llm_only_agent`` and are eval-only.

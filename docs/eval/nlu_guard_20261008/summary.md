@@ -34,9 +34,9 @@ none. The corpus has no lines of that shape, which is why it never showed the ha
   but `reject` is clearly wrong.
 - Commands:
   - `python -m eval.nlu_corpus --label CLAUDE_P37 --profile claude_nlu --providers docs/eval/nlu_guard_20261008/providers_claude.yaml --concurrency 2 --audit-db eval/results/nlu_corpus_audit_p37.db`
-  - `python -m eval.nlu_corpus --label CLAUDE_P37_NO_GUARD --from-records docs/eval/nlu_corpus_claude_p37.jsonl --no-repair-stance --profile claude_nlu --providers …`
+  - `python -m eval.nlu_corpus --label CLAUDE_P37_NO_GUARD --from-records docs/eval/records/nlu_corpus_claude_p37.jsonl --no-repair-stance --profile claude_nlu --providers …`
   - the same as the first with `--corpus docs/eval/nlu_guard_20261008/probes.jsonl --label CLAUDE_P37_PROBES`
-  - `python -m eval.nlu_guard_report docs/eval/nlu_corpus_claude_p37.jsonl --context docs/eval/nlu_corpus_before_p32.jsonl` for the tables below
+  - `python -m eval.nlu_guard_report docs/eval/records/nlu_corpus_claude_p37.jsonl --context docs/eval/records/nlu_corpus_before_p32.jsonl` for the tables below
 
 ## Cost (from the audit rows, at $2/M input and $10/M output)
 

@@ -1,4 +1,4 @@
-# A/B arms (Phase 24a handoff)
+# A/B arms
 
 Eval-only harness for the experiment pre-registered in [`docs/eval/ab_20261007/preregistration.md`](../../docs/eval/ab_20261007/preregistration.md). It answers one
 question: does an LLM that picks moves and writes numbers beat the code policy?
@@ -13,7 +13,7 @@ question: does an LLM that picks moves and writes numbers beat the code policy?
 | `--agent` | Arm | Moves | Words | LLM calls / turn |
 |---|---|---|---|---|
 | `policy` (default) | A, production | `decide()` | templates / LLM NLG with guards | NLU + ≤1 NLG |
-| `policy_h3` | B, H3 (Phase 24b) | `decide()` (identical moves) | + ack / answer acts, 3-turn NLG context | NLU + ≤1 NLG (0 with bank) |
+| `policy_h3` | B, H3 | `decide()` (identical moves) | + ack / answer acts, 3-turn NLG context | NLU + ≤1 NLG (0 with bank) |
 | `react` | C, ReAct | LLM, up to 4 tool steps, engine-guarded | LLM, unguarded | NLU + 1–4 |
 | `llm_only` | D, baseline | LLM, one JSON move, unguarded | LLM, unguarded | NLU + 1 |
 
@@ -84,7 +84,7 @@ LLM. Only the policy arm is forced onto `offline`.
 
 ## Notes
 
-- **Routing (Phase 24b):** agent steps use client role `agent`
+- **Routing:** agent steps use client role `agent`
   (`base.AGENT_ROLE`), bounded by `Settings.llm_timeout_agent_s` (20 s). Only
   the `eval` profile has an `agent` route (Groq → Cerebras → Gemini, free tier);
   other profiles fall back to their `nlu` route.
@@ -96,7 +96,7 @@ LLM. Only the policy arm is forced onto `offline`.
   number that does not match the move's facts does not change the sim's reply. It
   only shows up in `unverified_figures_spoken` / `sensitive_leaks`.
 - **`coerce_bp`:** the prompts ask for every bp argument as a `"N%"` string. An
-  explicit `"N%"` is exact (`"1%"` → 100 bp; before 24b it was wrongly re-scaled
+  explicit `"N%"` is exact (`"1%"` → 100 bp; an earlier version wrongly re-scaled it
   to 100%). A bare number ≤ 100 is still read as percent (`45` → 4500 bp).
 - **Pre-registered adoption rule** (pre-registered): zero leaks and zero
   unverified figures; `agreement_valid` = 1; outcome rates within A's 95% CI;

@@ -4,13 +4,13 @@ CLI: ``python -m eval.run_eval --scenarios 12 --seed 7 [--limit N] [--resume RUN
 [--profile eval] [--nlu oracle|llm] [--nlg llm|bank|template]
 [--sim-phrasing llm|template] [--no-oracle-overlay]
 [--agent policy|policy_h3|react|llm_only] [--providers PATH] [--allow-budgeted]``.
-``--limit N`` (Phase 49) runs only the first N scenarios of that set.
+``--limit N`` runs only the first N scenarios of that set.
 
 Two layers:
 - ``--nlu oracle``: offline policy eval. Sim ground-truth ``TurnAnalysis``
   replaces NLU, ``offline`` profile (FakeLLM), no network or API keys;
-  requires template (or bank) NLG. With ``--sim-phrasing llm`` (Phase 46a
-  smoke of the sim's rewrite check) ``--profile`` is kept, but only the sim
+  requires template (or bank) NLG. With ``--sim-phrasing llm`` (a smoke
+  test of the sim's rewrite check) ``--profile`` is kept, but only the sim
   role calls a model: the agent still makes no LLM call.
 - ``--nlu llm`` (default): live NLU. By default sim disposition flags are
   overlaid on the LLM result; ``--no-oracle-overlay`` turns that off.
@@ -26,8 +26,8 @@ metrics; per-call results add ``agent``, ``transcript``,
 
 ``--providers`` swaps ``config/providers.yaml`` for this run only (e.g. split
 per-key rpm when several arms run at once: each process paces its own keys).
-Without it, paid ``budgeted: true`` route targets (the demo NLU's Claude,
-Phase 41) are dropped from the shipped file (``without_budgeted``, copy written
+Without it, paid ``budgeted: true`` route targets (the demo NLU's Claude)
+are dropped from the shipped file (``without_budgeted``, copy written
 to the run dir) unless ``--allow-budgeted`` is passed, so an eval never spends
 money by accident. An explicit ``--providers`` file is used as is.
 
@@ -281,8 +281,8 @@ def _build_settings(
         gemini_api_key=src.gemini_api_key,
         openrouter_api_key=src.openrouter_api_key,
         cerebras_api_key=src.cerebras_api_key,
-        # Phase 49 (ledger 46c.3): an unsuffixed ANTHROPIC_API_KEY and the daily
-        # Claude cap were dropped here, so budgeted Haiku NLU was skipped silently.
+        # Copy the unsuffixed ANTHROPIC_API_KEY and the daily Claude cap too;
+        # without them budgeted Haiku NLU is skipped silently.
         anthropic_api_key=src.anthropic_api_key,
         claude_daily_budget_usd=src.claude_daily_budget_usd,
         # Suffixed key pools (GROQ_API_KEY_2, ...) and an explicit base pool.
@@ -589,7 +589,7 @@ def select_scenarios(n: int, seed: int, limit: int | None = None) -> list[Scenar
     """``generate(n, seed)``, cut to its first ``limit`` scenarios when given.
 
     A pilot on the first N of a larger set runs the same calls as the full run
-    starts with (Phase 49, ledger 46c.4); ``--scenarios N`` alone generates a
+    starts with; ``--scenarios N`` alone generates a
     different N-call set.
     """
     scenarios = generate(n, seed)

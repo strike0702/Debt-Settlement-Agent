@@ -1,6 +1,6 @@
 """A/B report: one table over several ``eval.run_eval`` arm runs, plus the adoption rule.
 
-Phase 24b (pre-registered rule: docs/eval/ab_20261007/preregistration.md).
+The adoption rule was written down before the run: docs/eval/ab_20261007/preregistration.md.
 Reads finished run dirs (one per arm) and
 optional ``eval.judge_naturalness`` output dirs, keeps only the scenarios that
 **every** arm completed (``status=ok``) so the arms are compared on identical

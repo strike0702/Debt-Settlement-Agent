@@ -35,7 +35,7 @@ enough for the NLU role, or does the demo need Claude Sonnet 5.5?
 - **Commands:**
   - `python -m eval.nlu_corpus --label HAIKU_P40 --profile claude_haiku_nlu --providers docs/eval/nlu_haiku_20261008/providers_haiku.yaml --concurrency 2 --audit-db eval/results/nlu_corpus_audit_p40.db`
   - the same command with `--corpus tests/nlu_corpus_amounts.jsonl --label AMOUNTS_HAIKU_P40`
-  - `python -m eval.nlu_corpus --label HAIKU_P40_NO_GUARD --from-records docs/eval/nlu_corpus_haiku_p40.jsonl --no-repair-stance ...` (rescore, no calls)
+  - `python -m eval.nlu_corpus --label HAIKU_P40_NO_GUARD --from-records docs/eval/records/nlu_corpus_haiku_p40.jsonl --no-repair-stance ...` (rescore, no calls)
 - **Variance:** each model ran once. In Phase 39, rewording the prompt moved 9 Sonnet stance lines each way at the same net accuracy, so treat small differences (one or two lines) as noise.
 
 ## Price (official)

@@ -5,7 +5,7 @@ CLI: ``python -m eval.judge_naturalness RUN_A RUN_B [--profile eval]
 
 For every scenario id completed (``status=ok``) in both runs, an LLM (role
 ``judge``: Claude Sonnet 5.5 on the ``eval`` / ``local`` profiles, no free-tier
-fallback, needs ``ANTHROPIC_API_KEY``; Phase 30) sees the two transcripts as
+fallback, needs ``ANTHROPIC_API_KEY``) sees the two transcripts as
 "Transcript 1" / "Transcript 2", with no arm names, and picks the more natural
 agent. Each pair is judged twice with the order swapped; a scenario counts as a
 win only when both orders agree, otherwise it is a tie (position bias). Output:
@@ -15,7 +15,7 @@ over decisive scenarios and its Wilson 95% CI. Also writes ``human_pairs.csv``
 ``human_pairs_key.csv`` (which side is which
 arm) so a human can check the judge.
 
-Cost (Phase 47): every judge attempt is logged to ``judge_calls.jsonl`` (role,
+Cost: every judge attempt is logged to ``judge_calls.jsonl`` (role,
 provider, model, tokens, latency, error, ``cost_usd`` from the provider's
 ``prices_usd_per_mtok``; cache hits cost 0), totals go into ``summary.json``
 under ``cost`` and the run prints one ``judge cost:`` line. A model with no

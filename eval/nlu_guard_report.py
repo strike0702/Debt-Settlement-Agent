@@ -1,13 +1,14 @@
-"""Stance-guard report: raw LLM stance vs ``repair_stance`` output (Phase 37).
+"""Stance-guard report: raw LLM stance vs ``repair_stance`` output.
 
-Reads per-line records written by ``eval.nlu_corpus`` (``nlu_corpus_<label>.jsonl``,
-which carry ``predicted.stance_raw`` and ``stance_rule`` since Phase 37) and
+Reads per-line records written by ``eval.nlu_corpus``
+(``docs/eval/records/nlu_corpus_<label>.jsonl``, which carry
+``predicted.stance_raw`` and ``stance_rule``) and
 renders Markdown: per-class stance precision / recall / F1 with and without the
 guard, every line where the guard changed the label (helped / hurt / neutral),
 and a per-rule tally. Pure scoring: no LLM call, no change to ``app/``.
 
-``context_rows`` handles older records with no raw stance (e.g. the Phase 32
-Gemini run): it can only list lines where a phrase rule would force the label,
+``context_rows`` handles older records with no raw stance (e.g. the
+``BEFORE_P32`` Gemini run): it can only list lines where a phrase rule would force the label,
 since the raw stance there was never stored.
 
 CLI: ``python -m eval.nlu_guard_report RECORDS.jsonl [--context OLD.jsonl]``.

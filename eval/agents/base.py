@@ -62,7 +62,7 @@ from app.llm.call_audit import llm_call_scope
 from app.llm.client import strip_json_fences
 from app.store.audit import AuditLog
 
-# Dedicated client role (Phase 24b): its own eval route and
+# Dedicated client role: its own eval route and
 # ``Settings.llm_timeout_agent_s``, so agent steps neither run under the 6 s NLU
 # timeout nor share the NLU route's quota. Profiles without an ``agent`` route
 # fall back to ``nlu``.
@@ -113,7 +113,7 @@ _FALLBACK_TEXT: dict[Intent, str] = {
 SAY_FALLBACK = "Could you tell me more about what you can accept?"
 
 # Tool reference shared by both arms' prompts. A bp argument is asked for as a
-# "N%" string (carry-over 24a.4): ``coerce_bp`` still reads a bare number ≤ 100 as
+# "N%" string: ``coerce_bp`` still reads a bare number ≤ 100 as
 # percent, so the explicit form is the only way to say 1% unambiguously.
 MOVE_DOCS = """\
 Moves (each one is what you SAY this turn; exactly one per turn).

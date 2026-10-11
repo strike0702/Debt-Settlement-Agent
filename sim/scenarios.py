@@ -140,7 +140,7 @@ def _build_client(
             )
         )
         # Keep starting SDA consistent with ledger credits/debits is hard;
-        # seed balance separately as the as-of cash (PLAN range).
+        # seed balance separately as the as-of cash (sampled range).
     return Client(
         draft_amount_cents=draft_cents,
         draft_day=_FIRST_DRAFT.day,
@@ -343,7 +343,7 @@ def _try_one(
         )
 
         # Shape no_fix when we have a feasible band: push floor above max_bp,
-        # keeping opening_ask > floor (PLAN invariant).
+        # keeping opening_ask > floor (a scenario invariant).
         if want == "no_fix" and true_max is not None:
             # Need true_max + 500 < opening <= 8500 and floor > true_max.
             if true_max + 1000 > 8500:

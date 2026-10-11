@@ -99,5 +99,5 @@ class CallSession:
         for fact in summary.facts.private().values():
             if isinstance(fact.value, (int, date)):
                 self.private_blocklist.add((fact.kind, fact.value))
-        # max affordable bp is PRIVATE (PLAN §4.3).
+        # max affordable bp is PRIVATE.
         # Affordability.max_bp is known to the agent but must not be spoken.

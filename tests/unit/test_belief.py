@@ -1,4 +1,4 @@
-"""Table-driven BeliefState transition tests (PLAN section 4.4)."""
+"""Table-driven BeliefState transition tests."""
 
 from __future__ import annotations
 

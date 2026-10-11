@@ -1,4 +1,4 @@
-"""Table-driven policy tests — one coverage path per PLAN §6.2 rule."""
+"""Table-driven policy tests — one coverage path per cascade rule."""
 
 from __future__ import annotations
 
@@ -951,7 +951,7 @@ def test_no_deal_after_max_counters_at_max_bp() -> None:
 
 
 def test_confirm_reject_asks_assumed_field_not_same_schedule() -> None:
-    """PLAN §6.2 rule 10: deny in CONFIRM re-enters discovery — never spam same confirm."""
+    """Deny in CONFIRM re-enters discovery — never spam same confirm."""
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
     # first_payment_date stays ASSUMED from BeliefState seed
     assert b.get("first_payment_date").status == TermStatus.ASSUMED

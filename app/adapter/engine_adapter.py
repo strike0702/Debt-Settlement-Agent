@@ -150,7 +150,7 @@ def evaluate(
     """Run the engine at one settlement percentage (`bp` basis points).
 
     Builds an Offer, calls ``evaluate_offer``, and wraps the result with a
-    FactSet whose visibility follows PLAN §4.3 (speakable vs client-private).
+    FactSet whose visibility marks each fact speakable or client-private.
     """
     settlement = bp_to_decimal(bp)  # e.g. 4500 -> Decimal("0.45")
     offer = Offer(

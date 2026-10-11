@@ -277,7 +277,7 @@ def post_verify(
     call_id: str | None = None,
     last_agent_line: str = "",
 ) -> VerifiedAnalysis:
-    """Deterministic quote / number / prior-range checks (PLAN §6.1).
+    """Deterministic quote / number / prior-range checks.
 
     ``last_agent_line`` lets a bare structure word answer our structure question
     (``structure_word_ok``); without it the word needs a schedule noun nearby.

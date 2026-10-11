@@ -92,7 +92,7 @@ class Decide(_Model):
     reason_key: str
     reason_text: str
     # The same reason in a few number-free words, for collapsed trace rows. Added
-    # by the WS layer at emit time (Phase 36); absent on older frames.
+    # by the WS layer at emit time; absent on older frames.
     reason_short: str | None = None
 
 
@@ -121,7 +121,7 @@ class SpokenSentence(_Model):
 
 
 class TraceReader(_Model):
-    """Who read the rep's line this turn (Phase 48). Operator only, like the trace.
+    """Who read the rep's line this turn. Operator only, like the trace.
 
     ``kind``: ``llm`` (a model; ``provider`` / ``model`` name it), ``code`` (a
     deterministic fast path such as a bare "Correct." to a read-back), or
@@ -150,7 +150,7 @@ TraceNoteKind = Literal[
 
 
 class TraceNote(_Model):
-    """A step of the turn worth telling in words, from its audit row (Phase 48).
+    """A step of the turn worth telling in words, from its audit row.
 
     ``acked``: code acknowledged ``fields`` (and ``total`` cents) before the
     move. ``ack_corrected`` / ``ack_disputed``: the rep corrected or disputed
@@ -189,7 +189,7 @@ class TurnTrace(_Model):
     # required engine fields still missing (``[]`` = the move did not need the
     # engine). The rep stream carries no ``turn_trace`` at all.
     needs_info: list[str] | None = None
-    # Phase 48, set by the WS layer from the turn's audit rows on rep turns:
+    # Set by the WS layer from the turn's audit rows on rep turns:
     # who read the rep's line, and notable steps (acks, corrections, held-back
     # amounts, dropped questions). Absent on older frames and the opening.
     reader: TraceReader | None = None

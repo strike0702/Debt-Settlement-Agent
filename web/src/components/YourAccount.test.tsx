@@ -1,5 +1,5 @@
 /**
- * "Your account" card (Phase 34) over a mocked `fetch`: it calls the rep-safe
+ * "Your account" card over a mocked `fetch`: it calls the rep-safe
  * `/scenarios/{id}/rep`, renders the creditor's balances and rules, and shows
  * loading and error states.
  */
@@ -57,7 +57,7 @@ describe("YourAccount", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not load your account (Error: HTTP 404)");
   });
 
-  it("posts a custom case to the rep-safe preview endpoint (Phase 36)", async () => {
+  it("posts a custom case to the rep-safe preview endpoint", async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
       new Response(JSON.stringify({ ...EASY_DEAL, id: "custom", suggested: [] }), { status: 200 }),
     );

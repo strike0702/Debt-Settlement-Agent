@@ -1,5 +1,5 @@
 /**
- * Phase 50b: suggested rep replies all look the same. A rep who haggles their
+ * Suggested rep replies all look the same. A rep who haggles their
  * own way makes a "next" highlight wrong, so no suggestion is singled out; every
  * one stays clickable while the call is live. A line the script repeats is listed once.
  */

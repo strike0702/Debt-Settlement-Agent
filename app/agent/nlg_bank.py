@@ -6,7 +6,7 @@ and only those passing ``template_guard`` were kept. At runtime ``pick_template`
 returns one of them for an ``Action`` with no LLM call, chosen deterministically
 from ``(call_id, turn)`` so a replayed call speaks the same words.
 
-Phase 24b adds act keys: ``ACK`` (placeholders = the ``ack_*`` ids present)
+Besides intents, the bank holds H3 act keys: ``ACK`` (placeholders = the ``ack_*`` ids present)
 and ``ANSWER:<topic>`` (no placeholders; number-free paraphrases of the
 policy talking point). This module only loads and picks. ``app.agent.nlg.speak_action`` still runs
 ``template_guard`` (against the live action's ids) and ``rendered_guard`` on the

@@ -7,7 +7,7 @@
  * internal lens values and the WS `view` are unchanged. With no `trace` slot
  * (the Creditor rep view) the grid is two columns.
  *
- * Phase 36: no call-phase badge in the header (the turn cards name each move);
+ * No call-phase badge in the header (the turn cards name each move);
  * a visitor's custom test cases join the cards (marked "Custom", with edit and
  * remove), "Add a test case" sits next to the picker's heading, and the
  * editor (`editor` slot) opens under the cards. All copy is sentence case.
@@ -61,13 +61,13 @@ export const VIEW_LABEL: Record<Lens, string> = {
   creditor: "Creditor rep",
 };
 
-/** Under the view toggle: what the selected view shows (candidates in docs/PROGRESS.md, Phase 36). */
+/** Under the view toggle: what the selected view shows. */
 export const VIEW_HINT: Record<Lens, string> = {
   operator: "The agent's side of the call: the client's money and the reason behind every move.",
   creditor: "What the creditor's representative sees on the call, and nothing more.",
 };
 
-/** Under the title (candidates in docs/PROGRESS.md, Phase 36). */
+/** Under the title. */
 export const TAGLINE =
   "An AI voice agent negotiates a debt settlement for a client. Ordinary code decides every number and every move; the AI only understands the other side and puts the replies into words.";
 

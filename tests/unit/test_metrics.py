@@ -331,7 +331,7 @@ def test_counter_gate_compares_against_max_counters_key() -> None:
 
 
 def test_no_deal_correct_needs_a_fitting_handoff() -> None:
-    """Phase 45: a no_fix call is correct only when it hands off for a price reason."""
+    """A no_fix call is correct only when it hands off for a price reason."""
     base = dict(stratum="no_fix", zopa=False, should_escalate=True, got_deal=False,
                 agreement_valid=None, surplus_captured=None, turns_to_proposal=None)
     results = [

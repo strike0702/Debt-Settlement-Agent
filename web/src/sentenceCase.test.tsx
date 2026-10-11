@@ -1,5 +1,5 @@
 /**
- * Phase 36: one rule for every user-visible status phrase, badge, label and
+ * One rule for every user-visible status phrase, badge, label and
  * heading: sentence case (a capital first letter, never an all-lowercase code
  * like "pending client approval" or "known"). Renders the main components
  * with the whole recorded call and scans their rendered strings.
@@ -133,7 +133,7 @@ function renderConsole(lens: Lens) {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe("sentence case (Phase 36)", () => {
+describe("sentence case", () => {
   it("holds for every label in the Debt negotiator view", () => {
     const { container } = renderConsole("operator");
     for (const d of container.querySelectorAll("details")) d.open = true;

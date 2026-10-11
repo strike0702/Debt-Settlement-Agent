@@ -665,7 +665,7 @@ async def test_screenshot_transcript_revises_terms(tmp_path: Path) -> None:
     assert u.action.facts["settlement_pct"].value == 7000
 
     # Revision: 3 payments instead — must not CLARIFY.
-    # Revision to more payments keeps 70% within the accept line (Phase 45: a
+    # Revision to more payments keeps 70% within the accept line (a
     # revision that drops the line below 70% is a handoff, ``above_accept_line``).
     u = await orch.on_creditor_text(
         "can we do it in 10 payments instead",
@@ -1023,7 +1023,7 @@ async def test_denied_first_payment_readback_falls_back_to_engine_default(
 ) -> None:
     """A denied date read-back leaves the field UNKNOWN; the engine must not crash.
 
-    Seen in the Phase 24b A/B (``s0007_025``): ``build_rules`` succeeds without
+    Seen in an A/B run (``s0007_025``): ``build_rules`` succeeds without
     ``first_payment_date``, and the old ``assert isinstance(fpd, date)`` fired.
     """
     from feasibility.models import default_first_payment_date
@@ -1052,7 +1052,7 @@ async def test_denied_first_payment_readback_falls_back_to_engine_default(
 
 @pytest.mark.asyncio
 async def test_nlu_llm_unavailable_rolls_back_turn(tmp_path: Path) -> None:
-    """[P22] A turn whose NLU raises LLMUnavailable leaves no creditor line or turn bump."""
+    """A turn whose NLU raises LLMUnavailable leaves no creditor line or turn bump."""
     from app.llm.client import FakeLLM, LLMUnavailable
 
     scenario = load_scenario("fixtures/demo")
@@ -1095,14 +1095,14 @@ def _terms(**values: tuple[object, str]) -> list[ExtractedTerm]:
     ("line", "quote", "want"),
     [
         # The A/B wording: "the 100% balance" names the balance, not an ask, and the
-        # NLU verifier drops it (Phase 26), so the agent still asks for the %.
+        # NLU verifier drops it, so the agent still asks for the %.
         (
             "We require even payments to settle the 100% balance. Let me know if that works.",
             "100%",
             Intent.ASK_SETTLEMENT,
         ),
         # The policy path behind "Great, 100% is acceptable": an accepting line with
-        # a real first number. Phase 45: countered, never accepted.
+        # a real first number: countered, never accepted.
         ("We require even payments and can settle at 100%, that works.", "100%", Intent.COUNTER),
     ],
 )
@@ -1110,8 +1110,8 @@ async def test_pair17_first_number_in_discovery_is_countered_not_accepted(
     tmp_path: Path, line: str, quote: str, want: Intent
 ) -> None:
     """A/B pair 17 (s0007_006) shape: the structure answer arrives with a 100% read
-    as an accepting ask during discovery. Before Phase 45 the agent said "Great,
-    100% is acceptable"; now the rep's first number always gets a counter."""
+    as an accepting ask during discovery. The agent must not say "Great, 100% is
+    acceptable": the rep's first number always gets a counter."""
     orch, session, audit = _orch(tmp_path)
     await orch.start()
     await orch.on_creditor_text(

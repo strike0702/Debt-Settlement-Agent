@@ -25,7 +25,7 @@ from sim.scenarios import TrueRules, generate_one
 
 
 def test_build_settings_passes_policy_knobs() -> None:
-    """F16 / Phase 45: eval must not drop policy knobs back to their defaults."""
+    """Eval must not drop policy knobs back to their defaults."""
     src = Settings(
         accept_line_pct_of_max_bp=8000, max_same_question=3, max_no_progress_turns=5,
         max_turns=24,
@@ -90,7 +90,7 @@ def test_cli_oracle_rejects_networked_or_meaningless_flags(argv: list[str]) -> N
 
 
 def test_cli_oracle_allows_llm_sim_phrasing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Phase 46a smoke: oracle NLU with the sim's LLM rewrite (only the sim calls a model)."""
+    """Oracle NLU with the sim's LLM rewrite (only the sim calls a model)."""
     seen: dict[str, str] = {}
 
     async def fake_main(args: object) -> int:
@@ -156,7 +156,7 @@ def test_cli_default_nlg_template() -> None:
 
 
 def test_build_settings_passes_anthropic_key_and_budget() -> None:
-    """Phase 49 (ledger 46c.3): Haiku NLU under run_eval needs the key and the cap."""
+    """Haiku NLU under run_eval needs the key and the cap."""
     from decimal import Decimal
 
     src = Settings(anthropic_api_key="sk-test", claude_daily_budget_usd=Decimal("0.25"))
@@ -167,14 +167,14 @@ def test_build_settings_passes_anthropic_key_and_budget() -> None:
 
 
 def test_limit_runs_the_first_n_of_the_full_set() -> None:
-    """Phase 49 (ledger 46c.4): ``--limit 3`` is a prefix of ``--scenarios 12``."""
+    """``--limit 3`` is a prefix of ``--scenarios 12``."""
     from eval.run_eval import select_scenarios
     from sim.scenarios import generate
 
     full = [s.id for s in generate(12, 7)]
     assert [s.id for s in select_scenarios(12, 7, 3)] == full[:3]
     assert [s.id for s in select_scenarios(12, 7)] == full
-    # ``--scenarios 3`` alone is a different set (the Phase 46c pilot problem).
+    # ``--scenarios 3`` alone is a different set, so it is no pilot of the full run.
     assert [s.id for s in generate(3, 7)] != full[:3]
 
 

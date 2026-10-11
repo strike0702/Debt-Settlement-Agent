@@ -19,7 +19,7 @@ function client(over: Partial<ScenarioBrief["client"]>): ScenarioBrief["client"]
   };
 }
 
-describe("ledgerRows (Phase 35)", () => {
+describe("ledgerRows", () => {
   it("runs scheduled entries forward from the as-of balance", () => {
     const rows = ledgerRows(
       client({

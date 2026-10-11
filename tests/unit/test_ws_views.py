@@ -60,7 +60,7 @@ def test_rep_view_scripted_call_leaks_no_private_value(tmp_path: Path) -> None:
     private = _scenario_private(session)
     assert len(private) > 5
     assert leaked_private_values(frames, private, ref=session.scenario.client.as_of_date) == []
-    # Phase 35: the decision trace is the negotiator's tool; the rep stream has none.
+    # The decision trace is the negotiator's tool; the rep stream has none.
     assert not any(f["type"] == "turn_trace" for f in frames)
     for f in frames:
         assert f["type"] != "eval" or not {"max_bp", "program_fee_cents", "additional_funds"} & set(
@@ -104,7 +104,7 @@ def test_unknown_view_is_rejected(tmp_path: Path) -> None:
 
 
 def test_rep_http_export_and_events_leak_no_private_value(tmp_path: Path) -> None:
-    """[22.1] ``/calls/{id}/export?view=rep`` and ``/events?view=rep`` drop private rows."""
+    """``/calls/{id}/export?view=rep`` and ``/events?view=rep`` drop private rows."""
     with make_client(tmp_path) as client:
         with client.websocket_connect("/ws/call/http-rep?view=rep") as ws:
             frames = scripted_easy_deal(ws)
@@ -125,7 +125,7 @@ def test_rep_http_export_and_events_leak_no_private_value(tmp_path: Path) -> Non
 
 
 def test_rep_audit_filter_is_an_allow_list() -> None:
-    """[P22] An audit event nobody has reviewed stays off the rep stream."""
+    """An audit event nobody has reviewed stays off the rep stream."""
     from app.voice.views import is_private_audit
 
     assert not is_private_audit("creditor", "utterance")
@@ -150,7 +150,7 @@ _STALL = {"type": "text", "text": "Let me pull up the account.", "oracle": {"sta
 
 
 def test_operator_trace_says_why_the_engine_did_not_run(tmp_path: Path) -> None:
-    """[P35] Turns before the rules are known carry ``needs_info``; later turns the curve."""
+    """Turns before the rules are known carry ``needs_info``; later turns the curve."""
     from tests.wsutil import _RULES, ack_all, turn
 
     with make_client(tmp_path) as client, client.websocket_connect("/ws/call/ni-1") as ws:
@@ -174,13 +174,13 @@ _FEE = {("money", 950)}  # easy_deal's private $9.50 bank fee
 
 
 def test_leak_scan_ignores_iso_timestamp_that_tokenizes_as_a_private_amount() -> None:
-    """[36.1] An audit ``ts`` whose seconds read ``09.50…`` is not the $9.50 fee."""
+    """An audit ``ts`` whose seconds read ``09.50…`` is not the $9.50 fee."""
     frame = {"type": "audit", "ts": "2026-10-08T03:17:09.500412+00:00", "event": "decide"}
     assert leaked_private_values([frame], _FEE, ref=_REF) == []
 
 
 def test_leak_scan_still_catches_private_amounts_beside_or_under_ts() -> None:
-    """[36.1] The timestamp exemption is narrow: money text is still scanned, even under ``ts``."""
+    """The timestamp exemption is narrow: money text is still scanned, even under ``ts``."""
     said = {"type": "say", "text": "The fee is $9.50.", "ts": "2026-10-08T03:17:09.500412+00:00"}
     fake_ts = {"type": "audit", "ts": "fee $9.50"}
     assert leaked_private_values([{"type": "x", "text": "fee $9.50"}], _FEE, ref=_REF) != []
@@ -191,7 +191,7 @@ def test_leak_scan_still_catches_private_amounts_beside_or_under_ts() -> None:
 
 
 def test_leak_scan_reports_the_full_path_of_each_hit() -> None:
-    """[36.1] A failure names frame type, key path and value, so a flake is triageable."""
+    """A failure names frame type, key path and value, so a flake is triageable."""
     frame = {"type": "audit", "events": [{"payload": {"note": "fee $9.50"}}]}
     assert leaked_private_values([frame], _FEE, ref=_REF) == [
         ("audit:events[0].payload.note", "$9.50")

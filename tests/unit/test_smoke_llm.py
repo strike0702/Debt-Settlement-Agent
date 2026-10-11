@@ -1,4 +1,4 @@
-"""[P27] ``scripts/smoke_llm.py`` sees suffixed-only key pools and smokes each key."""
+"""``scripts/smoke_llm.py`` sees suffixed-only key pools and smokes each key."""
 
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ class _FakeJudgeClient:
 
 
 def test_judge_target_skips_without_anthropic_key(monkeypatch) -> None:
-    """[30.2] No ``ANTHROPIC_API_KEY`` → a SKIP line and no client is built."""
+    """No ``ANTHROPIC_API_KEY`` → a SKIP line and no client is built."""
     import asyncio
 
     smoke = _smoke()
@@ -73,7 +73,7 @@ def test_judge_target_skips_without_anthropic_key(monkeypatch) -> None:
 
 
 def test_judge_target_calls_the_judge_role_once_per_key(monkeypatch) -> None:
-    """[30.2] With a key: one ``chat_text("judge", ..., json_mode=True)``, eval, no cache."""
+    """With a key: one ``chat_text("judge", ..., json_mode=True)``, eval, no cache."""
     import asyncio
 
     smoke = _smoke()

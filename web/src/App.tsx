@@ -15,17 +15,17 @@
  * mid-call re-filters on the client. Switching to the Debt negotiator view
  * during or after a call that streams the rep view backfills the decision
  * trace, ladder, latency and audit from `GET /calls/{id}/operator` and
- * refetches on every `turn_done` (Phase 36), so the trace is there whichever
+ * refetches on every `turn_done`, so the trace is there whichever
  * view the call was started in.
  *
- * Custom test cases (Phase 36): "Add a test case" opens `CaseEditor`; saved
+ * Custom test cases: "Add a test case" opens `CaseEditor`; saved
  * cases join the cards, persist in `localStorage` and start with
  * `start.scenario_payload` (played by hand: autoplay is curated-only).
  *
  * `?fixture=1` replays `fixtures/call_easy_deal.json` with no backend
  * (`&speed=4` to speed up).
  *
- * Phase 48: the selected scenario and view are in the URL
+ * The selected scenario and view are in the URL
  * (`?scenario=&view=operator|rep`, `useUrlState`; back and forward work), a
  * handoff is shown as the call's outcome in both views (`lib/outcome.ts`),
  * and the transcript ends with a line saying how the call ended.

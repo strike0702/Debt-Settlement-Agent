@@ -1,6 +1,6 @@
 /**
  * Backfills the Debt negotiator view for a call that streams the Creditor rep
- * view (Phase 36). The rep socket never carries `turn_trace` or private audit
+ * view. The rep socket never carries `turn_trace` or private audit
  * rows, so the server keeps them per call in memory and serves them at
  * `GET /calls/{id}/operator`; this hook fetches that while the negotiator view
  * is open, and again whenever `tick` changes (App passes the number of

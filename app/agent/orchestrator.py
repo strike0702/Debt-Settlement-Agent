@@ -12,20 +12,23 @@ Every ``Utterance`` carries a ``TurnTrace`` (``app.schemas.events``) assembled
 from what the turn already computed — NLU terms and drops, belief changes,
 affordability, the decision with its ``reasons`` sentence, NLG template and
 guard verdicts, timings — never by re-reading the audit log.
-With ``Settings.nlg_h3`` (Phase 24b) the decided move gets optional ack /
+With ``Settings.nlg_h3`` the decided move gets optional ack /
 answer acts (``app.agent.acts``) spoken before it, and LLM NLG sees the last
-three public turns. Phase 46b: ``Settings.nlg_ack`` (default on) speaks the
+three public turns. ``Settings.nlg_ack`` (default on) speaks the
 code-built ack alone; the next rep turn may correct it ("No, it's six
 payments" → the new value replaces the acked one; "that's not what I said" →
 the acked terms go back to TENTATIVE and are read back). A reply to a pending
 cents / amount question that also carries new terms is not just asked again:
 the answer (if any) and the new terms are applied and ``decide`` runs.
-Phase 45: before ``decide`` it counts rep turns in a row with no progress
+Before ``decide`` it counts rep turns in a row with no progress
 (``policy.rep_turn_progress``) for the loop guard, runs ``policy.loop_guard``
 on clarifies chosen before ``decide``, and turns a rep ending without a deal
 (``on_rep_end``) or a wrap whose agreement fails to draft into a handoff
 (``ESCALATE``). Does not own policy rules or LLM prompts — those live in
 ``policy`` / ``acts`` / ``nlu`` / ``nlg``.
+
+Non-price alternative search lives in ``app.agent.term_alts`` and the
+effect → session mapping in ``app.agent.effects``; both are re-exported here.
 """
 
 from __future__ import annotations
@@ -36,7 +39,6 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from dataclasses import replace as dc_replace
 from datetime import date
 from typing import Any, Concatenate
 
@@ -51,6 +53,7 @@ from app.adapter.engine_adapter import (
 )
 from app.adapter.validator import validate
 from app.agent.acts import acked_fields, attach_acts, is_ack_correction, is_ack_dispute
+from app.agent.effects import apply_effects
 from app.agent.guards import _cross_match
 from app.agent.nlg import SAFE_FALLBACK, render_action, render_acts, speak_action
 from app.agent.nlu import (
@@ -75,21 +78,26 @@ from app.agent.policy import (
     cents_ambiguity_clarify_action,
     decide,
     draft_agreement,
-    field_already_countered,
     follow_up_action,
     loop_guard,
     opening_action,
     parse_pending_terms_value,
     rep_turn_progress,
     speak_schedule_action,
-    terms_counter_key,
 )
 from app.agent.reasons import reason_key, reason_text
 from app.agent.session import CallSession, PendingSpeech, Turn
+
+# The find_alt_* searches are re-exported for callers that import them from here.
+from app.agent.term_alts import (  # noqa: F401
+    find_alt_first_payment_date,
+    find_alt_max_payments,
+    find_alt_min_payment_cents,
+    find_next_term_alt,
+)
 from app.config import Settings, get_settings
 from app.domain.belief import BeliefChange, TermStatus
 from app.domain.facts import Fact
-from app.domain.scenario import CallScenario
 from app.llm.call_audit import llm_call_scope
 from app.llm.client import LLMUnavailable, QueueWait, queue_wait_scope
 from app.llm.prompts import NLG_CONTEXT_TURNS
@@ -109,10 +117,7 @@ from app.schemas.events import (
 )
 from app.store.audit import AuditLog
 from feasibility.models import (
-    CreditorRules,
-    add_months,
     default_first_payment_date,
-    end_of_month,
 )
 
 
@@ -150,236 +155,6 @@ def _close_timings(timings: dict[str, float], t_server: float, queue: QueueWait)
     timings["server_total_ms"] = _ms_since(t_server)
 
 
-def find_alt_first_payment_date(
-    scenario: CallScenario,
-    rules: CreditorRules,
-    *,
-    ask_bp: int | None,
-    requested: date,
-    already: set[str],
-) -> date | None:
-    """Scan EOM candidates within the savings horizon.
-
-    Prefers the closest date where ``ask_bp`` is feasible. When the ask
-    fits nowhere, prefer the highest ceiling (then the closest date). The
-    current month is usually closest and can be stuck at a token percent
-    while a later month clears most of the ask. Never re-offers an ISO
-    date in ``already``.
-    """
-    client = scenario.client
-    start = end_of_month(max(client.as_of_date, client.first_draft_date))
-    end = client.last_draft_date
-    if start > end:
-        return None
-
-    candidates: list[date] = []
-    cur = start
-    # Cap scans (~24 months) so a bad fixture cannot hang the turn.
-    for _ in range(24):
-        if cur > end:
-            break
-        candidates.append(cur)
-        nxt = end_of_month(add_months(cur, 1))
-        if nxt <= cur:
-            break
-        cur = nxt
-
-    best: date | None = None
-    best_rank: tuple[int, int, int] | None = None
-    for cand in candidates:
-        iso = cand.isoformat()
-        if iso in already:
-            continue
-        aff = affordability(scenario, rules, cand)
-        if aff.max_bp is None:
-            continue
-        ask_ok = ask_bp is None or ask_bp in aff.feasible_bps
-        dist = abs((cand - requested).days)
-        # Ask-feasible: closest date. Otherwise a later month with a much
-        # higher ceiling must beat the current month's token curve.
-        if ask_ok:
-            rank = (0, dist, -aff.max_bp)
-        else:
-            rank = (1, -aff.max_bp, dist)
-        if best is None or best_rank is None or rank < best_rank:
-            best = cand
-            best_rank = rank
-    return best
-
-
-def find_alt_min_payment_cents(
-    scenario: CallScenario,
-    rules: CreditorRules,
-    *,
-    ask_bp: int | None,
-    fpd: date,
-    current: int,
-    baseline_max_bp: int | None = None,
-) -> int | None:
-    """Search lower min-payment floors that unlock or improve affordability.
-
-    Steps down by $10 (1000¢) toward the field floor (1000¢). Prefers the
-    least invasive floor where ``ask_bp`` is feasible. When the ask fits
-    nowhere, jump to the floor with the highest ceiling (then least
-    invasive) — same idea as FPD — so we do not nickle-and-dime $50→$40→$30.
-
-    When ``baseline_max_bp`` is set (curve already non-empty but ask still
-    unreachable), only candidates that make the ask feasible or raise
-    ``max_bp`` above the baseline count — avoids re-offering a useless cut.
-    """
-    floor = 1000
-    if current <= floor:
-        return None
-
-    best: int | None = None
-    # ask_ok → (0, distance, -max_bp); else → (1, -max_bp, distance)
-    best_rank: tuple[int, int, int] | None = None
-    cand = current - 1000
-    scanned = 0
-    while cand >= floor and scanned < 20:
-        trial = dc_replace(rules, min_payment_cents=cand)
-        aff = affordability(scenario, trial, fpd)
-        if aff.max_bp is not None:
-            ask_ok = ask_bp is None or ask_bp in aff.feasible_bps
-            improved = baseline_max_bp is None or aff.max_bp > baseline_max_bp
-            if ask_ok or improved:
-                dist = current - cand
-                if ask_ok:
-                    rank = (0, dist, -aff.max_bp)
-                else:
-                    rank = (1, -aff.max_bp, dist)
-                if best is None or best_rank is None or rank < best_rank:
-                    best = cand
-                    best_rank = rank
-                    # Closest ask-ok wins; scanning high→low so first is enough.
-                    if ask_ok:
-                        return best
-        cand -= 1000
-        scanned += 1
-    return best
-
-
-def find_alt_max_payments(
-    scenario: CallScenario,
-    rules: CreditorRules,
-    *,
-    ask_bp: int | None,
-    fpd: date,
-    current: int,
-    baseline_max_bp: int | None = None,
-) -> int | None:
-    """Search higher max-payment counts that unlock or improve affordability.
-
-    Steps up by 1 toward 60. Prefers the lowest count where ``ask_bp`` is
-    feasible. When the ask fits nowhere, jump to the lowest count that
-    hits the best ceiling — skip useless +1 steps that still leave the
-    ask unreachable (4→5 when only 6 unlocks a real ladder).
-
-    When ``baseline_max_bp`` is set, only candidates that make the ask
-    feasible or raise ``max_bp`` above the baseline count.
-    """
-    ceiling = 60
-    if current >= ceiling:
-        return None
-
-    best: int | None = None
-    # ask_ok → (0, distance, -max_bp); else → (1, -max_bp, distance)
-    best_rank: tuple[int, int, int] | None = None
-    cand = current + 1
-    scanned = 0
-    while cand <= ceiling and scanned < 20:
-        # Keep "no token limit" semantics when token pays tracked max_payments.
-        new_token = (
-            cand if rules.max_token_pays == rules.max_payments else rules.max_token_pays
-        )
-        trial = dc_replace(
-            rules,
-            max_payments=cand,
-            max_terms=cand,
-            max_token_pays=new_token,
-        )
-        aff = affordability(scenario, trial, fpd)
-        if aff.max_bp is not None:
-            ask_ok = ask_bp is None or ask_bp in aff.feasible_bps
-            improved = baseline_max_bp is None or aff.max_bp > baseline_max_bp
-            if ask_ok or improved:
-                dist = cand - current
-                if ask_ok:
-                    rank = (0, dist, -aff.max_bp)
-                else:
-                    rank = (1, -aff.max_bp, dist)
-                if best is None or best_rank is None or rank < best_rank:
-                    best = cand
-                    best_rank = rank
-                    # Lowest ask-ok wins; scanning low→high so first is enough.
-                    if ask_ok:
-                        return best
-        cand += 1
-        scanned += 1
-    return best
-
-
-def find_next_term_alt(
-    scenario: CallScenario,
-    rules: CreditorRules,
-    *,
-    ask_bp: int | None,
-    fpd: date,
-    max_payments: int,
-    min_payment_cents: int,
-    terms_countered: list[str],
-    baseline_max_bp: int | None = None,
-) -> tuple[str, Any] | None:
-    """Next staggered non-price alt: FPD → lower min → higher max_payments.
-
-    FPD is one try per field. Min / max may progress to a better value when
-    a prior alt only unlocked a ceiling still below the ask.
-    """
-    if not field_already_countered(terms_countered, "first_payment_date"):
-        already_iso = {
-            k.split(":", 1)[1]
-            for k in terms_countered
-            if k.startswith("first_payment_date:")
-        }
-        alt = find_alt_first_payment_date(
-            scenario,
-            rules,
-            ask_bp=ask_bp,
-            requested=fpd,
-            already=already_iso,
-        )
-        if alt is not None and alt != fpd:
-            return ("first_payment_date", alt)
-
-    alt_min = find_alt_min_payment_cents(
-        scenario,
-        rules,
-        ask_bp=ask_bp,
-        fpd=fpd,
-        current=min_payment_cents,
-        baseline_max_bp=baseline_max_bp,
-    )
-    if alt_min is not None and alt_min < min_payment_cents:
-        key = terms_counter_key("min_payment_cents", alt_min)
-        if key not in terms_countered:
-            return ("min_payment_cents", alt_min)
-
-    alt_max = find_alt_max_payments(
-        scenario,
-        rules,
-        ask_bp=ask_bp,
-        fpd=fpd,
-        current=max_payments,
-        baseline_max_bp=baseline_max_bp,
-    )
-    if alt_max is not None and alt_max > max_payments:
-        key = terms_counter_key("max_payments", alt_max)
-        if key not in terms_countered:
-            return ("max_payments", alt_max)
-
-    return None
-
-
 _BOOKKEEPING_EFFECT_KINDS: frozenset[str] = frozenset(
     {
         "offer_counter",
@@ -389,81 +164,6 @@ _BOOKKEEPING_EFFECT_KINDS: frozenset[str] = frozenset(
         "note_terms_countered",
     }
 )
-
-
-def apply_effects(session: CallSession, effects: list[Effect]) -> None:
-    """Commit deferred negotiation side effects (speech ack path only)."""
-    for effect in effects:
-        kind = effect.kind
-        data = effect.data
-        if kind == "offer_counter":
-            bp = int(data["bp"])
-            # Idempotent: eager emit + barge-in/ack must not double-count.
-            if not session.neg.counters_offered or session.neg.counters_offered[-1] != bp:
-                session.neg.counters_offered.append(bp)
-            # Phase 45 ladder bookkeeping: plain sets, so a second apply is a no-op.
-            if "ask_bp" in data:
-                session.neg.ask_at_last_counter = int(data["ask_bp"])
-            if "stage" in data:
-                session.neg.hold_stage = int(data["stage"])
-            if "final_ask" in data:
-                session.neg.final_counter_ask = int(data["final_ask"])
-            turn = data.get("turn")
-            if turn is not None and int(turn) not in session.neg.counter_turns:
-                session.neg.counter_turns.append(int(turn))
-        elif kind == "note_question":
-            key = str(data["key"])
-            session.neg.question_counts[key] = session.neg.question_counts.get(key, 0) + 1
-        elif kind == "set_pending_readback":
-            session.neg.pending_readback = str(data["field"])
-        elif kind == "clear_pending_readback":
-            session.neg.pending_readback = None
-        elif kind == "inc_private_ask":
-            session.neg.private_ask_count += 1
-        elif kind == "inc_commit_demand":
-            session.neg.commit_demand_count += 1
-        elif kind == "record_ask":
-            bp = int(data["bp"])
-            session.neg.ask_bp = bp
-            session.neg.ask_history.append(bp)
-        elif kind == "record_confirm":
-            raw_key = data.get("key")
-            if isinstance(raw_key, list):
-                session.neg.last_confirm_key = tuple(raw_key)
-            elif isinstance(raw_key, tuple):
-                session.neg.last_confirm_key = raw_key
-            else:
-                session.neg.last_confirm_key = (int(data["ask_bp"]),)
-            session.neg.confirmed_bp = int(data["ask_bp"])
-        elif kind == "note_confirm_accepted":
-            session.neg.accepted_confirm_key = tuple(data["key"])
-        elif kind == "inc_confirm_reject":
-            session.neg.confirm_rejects += 1
-        elif kind == "note_assumed_asked":
-            session.neg.assumed_asked.add(str(data["field"]))
-        elif kind == "note_clarify":
-            fname = str(data["field"])
-            session.neg.clarify_counts[fname] = session.neg.clarify_counts.get(fname, 0) + 1
-        elif kind == "note_terms_countered":
-            key = str(data.get("key") or terms_counter_key(str(data["field"]), data["value"]))
-            if key not in session.neg.terms_countered:
-                session.neg.terms_countered.append(key)
-            session.neg.pending_terms_alt = {
-                "field": str(data["field"]),
-                "value": data["value"],
-            }
-        elif kind == "clear_pending_terms_alt":
-            session.neg.pending_terms_alt = None
-        elif kind == "clear_wrap":
-            session.agreement = None
-            session.agreed_bp = None
-            session.last_eval = None
-        elif kind == "set_pending_cents_clarify":
-            session.neg.pending_cents_clarify = dict(data)
-        elif kind == "clear_pending_cents_clarify":
-            session.neg.pending_cents_clarify = None
-        elif kind == "set_phase":
-            session.neg.phase = Phase(str(data["phase"]))
 
 
 def _carries_new_terms(verified: VerifiedAnalysis, *, held_cents: int | None = None) -> bool:
@@ -611,7 +311,7 @@ class Orchestrator:
         self._drained: list[Utterance] = []
         # What the turn in flight computed, for ``Utterance.trace`` (see ``_build_trace``).
         self._trace_ctx: dict[str, Any] = {}
-        # Belief field → value the last emitted move acknowledged (Phase 46b); the
+        # Belief field → value the last emitted move acknowledged; the
         # next rep turn may correct it. Cleared when that turn starts.
         self._last_ack: dict[str, Any] = {}
 
@@ -897,7 +597,7 @@ class Orchestrator:
                 )
                 return await self._emit(action, sentences, timings, [])
 
-            # Total-vs-per-payment amounts (Phase 39): answer a pending question,
+            # Total-vs-per-payment amounts: answer a pending question,
             # then turn a dollar-total ask into bp or ask about a doubtful amount.
             check_min_payment = True
             pending_amount = session.neg.pending_amount_clarify
@@ -1012,7 +712,7 @@ class Orchestrator:
 
             t_pol = time.perf_counter()
             analysis = verified.to_turn_analysis()
-            # Loop guard (Phase 45): rep turns in a row that added nothing.
+            # Loop guard: rep turns in a row that added nothing.
             if rep_turn_progress(
                 analysis, session.neg, belief_changes, accepted_term_alt=accepted_term_alt
             ):
@@ -1128,7 +828,7 @@ class Orchestrator:
                 and pending.action.reason == "thanks_accept"
             )
         ) and agreement is None:
-            # No valid agreement behind the wrap: hand off (deal-or-handoff, Phase 45).
+            # No valid agreement behind the wrap: hand off (a call ends as a deal or a handoff).
             self.session.neg.phase = Phase.ESCALATE
             self._audit(
                 "orchestrator",
@@ -1266,7 +966,7 @@ class Orchestrator:
                     reason="rep_ended_after_wrap",
                 )
             else:
-                # No deal on the table: a handoff, never a bare no-deal end (Phase 45).
+                # No deal on the table: a handoff, never a bare no-deal end.
                 action = follow_up_action(reason="rep_ended")
             with queue_wait_scope() as queue:
                 sentences = await self._speak(action, last_rep_line="")
@@ -1535,7 +1235,7 @@ class Orchestrator:
         that says we misheard ("I said six payments") replaces the value
         outright instead of the CONTRADICTED → CLARIFY path; a bare "No, it's
         six" or "No, actually make that six" may be the rep changing their own
-        term, so it still clarifies (Phase 49). A dispute with no value
+        term, so it still clarifies. A dispute with no value
         ("that's not what I said") puts the acked terms back to TENTATIVE so
         they are read back.
         """

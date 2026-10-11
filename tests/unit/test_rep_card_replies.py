@@ -1,4 +1,4 @@
-"""Rep-card suggested replies must not quote the agent's own figure (Phase 33).
+"""Rep-card suggested replies must not quote the agent's own figure.
 
 A reply like "Thirty-two is too low" goes stale the moment policy changes the
 agent's counter. These tests run the curated easy_deal call offline (autoplay:

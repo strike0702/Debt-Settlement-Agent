@@ -1,4 +1,4 @@
-/** Custom test-case helpers (Phase 36): storage that never throws, JSON errors with lines, path → cursor. */
+/** Custom test-case helpers: storage that never throws, JSON errors with lines, path → cursor. */
 import { describe, expect, it } from "vitest";
 import { type CustomCase, loadCases, locatePath, metaOf, nextKey, parseCase, saveCases, serverId } from "@/lib/customCases";
 

@@ -1,5 +1,5 @@
 /**
- * Which side of the call the console shows. User-facing names (Phase 35):
+ * Which side of the call the console shows. User-facing names:
  * `operator` = "Debt negotiator", `creditor` = "Creditor rep" (server `?view=rep`).
  */
 import type { View } from "@/types/protocol";

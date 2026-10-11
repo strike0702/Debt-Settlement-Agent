@@ -520,7 +520,7 @@ async def test_hung_stt_times_out(tmp_path: Path) -> None:
     assert events[0]["role"] == "stt" and events[0]["error"]
 
 
-# --- Phase 21: F1 burst bucket, per-model buckets, route params, queue_ms ---
+# --- Burst bucket, per-model buckets, route params, queue_ms ---------------
 
 
 @pytest.mark.asyncio
@@ -704,7 +704,7 @@ providers:
 
 @pytest.mark.asyncio
 async def test_limiter_wait_bounded_by_role_timeout(tmp_path: Path) -> None:
-    """[20.2] An empty bucket cannot stall past the role timeout; it fails over."""
+    """An empty bucket cannot stall past the role timeout; it fails over."""
     path = _write_yaml(tmp_path, _SLOW_BUCKET_YAML)
     metas: list[dict[str, Any]] = []
     client, seen = _client(
@@ -729,7 +729,7 @@ async def test_limiter_wait_bounded_by_role_timeout(tmp_path: Path) -> None:
 
 
 def test_route_timeout_override_parses_and_validates() -> None:
-    """[20.1] a route may carry its own timeout_s (eval Gemini NLU is slower than 6 s)."""
+    """A route may carry its own timeout_s (eval Gemini NLU is slower than 6 s)."""
     from app.llm.client import parse_route_entry
 
     t = parse_route_entry({"target": "gemini/flash", "timeout_s": 20})
@@ -799,7 +799,7 @@ def test_shipped_providers_yaml_parses() -> None:
 
 
 def test_shipped_cerebras_limits_match_free_tier_docs() -> None:
-    """[P27] Cerebras free tier for gpt-oss-120b is 5 RPM / 30K uncached TPM (docs)."""
+    """Cerebras free tier for gpt-oss-120b is 5 RPM / 30K uncached TPM (docs)."""
     client = LLMClient(_settings(llm_profile="offline"), skip_health_check=True)
     cfg = client._providers["cerebras"]
     assert (cfg.rpm, cfg.tpm) == (5, 30000)

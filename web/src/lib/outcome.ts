@@ -1,7 +1,7 @@
 /**
- * How a call ended, in words, for both views (Phase 48).
+ * How a call ended, in words, for both views.
  *
- * Since Phase 45 a call ends only as a deal or a handoff to a specialist.
+ * A call ends only as a deal or a handoff to a specialist.
  * `callOutcome` reads the folded call state and says which, for the state
  * column's outcome card and the end-of-call line under the transcript.
  *

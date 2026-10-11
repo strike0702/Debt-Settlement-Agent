@@ -13,9 +13,8 @@
  * the rep stream carries no traces (for a call streamed in the Creditor rep
  * view, App backfills them from `GET /calls/{id}/operator`), and in the
  * Creditor rep lens this renders a single lock even if it is handed traces.
- * Phase 36 replaced the seven-step card with this design (user's pick of four
- * mockups); `note` replaces the empty state, e.g. when the server has
- * forgotten a call. Phase 48: price moves are titled by their ladder step,
+ * `note` replaces the empty state, e.g. when the server has
+ * forgotten a call. Price moves are titled by their ladder step,
  * an open rep turn shows which model read the line ("Read by Claude Haiku"),
  * and the working says when code opened the reply with an acknowledgement.
  */

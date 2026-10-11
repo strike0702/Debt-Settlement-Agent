@@ -35,7 +35,7 @@ export interface ScenarioMeta {
   description: string;
   expected: "deal" | "no_deal" | "escalate" | "counter" | string;
   suggested: string[];
-  /** Set on a visitor's own test case (Phase 36): played by hand, never autoplayed. */
+  /** Set on a visitor's own test case: played by hand, never autoplayed. */
   custom?: boolean;
 }
 

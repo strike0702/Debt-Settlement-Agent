@@ -1,4 +1,4 @@
-"""Phase 48: who read each rep turn (``turn_trace.reader``) and the turn's notes.
+"""Who read each rep turn (``turn_trace.reader``) and the turn's notes.
 
 The WS layer builds both from the turn's audit rows (``turn_reader`` /
 ``turn_notes`` in ``app.voice.ws``); the orchestrator is untouched. Covered:
@@ -193,7 +193,7 @@ def _play(ws: Any, *msgs: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def test_operator_trace_carries_reader_and_correction_notes(tmp_path: Path) -> None:
-    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/p48-op") as ws:
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/trace-op") as ws:
         frames = _play(ws, _FIVE, _SIX)
     traces = [f for f in frames if f["type"] == "turn_trace"]
     for f in traces:
@@ -213,7 +213,7 @@ def test_live_nlu_turn_names_the_fake_model(tmp_path: Path) -> None:
     settings = offline_settings(nlu_mode="llm")
     with (
         make_client(tmp_path, settings=settings, llm=llm) as client,
-        client.websocket_connect("/ws/call/p48-llm") as ws,
+        client.websocket_connect("/ws/call/trace-llm") as ws,
     ):
         frames = _play(ws, {"type": "text", "text": "Up to five payments."})
     rep_turn = [f for f in frames if f["type"] == "turn_trace"][-1]
@@ -224,7 +224,7 @@ def test_live_nlu_turn_names_the_fake_model(tmp_path: Path) -> None:
 def test_rep_stream_never_carries_reader_or_notes(tmp_path: Path) -> None:
     with (
         make_client(tmp_path) as client,
-        client.websocket_connect("/ws/call/p48-rep?view=rep") as ws,
+        client.websocket_connect("/ws/call/trace-rep?view=rep") as ws,
     ):
         frames = _play(ws, _FIVE, _SIX)
     blob = json.dumps(frames)
@@ -237,7 +237,7 @@ def test_rep_stream_never_carries_the_handoff_reason_code(tmp_path: Path) -> Non
     """The rep hears the spoken handoff line; the policy's code stays with the negotiator."""
     with (
         make_client(tmp_path) as client,
-        client.websocket_connect("/ws/call/p48-rep-esc?view=rep") as ws,
+        client.websocket_connect("/ws/call/trace-rep-esc?view=rep") as ws,
     ):
         start = {"type": "start", "scenario_id": "no_space", "autoplay": True}
         ws.send_json({**start, "autoplay_pause_ms": 0})

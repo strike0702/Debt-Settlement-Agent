@@ -1,11 +1,11 @@
-"""Phase 48: curated scenario fixtures and the optional haggle style in ``sim.json``.
+"""Curated scenario fixtures and the optional haggle style in ``sim.json``.
 
 - ``haggling_rep`` autoplays the price ladder in order: first offer, hold, one
   step, then (rep firm at their lowest) a final counter, and the agent accepts
-  the repeat. Phase 50b retuned the fixture so the equal step stays below the
+  the repeat. The fixture is tuned so the equal step stays below the
   floor; a second step cannot show up in a deal (it offers min(ask, line), which
   a rep whose floor is at or below the line simply takes).
-- Fixtures without ``"haggle"`` keep the easy rep, so they play as before.
+- Fixtures without ``"haggle"`` keep the easy rep, so they play as recorded.
 - Card descriptions are plain words (no policy jargon), and every rep card
   whose ``sim.json`` has a floor shows it.
 """
@@ -62,7 +62,7 @@ async def test_haggling_rep_plays_the_whole_ladder(max_counters: int) -> None:
     moves, (result, agreement) = await _ladder(
         "haggling_rep", offline_settings(max_counters=max_counters)
     )
-    # Phase 50b: ask 70%, floor 65%. Anchor 49, hold, equal step to 59 (below
+    # Ask 70%, floor 65%. Anchor 49, hold, equal step to 59 (below
     # the floor), the rep drops to 65 and is firm, final counter halfway (62),
     # the rep repeats 65 and we take it (at or below the accept line).
     assert moves == [
@@ -82,7 +82,7 @@ async def test_haggling_rep_plays_the_whole_ladder(max_counters: int) -> None:
 def test_haggling_rep_meta_matches_the_autoplay_outcome(tmp_path: Path) -> None:
     from app.domain.scenario import list_scenario_metas
 
-    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/p48-haggle") as ws:
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/haggle-fixture") as ws:
         ws.send_json(
             {
                 "type": "start",
@@ -151,7 +151,7 @@ def test_card_descriptions_are_plain_words(scenario_id: str) -> None:
 
 @pytest.mark.parametrize("scenario_id", _IDS)
 def test_every_rep_card_shows_the_sim_floor(scenario_id: str) -> None:
-    """[47.2] A human rep sees the same floor the simulated rep holds."""
+    """A human rep sees the same floor the simulated rep holds."""
     folder = SCENARIOS_ROOT / scenario_id
     acct = rep_account_from_card((folder / "rep_card.md").read_text(encoding="utf-8"))
     sim = json.loads((folder / "sim.json").read_text())

@@ -4,8 +4,8 @@ After ``decide()`` has picked the move, ``attach_acts`` may add two optional
 acts that are spoken *before* it, without changing the move:
 
 - ``ack``: PUBLIC facts (source ``creditor``) for the terms the rep settled this
-  turn, e.g. "Got it, 6 payments at a $250 minimum.", and (Phase 46b) a
-  verified dollar-total ask ("Got it, $420 in total."). Since Phase 50 the
+  turn, e.g. "Got it, 6 payments at a $250 minimum.", and a
+  verified dollar-total ask ("Got it, $420 in total."). The
   payment structure is acked too, as a digit-free ``text`` fact ("Got it, a
   balloon schedule."). A value is echoed only
   if ``rendered_guard`` would already allow it (it is in ``creditor_numbers``)
@@ -14,9 +14,9 @@ acts that are spoken *before* it, without changing the move:
   question the NLU flagged (``asks_question`` / ``question_topic``). A private
   info ask is never answered: the policy refuses it first (REFUSE_PRIVATE).
 
-Phase 46b also holds the rep-correction cues: ``is_ack_correction`` (the rep
-says we misheard a term we just acknowledged, "I said six payments"; since
-Phase 49 a bare "No, it's six" is not enough) and
+This module also holds the rep-correction cues: ``is_ack_correction`` (the rep
+says we misheard a term we just acknowledged, "I said six payments"; a bare
+"No, it's six" is not enough) and
 ``is_ack_dispute`` ("that's not what I said", no value needed). The
 orchestrator applies them to belief; nothing here touches belief.
 
@@ -66,7 +66,7 @@ ACK_FIELDS: dict[str, tuple[str, str]] = {
     "first_payment_date": ("ack_first_payment_date", "date"),
     "payment_structure": ("ack_payment_structure", "text"),
 }
-# Spoken phrase per payment structure (Phase 50). Fixed code text, no digits;
+# Spoken phrase per payment structure. Fixed code text, no digits;
 # a value outside this map is never acked.
 STRUCTURE_ACK_PHRASES: dict[str, str] = {
     "even": "even payments",
@@ -183,7 +183,7 @@ def acked_fields(ack: dict[str, Fact]) -> dict[str, Any]:
 
 
 # The rep corrects a value we just acknowledged, i.e. says we misheard. Only an
-# explicit misreading cue counts (Phase 49, ledger 46c.1): "I said 6", "you
+# explicit misreading cue counts: "I said 6", "you
 # misheard", "you heard wrong", "that's not what I said", "no, I said ...". A
 # bare "No, it's 6" / "No, actually make that 6" reads just as well as the rep
 # changing their own term, so it keeps the CONTRADICTED -> CLARIFY path; the

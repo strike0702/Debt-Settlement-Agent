@@ -1,4 +1,4 @@
-"""Phase 49 small fixes: singular payment ack (46b.4) and the ``ack_total`` meaning (46b.1)."""
+"""Singular payment ack ("up to 1 payment") and what ``ack_total`` means."""
 
 from __future__ import annotations
 

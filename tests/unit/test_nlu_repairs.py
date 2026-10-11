@@ -129,7 +129,7 @@ def test_llm_flag_survives_disclaimer_veto() -> None:
 
 
 def test_nlu_prompt_carries_reference_date() -> None:
-    """Phase 15 corpus h06/f05/t05/t12: no year context → no first_payment_date."""
+    """Corpus lines h06/f05/t05/t12: no year context → no first_payment_date."""
     from app.llm.prompts import nlu_messages
 
     user = nlu_messages("First payment by April 30.", "", None, ref=_REF)[-1]["content"]
@@ -137,7 +137,7 @@ def test_nlu_prompt_carries_reference_date() -> None:
 
 
 async def test_analyze_passes_ref_to_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.agent import nlu as nlu_mod
+    from app.agent.nlu import llm_call as nlu_mod
     from app.llm.client import FakeLLM
 
     seen: dict[str, object] = {}
@@ -180,7 +180,7 @@ async def test_oracle_overlay_uses_flag_or_regex() -> None:
 
 
 
-# --- Phase 28: filler false-accept veto -------------------------------------
+# --- Filler false-accept veto ----------------------------------------------
 # Live NLU read corpus f23 / f30 as accept (DEFAULT_EFFORT row). A veto in
 # ``repair_stance`` was built and then reverted: it failed the corpus gate (the
 # same-day BEFORE row had no filler false accepts to remove; see FILLER_BEFORE /
@@ -196,7 +196,7 @@ _CONFIRM_LINE = (
 _QUESTION_LINE = "What settlement terms can you accept on this account?"
 _EIGHT = '[{"field": "max_payments", "value": 8, "quote": "eight payments"}]'
 _VETO_XFAIL = pytest.mark.xfail(
-    strict=True, reason="Phase 28 filler veto reverted after the corpus gate"
+    strict=True, reason="filler veto reverted after the corpus gate"
 )
 
 
@@ -290,7 +290,7 @@ def test_oracle_accept_with_terms_is_kept() -> None:
     assert out.stance == "accept"
 
 
-# --- Phase 31: negation guard for the forced-accept phrase rule -------------
+# --- Negation guard for the forced-accept phrase rule ----------------------
 # A negator earlier in the same clause cancels an accept-phrase match; the line
 # then falls through to the ack rule and finally the LLM's own stance.
 
@@ -353,13 +353,13 @@ def test_negated_phrase_falls_through_to_unnegated_later_phrase() -> None:
     assert repair_stance("stall", "Not sure that works... actually, sounds good.") == "accept"
 
 
-# --- Phase 32: indirect private-info asks (regex arm, LLM flag off) ---------
-# The Phase 32 cues (commit b385a42) failed the corpus gate together with the
-# NLU prompt change and were reverted (docs/eval/nlu_corpus.md, "Phase 32").
+# --- Indirect private-info asks (regex arm, LLM flag off) ------------------
+# These regex cues failed the corpus gate together with an NLU prompt change
+# and were reverted (docs/eval/nlu_corpus.md).
 # Strict xfail: re-landing the cues turns these into XPASS failures, so the
 # markers must be dropped in the same change.
-_P32_XFAIL = pytest.mark.xfail(
-    strict=True, reason="Phase 32 private-info cues reverted after the corpus gate"
+_PRIVATE_CUES_XFAIL = pytest.mark.xfail(
+    strict=True, reason="private-info cues reverted after the corpus gate"
 )
 
 
@@ -383,8 +383,8 @@ _P32_XFAIL = pytest.mark.xfail(
         # what / most / how much the client can pay, afford, earn
         "What could the debtor pay each month?",
         "Just tell me what the borrower can afford.",
-        # "What's the most the client can pay up front?" passes since Phase 49
-        # (ledger 44b.1): tests/unit/test_nlu_rules_p49.py.
+        # "What's the most the client can pay up front?" is caught by the
+        # code-side private-finance rule: tests/unit/test_nlu_code_rules.py.
         "How much does the consumer earn?",
         "and she makes how much?",
         # off the record + question
@@ -396,7 +396,7 @@ _P32_XFAIL = pytest.mark.xfail(
         "Is any of it in savings?",
     ],
 )
-@_P32_XFAIL
+@_PRIVATE_CUES_XFAIL
 def test_indirect_private_cue_fires(utterance: str) -> None:
     out = post_verify(TurnAnalysis(stance="question"), utterance, ref=_REF)
     assert out.asks_client_private_info is True
@@ -405,7 +405,7 @@ def test_indirect_private_cue_fires(utterance: str) -> None:
 @pytest.mark.parametrize(
     "utterance",
     [
-        # Phase 32 held-out near-misses (tests/nlu_corpus_heldout.jsonl, hn*).
+        # Private-info held-out near-misses (tests/nlu_corpus_heldout.jsonl, hn*).
         "What balance do you show owed on this account?",
         "How many payments were you thinking?",
         "When would the first payment go out?",
@@ -437,7 +437,7 @@ def test_indirect_private_cue_near_misses_do_not_fire(utterance: str) -> None:
     assert out.asks_client_private_info is False
 
 
-@_P32_XFAIL
+@_PRIVATE_CUES_XFAIL
 def test_nlu_prompt_describes_indirect_private_asks() -> None:
     from app.llm.prompts import nlu_messages
 

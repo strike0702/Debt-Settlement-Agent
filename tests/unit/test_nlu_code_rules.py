@@ -1,12 +1,12 @@
-"""Phase 49: code-side reading rules that fire whatever the model returned.
+"""Code-side reading rules that fire whatever the model returned.
 
-- Private finance shapes (ledger 44b.1): money held for the client, "the most
+- Private finance shapes: money held for the client, "the most
   they could pay", SSN digits; public questions about the debt never fire.
-- Hostility floor (44b.2): clear insults / threats reach the escalation
+- Hostility floor: clear insults / threats reach the escalation
   threshold; negated, quoted or hypothetical uses and plain frustration do not.
-- Balance statements (46b.3, 44b.4): a model's ``amount_ambiguous`` flag on
+- Balance statements: a model's ``amount_ambiguous`` flag on
   "original balance of $6,000" asks nothing.
-- Bare demanded amounts (44b.5): "We would need $600 from the client." asks
+- Bare demanded amounts: "We would need $600 from the client." asks
   "total or per payment?" even when the model read a total, a minimum or nothing.
 
 The held-out lines for these rules are in ``tests/nlu_corpus_rules_heldout.jsonl``

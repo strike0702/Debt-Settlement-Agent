@@ -1,4 +1,4 @@
-"""Settings cache (REVIEW F31)."""
+"""Settings cache and defaults."""
 
 from __future__ import annotations
 
@@ -17,12 +17,12 @@ def test_get_settings_cached() -> None:
 
 
 def test_max_counters_default_is_six() -> None:
-    """Phase 46a: six spoken counters per call (holds included)."""
+    """Six spoken counters per call (holds included)."""
     assert Settings().max_counters == 6
 
 
 def test_env_example_lists_live_policy_knobs_only() -> None:
-    """``.env.example`` names real settings with their defaults; no retired keys (Phase 46a)."""
+    """``.env.example`` names real settings with their defaults; no retired keys."""
     lines = (_ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
     pairs = dict(ln.split("=", 1) for ln in lines if ln and not ln.startswith("#") and "=" in ln)
     assert "CLOSE_GAP_BP" not in pairs

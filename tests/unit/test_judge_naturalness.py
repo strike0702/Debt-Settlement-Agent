@@ -1,4 +1,4 @@
-"""Blind pairwise naturalness judge (Phase 24a): order swap, Wilson CI, human CSV."""
+"""Blind pairwise naturalness judge: order swap, Wilson CI, human CSV."""
 
 from __future__ import annotations
 
@@ -87,7 +87,7 @@ async def test_run_judge_writes_outputs_and_20_human_pairs(tmp_path: Path) -> No
     assert json.loads((out / "judge.json").read_text(encoding="utf-8"))[0]["verdict"] == "A"
 
 
-# --- Phase 47 [24b.8]: judge call log and cost ------------------------------
+# --- Judge call log and cost -----------------------------------------------
 
 
 def _meta(**kw: Any) -> dict[str, Any]:

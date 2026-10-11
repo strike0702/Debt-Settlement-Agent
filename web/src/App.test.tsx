@@ -1,10 +1,10 @@
 /**
  * LiveApp scenario picker over mocked `fetch` and `WebSocket`: the picker is
  * locked while a call runs and unlocks once the call is finished, even though
- * a finished autoplay call leaves its socket open (Phase 23b fix). The
- * Creditor rep view swaps the operator brief for the rep's own account
- * (Phase 34). Phase 35: view names, the client ledger in the Debt negotiator
- * view, no decision trace in the Creditor rep view. Phase 36: a call started in
+ * a finished autoplay call leaves its socket open. The
+ * Creditor rep view swaps the operator brief for the rep's own account.
+ * Also: view names, the client ledger in the Debt negotiator
+ * view, no decision trace in the Creditor rep view; a call started in
  * the Creditor rep view still shows its decision trace in the Debt negotiator
  * view (backfilled from `/calls/{id}/operator`), and custom test cases can be
  * added, persisted, edited, removed and started.
@@ -109,7 +109,7 @@ beforeEach(() => {
   operatorDetail = null;
   previewStatus = 200;
   localStorage.clear();
-  // Phase 48: the scenario and view live in the URL; each test starts clean.
+  // The scenario and view live in the URL; each test starts clean.
   window.history.replaceState(null, "", "/");
   vi.stubGlobal("WebSocket", FakeSocket);
   vi.stubGlobal("fetch", fetchMock);
@@ -156,7 +156,7 @@ describe("LiveApp Creditor rep view", () => {
     expect(briefCalls()).toBe(before);
   });
 
-  it("has no decision trace column and no client ledger (Phase 35)", async () => {
+  it("has no decision trace column and no client ledger", async () => {
     render(<App />);
     expect(await screen.findByText("Client deposits and credits")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("radio", { name: "Creditor rep" }));
@@ -167,7 +167,7 @@ describe("LiveApp Creditor rep view", () => {
   });
 });
 
-describe("LiveApp view names and Debt negotiator view (Phase 35)", () => {
+describe("LiveApp view names and Debt negotiator view", () => {
   it("names the views in plain words with a one-line subtitle", async () => {
     render(<App />);
     expect(await screen.findByRole("radiogroup", { name: "View" })).toBeInTheDocument();
@@ -185,7 +185,7 @@ describe("LiveApp view names and Debt negotiator view (Phase 35)", () => {
     expect(screen.getByText("$880.00")).toBeInTheDocument();
   });
 
-  it("shows the decision trace for a call started in the Creditor rep view (Phase 36)", async () => {
+  it("shows the decision trace for a call started in the Creditor rep view", async () => {
     // Regression: the trace column used to say the call "carries no decision trace".
     render(<App />);
     expect(await screen.findByRole("button", { name: /No space/ })).toBeInTheDocument();
@@ -224,7 +224,7 @@ describe("LiveApp view names and Debt negotiator view (Phase 35)", () => {
     expect(await screen.findByText(/no longer has this call's decision trace/)).toBeInTheDocument();
   });
 
-  it("has no call-phase badge in the header (Phase 36)", async () => {
+  it("has no call-phase badge in the header", async () => {
     render(<App />);
     expect(await screen.findByRole("button", { name: /No space/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Start call/ }));
@@ -236,7 +236,7 @@ describe("LiveApp view names and Debt negotiator view (Phase 35)", () => {
   });
 });
 
-describe("LiveApp custom test cases (Phase 36)", () => {
+describe("LiveApp custom test cases", () => {
   async function addCase() {
     render(<App />);
     expect(await screen.findByRole("button", { name: /No space/ })).toBeInTheDocument();

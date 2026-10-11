@@ -79,7 +79,7 @@ def test_path_traversal_stays_inside_dist(tmp_path: Path) -> None:
 
 
 def test_scenarios_carry_rep_card_suggestions(tmp_path: Path) -> None:
-    """[23a.2] every curated scenario offers suggested rep replies from its rep card."""
+    """Every curated scenario offers suggested rep replies from its rep card."""
     with _client(tmp_path, _fake_dist(tmp_path)) as c:
         rows = c.get("/scenarios").json()
     assert {r["id"] for r in rows} >= {"easy_deal", "no_space", "rescue_escalate"}
@@ -89,7 +89,7 @@ def test_scenarios_carry_rep_card_suggestions(tmp_path: Path) -> None:
 
 
 def test_rep_card_suggestions_answer_read_backs(tmp_path: Path) -> None:
-    """[P23b] every card offers a reply that confirms a pending read-back.
+    """Every card offers a reply that confirms a pending read-back.
 
     The confirm line takes the deterministic fast path, and with no read-back
     pending it is not a bare acknowledgement, so it cannot be read as an accept.

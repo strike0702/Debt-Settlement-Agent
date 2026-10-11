@@ -1,4 +1,4 @@
-"""NLG template bank (Phase 21): guard-clean entries, deterministic pick, no LLM."""
+"""NLG template bank: guard-clean entries, deterministic pick, no LLM."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def test_every_bank_entry_passes_template_guard() -> None:
     data = _bank_json()
     assert data["entries"], "bank is empty"
     for entry in data["entries"]:
-        # H3 act keys (Phase 24b) are not intents: ``ACK`` / ``ANSWER:<topic>``.
+        # H3 act keys are not intents: ``ACK`` / ``ANSWER:<topic>``.
         if entry["intent"] != "ACK" and not entry["intent"].startswith("ANSWER:"):
             assert Intent(entry["intent"]) not in TEMPLATE_ONLY_INTENTS
         allowed, required = set(entry["placeholders"]), set(entry["required"])
@@ -145,7 +145,7 @@ async def test_bank_mode_full_call_zero_llm_calls(tmp_path: Path) -> None:
     ), "at least one line came from the bank"
 
 
-# Phase 33: the bank is the demo voice, so its copy must sound spoken, not form-like.
+# The bank is the demo voice, so its copy must sound spoken, not form-like.
 _STIFF = re.compile(r"\b(kindly|tentative|validate|acknowledge|equals|set at)\b", re.IGNORECASE)
 
 
@@ -163,7 +163,7 @@ def test_read_back_entries_are_confirmation_questions() -> None:
     entries = [e for e in _bank_json()["entries"] if e["intent"] == "READ_BACK"]
     assert entries
     for entry in entries:
-        assert len(entry["templates"]) == 8, "same variant count as Phase 21"
+        assert len(entry["templates"]) == 8, "same variant count as every other intent"
         for t in entry["templates"]:
             assert t.rstrip().endswith("?"), t
             assert t.startswith(("Just to confirm", "So ", "And ", "Let me", "I have", "Okay")), t
@@ -174,7 +174,7 @@ def test_read_back_entries_are_confirmation_questions() -> None:
     [("max_payments", 6, 8), ("min_payment_cents", 10000, 12500)],
 )
 def test_contradiction_clarify_is_spoken_from_the_bank(field: str, old: int, new: int) -> None:
-    """[33.3] The bank CLARIFY entry is live: a non-tier contradiction keys to it.
+    """The bank CLARIFY entry is live: a non-tier contradiction keys to it.
 
     Only the cents-ambiguity CLARIFY (``bare_amount`` + ``template_override``)
     and the tier CLARIFYs bypass it, so the entry must not be removed as dead.

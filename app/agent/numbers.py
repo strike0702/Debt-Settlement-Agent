@@ -307,7 +307,8 @@ def _year_from(y: str | None, ref: date) -> int:
 
 
 def extract_tokens(text: str, *, ref: date | None = None) -> list[NumberToken]:
-    """Extract figures in PLAN §6.4 order; each match masks its character span.
+    """Extract figures in a fixed priority order (money, %, dates, ... as numbered
+    below); each match masks its character span so a later pattern cannot reuse it.
 
     ``ref`` supplies the year when a date has none (e.g. ``April 15``).
     """

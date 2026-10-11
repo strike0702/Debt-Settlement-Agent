@@ -1,4 +1,4 @@
-"""Commitment-guard edge cases (REVIEW F23)."""
+"""Commitment-guard edge cases."""
 
 from __future__ import annotations
 

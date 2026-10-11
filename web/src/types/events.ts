@@ -245,7 +245,7 @@ export interface GuardResult {
   stage: "template" | "unfilled" | "rendered";
 }
 /**
- * A step of the turn worth telling in words, from its audit row (Phase 48).
+ * A step of the turn worth telling in words, from its audit row.
  *
  * ``acked``: code acknowledged ``fields`` (and ``total`` cents) before the
  * move. ``ack_corrected`` / ``ack_disputed``: the rep corrected or disputed
@@ -275,7 +275,7 @@ export interface TraceNote {
   trigger?: string | null;
 }
 /**
- * Who read the rep's line this turn (Phase 48). Operator only, like the trace.
+ * Who read the rep's line this turn. Operator only, like the trace.
  *
  * ``kind``: ``llm`` (a model; ``provider`` / ``model`` name it), ``code`` (a
  * deterministic fast path such as a bare "Correct." to a read-back), or

@@ -1,7 +1,7 @@
 /**
  * Creditor rep view privacy: render the whole recorded call in the creditor lens
  * and assert no PRIVATE value from the fixture appears anywhere on the page.
- * Since Phase 35 that view has no decision trace column at all (as in App).
+ * That view has no decision trace column at all (as in App).
  */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
@@ -66,7 +66,7 @@ describe("creditor lens", () => {
     expect(text).not.toContain("balance_cents");
   });
 
-  it("shows the conversation and agreed terms, with no decision trace (Phase 35)", () => {
+  it("shows the conversation and agreed terms, with no decision trace", () => {
     renderConsole("creditor");
     expect(screen.getAllByTestId("private-lock").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Agreement drafted")).toBeInTheDocument();
@@ -105,7 +105,7 @@ describe("creditor lens", () => {
     for (const key of ["max_bp", "program_fee_cents", "bank_fee_cents", "balance_cents", "additional_funds", "affordability", "\"private\":true", "\"offending\":["]) {
       expect(json).not.toContain(key);
     }
-    // Phase 35: the rep stream carries no decision trace at all.
+    // The rep stream carries no decision trace at all.
     expect(rep.some((e) => e.type === "turn_trace")).toBe(false);
     expect(rep.some((e) => e.type === "transcript")).toBe(true);
   });

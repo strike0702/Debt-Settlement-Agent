@@ -186,7 +186,7 @@ def _phase_payload(session: CallSession, intent: str | None = None) -> dict[str,
     }
 
 
-# Debt negotiator detail per call (Phase 36). Operator data, like the rest of a
+# Debt negotiator detail per call. Operator data, like the rest of a
 # call's in-memory state: kept whatever view the socket streams, oldest call
 # evicted first, lost on restart (the UI then says the trace is gone).
 _DETAIL_KINDS = frozenset({"turn_trace", "audit", "eval", "agreement"})

@@ -1,7 +1,7 @@
-"""Phase 41: Claude NLU on the demo under a daily budget (Haiku 5.5 since Phase 43).
+"""Claude NLU (Haiku 5.5) on the demo under a daily budget.
 
 Hermetic: fake keys, ``MockTransport`` for both SDKs, a temp SQLite budget DB
-and an injected clock. Covers the shipped route shape and Haiku prices (Phase 43),
+and an injected clock. Covers the shipped route shape and Haiku prices,
 under / at / over budget,
 UTC day rollover, spend surviving a new client, no-key behaviour (identical to
 before, no DB touched), Anthropic failure → fallback and not counted, the eval
@@ -59,7 +59,7 @@ providers:
 """
 # 1000 input × $2/M + 100 output × $10/M = 2000 + 1000 micro-dollars.
 _CALL_MICROS = 3000
-# Phase 43: the shipped demo NLU target is Haiku 5.5 ($0.10 / $0.50 per MTok).
+# The shipped demo NLU target is Haiku 5.5 ($0.10 / $0.50 per MTok).
 _HAIKU_YAML = _YAML.replace(
     "      - target: anthropic/claude-sonnet-5-5\n        params",
     "      - target: anthropic/claude-haiku-5-5\n        params",
@@ -232,7 +232,7 @@ def test_shipped_anthropic_prices_haiku_and_keeps_sonnet() -> None:
     assert ModelPrice.from_config(prices["claude-sonnet-5-5"], "sonnet") == ModelPrice(
         2_000_000, 10_000_000
     )
-    # $1/day at a typical Haiku NLU call (~1,950 in / ~200 out, Phase 43) ≈ 3,400 turns.
+    # $1/day at a typical Haiku NLU call (~1,950 in / ~200 out) ≈ 3,400 turns.
     assert usd_to_micros("1.00") // haiku.cost_micros(1950, 200) == 3389
 
 
@@ -406,7 +406,7 @@ async def test_anthropic_error_falls_back_and_is_not_counted(tmp_path: Path) -> 
 async def test_anthropic_timeout_falls_back_and_charges_the_prompt_estimate(
     tmp_path: Path,
 ) -> None:
-    """Phase 47 [41.4]: a timed-out request may still be billed, so its prompt is charged."""
+    """A timed-out request may still be billed, so its prompt is charged."""
 
     async def slow(request: httpx2.Request) -> httpx2.Response:
         await asyncio.sleep(2)
@@ -476,13 +476,13 @@ async def test_unreadable_budget_fails_closed_to_the_free_chain(tmp_path: Path) 
     await rig.client.aclose()
 
 
-# --- Phase 47: reservation before the call, reconcile after -----------------
+# --- Reservation before the call, reconcile after --------------------------
 
 
 async def test_concurrent_calls_overshoot_the_cap_by_at_most_one_estimate(
     tmp_path: Path,
 ) -> None:
-    """[41.3] Ten calls in flight at once: holds stop new calls once the cap is reached."""
+    """Ten calls in flight at once: holds stop new calls once the cap is reached."""
     clock = _Clock()
     limit = 25_000  # between two and three reservations
     budget = DailyBudget(tmp_path / "app.db", limit_micros=limit, clock=clock)

@@ -1,4 +1,4 @@
-"""Regression for Phase 29: a local ``.env`` must not change test results.
+"""Regression: a local ``.env`` must not change test results.
 
 CI has no ``.env``; developers do. ``tests/conftest.py`` makes every non-live
 test see code defaults only. These tests write a ``.env`` into the cwd and

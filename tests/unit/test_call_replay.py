@@ -1,4 +1,4 @@
-"""Phase 50: the user's manual call, replayed offline, and the four fixes it led to.
+"""A real test call, replayed offline, and the four behaviours it pins.
 
 - Equal steps: a rep who does not move gets a hold, then two equal steps to
   min(their ask, accept line), then a handoff (or an accept at or below the line).
@@ -8,8 +8,8 @@
 - The payment structure is acknowledged ("Got it, a balloon schedule."), and a
   one-payment plan is spoken "1 payment".
 
-``replay_manual_call`` is also what the PROGRESS before / after lines came from
-(oracle NLU standing in for Haiku, template NLG, no LLM call).
+``replay_manual_call`` replays that call with oracle NLU standing in for
+Haiku and template NLG (no LLM call).
 """
 
 from __future__ import annotations
@@ -398,7 +398,7 @@ def test_one_payment_plan_is_spoken_singular() -> None:
 
 
 def test_paraphrased_structure_stays_unverified_and_is_read_back() -> None:
-    """No structure word in the line: the rule does not apply (pre-Phase 50 behaviour)."""
+    """No structure word in the line: the rule does not apply."""
     out = post_verify(
         TurnAnalysis(stance="info", terms=[_t("payment_structure", "even", "equal installments")]),
         "We only do equal installments on these accounts.",

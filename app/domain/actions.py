@@ -4,7 +4,7 @@
 agent's ``Action`` (intent + PUBLIC facts). Policy and NLG keep using these
 types from here; ``app.agent.policy`` re-exports for existing callers.
 
-Phase 24b (H3) adds two optional acts that ride on the primary move without
+Two optional H3 acts ride on the primary move without
 replacing it: ``ack`` (creditor-sourced PUBLIC facts echoed back) and
 ``answer`` (a number-free talking point for an off-script question). Both are
 built by ``app.agent.acts`` after ``decide()``; the sim reacts only to

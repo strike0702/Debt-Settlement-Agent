@@ -1426,7 +1426,7 @@
     },
     "TraceNote": {
       "additionalProperties": false,
-      "description": "A step of the turn worth telling in words, from its audit row (Phase 48).\n\n``acked``: code acknowledged ``fields`` (and ``total`` cents) before the\nmove. ``ack_corrected`` / ``ack_disputed``: the rep corrected or disputed\nan acked ``field`` (``old_value`` → ``new_value``). ``amount_held``: a dollar\namount (``cents``, ``quote``) was held back for the total-or-per-payment\nquestion, ``trigger`` says why. ``*_dropped``: a pending question was\ndropped, ``reason`` ``new_terms`` | ``interrupt``. ``amount_clarify_resolved``:\nthe rep answered it (``total`` or ``new_value`` = per-payment cents).",
+      "description": "A step of the turn worth telling in words, from its audit row.\n\n``acked``: code acknowledged ``fields`` (and ``total`` cents) before the\nmove. ``ack_corrected`` / ``ack_disputed``: the rep corrected or disputed\nan acked ``field`` (``old_value`` → ``new_value``). ``amount_held``: a dollar\namount (``cents``, ``quote``) was held back for the total-or-per-payment\nquestion, ``trigger`` says why. ``*_dropped``: a pending question was\ndropped, ``reason`` ``new_terms`` | ``interrupt``. ``amount_clarify_resolved``:\nthe rep answered it (``total`` or ``new_value`` = per-payment cents).",
       "properties": {
         "cents": {
           "anyOf": [
@@ -1591,7 +1591,7 @@
     },
     "TraceReader": {
       "additionalProperties": false,
-      "description": "Who read the rep's line this turn (Phase 48). Operator only, like the trace.\n\n``kind``: ``llm`` (a model; ``provider`` / ``model`` name it), ``code`` (a\ndeterministic fast path such as a bare \"Correct.\" to a read-back), or\n``script`` (oracle NLU: the simulated rep hands over its own reading).\n``fallback``: the answering model was not the route's first choice;\n``budget_reached``: a paid target was skipped for today's budget first.",
+      "description": "Who read the rep's line this turn. Operator only, like the trace.\n\n``kind``: ``llm`` (a model; ``provider`` / ``model`` name it), ``code`` (a\ndeterministic fast path such as a bare \"Correct.\" to a read-back), or\n``script`` (oracle NLU: the simulated rep hands over its own reading).\n``fallback``: the answering model was not the route's first choice;\n``budget_reached``: a paid target was skipped for today's budget first.",
       "properties": {
         "budget_reached": {
           "default": false,

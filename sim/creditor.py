@@ -20,7 +20,7 @@ never loosen, so scenario labels (zopa / stratum) stay valid.
 Price counters follow the scenario's haggle style (``sim.haggle``: easy,
 holder, stepper, staller). Every style accepts only at or above the floor.
 
-Lines (Phase 46a): each template has a few plain variants (``_LINES``), picked
+Lines: each template has a few plain variants (``_LINES``), picked
 by ``Random(f"lines:{scenario.id}")`` so a scenario always speaks the same
 way. Figures in every variant come from ``app.domain.units`` renderers.
 
@@ -28,7 +28,7 @@ LLM phrasing (``phrasing="llm"``): the rewrite is kept only when it carries
 exactly the draft's figures, adds no client-private wording, commitment
 language or opposite stance (``sim.figures.rewrite_problem``); otherwise the
 draft is spoken and the fallback is counted by reason (``rewrite_stats``).
-The call allows ``SIM_MAX_TOKENS`` (Phase 46c): reasoning models (gpt-oss) spend
+The call allows ``SIM_MAX_TOKENS``: reasoning models (gpt-oss) spend
 part of the budget thinking, and at 120 a reply could come back empty.
 
 Must not import ``app.agent``.
@@ -217,7 +217,7 @@ def _spoken_tiers(action: Action, prefix: str) -> list[tuple[int, int]]:
 
 # Completion budget for one rewrite. The prompt still asks for one or two short
 # sentences; the headroom is for gpt-oss reasoning tokens, which count against
-# max_tokens (P46a smoke: 8 of 28 rewrites empty at 120 on Cerebras).
+# max_tokens (at 120, 8 of 28 rewrites came back empty on Cerebras).
 SIM_MAX_TOKENS = 512
 
 

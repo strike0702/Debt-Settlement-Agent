@@ -8,7 +8,7 @@ The eval runner also sets it around the sim, so sim-phrasing calls are audited.
 ``audit_llm_calls`` builds an ``on_call`` hook for ``LLMClient`` / ``FakeLLM``
 that writes one row per attempt: ``llm_call`` on success or cache hit,
 ``llm_call_failed`` when a target failed (``error`` set), or the meta's own
-``event`` when it names one (Phase 41 budget markers ``llm_budget_exhausted`` /
+``event`` when it names one (the daily-budget markers ``llm_budget_exhausted`` /
 ``llm_budget_skip``). Wired in the FastAPI lifespan (``app.main``),
 ``app.cli``, and ``eval.run_eval``. Calls made with no call id in context
 (e.g. the NLU corpus scorer) are not written anywhere.

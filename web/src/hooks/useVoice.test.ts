@@ -1,9 +1,9 @@
 /**
  * Voice behaviour contracts, ported from tests/unit/test_app_js_contracts.py
  * (which grepped the old app.js) to behaviour tests on `useVoice` with fake
- * browser deps: TTS acks (F06), benign cancel errors, utterance retention and
+ * browser deps: TTS acks, benign cancel errors, utterance retention and
  * stale handlers, barge-in with spoken ids, the echo guard, contaminated clips,
- * listening cues, browser STT pausing during TTS, Phase 21 VAD settings, the
+ * listening cues, browser STT pausing during TTS, the pinned VAD settings, the
  * onstart timing stamp, the local backchannel, and preferred voices.
  */
 import { act, renderHook } from "@testing-library/react";
@@ -139,7 +139,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
-describe("TTS acks (F06)", () => {
+describe("TTS acks", () => {
   it("acks with sentence_done and shows a notice when playback fails", () => {
     const h = harness();
     const hook = mount(h);
@@ -315,7 +315,7 @@ describe("browser STT during TTS", () => {
   });
 });
 
-describe("Phase 21 voice latency client", () => {
+describe("voice latency client", () => {
   it("pins vad-web 0.0.22 + onnxruntime 1.14.0 with the tuned VAD settings", () => {
     expect(VAD_WEB_VERSION).toBe("0.0.22");
     expect(ONNX_RUNTIME_VERSION).toBe("1.14.0");

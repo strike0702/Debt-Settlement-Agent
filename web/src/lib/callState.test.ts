@@ -57,7 +57,7 @@ describe("formatting and highlighting", () => {
     expect(pct(4500)).toBe("45%");
     expect(pct(4250)).toBe("42.5%");
   });
-  it("renders tiers in the agent's spoken style (Phase 20 F10, 23a.5)", () => {
+  it("renders tiers in the agent's spoken style", () => {
     expect(termValue("min_payment_tiers", [])).toBe("No special tiers");
     expect(termValue("min_payment_tiers", [[4, 7500], [8, 5050]])).toBe(
       "$75 from the 4th payment and $50.50 from the 8th payment",
@@ -79,7 +79,7 @@ describe("formatting and highlighting", () => {
   });
 });
 
-describe("withOperatorDetail (Phase 36)", () => {
+describe("withOperatorDetail", () => {
   it("restores the trace, private audit and fee columns over a rep-stream fold", () => {
     const op = foldCall(events);
     const rep = foldCall([...eventsForLens(events, "creditor"), { type: "tts_onset", turn: 2, ms: 120 }]);

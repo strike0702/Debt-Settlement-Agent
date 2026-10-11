@@ -1,12 +1,12 @@
-"""Role-scoped WS streams (Phase 22): what ``?view=rep`` may see.
+"""Role-scoped WS streams: what ``?view=rep`` may see.
 
 ``redact_for_view`` is the single choke point: ``app.voice.ws`` passes every
 outgoing frame through it. The operator ("Debt negotiator") stream gets frames
 unchanged except that audit rows carry ``private: true`` when the rep may not
 see them. The rep ("Creditor rep") stream gets no ``turn_trace`` at all (the
-decision trace is the negotiator's tool, Phase 35), and drops ``max_bp``, firm
+decision trace is the negotiator's tool), and drops ``max_bp``, firm
 fees, the client's savings balances, rescue amounts, ``blocked.offending`` and
-private audit rows. Phase 48: it also drops the policy's reason code (the
+private audit rows. It also drops the policy's reason code (the
 ``escalate.reason`` of a handoff and the ``reason`` of ``policy/decide`` rows),
 since codes such as ``above_accept_line`` or ``out_of_guardrail`` tell the rep
 why the agent stopped; the rep keeps the spoken ``escalate_reason``. Returns

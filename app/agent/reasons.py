@@ -39,9 +39,9 @@ PUBLIC_PLACEHOLDERS: frozenset[str] = frozenset(
 )
 
 # One full sentence per reason, written for a newcomer reading the trace ("we"
-# is the agent). Phase 36 rewrote the wording; Phase 45 turned every no-deal
-# ending into a handoff (same codes) and added the ladder and loop-guard codes;
-# Phase 50b reworded ``step`` / ``rep_held`` for Phase 50's two equal steps.
+# is the agent). Every no-deal ending is a handoff, so the no-deal codes read
+# as reasons to hand off. ``step`` / ``rep_held`` describe the two equal steps
+# of the price ladder (``app.agent.policy.ladder`` module docstring).
 REASON_TEXT: dict[str, str] = {
     # Opening and discovery
     "opening": (
@@ -133,7 +133,7 @@ REASON_TEXT: dict[str, str] = {
         "date they asked for, no payment plan fits the client's savings."
     ),
     # Display variant (not a reason code): the rep never gave a start date, so the
-    # date that did not fit was our assumed default, not theirs (Phase 50 item 2).
+    # date that did not fit was our assumed default, not theirs.
     "alt_first_payment_date_assumed": (
         "We ask whether payment could start on {alt_first_payment_date}, because the rep "
         "has not given a start date and that one lets a payment plan fit the client's "
@@ -206,7 +206,7 @@ REASON_TEXT: dict[str, str] = {
         "We hand the call to a person, because no payment plan fits these rules unless the "
         "client adds money, and only the client can agree to that."
     ),
-    # Handoffs (Phase 45: a call ends only as a deal or a handoff)
+    # Handoffs (a call ends only as a deal or a handoff)
     "infeasible": (
         "We hand the call to a person, because no payment plan fits the client's savings "
         "under these rules, and changing a term would not help."

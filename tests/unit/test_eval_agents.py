@@ -1,4 +1,4 @@
-"""A/B arms (Phase 24a): policy adapter parity, ReAct / LLM-only with FakeLLM.
+"""A/B arms: policy adapter parity, ReAct / LLM-only with FakeLLM.
 
 Everything runs offline: oracle NLU, template sim, and a ``FakeLLM`` subclass
 whose queued replies may be callables of the prompt (so a script can read the
@@ -30,7 +30,7 @@ from sim.creditor import CreditorPolicy
 from tests.seed7 import slot
 
 GOLDEN = Path(__file__).resolve().parents[1] / "data" / "policy_arm_golden.json"
-# Keys added by Phase 24a; everything else must match the pre-24a runner.
+# Keys the A/B arms added; everything else must match the original runner output.
 _NEW_KEYS = {"agent", "transcript", "llm_calls_per_turn", "turn_latency_ms", "timings"}
 
 
@@ -430,10 +430,10 @@ def test_split_providers_file_halves_every_rate() -> None:
         Path("docs/eval/ab_20261007/providers_split2.yaml").read_text(encoding="utf-8")
     )
     # The split file is the frozen 2026-10-07 A/B config: it predates the
-    # Phase 41 budgeted Claude target on the demo NLU, so compare without it.
+    # budgeted Claude target on the demo NLU, so compare without it.
     for entries in base["profiles"]["demo"].values():
         entries[:] = [e for e in entries if not (isinstance(e, dict) and e.get("budgeted"))]
-    # It also predates the Phase 46c eval sim route (Groq gpt-oss-120b first).
+    # It also predates the eval sim route (Groq gpt-oss-120b first).
     base["profiles"]["eval"]["sim"] = split["profiles"]["eval"]["sim"]
     assert split["profiles"] == base["profiles"]
     for name, cfg in base["providers"].items():

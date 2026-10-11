@@ -1,4 +1,4 @@
-"""Phase 39: dollar-total asks and the total-vs-per-payment clarify (no keys).
+"""Dollar-total asks and the total-vs-per-payment clarify (no keys).
 
 Covers the new NLU slots' quote verification, the code-side dollars → bp
 conversion (round up), the triggers in ``resolve_amounts``, the deterministic
@@ -390,7 +390,7 @@ def _nlu_reply(**fields: object) -> str:
     return json.dumps(base)
 
 
-# What a pre-Phase 39 NLU produced for the user's sentence: $420 as the minimum.
+# What an NLU without dollar-total slots produces for this sentence: $420 as the minimum.
 _OLD_STYLE_TERMS = [
     {"field": "min_payment_cents", "value": 42000, "quote": "$420", "hedged": False},
     {"field": "max_payments", "value": 3, "quote": "3 even payments", "hedged": False},

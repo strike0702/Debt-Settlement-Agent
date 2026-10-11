@@ -3,7 +3,7 @@
  * account card, for a curated case or a visitor's custom case.
  *
  * Curated: `GET /scenarios/{id}` (brief) and `GET /scenarios/{id}/rep`.
- * Custom (Phase 36): `POST /scenarios/preview` and `POST /scenarios/preview/rep`
+ * Custom: `POST /scenarios/preview` and `POST /scenarios/preview/rep`
  * with the case's JSON; the rep endpoint reads only the creditor side.
  *
  * The brief holds the client's private finances and the firm's fees, so it is

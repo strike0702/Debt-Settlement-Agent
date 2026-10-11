@@ -1,5 +1,5 @@
 /**
- * The selected scenario and view live in the URL (Phase 48), so a link opens
+ * The selected scenario and view live in the URL, so a link opens
  * the same screen and the browser's back and forward buttons step through
  * what the visitor picked.
  *

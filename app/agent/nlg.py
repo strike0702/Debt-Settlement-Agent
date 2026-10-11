@@ -10,11 +10,11 @@ only placeholder meanings from ``app.llm.prompts``. An optional ``trace_out``
 dict receives how the line was made (mode, template, guard verdicts, fallback)
 for the orchestrator's decision trace; it never changes what is spoken.
 
-Phase 24b (H3): ``render_acts`` speaks an action's optional ``ack`` and
+H3 acts: ``render_acts`` speaks an action's optional ``ack`` and
 ``answer`` acts as short leading sentences, each through the same two guards.
-Phase 46b: the default agent's code-built ack (``Settings.nlg_ack``) uses
+The default agent's code-built ack (``Settings.nlg_ack``) uses
 ``ack_template`` (2–3 wordings per shape, rotated by turn), never the bank or LLM;
-a count of 1 is acked as "up to 1 payment" (Phase 49). Phase 50 acks the
+a count of 1 is acked as "up to 1 payment". The ack also covers the
 payment structure from a digit-free ``text`` fact ("Got it, a balloon schedule.",
 or ", with even payments" after the other terms).
 A guard-failed act is dropped (audited), never replaced by ``SAFE_FALLBACK``,
@@ -117,8 +117,8 @@ TEMPLATES: dict[Intent, str] = {
 
 
 # Acknowledgement bodies keyed by the sorted term ``ack_*`` ids present; the
-# first body of each is the H3 wording (Phase 24b). An ack line is
-# "<opener>, <total body>, <term body>." (the total, Phase 46b, leads).
+# first body of each is the H3 wording. An ack line is
+# "<opener>, <total body>, <term body>." (the dollar total, when present, leads).
 _ACK_TERM_BODIES: dict[tuple[str, ...], tuple[str, ...]] = {
     ("ack_max_payments",): (
         "up to {ack_max_payments} payments",
@@ -155,7 +155,7 @@ _ACK_TOTAL_BODIES: tuple[str, ...] = (
     "{ack_total} in total",
     "{ack_total} for the whole settlement",
 )
-# Payment structure (Phase 50): the fact renders a phrase ("a balloon schedule",
+# Payment structure: the fact renders a phrase ("a balloon schedule",
 # "even payments"). Alone it has its own bodies; after other terms it is appended.
 _ACK_STRUCTURE_ID = "ack_payment_structure"
 _ACK_STRUCTURE_BODIES: tuple[str, ...] = (
@@ -201,7 +201,7 @@ def ack_template(ids: tuple[str, ...], turn: int, *, singular: bool = False) -> 
 
     Opener and body rotate independently so the same shape does not repeat
     word for word on back-to-back turns. ``singular`` (a payment count of 1)
-    says "up to 1 payment", not "1 payments" (Phase 49).
+    says "up to 1 payment", not "1 payments".
     """
     term_bodies = _ack_bodies(ids)
     if term_bodies is None:
@@ -215,7 +215,7 @@ def ack_template(ids: tuple[str, ...], turn: int, *, singular: bool = False) -> 
     return f"{_ACK_OPENERS[turn % len(_ACK_OPENERS)]}, {body}."
 
 
-# H3 (Phase 24b) wording: one fixed line per shape ("Got it, " + first body).
+# H3 wording: one fixed line per shape ("Got it, " + first body).
 ACK_TEMPLATES: dict[tuple[str, ...], str] = {
     **{ids: f"Got it, {bodies[0]}." for ids, bodies in _ACK_TERM_BODIES.items()},
     (_ACK_STRUCTURE_ID,): f"Got it, {_ACK_STRUCTURE_BODIES[0]}.",
@@ -244,7 +244,7 @@ def _allowed_ids(action: Action) -> set[str]:
 
 
 def _singular_counts(template: str, action: Action) -> str:
-    """"{n} payments" → "{n} payment" for every count fact equal to 1 (Phase 50).
+    """"{n} payments" → "{n} payment" for every count fact equal to 1.
 
     Bank and default bodies all say "{num_payments} payments totaling ...";
     this keeps a one-payment plan from being spoken as "1 payments".

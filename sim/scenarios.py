@@ -5,19 +5,19 @@ opening ask / floor, persona, and labels: ``zopa``, ``should_escalate``,
 ``stratum`` (deal | rescue | no_fix). ``generate(n, seed)`` is deterministic
 and resamples until strata are balanced. Does not import ``app.agent``.
 
-Phase 45 labels follow the deal-or-handoff policy: a deal is possible
+Labels follow the deal-or-handoff policy: a deal is possible
 (``zopa``) only when the rep's floor is a feasible bp at or below the accept
 line (``app.domain.negotiation.accept_line_bp`` of the true ceiling, 75%
 rounded down). Every other case (rescue, no_fix) expects a handoff
 (``should_escalate``), as does the pressuring persona.
 
-Phase 46a: ``generate`` also gives each scenario a haggle style
-(``sim.haggle``) from its own ``Random(f"haggle:{seed}:{index}")``, so the
-main sampler is untouched. A holder / stepper deal moves its floor to 80–92%
-of min(opening ask, accept line), i.e. between the agent's first counter
-(70% of that) and the line; a holder / stepper no-fix call opens 10–25 points
-above its floor. Labels are recomputed and must not change stratum
-(``apply_haggle``).
+``generate`` also gives each scenario a haggle style
+(``sim.haggle``) from its own ``Random(f"haggle:{seed}:{index}")``, so adding
+a haggle style does not change the main sampler's draws. A holder / stepper
+deal moves its floor to 80–92% of min(opening ask, accept line), i.e.
+between the agent's first counter (70% of that) and the line; a holder /
+stepper no-fix call opens 10–25 points above its floor. Labels are
+recomputed and must not change stratum (``apply_haggle``).
 """
 
 from __future__ import annotations
@@ -140,7 +140,7 @@ def _build_client(
             )
         )
         # Keep starting SDA consistent with ledger credits/debits is hard;
-        # seed balance separately as the as-of cash (PLAN range).
+        # seed balance separately as the as-of cash (sampled range).
     return Client(
         draft_amount_cents=draft_cents,
         draft_day=_FIRST_DRAFT.day,
@@ -297,7 +297,7 @@ def _classify(
     aff = affordability(call, rules, true.first_payment_date)
     true_max = aff.max_bp
     feasible = tuple(aff.feasible_bps)
-    # A deal is possible only at or below the agent's accept line (Phase 45).
+    # A deal is possible only at or below the agent's accept line.
     zopa = (
         true_max is not None
         and floor_bp <= accept_line_bp(true_max)
@@ -343,7 +343,7 @@ def _try_one(
         )
 
         # Shape no_fix when we have a feasible band: push floor above max_bp,
-        # keeping opening_ask > floor (PLAN invariant).
+        # keeping opening_ask > floor (a scenario invariant).
         if want == "no_fix" and true_max is not None:
             # Need true_max + 500 < opening <= 8500 and floor > true_max.
             if true_max + 1000 > 8500:

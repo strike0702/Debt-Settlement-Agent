@@ -1,4 +1,4 @@
-"""Phase 46a: the haggling rep (holds, varied steps, firm floor, stallers) and plain lines."""
+"""The haggling rep (holds, varied steps, firm floor, stallers) and plain lines."""
 
 from __future__ import annotations
 

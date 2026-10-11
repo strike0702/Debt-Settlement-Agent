@@ -162,7 +162,7 @@ async def test_text_call_persona_stratum(
         assert session.agreement is None
         return
 
-    # no_fix: deal-or-handoff (Phase 45) — a handoff with no agreement.
+    # no_fix: deal-or-handoff — a handoff with no agreement.
     assert session.neg.phase == Phase.ESCALATE
     assert session.agreement is None
     finals = [t for t in session.history if t.role == "agent"]

@@ -39,7 +39,7 @@ export function micEventFor(ev: ServerEvent): MicEvent | null {
   if (ev.type === "transcript" && ev.role === "creditor") return { type: "rep_done" };
   if (ev.type === "say") return { type: "agent_say" };
   if (ev.type === "phase" && ev.intent === null) {
-    // A handoff ends the call just as END does (Phase 45: deal or handoff).
+    // A handoff ends the call just as END does (a call ends as a deal or a handoff).
     return ev.phase === "END" || ev.phase === "ESCALATE" ? { type: "call_over" } : { type: "agent_done" };
   }
   return null;

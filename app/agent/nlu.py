@@ -4,13 +4,13 @@
 failure, then drops bad quotes / out-of-range values and sets ``verified`` from
 ``numbers.extract_tokens`` matches. ``repair_*`` helpers then fix stance
 (accept phrase, dominant short ack, never accept on injection) and OR each LLM
-side-channel flag with a regex cue. ``repair_question`` keeps the Phase 24b
+side-channel flag with a regex cue. ``repair_question`` keeps the H3
 off-script question flag only with a question cue and never on a private-info
 ask (that one is refused, not answered). ``NLU_MODE=oracle`` skips the LLM and uses
 a caller-supplied ``TurnAnalysis`` (sim/tests). Rejected terms are audited and
 also kept on ``VerifiedAnalysis.dropped`` for the decision trace. Does not
 update belief — that is the orchestrator's job via ``BeliefState.observe``.
-Phase 49 code-side rules apply whatever the model returned: wider private-info
+Code-side rules apply whatever the model returned: wider private-info
 cues, a hostility floor for clear insults / threats, no amount question on a
 balance statement, and the question for a bare demanded amount.
 """
@@ -81,7 +81,7 @@ class VerifiedAnalysis(BaseModel):
     settlement_ask_pct: float | None = None
     ask_quote: str | None = None
     ask_verified: bool = False
-    # Dollar-total ask (Phase 39): verified against its quote here; converted to
+    # Dollar-total ask: verified against its quote here; converted to
     # ``settlement_ask_pct`` by ``resolve_amounts`` once the balance is known.
     settlement_ask_total_cents: int | None = None
     ask_total_quote: str | None = None
@@ -104,7 +104,7 @@ class VerifiedAnalysis(BaseModel):
     cents_ambiguity_bare: int | None = None
     cents_ambiguity_field: str | None = None
     tiers_ambiguous: bool = False
-    # Off-script question (Phase 24b); answered by ``app.agent.acts``, not policy.
+    # Off-script question; answered by ``app.agent.acts``, not policy.
     asks_question: bool = False
     question_topic: str | None = None
 
@@ -794,7 +794,7 @@ _PRIVATE_INFO_RE = re.compile(
     r"|\b(?:bank balance|monthly income|social security|ssn|routing number)\b"
     r"|\bdraft amount\b"
     r"|\bwhat (?:is|are) (?:the )?client\b"
-    # Phase 49 (ledger 44b.1): money held for the client (escrow / program /
+    # Money held for the client (escrow / program /
     # dedicated / savings account), "the most they could pay", SSN digits.
     # The creditor's own account ("this account", "the account number for this
     # debt") and the balance owed never match.
@@ -809,7 +809,7 @@ _PRIVATE_INFO_RE = re.compile(
     r")",
     re.IGNORECASE,
 )
-# Phase 49 (ledger 44b.2): clearly hostile phrases set hostility to the floor
+# Clearly hostile phrases set hostility to the floor
 # (``HOSTILITY_FLOOR``, at or above any escalation threshold) even when the
 # model scores the line low. Negated ("not a waste of time"), quoted ("he said
 # 'shut up'") and hypothetical ("if this is a scam") uses do not count; firm
@@ -916,7 +916,7 @@ def _phrase_guarded(utterance: str, m: re.Match[str], negators: re.Pattern[str])
 
     Only the clause text before the match counts for the conditional and the
     negator, so "That works, nothing else to add." still accepts. The LLM's own
-    reading decides a guarded line (Phase 45, ledger 31.1 / 31.2).
+    reading decides a guarded line.
     """
     if _in_question(utterance, m.start(), m.end()):
         return True
@@ -999,7 +999,7 @@ def repair_firm(firm: bool, utterance: str) -> bool:
 
     A phrase inside a question ("Is that your final offer?"), after a
     conditional ("If that were our floor") or after a negator in its clause
-    ("not the lowest we can go") does not set the flag (Phase 45).
+    ("not the lowest we can go") does not set the flag.
     """
     if firm:
         return True
@@ -1125,7 +1125,7 @@ def repair_hostility(hostility: float, utterance: str) -> float:
     """Keep LLM hostility only when the utterance has hostile cues; else 0.
 
     A floor phrase (``hostility_floor_hit``) lifts it to ``HOSTILITY_FLOOR``
-    whatever the model scored (Phase 49).
+    whatever the model scored.
     """
     h = max(0.0, min(1.0, float(hostility)))
     if hostility_floor_hit(utterance):
@@ -1192,7 +1192,7 @@ def _verify_amount(
     ref: date,
     drop: Any,
 ) -> tuple[int | None, str | None]:
-    """Keep a dollar amount (Phase 39 slots) only when its quote verifies; else drop + audit."""
+    """Keep a dollar-amount slot only when its quote verifies; else drop + audit."""
     if cents is None:
         return None, None
     if not isinstance(cents, int) or isinstance(cents, bool) or cents <= 0:
@@ -1213,8 +1213,8 @@ def _verify_amount(
     return cents, quote
 
 
-# Phase 50: a payment-structure word counts only when it is about the payments.
-# "We can be flexible on other terms" (the user's manual call) is not a flexible
+# A payment-structure word counts only when it is about the payments.
+# "We can be flexible on other terms" (heard on a real test call) is not a flexible
 # schedule, and "can't even do that" is not even payments. The word must sit near
 # a schedule noun ("flexible payments", "an even schedule") or a variation
 # phrase ("the payments can vary"), or answer our structure question ("flexible
@@ -1537,7 +1537,7 @@ def post_verify(
     )
 
 
-# --- Phase 39: dollar-total asks and total-vs-per-payment ambiguity ---------
+# --- Dollar-total asks and total-vs-per-payment ambiguity -------------------
 #
 # ``post_verify`` cannot convert a dollar total to bp (it has no balance), so
 # the orchestrator calls ``resolve_amounts`` after NLU. It either turns a
@@ -1579,7 +1579,7 @@ _COUNT_CAP_RE = re.compile(
 )
 _CLAUSE_SPLIT_RE = re.compile(r"[,.;!?]|\bbut\b", re.IGNORECASE)
 
-# Phase 46b, code-side question for a verified TOTAL (whatever the model said):
+# Code-side question for a verified TOTAL (whatever the model said):
 # in the same sentence as an exact payment count ("3 even payments"), or as
 # "pay $X by <date>", the amount may as well be per payment, so ask. An
 # explicit total cue in that sentence ("in total", "altogether") settles it.
@@ -1604,7 +1604,7 @@ _BALANCE_STATEMENT_RE = re.compile(
     r"\b(?:balance|owes?|owed|owing|outstanding|original amount|debt of|account is at)\b",
     re.IGNORECASE,
 )
-# Phase 49 (ledger 44b.5): a bare dollar amount the rep demands for the deal
+# A bare dollar amount the rep demands for the deal
 # ("We would need $600 from the client.", "We'd want $450 to close this.") with
 # no count, date, % or total / per-payment cue in its sentence asks "total or
 # per payment?" whatever the model returned. Both a demand verb and a deal
@@ -1703,8 +1703,8 @@ def balance_statement_amount(cents: int, utterance: str) -> bool:
     "Our records show an original balance of $6,000." is; "We need $2,000 to
     clear the balance." is not (a demand verb in the amount's clause makes it
     an ask, while "The client owes $6,000, and we need 3 payments" is still a
-    statement). Phase 49 uses
-    it to drop a model's ``amount_ambiguous`` flag (ledger 46b.3 / 44b.4).
+    statement). ``resolve_amounts`` uses it to drop a model's
+    ``amount_ambiguous`` flag.
     """
     said = _sentences_with_amount(cents, utterance)
     return bool(said) and all(
@@ -1771,8 +1771,8 @@ def resolve_amounts(
     "total or per payment?" and ``analysis`` has the doubtful amount (and any
     disagreeing ask) removed so the rest of the turn can still be applied.
     Triggers, first match: NLU ``amount_ambiguous`` (not when the amount's
-    sentence is a balance statement, Phase 49); a bare demanded amount with no
-    count / date / total or per-payment cue (``bare_amount_ask``, Phase 49, not
+    sentence is a balance statement); a bare demanded amount with no
+    count / date / total or per-payment cue (``bare_amount_ask``, not
     right after the rep answered this question); % and total disagree;
     total above the balance; a total with no agreeing % in a per-payment shape
     (``total_shape_trigger``: "pay $X by", or an exact count in the same
@@ -1811,7 +1811,7 @@ def resolve_amounts(
         flagged = verified.amount_ambiguous_cents
         if not balance_statement_amount(flagged, utterance):
             return _clarify(flagged, verified.amount_ambiguous_quote, "nlu_flag")
-        # A balance statement is never an ask (Phase 49): drop the flag, no question.
+        # A balance statement is never an ask: drop the flag, no question.
         _log("nlu_amount_flag_dropped", {"cents": flagged, "reason": "balance_statement"})
         verified = verified.model_copy(
             update={"amount_ambiguous_cents": None, "amount_ambiguous_quote": None}

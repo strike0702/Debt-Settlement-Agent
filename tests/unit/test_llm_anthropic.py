@@ -1,4 +1,4 @@
-"""Phase 30: Anthropic provider (Messages API) and the ``judge`` role.
+"""Anthropic provider (Messages API) and the ``judge`` role.
 
 Offline only: the ``anthropic`` SDK client is built on ``httpx2``, so each test
 hands ``LLMClient`` an ``anthropic.DefaultAsyncHttpxClient`` with an
@@ -302,7 +302,7 @@ def test_shipped_judge_route_is_sonnet_5_5_without_fallback() -> None:
     for name in ("eval", "local"):
         route = [parse_route_entry(e) for e in data["profiles"][name]["judge"]]
         assert [t.spec for t in route] == ["anthropic/claude-sonnet-5-5"], name
-    # No other role moved off the free tier, except the demo NLU (Phase 41),
+    # No other role moved off the free tier, except the demo NLU,
     # whose Claude target is budgeted (tests/unit/test_llm_budget.py).
     for pname, prof in data["profiles"].items():
         for role, entries in prof.items():

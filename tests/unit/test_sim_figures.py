@@ -1,4 +1,4 @@
-"""Phase 46a: the sim's LLM rewrite keeps the draft's figures and stance, else falls back.
+"""The sim's LLM rewrite keeps the draft's figures and stance, else falls back.
 
 Evidence lines are from the live A/B (``docs/eval/ab_20261007``: s0007_015,
 s0007_004, pair 17, pair 3); the drafts are made up so that each rewrite is
@@ -141,9 +141,9 @@ async def test_template_phrasing_makes_no_attempts() -> None:
     assert rep.rewrite_stats == {"attempts": 0, "fallbacks": {}}
 
 
-# Phase 49 (ledger 46c.2 / 46c.5): Phase 46c re-check rewrites that slipped the
+# Live rewrites that once slipped the
 # stance check (s0007_040, s0007_019, s0007_028 / s0007_034, smoke hold line).
-P49_STANCE: list[tuple[str, str, str]] = [
+STANCE_FLIPS: list[tuple[str, str, str]] = [
     ("We can go up to 3 payments.", "info", "We can go up to 3 payments. Actually, we can't."),
     (
         "The maximum is 6 payments.",
@@ -161,7 +161,7 @@ P49_STANCE: list[tuple[str, str, str]] = [
 ]
 
 
-@pytest.mark.parametrize(("draft", "stance", "rewrite"), P49_STANCE)
+@pytest.mark.parametrize(("draft", "stance", "rewrite"), STANCE_FLIPS)
 def test_p49_self_contradictions_fall_back(draft: str, stance: str, rewrite: str) -> None:
     assert rewrite_problem(draft, rewrite, stance=stance) == "stance"
 

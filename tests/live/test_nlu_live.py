@@ -1,7 +1,7 @@
 """Live NLU accuracy against the demo LLM profile.
 
 Skipped unless ``DSA_LIVE=1``. Fifteen synthetic rep utterances with expected
-field extractions; records pass rate for PROGRESS.md.
+field extractions; prints the pass rate.
 """
 
 from __future__ import annotations
@@ -191,7 +191,7 @@ async def test_nlu_live_accuracy(llm_client, capsys) -> None:
         f"nlu_live accuracy={hits}/{total} ({accuracy:.0%}) profile={settings.llm_profile}\n"
         + "\n".join(details)
     )
-    # Always print so DSA_LIVE runs can paste into PROGRESS.
+    # Always print so a DSA_LIVE run shows the report.
     print("\n" + report)
     # Soft floor: document whatever we got; fail only if completely broken.
     assert hits >= 1, report

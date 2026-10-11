@@ -1,8 +1,8 @@
-"""Phase 45 (D / D2): accept, reject and firm phrases inside a question, after a
+"""Accept, reject and firm phrases inside a question, after a
 conditional or after a negator never force a label; the LLM's reading stands.
 
-Probe lines come from ``docs/eval/nlu_guard_20261008/probes.jsonl`` (ledger
-31.1 / 31.2); firm lines from ``tests/nlu_corpus_firm.jsonl``.
+Probe lines come from ``docs/eval/nlu_guard_20261008/probes.jsonl``; firm lines
+from ``tests/nlu_corpus_firm.jsonl``.
 """
 
 from __future__ import annotations

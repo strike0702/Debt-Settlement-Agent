@@ -88,8 +88,8 @@ def test_autoplay_easy_deal_reaches_wrap_with_valid_agreement(tmp_path: Path) ->
 
 
 def test_autoplay_no_space_ends_in_handoff(tmp_path: Path) -> None:
-    # Deal-or-handoff (Phase 45): no feasible schedule is a handoff, not a no-deal end.
-    # Phase 46a: the fixture's meta now says so too.
+    # Deal-or-handoff: no feasible schedule is a handoff, not a no-deal end.
+    # The fixture's meta says so too.
     from app.domain.scenario import list_scenario_metas
 
     meta = {m.id: m for m in list_scenario_metas()}["no_space"]

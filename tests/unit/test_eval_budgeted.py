@@ -1,4 +1,4 @@
-"""Phase 41 follow-up: eval tooling never reaches a paid (``budgeted``) target by accident.
+"""Eval tooling never reaches a paid (``budgeted``) target by accident.
 
 Hermetic: fake keys and mock transports for Anthropic and Groq. A default
 ``eval.nlu_corpus`` run on the ``demo`` profile must make no Anthropic call;

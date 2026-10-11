@@ -29,7 +29,7 @@ const BRIEF: ScenarioBrief = {
   firm: { program_fee_bp: 1800, program_fee_cents: 28800, bank_fee_cents: 950 },
 };
 
-describe("ClientLedger (Phase 35)", () => {
+describe("ClientLedger", () => {
   it("renders the ledger table with running balance, past vs scheduled", () => {
     render(<ClientLedger brief={BRIEF} lens="operator" />);
     expect(screen.getByText("Client deposits and credits")).toBeInTheDocument();

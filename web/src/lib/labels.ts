@@ -1,5 +1,5 @@
 /**
- * Every protocol code the console shows as words, in sentence case (Phase 36).
+ * Every protocol code the console shows as words, in sentence case.
  *
  * The server speaks in codes (`COUNTER`, `KNOWN`, guard stage `rendered`,
  * expected `no_deal`); a newcomer watching the demo should read words. This is

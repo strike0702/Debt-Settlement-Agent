@@ -2,7 +2,7 @@
 
 ``generate(100, 7)`` takes ~20 s because it samples all 100 scenarios. Slot
 ``i`` is just ``generate_one(PERSONAS[i % 3], <stratum of slot i>, sub_seed_i)``
-re-ided (plus its Phase 46a haggle style, ``apply_haggle``), where
+re-ided (plus its haggle style, ``apply_haggle``), where
 ``sub_seed_i`` is the i-th draw of ``Random(7)``. Rebuilding one
 slot costs tens of ms, so fast tests use these instead of the full set.
 ``tests/e2e/test_policy_invariants.py::test_seed7_slots_match_generate`` (slow)
@@ -34,7 +34,7 @@ def _plan() -> tuple[tuple[str, int], ...]:
 
 @cache
 def easy_slot(i: int) -> Scenario:
-    """Slot ``i`` before its Phase 46a haggle style: the pre-46a easy rep, floor and ask."""
+    """Slot ``i`` before its haggle style: the plain easy rep, floor and ask."""
     stratum, sub_seed = _plan()[i]
     persona = PERSONAS[i % len(PERSONAS)]
     sc = generate_one(persona, stratum, seed=sub_seed)  # type: ignore[arg-type]

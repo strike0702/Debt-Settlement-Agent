@@ -1,4 +1,4 @@
-"""Phase 46c: the eval ``sim`` route (Groq-played rep) and the rewrite token budget."""
+"""The eval ``sim`` route (Groq-played rep) and the rewrite token budget."""
 
 from __future__ import annotations
 

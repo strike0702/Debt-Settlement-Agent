@@ -1,6 +1,6 @@
 """Accept line shared by the agent policy and the simulator's scenario labels.
 
-Phase 45 (user decision 2026-10-09): the agent accepts a settlement only at or
+The agent accepts a settlement only at or
 below the *accept line*, 75% of the client's ceiling (``Affordability.max_bp``),
 and never counters above it. The policy reads the percentage from
 ``Settings.accept_line_pct_of_max_bp``; ``sim.scenarios`` uses the default here

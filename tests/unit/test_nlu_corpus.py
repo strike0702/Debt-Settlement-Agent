@@ -90,7 +90,7 @@ def test_write_report_keeps_before_above_after(tmp_path: Path) -> None:
 
 
 async def test_corpus_lines_are_audited_per_line(tmp_path: Path) -> None:
-    """[20.4] each corpus line's LLM call is audited under ``corpus:<id>``."""
+    """Each corpus line's LLM call is audited under ``corpus:<id>``."""
     from app.llm.client import FakeLLM
     from app.store.audit import AuditLog
     from eval.nlu_corpus import run_corpus
@@ -113,7 +113,7 @@ async def test_corpus_lines_are_audited_per_line(tmp_path: Path) -> None:
         assert rows[0]["payload"]["role"] == "nlu"
 
 
-# --- Phase 32 (item 28.4): retry skipped lines once, fail loudly on gaps ---
+# --- Retry skipped lines once, fail loudly on gaps -------------------------
 
 _OK = '{"terms": [], "stance": "info"}'
 
@@ -233,7 +233,7 @@ def test_cli_writes_report_when_all_answered(tmp_path: Path, monkeypatch) -> Non
 
 
 def test_heldout_private_set_schema() -> None:
-    """Phase 32 held-out set: written before the private-info fix, never tuned on."""
+    """Private-info held-out set: written before the private-info fix, never tuned on."""
     held = load_corpus(Path("tests/nlu_corpus_heldout.jsonl"))
     main_ids = {ln["id"] for ln in load_corpus()}
     assert len({ln["id"] for ln in held}) == len(held)
@@ -248,7 +248,7 @@ def test_heldout_private_set_schema() -> None:
 
 
 def test_heldout_stance_set_schema() -> None:
-    """Phase 42 held-out set: written before the stance prompt change, never tuned on."""
+    """Stance held-out set: written before the stance prompt change, never tuned on."""
     held = load_corpus(Path("tests/nlu_corpus_heldout_stance.jsonl"))
     other_ids = {ln["id"] for ln in load_corpus()} | {
         ln["id"] for ln in load_corpus(Path("tests/nlu_corpus_heldout.jsonl"))
@@ -290,7 +290,7 @@ async def test_min_interval_paces_lines_with_llm_calls(monkeypatch) -> None:
     assert len(slept) == 2 and all(4.0 < s <= 5.0 for s in slept)
 
 
-# --- Phase 37: raw vs repaired stance from one pass; --providers; rescore ---
+# --- Raw vs repaired stance from one pass; --providers; rescore ------------
 
 
 def _stance_llm(replies: dict[str, str]):
@@ -475,7 +475,7 @@ def test_cli_no_repair_stance_rescores_saved_records(tmp_path: Path, monkeypatch
     assert [r["predicted"]["stance"] for r in out] == ["question", "accept", "stall", "info"]
 
 
-# --- Phase 38 (item 32.3): one labelled row = one answering model ---
+# --- One labelled row = one answering model -------------------------------
 
 
 def _routed_llm(plan: dict[str, list[tuple[str, str | None]]]):
@@ -603,7 +603,7 @@ def test_cli_from_records_also_refuses_mixed_rows(tmp_path: Path, monkeypatch, c
                     "--audit-db", str(tmp_path / "a.db")]) == 0
 
 
-# --- Phase 38 (item 32.5): rows stay next to their BEFORE/AFTER pair, Notes last ---
+# --- Rows stay next to their BEFORE/AFTER pair, Notes last ---
 
 
 def _headings(p: Path) -> list[str]:
@@ -638,11 +638,11 @@ def test_shipped_report_rows_are_in_section_order() -> None:
         assert h.index(after) == h.index(before) + 1, (before, after, h)
 
 
-# ----- Phase 49: code-side reading rules, rescored without LLM calls -----
+# ----- Code-side reading rules, rescored without LLM calls -----
 
 
 def test_rules_heldout_set_schema() -> None:
-    """Phase 49 held-out set: written and committed before the rules, never tuned on."""
+    """Code-rules held-out set: written and committed before the rules, never tuned on."""
     held = load_corpus(Path("tests/nlu_corpus_rules_heldout.jsonl"))
     other: set[str] = set()
     for p in Path("tests").glob("nlu_corpus*.jsonl"):

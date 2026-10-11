@@ -1,7 +1,7 @@
 /**
  * "Your account": the creditor's own side of the call, for the human playing
  * the rep (`GET /scenarios/{id}/rep`, or `POST /scenarios/preview/rep` with a
- * custom case's JSON since Phase 36; that endpoint reads only the creditor side).
+ * custom case's JSON; that endpoint reads only the creditor side).
  *
  * Creditor lens only; it takes the slot the operator's ScenarioBrief uses. It
  * shows the creditor's balances and their settlement rules from the rep card,

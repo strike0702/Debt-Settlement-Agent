@@ -1,5 +1,5 @@
 /**
- * "Add a test case" editor (Phase 36): a JSON textarea pre-filled with
+ * "Add a test case" editor: a JSON textarea pre-filled with
  * `GET /scenarios/template`, checked against `POST /scenarios/preview` as the
  * visitor types, with every problem shown next to the editor by field path.
  *
@@ -12,7 +12,7 @@
  * Keyboard: Tab indents (two spaces). Esc, then Tab, leaves the editor, so the
  * textarea is never a keyboard trap.
  *
- * Phase 48: while the text differs from what the editor opened with, leaving
+ * While the text differs from what the editor opened with, leaving
  * or reloading the page asks first (`beforeunload`); saving or cancelling
  * closes the editor and drops the warning.
  */

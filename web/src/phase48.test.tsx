@@ -1,5 +1,5 @@
 /**
- * Phase 48 UI: the handoff outcome in both views (and nothing private in the
+ * Handoff UI: the handoff outcome in both views (and nothing private in the
  * Creditor rep view), the end-of-call line, the model badge in the Debt
  * negotiator trace only, the mic going to call-over on a handoff, the URL
  * holding the scenario and view, the case editor's unsaved-text warning, and

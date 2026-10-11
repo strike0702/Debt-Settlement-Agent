@@ -1,4 +1,4 @@
-"""Phase 36: custom test cases from the UI (validation with field paths, rep-safe preview).
+"""Custom test cases from the UI (validation with field paths, rep-safe preview).
 
 ``POST /scenarios/preview`` answers a bad case with every problem and its
 field path (``client.draft_day``) so the editor can show them inline.
@@ -127,7 +127,7 @@ def test_preview_rep_falls_back_to_the_offer_without_a_card(tmp_path: Path) -> N
 
 
 def test_preview_rep_leaks_no_client_or_firm_field(tmp_path: Path) -> None:
-    """[34.2] Distinctive client and firm values never reach the rep-safe preview."""
+    """Distinctive client and firm values never reach the rep-safe preview."""
     payload = _tpl()
     c = payload["client"]
     c["current_balance_cents"] = 73_311

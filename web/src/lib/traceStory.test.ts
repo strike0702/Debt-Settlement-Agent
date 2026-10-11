@@ -1,5 +1,5 @@
 /**
- * Phase 48 trace wording: ladder moves by name, handoffs, the total-or-per-
+ * Trace wording: ladder moves by name, handoffs, the total-or-per-
  * payment question with its cause, acks, corrections and dropped questions
  * from `turn_trace.notes`, the model badge from `turn_trace.reader`, and a
  * true reason for every dropped term.

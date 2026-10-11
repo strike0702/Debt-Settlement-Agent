@@ -1,4 +1,4 @@
-"""Phase 24b (H3): ack / answer acts, NLU question flags, 3-turn NLG context.
+"""H3: ack / answer acts, NLU question flags, 3-turn NLG context.
 
 Policy still decides every move: with ``nlg_h3`` on, the same scenarios produce
 the same intents, reasons and facts; only extra leading sentences appear.
@@ -72,7 +72,7 @@ def test_ack_facts_only_creditor_said_known_values() -> None:
         _known("max_payments", 6),
         _known("min_payment_cents", 25_000),
         _known("first_payment_date", date(2026, 4, 1)),
-        _known("payment_structure", "even"),  # Phase 50: a text fact, no cross-match
+        _known("payment_structure", "even"),  # a text fact, no cross-match
     ]
     said = {("count", 6), ("money", 25_000), ("date", date(2026, 4, 1))}
     facts = ack_facts(changes, said, set())

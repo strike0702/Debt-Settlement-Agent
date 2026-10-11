@@ -69,7 +69,7 @@ def test_readme_media_within_size_budget() -> None:
 
 
 def test_ab_results_replaced_the_pending_placeholders() -> None:
-    # Phase 25r filled in the A/B result; no placeholder may come back, and both
+    # The A/B result is filled in; no placeholder may come back, and both
     # docs must cite the committed summary the numbers come from.
     marker = "AB-" + "PENDING"
     for doc in ("README.md", "docs/DESIGN.md"):

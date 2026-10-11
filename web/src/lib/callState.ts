@@ -171,7 +171,7 @@ export function foldCall(events: readonly CallEvent[]): CallState {
 
 /**
  * Lay the server's Debt negotiator detail (`GET /calls/{id}/operator`) over a
- * call folded from a rep stream (Phase 36): its traces (with any local TTS
+ * call folded from a rep stream: its traces (with any local TTS
  * onsets), the full audit log with privacy flags, and the eval and agreement
  * with their fee columns. Everything else (conversation, belief, phase) stays
  * from the live stream, which is always at least as new.

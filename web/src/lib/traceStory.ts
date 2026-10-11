@@ -1,5 +1,5 @@
 /**
- * A turn trace retold in plain words for a newcomer (Phase 36).
+ * A turn trace retold in plain words for a newcomer.
  *
  * The server's `turn_trace` is written for engineers: intent codes, belief
  * statuses, guard stages, a template with placeholders. `DecisionTrace` takes
@@ -8,7 +8,7 @@
  * whether the client can afford it, and the safety checks, each listed once
  * (the server repeats a check per sentence). Pure; no React.
  *
- * Phase 48: price moves are named by their step on the ladder ("Held our
+ * Price moves are named by their step on the ladder ("Held our
  * offer at 42%", "Made a final offer of 48%", "Accepted 50% when they
  * repeated it"), a handoff is "Handed off to a specialist", and the server's
  * `reader` / `notes` become "Read by Claude Haiku" and plain lines about acks,
@@ -18,7 +18,7 @@
 import { fieldLabel, isoDate, moneyShort, pct, termValue } from "@/lib/format";
 import type { TraceNote, TraceReader, TurnTraceEvent } from "@/types/protocol";
 
-/** The outcome of every call that ends without a deal (Phase 45: deal or handoff). */
+/** The outcome of every call that ends without a deal (a call ends as a deal or a handoff). */
 export const HANDOFF_TITLE = "Handed off to a specialist";
 
 /** Where a price move sits on the ladder (policy reason codes, plus history for the first offer). */
@@ -137,7 +137,7 @@ export function turnTitle(t: TurnTraceEvent, earlier: readonly TurnTraceEvent[] 
       return "Read out the payment schedule";
     case "PROPOSE_WRAP":
       return "Sent the deal to the client";
-    // NO_DEAL_WRAP is dead since Phase 45 (every no-deal ending is a handoff); old logs read as a close.
+    // The policy never emits NO_DEAL_WRAP (every no-deal ending is a handoff); old logs read as a close.
     case "CLOSE":
     case "NO_DEAL_WRAP":
       return "Closed the call";

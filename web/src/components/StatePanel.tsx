@@ -1,16 +1,16 @@
 /**
  * Right column: the state of the negotiation after the latest turn.
  *
- * Order (Phase 36, both views): the outcome first ("Agreement drafted" once
+ * Order (both views): the outcome first ("Agreement drafted" once
  * agreed, then "Proposed schedule"), then `context` (App's scenario brief and
  * client ledger in the Debt negotiator view, "Your account" in the Creditor
  * rep view), then the working detail. Debt negotiator view adds the ladder
  * chart (ask vs our offers, private ceiling), the belief table, the per-turn
- * latency waterfall and a collapsible audit log. Creditor rep view (Phase 35):
+ * latency waterfall and a collapsible audit log. Creditor rep view:
  * only the agreed terms (agreement, schedule without private columns, terms
  * heard); the ladder, latency and audit are the negotiator's tools.
  *
- * Phase 48: a call that ends without a deal is handed off; "Handed off to a
+ * A call that ends without a deal is handed off; "Handed off to a
  * specialist" takes the agreement's slot. The Debt negotiator view says why
  * (the reason sentence from the server); the Creditor rep view shows only what
  * the agent told the rep (`lib/outcome.ts`).

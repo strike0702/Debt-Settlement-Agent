@@ -1,4 +1,4 @@
-"""Phase 34: ``GET /scenarios/{id}/rep`` shows the rep their own account and rules.
+"""``GET /scenarios/{id}/rep`` shows the rep their own account and rules.
 
 The payload is parsed from ``rep_card.md`` only. These tests check that every
 curated card parses and agrees with the scenario's ``offer.json`` / ``sim.json``,
@@ -54,7 +54,7 @@ def _private(scenario_id: str) -> tuple[set[tuple[str, int | date]], date]:
 
 
 def test_seven_curated_cards() -> None:
-    assert len(CARD_IDS) == 7  # Phase 48 added haggling_rep
+    assert len(CARD_IDS) == 7  # haggling_rep is the seventh
 
 
 @pytest.mark.parametrize("scenario_id", CARD_IDS)
@@ -150,7 +150,7 @@ def test_rep_endpoint_leaks_no_client_or_firm_value(tmp_path: Path, scenario_id:
 def test_rep_endpoint_has_no_ledger_amount_or_running_balance(
     tmp_path: Path, scenario_id: str
 ) -> None:
-    """[P35] The negotiator's ledger table (entries and running balances) stays off ``/rep``."""
+    """The negotiator's ledger table (entries and running balances) stays off ``/rep``."""
     with make_client(tmp_path) as c:
         body = c.get(f"/scenarios/{scenario_id}/rep").json()
         client = c.get(f"/scenarios/{scenario_id}").json()["client"]
@@ -175,7 +175,7 @@ def test_rep_endpoint_unknown_id_is_404(tmp_path: Path) -> None:
 
 
 def test_balloon_structure_card_shows_the_sim_floor() -> None:
-    """[34.1] The human rep sees the same floor the simulated rep holds."""
+    """The human rep sees the same floor the simulated rep holds."""
     folder = SCENARIOS_ROOT / "balloon_structure"
     acct = rep_account_from_card((folder / "rep_card.md").read_text(encoding="utf-8"))
     sim = json.loads((folder / "sim.json").read_text())

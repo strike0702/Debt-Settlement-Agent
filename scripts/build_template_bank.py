@@ -15,14 +15,14 @@
    the offer total spoken as a per-payment amount). Duplicates are dropped;
    at most ``--per-key`` are kept.
 
-``--acts`` (Phase 24b) builds only the H3 act keys and merges them into the
+``--acts`` builds only the H3 act keys and merges them into the
 existing bank: ``ACK`` for every ``ACK_TEMPLATES`` id set (prompt
 ``app.llm.prompts.act_messages``, same acceptance checks) and
 ``ANSWER:<topic>`` paraphrases of each ``ANSWER_POINTS`` talking point (no
 placeholders; the default talking point is always kept as the first entry).
 
-Both builds merge into the existing ``--out`` file (Phase 47): an entry marked
-``"reviewed": true`` (hand-written or hand-edited copy, e.g. the Phase 33
+Both builds merge into the existing ``--out`` file: an entry marked
+``"reviewed": true`` (hand-written or hand-edited copy, e.g. the
 READ_BACK / CLARIFY / COUNTER lines) is kept as is and its key is not sent to
 the LLM; a full build leaves the act keys alone, ``--acts`` leaves the rest
 alone, and top-level notes in the file are kept. Drop the flag from an entry

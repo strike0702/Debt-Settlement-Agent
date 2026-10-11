@@ -1,7 +1,7 @@
-"""[33.2] ``scripts/build_template_bank.py`` keeps hand-reviewed bank entries.
+"""``scripts/build_template_bank.py`` keeps hand-reviewed bank entries.
 
-A full rebuild (no ``--acts``) used to rewrite the whole bank from the LLM,
-losing the Phase 33 hand-written READ_BACK / CLARIFY / COUNTER lines and the
+A full rebuild (no ``--acts``) must not rewrite the whole bank from the LLM:
+that would lose the hand-written READ_BACK / CLARIFY / COUNTER lines and the
 act keys. Hermetic: key collection is stubbed and the ``nlg`` role is a
 ``FakeLLM``, so no sim run and no network.
 """
@@ -54,7 +54,7 @@ def test_shipped_bank_marks_the_phase_33_entries_reviewed() -> None:
         for e in _shipped()["entries"]
         if e.get("reviewed") is True
     }
-    # Phase 46b adds the hand-written ``ack_total`` ACK entry, Phase 50 the structure one.
+    # Hand-written ACK entries: ``ack_total`` and the payment structure.
     assert {i for i, _ in reviewed} == set(_REVIEWED) | {"ACK"}
     assert {p for i, p in reviewed if i == "ACK"} == {("ack_total",), ("ack_payment_structure",)}
 

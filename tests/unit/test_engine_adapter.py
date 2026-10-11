@@ -193,7 +193,7 @@ def test_affordability_max_bp_none_when_nothing_feasible() -> None:
 
 
 def test_affordability_demo_timing() -> None:
-    """Measure affordability scan on fixtures/demo; recorded in PROGRESS.md."""
+    """Measure affordability scan on fixtures/demo (timing printed, not asserted tightly)."""
     clear_affordability_cache()
     scenario = load_scenario(DEMO)
     belief = BeliefState(scenario.client)

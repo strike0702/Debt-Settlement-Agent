@@ -6,7 +6,7 @@ negotiation knobs (max turns, anchor ratio, accept line, loop guard, firm
 disclosure). Call
 ``get_settings()``; do not construct ``Settings`` ad hoc in hot paths.
 
-Phase 41: ``claude_daily_budget_usd`` (env ``CLAUDE_DAILY_BUDGET_USD``) caps the
+``claude_daily_budget_usd`` (env ``CLAUDE_DAILY_BUDGET_USD``) caps the
 demo's paid Claude NLU per UTC day; see ``app.llm.budget``.
 
 API key pools: besides the declared ``<provider>_api_key`` fields, every
@@ -87,10 +87,10 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr | None = None
     openrouter_api_key: SecretStr | None = None
     cerebras_api_key: SecretStr | None = None
-    # Paid Anthropic key: the eval ``judge`` role (Phase 30) and, since Phase 41,
+    # Paid Anthropic key: the eval ``judge`` role and
     # the demo ``nlu`` route's first target (under the daily budget below).
     anthropic_api_key: SecretStr | None = None
-    # Phase 41: daily cap (USD, UTC day) on route targets marked ``budgeted`` in
+    # Daily cap (USD, UTC day) on route targets marked ``budgeted`` in
     # providers.yaml (only the demo NLU's Claude target). Decimal, never float;
     # app.llm.budget converts it to integer micro-dollars. Prices live in providers.yaml.
     claude_daily_budget_usd: Decimal = Field(default=Decimal("1.00"), ge=0)
@@ -106,9 +106,9 @@ class Settings(BaseSettings):
     # llm | bank | template. bank = guard-checked templates from nlg_bank_path, no LLM.
     nlg_mode: str = "llm"
     nlg_bank_path: str = "config/nlg_bank.json"
-    # H3 conversational NLG (Phase 24b): ack / answer acts before the decided move.
+    # H3 conversational NLG: ack / answer acts before the decided move.
     nlg_h3: bool = False
-    # Code-built acknowledgements (Phase 46b): "Got it, up to 5 payments." before
+    # Code-built acknowledgements: "Got it, up to 5 payments." before
     # the move, from ack_facts + ACK_VARIANTS only (no LLM, no answer act, no
     # NLG context). Independent of ``nlg_h3``; when both are on, H3 renders.
     nlg_ack: bool = True
@@ -121,7 +121,7 @@ class Settings(BaseSettings):
     llm_timeout_sim_s: float = 15.0
     # Eval-only A/B agent arms (eval/agents): multi-step tool calls, not on the voice path.
     llm_timeout_agent_s: float = 20.0
-    # Eval-only naturalness judge (Phase 30, Anthropic): two transcripts in, one verdict out.
+    # Eval-only naturalness judge (Anthropic): two transcripts in, one verdict out.
     llm_timeout_judge_s: float = 60.0
 
     db_path: str = "debt_settlement_agent.db"
@@ -131,10 +131,10 @@ class Settings(BaseSettings):
     anchor_ratio: float = 0.7
     concession_factor: float = 0.5
     max_counters: int = 6
-    # Phase 45: accept only at or below this share of the client's ceiling
+    # Accept only at or below this share of the client's ceiling
     # (bp of max_bp; 7500 = 75.00%), and never counter above it. Integer math.
     accept_line_pct_of_max_bp: int = Field(default=ACCEPT_LINE_PCT_OF_MAX_BP, ge=0, le=10000)
-    # Phase 45 loop guard: hand off instead of asking the same question this
+    # Loop guard: hand off instead of asking the same question this
     # many + 1 times, or after this many rep turns in a row with no progress.
     max_same_question: int = 2
     max_no_progress_turns: int = 4

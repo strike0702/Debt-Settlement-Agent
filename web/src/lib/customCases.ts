@@ -1,5 +1,5 @@
 /**
- * Custom test cases the visitor adds from the console (Phase 36).
+ * Custom test cases the visitor adds from the console.
  *
  * A custom case is the pasted JSON (`GET /scenarios/template` shape: meta,
  * offer, firm, client, rep_card) plus what its card shows. It lives only in

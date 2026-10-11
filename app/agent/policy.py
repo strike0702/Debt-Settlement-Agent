@@ -18,11 +18,11 @@ is first-match and its order is load-bearing:
 After the cascade, ``loop_guard`` turns a question asked twice already into a
 handoff (``repeated_question``).
 
-Call endings (Phase 45): a call ends only as a confirmed deal (PROPOSE_WRAP /
+Call endings: a call ends only as a confirmed deal (PROPOSE_WRAP /
 ``thanks_accept``) or a handoff (ESCALATE, with a reason code for the person
 taking over). ``decide`` never emits NO_DEAL_WRAP.
 
-Price ladder (Phase 45, ``_negotiate``). The *accept line* is 75% of the
+Price ladder (``_negotiate``). The *accept line* is 75% of the
 client's ceiling (``accept_line_bp``, rounded down); we never offer above it
 and accept only at or below it, and only at a bp the engine can schedule.
 
@@ -33,7 +33,7 @@ and accept only at or below it, and only at a bp the engine can schedule.
   (``concession_factor``), and the hold / step count resets.
 - Rep did not move: hold once (restate our offer), then two equal steps that
   split the gap between our held offer and min(ask, line), the second landing on
-  it (Phase 50; was two quarter-gap steps); then accept if their ask is at or
+  it; then accept if their ask is at or
   below the line (``rep_held``), else hand off (``above_accept_line``).
 - Rep firm: above the line → hand off now; else one final counter halfway
   between our last offer and their number, and accept when they repeat it
@@ -117,11 +117,11 @@ class NegotiationState:
     # Bare money reply awaiting dollars-vs-cents disambiguation.
     # ``{"field", "bare", "as_dollars", "as_cents"}`` — amounts in integer cents.
     pending_cents_clarify: dict[str, Any] | None = None
-    # Dollar amount awaiting "total or per payment?" (Phase 39). Set and cleared
+    # Dollar amount awaiting "total or per payment?". Set and cleared
     # by the orchestrator: ``{"cents", "quote", "trigger"}`` plus ``"pct"`` /
     # ``"pct_quote"`` when a disagreeing % ask was held back.
     pending_amount_clarify: dict[str, Any] | None = None
-    # Phase 45 price ladder. Rep's ask when our last counter was spoken (did
+    # Price ladder. Rep's ask when our last counter was spoken (did
     # they move since?), hold / step stage (0 none, 1 held, 2–3 equal steps),
     # the rep's firm ask when we made our final counter, and the turns that
     # spoke a COUNTER (holds included) for the ``max_counters`` cap.
@@ -129,7 +129,7 @@ class NegotiationState:
     hold_stage: int = 0
     final_counter_ask: int | None = None
     counter_turns: list[int] = field(default_factory=list)
-    # Phase 45 loop guard: times each question was asked (``question_key``) and
+    # Loop guard: times each question was asked (``question_key``) and
     # rep turns in a row that added nothing (``rep_turn_progress``).
     question_counts: dict[str, int] = field(default_factory=dict)
     no_progress_turns: int = 0
@@ -173,7 +173,7 @@ def _counter_terms_action(
     """Build a field-aware COUNTER_TERMS move with the right Fact + template.
 
     ``rep_stated`` is false when the rep never gave this term (our belief is an
-    ASSUMED default, Phase 50): then we only propose our value as a question and
+    ASSUMED default): then we only propose our value as a question and
     never say "that ... does not fit", which would object to words they never said.
     """
     key = terms_counter_key(field, value)
@@ -456,7 +456,7 @@ def cents_ambiguity_clarify_action(
     )
 
 
-# ``clarify_counts`` key for the total-vs-per-payment question (Phase 39).
+# ``clarify_counts`` key for the total-vs-per-payment question.
 AMOUNT_CLARIFY_KEY = "amount_meaning"
 
 
@@ -579,7 +579,7 @@ def _confirm_action(
     )
 
 
-# COUNTER templates for the Phase 45 ladder moves; ``{offer_total}`` is required
+# COUNTER templates for the price-ladder moves; ``{offer_total}`` is required
 # because ``Orchestrator._enrich_action`` makes it so for every COUNTER.
 _HOLD_TEMPLATE = (
     "We are staying at {counter_pct} of the balance, which is {offer_total}. "
@@ -658,7 +658,7 @@ _LAST_HOLD_STAGE = 3
 
 
 def _negotiate(t: _Turn, ask_bp: int, afford: Affordability) -> Action:
-    """The Phase 45 price ladder (module docstring); every accept is a CONFIRM at a feasible bp.
+    """The price ladder (module docstring); every accept is a CONFIRM at a feasible bp.
 
     Order: ask within our offer → rep's first number → repeat after our final
     counter → firm → ``max_counters`` cap → rep moved (concede half) → hold →
@@ -880,7 +880,7 @@ _FOLLOW_UP_TEMPLATE = "Understood. A specialist from our side will follow up wit
 
 
 def _handoff(effects: list[Effect], reason: str) -> Action:
-    """ESCALATE for a Phase 45 handoff code (``HANDOFF_SPOKEN``)."""
+    """ESCALATE for a no-deal handoff code (``HANDOFF_SPOKEN``)."""
     return _escalate(effects, reason=reason, spoken_reason=HANDOFF_SPOKEN[reason])
 
 
@@ -1398,8 +1398,8 @@ def _confirm_accepted_counter(t: _Turn, ask_bp: int, afford: Affordability) -> A
     """Rep accepted one of our offers: confirm it, if still feasible and at or below the line.
 
     A restated % counts only when it is a number we offered; any other number
-    is the rep's own ask and goes through the ladder (never accepted first —
-    Phase 45, the A/B pair-17 "100% balance" accept). A yes to a term alt is
+    is the rep's own ask and goes through the ladder (never accepted first:
+    otherwise "OK, 100% of the balance" would read as accepting our offer). A yes to a term alt is
     not a yes to the previous price — that counter can be a token percent the
     new terms just made obsolete.
     """

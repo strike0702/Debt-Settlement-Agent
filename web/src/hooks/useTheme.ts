@@ -1,7 +1,7 @@
 /**
  * Light/dark theme toggle, persisted per browser; index.html applies it pre-paint.
  * The toggle also keeps `<meta name="theme-color">` on the page background, so
- * mobile browser chrome matches the theme (Phase 48).
+ * mobile browser chrome matches the theme.
  */
 import { useCallback, useState } from "react";
 

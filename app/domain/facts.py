@@ -1,7 +1,7 @@
 """Typed negotiation figures with PUBLIC/PRIVATE visibility.
 
 ``Fact`` is the only source of spoken numbers (via ``render`` → ``units``).
-The ``text`` kind (Phase 50) carries a fixed, digit-free phrase such as the
+The ``text`` kind carries a fixed, digit-free phrase such as the
 acknowledged payment structure ("a balloon schedule"); it is never a figure.
 PUBLIC facts may go to NLG and the creditor-facing transcript; PRIVATE facts
 (balances, fees, max affordable) stay off the NLG prompt and feed the

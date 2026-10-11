@@ -1,4 +1,4 @@
-"""Phase 20 (F5, F17): every LLM call is audited under the turn's call id.
+"""Every LLM call is audited under the turn's call id.
 
 FakeLLM NLU / NLG calls made inside ``Orchestrator`` turns must land in
 ``AuditLog.for_call(call_id)``; the call id comes from the ``LLM_CALL_ID``

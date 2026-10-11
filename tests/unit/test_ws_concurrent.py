@@ -1,4 +1,4 @@
-"""Phase 21 (F4, F15): concurrent WS handlers and the latency event shape.
+"""Concurrent WS handlers and the latency event shape.
 
 A ``FakeLLM`` whose NLU sleeps keeps a turn inside NLU long enough for the
 test to send a second ``text`` (merged into one turn) or a ``barge_in``

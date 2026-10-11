@@ -139,8 +139,8 @@ def test_counter_without_offer_total_omits_the_amount() -> None:
     assert reason_key(Intent.COUNTER, "bp=4900") == "counter"
 
 
-# Phase 36 rewrote the sentences for newcomers. Text only: these are the placeholders
-# each key had before the rewrite, so no fact was added, dropped or swapped.
+# The sentences are written for newcomers, but each key's placeholders are fixed:
+# a wording change must not add, drop or swap a fact.
 _PLACEHOLDERS_BEFORE: dict[str, set[str]] = {
     "ask_field": {"field_label"},
     "read_back": {"field_label"},
@@ -163,7 +163,7 @@ _PLACEHOLDERS_BEFORE: dict[str, set[str]] = {
             "terms_revised",
         )
     },
-    # Phase 45 ladder moves (COUNTER templates speak the counter).
+    # Price-ladder moves (COUNTER templates speak the counter).
     "hold": {"counter_pct"},
     "step": {"counter_pct"},
     "final_counter": {"counter_pct"},
@@ -175,10 +175,8 @@ def test_rewrite_kept_every_key_and_placeholder() -> None:
     for key, text in REASON_TEXT.items():
         names = {n for _, n, _, _ in fmt.parse(text) if n}
         assert names == _PLACEHOLDERS_BEFORE.get(key, set()), key
-    # +2 in Phase 39: amount_meaning(_unresolved). Phase 45: -2 (gap_small,
-    # ladder_stalled), +7 (hold, step, final_counter, rep_held, above_accept_line,
-    # repeated_question, no_progress). Phase 50b: +1 display variant
-    # (alt_first_payment_date_assumed).
+    # Reason codes plus one display variant (alt_first_payment_date_assumed);
+    # a new code must get a sentence here.
     assert len(REASON_TEXT) == 53
 
 
@@ -204,7 +202,7 @@ def test_short_forms_cover_every_reason_and_carry_no_numbers() -> None:
 
 
 def test_step_wording_describes_two_equal_steps() -> None:
-    """Phase 50b: Phase 50's steps are equal halves of the gap, not "small steps"."""
+    """The ladder's steps are equal halves of the gap, not "small steps"."""
     pct = Fact(id="counter_pct", kind="pct", value=5900, visibility="PUBLIC", source="engine")
     step = Action(
         intent=Intent.COUNTER, facts={"counter_pct": pct}, next_phase=Phase.NEGOTIATE, reason="step"
@@ -221,7 +219,7 @@ def test_step_wording_describes_two_equal_steps() -> None:
 
 @pytest.mark.parametrize("rep_stated", [True, False])
 def test_start_date_alt_reason_does_not_blame_an_assumed_date(rep_stated: bool) -> None:
-    """Phase 50b: the start date the rep never gave is ours, not "their start date"."""
+    """The start date the rep never gave is ours, not "their start date"."""
     from app.agent.policy import _counter_terms_action
 
     action = _counter_terms_action(

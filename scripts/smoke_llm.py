@@ -50,7 +50,7 @@ SMOKE_TARGETS = [
 # The judge has no OpenAI-compatible target to force; smoke the real route instead.
 JUDGE_PROFILE = "eval"
 JUDGE_KEY_ENV = "ANTHROPIC_API_KEY"
-# Sonnet 5.5 thinking counts against max_tokens (Phase 30); a pong needs ~12.
+# Sonnet 5.5 thinking counts against max_tokens; a pong needs ~12.
 JUDGE_MAX_TOKENS = 1024
 
 

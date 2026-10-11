@@ -1,10 +1,10 @@
 /**
- * Voice-activity detection: the pinned vad-web build and its Phase 21 settings.
+ * Voice-activity detection: the pinned vad-web build and its tuned settings.
  *
  * vad-web and its ONNX runtime load from jsDelivr at mic-on time (not bundled):
  * `@ricky0123/vad-web@0.0.22` with `onnxruntime-web@1.14.0`, the pair that
- * works (1.18 broke it, see PROGRESS "Accept/counter + mic release"). Tuning
- * is from PROGRESS "VAD sensitivity" and Phase 21. The engine (`engine.ts`)
+ * works (1.18 broke it). The tuned settings are pinned by
+ * `hooks/useVoice.test.ts`. The engine (`engine.ts`)
  * owns what happens on speech start/end; this file only builds the detector.
  */
 

@@ -3,7 +3,7 @@
 Callers ask for a role (``nlu`` / ``nlg`` / ``sim`` / ``stt`` / ``agent`` /
 ``judge``), never a model name. ``agent`` is the eval-only A/B arms' move role
 (``eval/agents``); a profile without an ``agent`` route falls back to its
-``nlu`` route. ``judge`` (Phase 30, ``eval/judge_naturalness``) never falls
+``nlu`` route. ``judge`` (``eval/judge_naturalness``) never falls
 back: a profile without a ``judge`` route raises ``LLMUnavailable``, because a
 judge that silently changes model would corrupt the metric.
 
@@ -46,7 +46,7 @@ that failed before the call moved to another key. Each meta carries ``key_id``
 cooldown waits); ``queue_wait_scope`` sums it for a turn.
 ``app.llm.call_audit`` turns that hook into audit-log rows.
 
-Daily budget (Phase 41): a route entry may carry ``budgeted: true`` (only the
+Daily budget: a route entry may carry ``budgeted: true`` (only the
 demo ``nlu`` route's Claude target does; a ``judge`` route may not, so eval
 judging is never capped). Its provider must list the model under
 ``prices_usd_per_mtok``. Before such a target, once its provider has a usable
@@ -54,8 +54,8 @@ key, ``app.llm.budget.DailyBudget`` is checked: when today's (UTC) spend has
 reached ``Settings.claude_daily_budget_usd`` the target is skipped and the call
 goes down the route (``failover_from`` = the skipped target). The skip emits a
 meta with ``event="llm_budget_skip"`` (and, first time each day,
-``event="llm_budget_exhausted"``), ``error`` set and ``latency_ms`` 0. Phase 47:
-right before the live request an upper-bound estimate (prompt estimate ×
+``event="llm_budget_exhausted"``), ``error`` set and ``latency_ms`` 0.
+Right before the live request an upper-bound estimate (prompt estimate ×
 input price + ``max_tokens`` × output price) is reserved atomically, so
 concurrent calls overshoot the cap by at most one estimate; a failed
 reservation is a skip like the one above. A live success settles the
@@ -206,7 +206,7 @@ class RouteTarget:
     model: str
     params: Mapping[str, Any] = field(default_factory=dict)
     timeout_s: float | None = None
-    # Phase 41: subject to the daily budget (see module docstring).
+    # Subject to the daily budget (see module docstring).
     budgeted: bool = False
 
     @property
@@ -282,7 +282,7 @@ class _ProviderCfg:
     health: str | None = None
     tpm: float = 0  # tokens per minute per key; 0 = no TPM budget
     api: Literal["openai", "anthropic"] = "openai"
-    # model -> price, from ``prices_usd_per_mtok`` (Phase 41 daily budget).
+    # model -> price, from ``prices_usd_per_mtok`` (daily budget).
     prices: dict[str, ModelPrice] = field(default_factory=dict)
 
 

@@ -76,7 +76,7 @@ def test_rule1_max_turns() -> None:
         _afford(6000),
         settings=_SETTINGS,
     )
-    # Deal-or-handoff (Phase 45): the turn cap is a handoff, not a no-deal end.
+    # Deal-or-handoff: the turn cap is a handoff, not a no-deal end.
     assert action.intent == Intent.ESCALATE
     assert action.reason == "max_turns"
     assert action.next_phase == Phase.ESCALATE
@@ -1432,7 +1432,7 @@ def test_negotiate_first_number_never_accepted_when_a_counter_exists() -> None:
 
 
 def test_negotiate_hold_then_two_steps_then_accept_or_hand_off() -> None:
-    """Rule C3 (Phase 50): rep does not move → hold, two equal steps to min(ask, line), decide."""
+    """Rule C3: rep does not move → hold, two equal steps to min(ask, line), decide."""
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
     afford = _afford(6000, list(range(100, 6100, 100)))  # line 4500
     base = dict(turn_idx=6, ask_at_last_counter=4500, phase=Phase.NEGOTIATE)
@@ -1549,7 +1549,7 @@ def test_counters_never_exceed_the_accept_line() -> None:
                         )
                         if action.intent == Intent.COUNTER:
                             bp = action.facts["counter_pct"].value
-                            # Phase 50: only the second equal step may land on their ask.
+                            # Only the second equal step may land on their ask.
                             ceiling_ok = bp <= ask if action.reason == "step" else bp < ask
                             assert isinstance(bp, int) and bp <= line and ceiling_ok
                         if action.intent == Intent.CONFIRM_SCHEDULE:

@@ -1,4 +1,4 @@
-"""Phase 37: guard report scoring on hand-built records (no LLM)."""
+"""Guard report scoring on hand-built records (no LLM)."""
 
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ def test_context_rows_list_forced_lines_only() -> None:
          "predicted": {"stance": "accept"}},
         {"id": "z", "text": "Let me look.", "expected": {"stance": "stall"},
          "predicted": {"stance": "stall"}},
-        # A phrase inside a question no longer forces a label (Phase 45).
+        # A phrase inside a question no longer forces a label.
         {"id": "w", "text": "Is that agreed?", "expected": {"stance": "question"},
          "predicted": {"stance": "question"}},
     ]

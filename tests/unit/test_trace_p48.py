@@ -1,4 +1,4 @@
-"""Phase 48: who read each rep turn (``turn_trace.reader``) and the turn's notes.
+"""Who read each rep turn (``turn_trace.reader``) and the turn's notes.
 
 The WS layer builds both from the turn's audit rows (``turn_reader`` /
 ``turn_notes`` in ``app.voice.ws``); the orchestrator is untouched. Covered:

@@ -6,7 +6,7 @@
  * card, and a text box. `onSend` / `onMicToggle` are wired by App to the
  * call socket and `useVoice`; when absent (replay, no call) their controls
  * are disabled. `interim` is the voice cue or a live browser-STT partial.
- * `ended` (Phase 48) closes the transcript with a quiet line saying how the
+ * `ended` closes the transcript with a quiet line saying how the
  * call ended ("Call ended: handed off to a specialist").
  */
 import { Mic, MicOff, Send, X } from "lucide-react";
@@ -21,7 +21,7 @@ export interface ConversationProps {
   messages: ChatMessage[];
   mic: MicState;
   /**
-   * Rep lines to click, shown once each (Phase 50b). All look the same: no "next"
+   * Rep lines to click, shown once each. All look the same: no "next"
    * highlight, since a rep who haggles their own way makes the scripted order meaningless.
    */
   suggested: string[];

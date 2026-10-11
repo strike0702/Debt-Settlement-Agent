@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Live probe (paid): the demo NLU route with its Claude target first (Phase 41, 43).
+"""Live probe (paid): the demo NLU route with its Claude target first.
 
 Runs ``app.agent.nlu.analyze`` on N lines of ``tests/nlu_corpus.jsonl`` through
 the shipped ``demo`` profile (cache off), then one call with the daily budget

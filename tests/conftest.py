@@ -1,8 +1,8 @@
 """Shared pytest config: the ``live`` marker and hermetic ``Settings`` for every test.
 
 ``app.config.Settings`` reads ``.env`` from the cwd and the process environment.
-A developer's local ``.env`` (e.g. a custom ``OPENING_DISCLOSURE``) used to leak
-into goldens, so the suite passed locally and failed on CI (Phase 29). The
+A developer's local ``.env`` (e.g. a custom ``OPENING_DISCLOSURE``) would
+otherwise leak into goldens, so the suite would pass locally and fail on CI. The
 autouse ``_hermetic_settings`` fixture turns the dotenv source off and unsets
 every env var ``Settings`` would read (declared fields, derived from
 ``Settings.model_fields``, plus ``*_KEY`` / ``*_KEY_<n>`` pool vars).

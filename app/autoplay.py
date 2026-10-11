@@ -10,9 +10,9 @@ Autoplay never calls an LLM: ``autoplay_settings`` forces ``nlu_mode=oracle``
 and template (or bank) NLG, and the orchestrator gets ``llm=None``, so it works
 under ``LLM_PROFILE=offline`` with no keys. The creditor's hidden rules come
 from ``fixtures/scenarios/<id>/sim.json`` (mirrors that scenario's rep card).
-Phase 48: ``sim.json`` may also name how the rep haggles (``"haggle"``: a
-``sim.haggle.Haggle`` style and its knobs); without it the rep is the easy
-pre-46a one, so the older fixtures play exactly as before.
+``sim.json`` may also name how the rep haggles (``"haggle"``: a
+``sim.haggle.Haggle`` style and its knobs); without it the rep is the plain
+easy rep, so fixtures without the key play exactly as recorded.
 The policy is unchanged; ``sim/`` still never imports ``app.agent``.
 """
 

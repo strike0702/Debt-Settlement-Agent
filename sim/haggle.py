@@ -1,4 +1,4 @@
-"""How the simulated rep haggles over price (Phase 46a).
+"""How the simulated rep haggles over price.
 
 A ``Haggle`` is a per-scenario knob next to the persona: the persona decides
 *what else* the rep does (contradict a rule, pressure for private info), the
@@ -8,7 +8,7 @@ assigns it in ``generate`` from its own RNG, so the main sampler's draws (and
 every scenario's client and rules) stay as they were.
 
 Styles:
-- ``easy`` (the pre-46a rep): accepts any counter at or above its floor,
+- ``easy`` (the original, simplest rep): accepts any counter at or above its floor,
   otherwise drops five points per counter and is firm only at the floor.
 - ``holder``: answers ``hold_turns`` counters by restating its number, then
   concedes one step (sizes cycle through ``steps_bp``), and repeats; firm
@@ -33,7 +33,7 @@ from typing import Literal
 HaggleStyle = Literal["easy", "holder", "stepper", "staller"]
 StallOn = Literal["ask", "counter"]
 
-# The pre-46a fixed concession per counter.
+# The easy rep's fixed concession per counter.
 EASY_STEP_BP = 500
 
 

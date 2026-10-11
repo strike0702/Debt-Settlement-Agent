@@ -1,4 +1,4 @@
-/** Every code-to-words label is sentence case (Phase 36). */
+/** Every code-to-words label is sentence case. */
 import { describe, expect, it } from "vitest";
 import { EXPECTED_LABEL, expectedLabel, sentence, STATUS_LABEL } from "@/lib/labels";
 

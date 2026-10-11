@@ -1,11 +1,11 @@
-"""Figure and stance check for the sim's LLM rewrite (Phase 46a).
+"""Figure and stance check for the sim's LLM rewrite.
 
 ``CreditorPolicy._phrase`` lets the ``sim`` LLM restyle a code-built draft.
 Free models invent or change numbers ("the 10% balance", "we cannot go below
 21%") and contradict themselves ("We cannot accept 48%, but we will accept
 48%"). ``rewrite_problem(draft, rewrite, stance=...)`` names the first reason
-to throw the rewrite away and speak the draft instead, or ``None``. Phase 49
-adds the self-contradictions the Phase 46c re-check let through: a trailing
+to throw the rewrite away and speak the draft instead, or ``None``. It also
+catches self-contradictions that carry no number: a trailing
 "Actually, it isn't.", a leading "No," on an info line, and a "Sure, ..."
 opener on a refusal (all ``stance``).
 
@@ -111,7 +111,7 @@ _NEGATOR_RE = re.compile(
 _IDIOM_RE = re.compile(r"\b(?:no problem|no worries|not a problem|no doubt)\b", re.IGNORECASE)
 _CLAUSE_RE = re.compile(r"[.;,:!?—]|\bbut\b|\bhowever\b|\bthough\b", re.IGNORECASE)
 
-# Phase 49 (ledger 46c.2 / 46c.5): shapes that flip a line without adding a
+# Shapes that flip a line without adding a
 # phrase from the lists above. A short sentence that only takes back what came
 # before ("Actually, it isn't.", "Actually, we can't."); a leading "No," on a
 # line that is not a refusal (the agent reads it as a correction); and an

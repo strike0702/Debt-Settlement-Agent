@@ -61,7 +61,7 @@ describe("useCall", () => {
     );
   });
 
-  it("starts a live call and an autoplay call with the Phase 22 payloads", () => {
+  it("starts a live call and an autoplay call with the expected start payloads", () => {
     const hook = mount();
     act(() => hook.result.current.start("easy_deal", { view: "rep" }));
     const ws = FakeSocket.all[0]!;

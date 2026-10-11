@@ -12,15 +12,15 @@ Every ``Utterance`` carries a ``TurnTrace`` (``app.schemas.events``) assembled
 from what the turn already computed — NLU terms and drops, belief changes,
 affordability, the decision with its ``reasons`` sentence, NLG template and
 guard verdicts, timings — never by re-reading the audit log.
-With ``Settings.nlg_h3`` (Phase 24b) the decided move gets optional ack /
+With ``Settings.nlg_h3`` the decided move gets optional ack /
 answer acts (``app.agent.acts``) spoken before it, and LLM NLG sees the last
-three public turns. Phase 46b: ``Settings.nlg_ack`` (default on) speaks the
+three public turns. ``Settings.nlg_ack`` (default on) speaks the
 code-built ack alone; the next rep turn may correct it ("No, it's six
 payments" → the new value replaces the acked one; "that's not what I said" →
 the acked terms go back to TENTATIVE and are read back). A reply to a pending
 cents / amount question that also carries new terms is not just asked again:
 the answer (if any) and the new terms are applied and ``decide`` runs.
-Phase 45: before ``decide`` it counts rep turns in a row with no progress
+Before ``decide`` it counts rep turns in a row with no progress
 (``policy.rep_turn_progress``) for the loop guard, runs ``policy.loop_guard``
 on clarifies chosen before ``decide``, and turns a rep ending without a deal
 (``on_rep_end``) or a wrap whose agreement fails to draft into a handoff
@@ -401,7 +401,7 @@ def apply_effects(session: CallSession, effects: list[Effect]) -> None:
             # Idempotent: eager emit + barge-in/ack must not double-count.
             if not session.neg.counters_offered or session.neg.counters_offered[-1] != bp:
                 session.neg.counters_offered.append(bp)
-            # Phase 45 ladder bookkeeping: plain sets, so a second apply is a no-op.
+            # Price-ladder bookkeeping: plain sets, so a second apply is a no-op.
             if "ask_bp" in data:
                 session.neg.ask_at_last_counter = int(data["ask_bp"])
             if "stage" in data:
@@ -611,7 +611,7 @@ class Orchestrator:
         self._drained: list[Utterance] = []
         # What the turn in flight computed, for ``Utterance.trace`` (see ``_build_trace``).
         self._trace_ctx: dict[str, Any] = {}
-        # Belief field → value the last emitted move acknowledged (Phase 46b); the
+        # Belief field → value the last emitted move acknowledged; the
         # next rep turn may correct it. Cleared when that turn starts.
         self._last_ack: dict[str, Any] = {}
 
@@ -897,7 +897,7 @@ class Orchestrator:
                 )
                 return await self._emit(action, sentences, timings, [])
 
-            # Total-vs-per-payment amounts (Phase 39): answer a pending question,
+            # Total-vs-per-payment amounts: answer a pending question,
             # then turn a dollar-total ask into bp or ask about a doubtful amount.
             check_min_payment = True
             pending_amount = session.neg.pending_amount_clarify
@@ -1012,7 +1012,7 @@ class Orchestrator:
 
             t_pol = time.perf_counter()
             analysis = verified.to_turn_analysis()
-            # Loop guard (Phase 45): rep turns in a row that added nothing.
+            # Loop guard: rep turns in a row that added nothing.
             if rep_turn_progress(
                 analysis, session.neg, belief_changes, accepted_term_alt=accepted_term_alt
             ):
@@ -1128,7 +1128,7 @@ class Orchestrator:
                 and pending.action.reason == "thanks_accept"
             )
         ) and agreement is None:
-            # No valid agreement behind the wrap: hand off (deal-or-handoff, Phase 45).
+            # No valid agreement behind the wrap: hand off (a call ends as a deal or a handoff).
             self.session.neg.phase = Phase.ESCALATE
             self._audit(
                 "orchestrator",
@@ -1266,7 +1266,7 @@ class Orchestrator:
                     reason="rep_ended_after_wrap",
                 )
             else:
-                # No deal on the table: a handoff, never a bare no-deal end (Phase 45).
+                # No deal on the table: a handoff, never a bare no-deal end.
                 action = follow_up_action(reason="rep_ended")
             with queue_wait_scope() as queue:
                 sentences = await self._speak(action, last_rep_line="")
@@ -1535,7 +1535,7 @@ class Orchestrator:
         that says we misheard ("I said six payments") replaces the value
         outright instead of the CONTRADICTED → CLARIFY path; a bare "No, it's
         six" or "No, actually make that six" may be the rep changing their own
-        term, so it still clarifies (Phase 49). A dispute with no value
+        term, so it still clarifies. A dispute with no value
         ("that's not what I said") puts the acked terms back to TENTATIVE so
         they are read back.
         """

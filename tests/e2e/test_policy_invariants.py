@@ -32,7 +32,7 @@ _N_SEEDS = int(os.environ.get("DSA_INVARIANT_SEEDS", "100"))
 
 
 async def test_regression_s0007_009_no_fix_flexible_counter_loop(tmp_path: Path) -> None:
-    """Phase 12 eval (seed 7, n=12) spoke 10 COUNTERs, last four identical at 62%."""
+    """Regression: this call once spoke 10 COUNTERs, the last four identical at 62%."""
     sc = next(s for s in generate(12, 7) if s.id == "s0007_009_no_fix_flexible")
     r = await run_one_scenario(
         sc,
@@ -44,14 +44,14 @@ async def test_regression_s0007_009_no_fix_flexible_counter_loop(tmp_path: Path)
     assert r["status"] == "ok"
     assert r["counters_spoken"] <= _SETTINGS.max_counters
     assert r["identical_consecutive_agent_moves"] == 0
-    # Deal-or-handoff (Phase 45): a no_fix call ends in a handoff, never a no-deal end.
+    # Deal-or-handoff: a no_fix call ends in a handoff, never a no-deal end.
     assert r["final_intent"] == Intent.ESCALATE.value
     assert r["final_reason"] in ("above_accept_line", "max_counters", "no_legal_counter")
 
 
 async def test_regression_s0007_000_tiers_readback_after_accept(tmp_path: Path) -> None:
     """Seed-7 n=100: 'Agreed' at 48%, tiers READ_BACK, then a 58% COUNTER + re-CONFIRM."""
-    # Pre-46a easy rep (slot 0 is a holder since Phase 46a; this pins the old path).
+    # Easy rep (slot 0 is a holder by default; this pins the plain easy-rep path).
     sc = seed7_easy_slot(0)
     assert sc.id == "s0007_000_deal_flexible"
     r = await run_one_scenario(
@@ -106,7 +106,7 @@ async def _run_call(sc: Scenario, audit_dir: Path) -> list[str]:
                 bad.append(f"counter {bp} >= ask {ask}")
             if line is None or bp > line:
                 bad.append(f"counter {bp} > accept line {line}")
-            # A hold restates our last offer on purpose (Phase 45); nothing else may.
+            # A hold restates our last offer on purpose; nothing else may.
             if prev_counter == bp and action.reason != "hold":
                 bad.append(f"identical consecutive counter {bp}")
             counters.append(bp)
@@ -140,7 +140,7 @@ def _seed_scenario(seed: int) -> Scenario:
 
 
 async def test_ladder_through_the_sim_settles_at_or_below_the_line(tmp_path: Path) -> None:
-    """Phase 45 ladder against the real sim: floor raised to the accept line, so the
+    """Price ladder against the real sim: floor raised to the accept line, so the
     rep concedes, reaches its floor, says it is firm, and the call ends in a deal at
     or below the line within ``max_counters`` counters (no first-number accept)."""
     import dataclasses

@@ -183,7 +183,7 @@ def test_ws_end_closes_without_unknown_event(tmp_path: Path) -> None:
                 for m in ended
             )
             assert any(m.get("type") == "say" for m in ended)
-            # Deal-or-handoff (Phase 45): the rep leaving without a deal is a handoff.
+            # Deal-or-handoff: the rep leaving without a deal is a handoff.
             assert any(
                 m.get("type") == "phase" and m.get("intent") == "ESCALATE"
                 for m in ended
@@ -218,7 +218,7 @@ def test_scenario_brief_endpoint(tmp_path: Path) -> None:
         assert len(ledger) == 8
         assert all(e["type"] == "credit" for e in ledger)
         assert ledger[0]["amount_cents"] == 22_000
-        # [P35] Whole ledger for the negotiator's table, flagged past vs scheduled.
+        # Whole ledger for the negotiator's table, flagged past vs scheduled.
         full = body["client"]["ledger"]
         assert [e["date"] for e in full] == sorted(e["date"] for e in full)
         assert {e["type"] for e in full} == {"credit"}
@@ -312,7 +312,7 @@ def test_healthz(tmp_path: Path) -> None:
 
 
 def test_nlu_llm_unavailable_keeps_socket_open(tmp_path: Path) -> None:
-    """[21.2] NLU with no provider → ``error`` + ``turn_done``; the call continues."""
+    """NLU with no provider → ``error`` + ``turn_done``; the call continues."""
     settings = _settings().model_copy(update={"nlu_mode": "llm"})
     llm = FakeLLM()  # empty nlu queue → LLMUnavailable
     audit = AuditLog(tmp_path / "ws_audit.db")

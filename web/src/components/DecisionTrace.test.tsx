@@ -1,5 +1,5 @@
 /**
- * "How the agent decided" (Phase 36 final design) over the recorded easy_deal
+ * "How the agent decided" over the recorded easy_deal
  * call: one row per turn with a plain title, key number and a few-word reason;
  * the newest row open with the five-line story; internals one click further;
  * each safety check once; no stance labels, raw codes or "None" up front; one

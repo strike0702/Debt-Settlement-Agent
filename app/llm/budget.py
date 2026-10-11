@@ -1,4 +1,4 @@
-"""Daily spend cap for paid route targets (the demo's Claude NLU, Phase 41).
+"""Daily spend cap for paid route targets (the demo's Claude NLU).
 
 ``DailyBudget`` keeps one row per UTC day in a small SQLite table
 (``llm_daily_spend``) inside the app DB (``Settings.db_path``), so a process
@@ -8,7 +8,7 @@ restart does not reset the day's spend. Money is integer micro-dollars
 
 It does not route or call anything. ``app.llm.client.LLMClient`` asks
 ``exhausted()`` before a route target marked ``budgeted: true`` (only the demo
-``nlu`` route's Anthropic target). Phase 47: just before the live request it
+``nlu`` route's Anthropic target). Just before the live request it
 ``reserve()``s an upper-bound estimate in one atomic UPDATE, so concurrent calls
 can overshoot the cap by at most one reservation; afterwards it ``settle()``s
 the reservation to the actual usage, or ``release()``s it when the attempt was

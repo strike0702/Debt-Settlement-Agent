@@ -28,7 +28,7 @@ an LLM `counter`, `confirm`, `escalate` tools and let it reason. But every move
 here moves money, and the model would need the client's private ceiling to
 choose a counter.
 
-**Decision.** `decide()` in `app/agent/policy.py` is plain Python: belief state,
+**Decision.** `decide()` in `app/agent/policy/cascade.py` is plain Python: belief state,
 verified NLU and the affordability curve in, one `Action` out. The LLM only
 reads (NLU) and phrases (NLG). The ReAct and LLM-only agents exist, but only as
 eval arms in `eval/agents/` (Phase 24a); nothing in `app/` imports them.
@@ -222,7 +222,7 @@ as agreement. In the A/B run (pair 17, `s0007_006`) the agent answered "Great,
 could also end with a plain "no deal", leaving nobody to follow up, and a rep
 who kept repeating themselves could keep the agent asking the same question.
 
-**Decision.** The rules live in `_negotiate` in `app/agent/policy.py`; the
+**Decision.** The rules live in `_negotiate` in `app/agent/policy/ladder.py`; the
 engine is unchanged. The tunable settings (in `.env`):
 
 | Setting | Default | What it does |

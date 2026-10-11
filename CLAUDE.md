@@ -4,9 +4,9 @@
 Voice agent that negotiates debt settlements. Code-based policy decides every move; the LLM only extracts terms (NLU) and phrases moves with fact placeholders (NLG). The vendored `feasibility/` engine is the source of truth for every number.
 
 ## Before doing anything in a new session
-1. Read `docs/PROGRESS.md` (phase status, interfaces built so far, deviations, open issues).
+1. Read `docs/history/PROGRESS.md` (phase status, interfaces built so far, deviations, open issues).
 2. Read only the `docs/history/PLAN.md` sections your phase prompt names. Do not read the whole plan unless needed.
-3. Read existing code only when you need an interface not recorded in `docs/PROGRESS.md`.
+3. Read existing code only when you need an interface not recorded in `docs/history/PROGRESS.md`.
 
 ## Ground rules
 - Money is integer cents. Settlement percentages are integer basis points (4500 = 45%). Convert to the engine with `Decimal(bp) / Decimal(10000)`. Never use float for money. Dates are `datetime.date`.
@@ -29,5 +29,5 @@ Voice agent that negotiates debt settlements. Code-based policy decides every mo
 
 ## End of every phase
 1. Run the phase's acceptance check, plus `uv run pytest -q` and `uv run ruff check .`. All green.
-2. Update `docs/PROGRESS.md`: mark the phase done, list the files added, record the public interfaces (signatures) later phases need, and record any deviation from docs/history/PLAN.md and open issues.
+2. Update `docs/history/PROGRESS.md`: mark the phase done, list the files added, record the public interfaces (signatures) later phases need, and record any deviation from docs/history/PLAN.md and open issues.
 3. Commit with message `phase N: <summary>`.

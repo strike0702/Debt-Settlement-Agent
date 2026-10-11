@@ -44,8 +44,8 @@ By default the demo's replies come from a bank of templates built and guard-chec
 | Start here | What it is |
 |---|---|
 | `app/agent/orchestrator.py` | Runs one turn end to end: NLU, belief update, affordability, policy, reply, and the spoken-sentence acknowledgement. |
-| `app/agent/policy.py` | `decide()`: the whole negotiation strategy as pure functions. Belief and verified NLU in, one `Action` out. |
-| `app/agent/nlu.py` | Asks the model to read the line, then `post_verify` checks quotes, numbers and phrase rules in code. |
+| `app/agent/policy/` | `decide()` (`cascade.py`): the whole negotiation strategy as pure functions. Belief and verified NLU in, one `Action` out. The price ladder is in `ladder.py`. |
+| `app/agent/nlu/` | Asks the model to read the line (`llm_call.py`), then `post_verify` (`verify.py`) checks quotes, numbers and phrase rules (`cues.py`) in code; amount questions are in `amounts.py`. |
 | `app/agent/nlg.py`, `app/agent/guards.py` | Turns an `Action` into a template, fills it from facts, and runs the two guards. |
 | `app/adapter/engine_adapter.py` | The only bridge to the engine: builds creditor rules from belief and scans 1%–100% for affordability. `app/adapter/validator.py` re-checks every drafted schedule independently. |
 | `feasibility/engine.py` | `evaluate_offer`: the settlement math (brought in from an earlier project). |

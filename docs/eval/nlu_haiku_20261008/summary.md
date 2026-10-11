@@ -77,7 +77,7 @@ Cost guard:
 | latency p50 per call | ≈ 2.1 s (P37, see below) | **1.23 s** |
 | latency p95 per call | not available | **1.96 s** (max 3.36 s) |
 
-- Sonnet tokens are the Phase 39 audit totals recorded in `docs/PROGRESS.md`: 270,970 in / 36,158 out.
+- Sonnet tokens are the Phase 39 audit totals recorded in `docs/history/PROGRESS.md`: 270,970 in / 36,158 out.
 - **Sonnet latency is not available for the Phase 39 run.** Its audit DB was in that worktree's git-ignored `eval/results/`, which is gone. The only Sonnet figure on record is the Phase 37 summary, p50 ≈ 2.1 s, measured on the pre-P39 prompt with the same providers file. No p95 was recorded.
 - Haiku latency is the audit's `latency_ms`: API time per call, without time spent waiting in the pool queue.
 - On the longest lines, Haiku thinks a little at effort `low`, up to 689 output tokens on i06. The shipped NLU `max_tokens` (1200) still has room.

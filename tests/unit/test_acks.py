@@ -565,7 +565,7 @@ def test_total_in_per_payment_shape_asks(utterance: str, cents: int, trigger: st
         "That is $420 altogether, 3 even payments.",
         "We can settle for $420 in 3 payments.",
         # "We would need $600 from the client." is a bare demanded amount, which
-        # asks for a different reason: tests/unit/test_nlu_rules_p49.py.
+        # asks for a different reason: tests/unit/test_nlu_code_rules.py.
         "We take $600, up to 6 payments.",  # a cap, not an exact count
         "The client must pay $420 by March 31 in full.",
     ],

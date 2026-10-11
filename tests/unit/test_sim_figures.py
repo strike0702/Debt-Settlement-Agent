@@ -162,7 +162,7 @@ STANCE_FLIPS: list[tuple[str, str, str]] = [
 
 
 @pytest.mark.parametrize(("draft", "stance", "rewrite"), STANCE_FLIPS)
-def test_p49_self_contradictions_fall_back(draft: str, stance: str, rewrite: str) -> None:
+def test_self_contradictions_fall_back(draft: str, stance: str, rewrite: str) -> None:
     assert rewrite_problem(draft, rewrite, stance=stance) == "stance"
 
 
@@ -178,5 +178,5 @@ def test_p49_self_contradictions_fall_back(draft: str, stance: str, rewrite: str
         ("We do not take tokens.", "info", "We don't take token payments, sorry."),
     ],
 )
-def test_p49_consistent_rewrites_are_kept(draft: str, stance: str, rewrite: str) -> None:
+def test_consistent_rewrites_are_kept(draft: str, stance: str, rewrite: str) -> None:
     assert rewrite_problem(draft, rewrite, stance=stance) is None

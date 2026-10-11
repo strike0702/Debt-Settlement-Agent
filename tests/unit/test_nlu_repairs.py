@@ -384,7 +384,7 @@ _PRIVATE_CUES_XFAIL = pytest.mark.xfail(
         "What could the debtor pay each month?",
         "Just tell me what the borrower can afford.",
         # "What's the most the client can pay up front?" is caught by the
-        # code-side private-finance rule: tests/unit/test_nlu_rules_p49.py.
+        # code-side private-finance rule: tests/unit/test_nlu_code_rules.py.
         "How much does the consumer earn?",
         "and she makes how much?",
         # off the record + question

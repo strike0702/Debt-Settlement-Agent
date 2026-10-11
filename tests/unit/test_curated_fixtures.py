@@ -82,7 +82,7 @@ async def test_haggling_rep_plays_the_whole_ladder(max_counters: int) -> None:
 def test_haggling_rep_meta_matches_the_autoplay_outcome(tmp_path: Path) -> None:
     from app.domain.scenario import list_scenario_metas
 
-    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/p48-haggle") as ws:
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/haggle-fixture") as ws:
         ws.send_json(
             {
                 "type": "start",

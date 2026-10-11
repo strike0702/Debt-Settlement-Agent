@@ -28,14 +28,17 @@ _REF = date(2026, 3, 1)
 _LITERAL_REASON = re.compile(r'reason="([a-z_]+)"')
 
 
+_POLICY_SRC = "".join(p.read_text() for p in sorted(Path("app/agent/policy").glob("*.py")))
+
+
 def _literal_codes(path: str) -> set[str]:
     return set(_LITERAL_REASON.findall(Path(path).read_text()))
 
 
 def test_every_literal_reason_code_in_policy_and_orchestrator_has_text() -> None:
-    codes = _literal_codes("app/agent/policy.py") | _literal_codes("app/agent/orchestrator.py")
+    codes = set(_LITERAL_REASON.findall(_POLICY_SRC)) | _literal_codes("app/agent/orchestrator.py")
     # Confirm-path reasons are passed positionally through ``confirm("...")``.
-    codes |= set(re.findall(r'confirm\("([a-z_]+)"\)', Path("app/agent/policy.py").read_text()))
+    codes |= set(re.findall(r'confirm\("([a-z_]+)"\)', _POLICY_SRC))
     assert codes, "regex found no reason codes"
     missing = sorted(c for c in codes if c not in REASON_TEXT)
     assert missing == []

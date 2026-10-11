@@ -137,7 +137,7 @@ def test_nlu_prompt_carries_reference_date() -> None:
 
 
 async def test_analyze_passes_ref_to_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.agent import nlu as nlu_mod
+    from app.agent.nlu import llm_call as nlu_mod
     from app.llm.client import FakeLLM
 
     seen: dict[str, object] = {}

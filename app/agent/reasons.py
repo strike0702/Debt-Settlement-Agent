@@ -41,7 +41,7 @@ PUBLIC_PLACEHOLDERS: frozenset[str] = frozenset(
 # One full sentence per reason, written for a newcomer reading the trace ("we"
 # is the agent). Every no-deal ending is a handoff, so the no-deal codes read
 # as reasons to hand off. ``step`` / ``rep_held`` describe the two equal steps
-# of the price ladder (``app.agent.policy`` module docstring).
+# of the price ladder (``app.agent.policy.ladder`` module docstring).
 REASON_TEXT: dict[str, str] = {
     # Opening and discovery
     "opening": (

@@ -1,4 +1,4 @@
-"""Settings cache (REVIEW F31)."""
+"""Settings cache and defaults."""
 
 from __future__ import annotations
 

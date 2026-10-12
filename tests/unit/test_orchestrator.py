@@ -134,8 +134,10 @@ async def test_contradiction_leads_to_clarify(tmp_path: Path) -> None:
     )
     assert session.belief.get("max_payments").status == TermStatus.KNOWN
 
+    # A bare "no" + value still clarifies; "make that eight" would be a change
+    # request on the acked value (Phase 54) and update it directly.
     utt = await orch.on_creditor_text(
-        "Actually make that eight payments.",
+        "No, actually it's eight payments.",
         oracle=TurnAnalysis(
             terms=[
                 ExtractedTerm(field="max_payments", value=8, quote="eight", hedged=False),

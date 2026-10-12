@@ -1,6 +1,8 @@
 """Short NLU / NLG prompt builders for the role-based LLM client.
 
-NLU: field units + last agent line + rep utterance → JSON only.
+NLU: field units + up to the last 3 spoken turns as earlier context + last
+agent line + rep utterance → JSON only. Quotes still come from the current
+utterance only.
 NLG: intent instruction + placeholder meanings (never values or digits), plus
 up to the last 3 public turns as context (spoken lines only; the caller drops
 any line that carries a private figure). ``act_messages`` builds the offline
@@ -43,6 +45,8 @@ PLACEHOLDER_MEANINGS: dict[str, str] = {
 
 # How many recent public turns the NLG prompt sees (A/B pre-registration, H3).
 NLG_CONTEXT_TURNS = 3
+# How many spoken turns before the current utterance the NLU prompt sees.
+NLU_CONTEXT_TURNS = 3
 
 _INTENT_INSTRUCTION: dict[Intent, str] = {
     Intent.OPENING: "Introduce yourself as the caller and ask the rep for settlement terms.",
@@ -130,6 +134,8 @@ Units:
   accept 3 payments". Do not also put that amount in terms or the total.
 Each term quote, ask_total_quote and amount_ambiguous_quote must be a verbatim
 substring of the utterance.
+Use earlier turns only to understand references ("it", "that", a bare value
+answering a question); extract only what the Rep utterance says.
 hedged=true for hedges like about/around/roughly.
 If pending_readback is set, fill readback_response with "confirm" or "deny".
 stance must be one of: offer, counter, accept, reject, stall, info, question, other.
@@ -177,15 +183,24 @@ def nlu_messages(
     pending_readback: str | None,
     *,
     ref: date | None = None,
+    context: list[tuple[str, str]] | None = None,
 ) -> list[dict[str, str]]:
     """Build chat messages for one NLU turn (JSON-only reply).
 
     ``ref`` is the call's reference date so a yearless "May 15" can resolve.
+    ``context``: the spoken turns before this utterance as ``(role, text)``
+    (``agent`` / ``creditor``); the last ``NLU_CONTEXT_TURNS`` are shown as
+    earlier context. Empty or None leaves the message exactly as before.
     """
     pending = pending_readback or "(none)"
     today = f"Today's date: {ref.isoformat()}\n" if ref is not None else ""
+    earlier = ""
+    if context:
+        lines = format_recent_turns(context[-NLU_CONTEXT_TURNS:])
+        earlier = f"Earlier turns (context only, do not extract from them):\n{lines}\n"
     user = (
         today
+        + earlier
         + f"Agent last said: {last_agent_line or '(opening)'}\n"
         f"Pending read-back field: {pending}\n"
         f"Rep utterance: {utterance}\n"

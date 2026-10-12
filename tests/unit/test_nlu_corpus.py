@@ -746,3 +746,55 @@ def test_cli_amount_view_needs_saved_or_rules_only(tmp_path: Path) -> None:
 
     with pytest.raises(SystemExit):
         nc.main(["--label", "R", "--amount-view", "--audit-db", str(tmp_path / "a.db")])
+
+
+# --- Optional `context` turns (tests/nlu_corpus_context.jsonl) ---------------
+
+
+def test_context_corpus_schema() -> None:
+    from eval.nlu_corpus import line_agent_text, line_context
+
+    corpus = load_corpus(Path("tests/nlu_corpus_context.jsonl"))
+    assert len(corpus) >= 15
+    assert len({ln["id"] for ln in corpus}) == len(corpus)
+    for ln in corpus:
+        assert ln["stance"] in _STANCES
+        assert 1 <= len(ln["context"]) <= 3
+        assert all(t["role"] in ("agent", "rep") for t in ln["context"])
+        assert line_context(ln)[-1][0] == "agent"
+        # The agent line is the last sentence of the last agent turn.
+        assert ln["context"][-1]["text"].endswith(line_agent_text(ln))
+
+
+async def test_context_goes_to_analyze_unless_switched_off() -> None:
+    from app.llm.client import FakeLLM
+    from eval.nlu_corpus import run_corpus
+
+    seen: list[str] = []
+
+    class Rec(FakeLLM):
+        async def chat_text(self, role, messages, max_tokens, *, json_mode=False):
+            seen.append(messages[-1]["content"])
+            return '{"terms": [], "stance": "info"}'
+
+    line = {
+        "id": "c1",
+        "text": "Can you change it to $250?",
+        "stance": "counter",
+        "context": [
+            {"role": "rep", "text": "$180."},
+            {"role": "agent", "text": "Got it. Do you need even payments?"},
+        ],
+    }
+    plain = {"id": "c2", "text": "Six payments.", "stance": "info"}
+    records, _ = await run_corpus([line, plain], profile="offline", llm=Rec())
+    assert "Earlier turns" in seen[0] and "Rep: $180." in seen[0]
+    assert "Agent last said: Do you need even payments?" in seen[0]
+    assert "Earlier turns" not in seen[1]
+    assert AGENT_LINES["default"] in seen[1]
+    assert [r["context_turns"] for r in records] == [2, 0]
+    seen.clear()
+    records, _ = await run_corpus([line], profile="offline", llm=Rec(), use_context=False)
+    assert "Earlier turns" not in seen[0]
+    assert "Agent last said: Do you need even payments?" in seen[0]
+    assert records[0]["context_turns"] == 0

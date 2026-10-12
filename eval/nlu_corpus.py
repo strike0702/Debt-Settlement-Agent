@@ -43,10 +43,17 @@ Lines may also label ``ask_total_cents`` (a dollar-total ask) and
 ``amount_ambiguous`` (total vs per payment unclear); both score as terms
 (``tests/nlu_corpus_amounts.jsonl``).
 
+A line may carry ``context``: the earlier turns, oldest first, as
+``{"role": "agent" | "rep", "text": ...}`` (``tests/nlu_corpus_context.jsonl``).
+They go to ``analyze`` as the call's recent turns, and a line with context but
+no ``agent`` alias replies to its last agent turn. ``--no-context`` drops them
+(same agent line), so one file measures context off vs on. Lines without
+``context`` run exactly as before.
+
 Not the policy eval (``eval.run_eval``): no orchestrator, no simulator.
 CLI: ``python -m eval.nlu_corpus --label BEFORE [--profile demo] [--corpus PATH]
 [--providers PATH] [--no-repair-stance] [--from-records PATH [--rescore-guards]]
-[--rules-only] [--amount-view] [--allow-mixed-models]``. ``--rules-only`` and
+[--rules-only] [--amount-view] [--allow-mixed-models] [--no-context]``. ``--rules-only`` and
 ``--amount-view`` make no LLM call: see ``rules_only_records`` and
 ``amount_view``.
 """
@@ -138,6 +145,25 @@ AGENT_LINES: dict[str, str] = {
     "counter": "We can offer fifty percent of the balance, which is two thousand dollars.",
     "min_ask": FIELDS_BY_NAME["min_payment_cents"].ask_text,
 }
+
+
+_CONTEXT_ROLES = {"agent": "agent", "rep": "creditor", "creditor": "creditor"}
+
+
+def line_context(line: dict[str, Any]) -> list[tuple[str, str]]:
+    """A line's ``context`` turns as ``(role, text)`` for ``analyze`` (``rep`` → ``creditor``)."""
+    return [(_CONTEXT_ROLES[t["role"]], str(t["text"])) for t in line.get("context", [])]
+
+
+def line_agent_text(line: dict[str, Any]) -> str:
+    """The agent line the rep replies to: the ``agent`` alias, else the last
+    sentence of the last agent context turn (the agent keeps one history entry
+    per spoken sentence, so that is what ``Agent last said`` shows live)."""
+    if "agent" not in line:
+        for role, text in reversed(line_context(line)):
+            if role == "agent":
+                return re.split(r"(?<=[.!?])\s+", text.strip())[-1]
+    return AGENT_LINES[line.get("agent", "default")]
 
 
 def load_corpus(path: Path = CORPUS_PATH) -> list[dict[str, Any]]:
@@ -589,6 +615,7 @@ async def run_corpus(
     min_interval_s: float = 0.0,
     providers_path: Path | None = None,
     allow_budgeted: bool = False,
+    use_context: bool = True,
 ) -> tuple[list[dict[str, Any]], Counter[str]]:
     """Analyze every line; returns per-line records and answering-model counts.
 
@@ -600,6 +627,7 @@ async def run_corpus(
     ``llm`` overrides the client built from ``profile`` (tests);
     ``providers_path`` replaces ``config/providers.yaml`` for the built client;
     without it, ``budgeted`` (paid) targets are dropped unless ``allow_budgeted``.
+    ``use_context=False`` ignores each line's ``context`` turns.
     """
     settings = get_settings().model_copy(
         update={
@@ -660,11 +688,13 @@ async def run_corpus(
         current[tid] = line["id"]
         recorder.last.pop(tid, None)
         line_answered.pop(line["id"], None)  # a retry pass starts clean
-        agent = AGENT_LINES[line.get("agent", "default")]
+        agent = line_agent_text(line)
+        context = line_context(line) if use_context else []
         rec: dict[str, Any] = {
             "id": line["id"],
             "tags": line.get("tags", []),
             "text": line["text"],
+            "context_turns": len(context),
             "expected": {
                 **expected_flags(line),
                 "stance": line["stance"],
@@ -675,7 +705,7 @@ async def run_corpus(
             with llm_call_scope(f"corpus:{line['id']}"):
                 out = await analyze(
                     line["text"], agent, line.get("pending"),
-                    llm=recorder, settings=settings, ref=REF,
+                    llm=recorder, settings=settings, ref=REF, context=context or None,
                 )
         except Exception as e:  # noqa: BLE001 - any failure is a skip, retried below
             rec["skipped"] = True
@@ -809,6 +839,10 @@ def main(argv: list[str] | None = None) -> int:
         help="no LLM: an empty analysis through post_verify, so only code-side rules decide",
     )
     ap.add_argument(
+        "--no-context", action="store_true",
+        help="ignore each line's `context` turns (same agent line); measures context off",
+    )
+    ap.add_argument(
         "--allow-mixed-models", action="store_true",
         help="write the row even if more than one provider/model answered (noted in it)",
     )
@@ -843,6 +877,7 @@ def main(argv: list[str] | None = None) -> int:
                     min_interval_s=args.min_interval_s,
                     providers_path=args.providers,
                     allow_budgeted=args.allow_budgeted,
+                    use_context=not args.no_context,
                 )
             )
         finally:
@@ -892,6 +927,8 @@ def main(argv: list[str] | None = None) -> int:
     }
     if mixed:
         meta["mixed"] = True
+    if args.no_context:
+        meta["stance_variant"] += "; line `context` turns ignored (--no-context)"
     if args.from_records is not None:
         meta["stance_variant"] += f"; rescored from `{args.from_records}`"
     if args.rescore_guards:

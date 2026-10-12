@@ -303,10 +303,10 @@ async def test_i_said_six_replaces_the_acked_value(tmp_path: Path) -> None:
     "line",
     [
         "No, it's six payments.",
-        # s0007_028 / s0007_034: the contradictory persona's
-        # change line as the sim rewrote it, and as the persona says it.
+        # s0007_028: the contradictory persona's change line as the sim
+        # rewrote it. ("No, actually make that ..." is a change request now:
+        # tests/unit/test_correction_loop.py.)
         "No, actually it's a maximum of 6 payments.",
-        "No, actually make that a maximum of 6 payments.",
     ],
 )
 async def test_bare_no_with_a_new_value_clarifies(tmp_path: Path, line: str) -> None:

@@ -2,8 +2,10 @@
 
 The model only reads; code decides what to trust. ``analyze`` (``llm_call``)
 first tries the code-only ``fast_paths`` (a plain yes / no to a read-back, a
-bare answer to the field we just asked), then makes one JSON ``nlu`` call
-(retried once on a validation failure) and parses it (``parse``).
+short pick between the two values of an open clarify, a bare answer to the
+field we just asked), then makes one JSON ``nlu`` call, with the last few
+spoken turns as context (retried once on a validation failure) and parses it
+(``parse``).
 ``verify.post_verify`` then drops bad quotes and out-of-range values and sets
 ``verified`` from ``app.agent.numbers.extract_tokens`` matches, and the
 ``cues`` repairs fix the stance (accept phrase, dominant short ack, never
@@ -51,6 +53,7 @@ from app.agent.nlu.fast_paths import (
     try_fast_field_answer,
     try_fast_readback,
     try_resolve_cents_clarify,
+    try_resolve_disputed_value,
 )
 from app.agent.nlu.llm_call import (
     analyze,
@@ -105,6 +108,7 @@ __all__ = [
     "try_fast_readback",
     "try_resolve_amount_clarify",
     "try_resolve_cents_clarify",
+    "try_resolve_disputed_value",
 ]
 
 # Private helpers that eval tooling imports from this path; not public API.

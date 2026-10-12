@@ -16,9 +16,10 @@ acts that are spoken *before* it, without changing the move:
 
 This module also holds the rep-correction cues: ``is_ack_correction`` (the rep
 says we misheard a term we just acknowledged, "I said six payments"; a bare
-"No, it's six" is not enough) and
-``is_ack_dispute`` ("that's not what I said", no value needed). The
-orchestrator applies them to belief; nothing here touches belief.
+"No, it's six" is not enough), ``is_change_request`` (the rep asks to change
+it, "can you change it to $250", "make that 6") and ``is_ack_dispute``
+("that's not what I said", no value needed). The orchestrator applies them to
+belief; nothing here touches belief.
 
 This module is pure policy-side code (no LLM, no engine). It does not render
 speech; ``app.agent.nlg.render_acts`` does, with the same guards. The
@@ -182,10 +183,10 @@ def acked_fields(ack: dict[str, Fact]) -> dict[str, Any]:
     return out
 
 
-# The rep corrects a value we just acknowledged, i.e. says we misheard. Only an
-# explicit misreading cue counts: "I said 6", "you
-# misheard", "you heard wrong", "that's not what I said", "no, I said ...". A
-# bare "No, it's 6" / "No, actually make that 6" reads just as well as the rep
+# The rep corrects a value we just acknowledged, i.e. says we misheard: "I said
+# 6", "you misheard", "you heard wrong", "that's not what I said", "no, I said
+# ...". A change request is the other explicit cue (``is_change_request``). A
+# bare "No, it's 6" / "No, actually it's 6" reads just as well as the rep
 # changing their own term, so it keeps the CONTRADICTED -> CLARIFY path; the
 # orchestrator also needs a new value for an acked field.
 _ACK_CORRECTION_RE = re.compile(
@@ -203,6 +204,71 @@ _ACK_DISPUTE_RE = re.compile(
     r"|\bthat'?s not what I\b",
     re.IGNORECASE,
 )
+
+
+# The rep asks us to change a value we just acknowledged: "can you change it to
+# $250", "change that to 6", "make it $250", "make that 6", "let's update it to
+# ...", "switch it to ...". "make it / that" needs a value right after it, so
+# "can you make that work" is not a cue.
+_NUMBER_START = (
+    r"(?:\$|\d|(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve"
+    r"|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty"
+    r"|forty|fifty|sixty|seventy|eighty|ninety|hundred|january|february|march"
+    r"|april|may|june|july|august|september|october|november|december)\b)"
+)
+_CHANGE_REQUEST_RE = re.compile(
+    r"\b(?:change|update|switch|set|move|bump)\s+(?:it|that|this)\s+(?:(?:up|down|back)\s+)?to\b"
+    r"|\bmake\s+(?:it|that|this)\s+(?=(?:(?:a|an|the)\s+)?(?:(?:maximum|minimum|max|min)\s+of\s+"
+    r"|at\s+(?:least|most)\s+|up\s+to\s+|only\s+)?" + _NUMBER_START + r")",
+    re.IGNORECASE,
+)
+# A change cue inside a question counts only as a request ("can you change it
+# to $250?"); "should we change it to ...?" / "why did you change it to ...?"
+# asks about it instead.
+_REQUEST_OPENER_RE = re.compile(
+    r"\b(?:(?:can|could|would|will)\s+you|(?:can|could)\s+we|please"
+    r"|(?:is|would)\s+it\s+be\s+possible|is\s+it\s+possible|any\s+chance)\b",
+    re.IGNORECASE,
+)
+# Negators and conditionals that cancel the cue in its clause ("we can't change
+# it to 6", "if we change it to 6"). A bare "no" is not one: "No, change it to 6".
+_CHANGE_GUARD_RE = re.compile(
+    r"\b(?:not|never|cannot|unless|if|whether|\w+n['\u2019]t"
+    r"|(?:do|does|did|is|are|was|were|ca|wo|would|could|should)nt)\b",
+    re.IGNORECASE,
+)
+_SENTENCE_END_RE = re.compile(r"[.!?](?=\s|$)")
+_CLAUSE_BREAK_RE = re.compile(r"[.;,:!?]|\b(?:but|though|although|however)\b", re.IGNORECASE)
+_QUESTION_OPENER_RE = re.compile(
+    r"^\s*(?:is|are|was|were|does|did|has|have|had|would|could|will|shall|should"
+    r"|(?:do|can|why|how|what)\b)",
+    re.IGNORECASE,
+)
+
+
+def is_change_request(utterance: str) -> bool:
+    """True when the rep asks to change a value ("can you change it to $250", "make that 6").
+
+    Not when the cue is negated or conditional in its clause, or sits in a
+    question that is not a request ("should we change it to 6?").
+    """
+    for m in _CHANGE_REQUEST_RE.finditer(utterance):
+        head = utterance[: m.start()]
+        stops = list(_SENTENCE_END_RE.finditer(head))
+        sentence_head = head[stops[-1].end() if stops else 0 :]
+        tail = _SENTENCE_END_RE.search(utterance, m.end())
+        asked = (
+            (tail is not None and tail.group() == "?")
+            or (tail is None and utterance.rstrip().endswith("?"))
+            or _QUESTION_OPENER_RE.match(sentence_head) is not None
+        )
+        if asked and not _REQUEST_OPENER_RE.search(sentence_head):
+            continue
+        clause = _CLAUSE_BREAK_RE.split(head)[-1]
+        if _CHANGE_GUARD_RE.search(clause):
+            continue
+        return True
+    return False
 
 
 def is_ack_correction(utterance: str) -> bool:

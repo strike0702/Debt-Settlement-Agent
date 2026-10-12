@@ -11,7 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vite
 import { useVoice } from "@/hooks/useVoice";
 import {
   BACKCHANNEL_AFTER_MS,
-  BACKCHANNEL_TEXT,
+  BACKCHANNEL_GUARD_MS,
+  BACKCHANNEL_PHRASES,
   BARGE_ECHO_GUARD_MS,
   BROWSER_STT_SETTLE_MS,
   LABEL,
@@ -351,9 +352,9 @@ describe("voice latency client", () => {
     expect(h.onsets).toHaveLength(1);
   });
 
-  it("plays a local, number-free backchannel after 1.2 s with no reply; never sent or acked", async () => {
-    expect(BACKCHANNEL_TEXT).toBe("One moment.");
-    expect(BACKCHANNEL_AFTER_MS).toBe(1200);
+  it("plays a local, number-free backchannel after 1.7 s with no reply; never sent or acked", async () => {
+    expect(BACKCHANNEL_AFTER_MS).toBe(1700);
+    for (const phrase of BACKCHANNEL_PHRASES) expect(/\d/.test(phrase)).toBe(false);
     const h = harness();
     const hook = mount(h);
     await micOn(hook);
@@ -362,11 +363,24 @@ describe("voice latency client", () => {
     act(() => vi.advanceTimersByTime(BACKCHANNEL_AFTER_MS - 1));
     expect(h.spoken).toHaveLength(0);
     act(() => vi.advanceTimersByTime(1));
-    expect(h.spoken.map((u) => u.text)).toEqual([BACKCHANNEL_TEXT]);
-    expect(/\d/.test(BACKCHANNEL_TEXT)).toBe(false);
+    expect(h.spoken.map((u) => u.text)).toEqual([BACKCHANNEL_PHRASES[0]]);
     expect(hook.result.current.engine.backchannelPlaying).toBe(true);
     act(() => h.spoken[0]!.onend?.());
     expect(h.sent).toEqual([]); // no text, no sentence_done: not part of the agent's turn
+  });
+
+  it("rotates backchannel phrases so consecutive waits differ", async () => {
+    const h = harness();
+    const hook = mount(h);
+    await micOn(hook);
+    for (let i = 0; i < 2; i += 1) {
+      act(() => h.vad.cb!.onSpeechStart());
+      act(() => h.vad.cb!.onSpeechEnd(audio));
+      act(() => vi.advanceTimersByTime(BACKCHANNEL_AFTER_MS));
+      act(() => h.spoken.at(-1)!.onend?.());
+      act(() => vi.advanceTimersByTime(BACKCHANNEL_GUARD_MS)); // past our own echo guard
+    }
+    expect(h.spoken.map((u) => u.text)).toEqual(BACKCHANNEL_PHRASES.slice(0, 2));
   });
 
   it("cancels the backchannel when the reply arrives first", async () => {

@@ -16,7 +16,7 @@
  * - Speech that starts while the agent talks (or within the echo guard) can
  *   barge, but its clip is "contaminated" and never sent to STT.
  * - Browser STT is stopped for the whole agent turn (it would hear the TTS).
- * - The backchannel ("One moment.") is local: never sent, never acked.
+ * - The backchannel ("One moment.", rotated) is local: never sent, never acked.
  */
 import type { ClientEvent, ServerEvent } from "@/types/protocol";
 import { isBenignTtsError, pickVoice, speakableText, type VoiceLike } from "./speech";
@@ -27,8 +27,14 @@ export type SttMode = "server" | "browser";
 
 /** Ignore barge for this long after TTS starts (speaker-onset echo). */
 export const BARGE_ECHO_GUARD_MS = 750;
-export const BACKCHANNEL_TEXT = "One moment.";
-export const BACKCHANNEL_AFTER_MS = 1200;
+/** Filler lines, played in turn so consecutive waits never repeat. No digits. */
+export const BACKCHANNEL_PHRASES = [
+  "One moment.",
+  "Let me check.",
+  "Mm-hm, let me see.",
+  "Okay, just a second.",
+] as const;
+export const BACKCHANNEL_AFTER_MS = 1700;
 /** Our own filler must not read as rep speech or barge. */
 export const BACKCHANNEL_GUARD_MS = 1500;
 /** Let trailing speaker audio die out before browser STT re-arms. */
@@ -181,6 +187,7 @@ export class VoiceEngine {
   currentUtter: UtterLike | null = null;
   private backchannelUtter: UtterLike | null = null;
   private backchannelTimer: ReturnType<typeof setTimeout> | null = null;
+  private backchannelNext = 0;
   private bargeSuppressUntil = 0;
   private utteranceContaminated = false;
   private browserIgnoreResults = false;
@@ -234,6 +241,7 @@ export class VoiceEngine {
     this.queue = [];
     this.cancelTts();
     this.cancelBackchannel();
+    this.backchannelNext = 0;
     this.speakingIds.clear();
     this.ackedIds = [];
     this.turnSayAt = null;
@@ -442,7 +450,9 @@ export class VoiceEngine {
     this.backchannelTimer = null;
     const synth = this.deps.synth;
     if (!synth || this.agentIsTalking() || !this.snap.waiting) return;
-    const utter = this.deps.makeUtterance(BACKCHANNEL_TEXT);
+    const text = BACKCHANNEL_PHRASES[this.backchannelNext % BACKCHANNEL_PHRASES.length]!;
+    this.backchannelNext += 1;
+    const utter = this.deps.makeUtterance(text);
     this.applyVoice(utter);
     utter.rate = 1.05;
     this.backchannelUtter = utter;

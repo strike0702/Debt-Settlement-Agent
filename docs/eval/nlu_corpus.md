@@ -1901,6 +1901,97 @@ Misses (line ids):
 - terms: hs08
 - filler false accept: -
 
+## CONTEXT_OFF_P54
+
+- git: `6fee094`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped); line `context` turns ignored (--no-context)
+- lines: 16  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=15, fast_path=1
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 1 | 1 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 1 | 1 | 0 | 0 | 1.000 | 1.000 |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 1 | 1 | 0 | 0 | 1.000 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.875 |
+| term exact-match (all lines) | 0.875 |
+| term exact-match (lines with terms, n=13) | 0.846 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- terms: cx05, cx06
+- filler false accept: -
+
+## CONTEXT_ON_P54
+
+- git: `6fee094`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 16  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=15, fast_path=1
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 1 | 1 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 1 | 1 | 0 | 0 | 1.000 | 1.000 |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 1 | 1 | 0 | 0 | 1.000 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.875 |
+| term exact-match (all lines) | 0.812 |
+| term exact-match (lines with terms, n=13) | 0.769 |
+| filler false accepts (n=0) | 0 |
+
+Misses (line ids):
+
+- terms: cx03, cx05, cx06
+- filler false accept: -
+
+## HAIKU_P54
+
+- git: `6fee094`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 183  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=179, fast_path=4
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 1 | 0 | 0.971 | 1.000 |
+| demands_commitment | 13 | 13 | 4 | 0 | 0.765 | 1.000 |
+| firm | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 6 | 6 | 3 | 0 | 0.667 | 1.000 |
+| hostility | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| stance=accept | 11 | 11 | 1 | 0 | 0.917 | 1.000 |
+| stance=reject | 9 | 9 | 0 | 0 | 1.000 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.880 |
+| term exact-match (all lines) | 0.978 |
+| term exact-match (lines with terms, n=66) | 0.939 |
+| filler false accepts (n=31) | 0 |
+
+Misses (line ids):
+
+- asks_client_private_info: FP n10; FN -
+- demands_commitment: FP n08, i09, a11, k05; FN -
+- wants_to_end: FP e06, e07, e10; FN -
+- stance=accept: FP c11; FN -
+- terms: f16, f17, d04, d07
+- filler false accept: -
+
 ## Notes
 
 - Both runs used the same model and prompt (Groq `gpt-oss-120b`, temperature 0).
@@ -2316,3 +2407,25 @@ starts with Haiku 5.5.
   n06 is no longer asked (balance statement). Rules alone on the held-out set:
   private 7/7, hostility 6/6, bare amount 2/3 (miss hr29), 0 FP.
   Write-up: `docs/eval/nlu_rules_20261009/summary.md`.
+
+### Phase 54: recent turns as NLU context (2026-10-13)
+
+- The NLU prompt gets one system sentence ("Use earlier turns only to
+  understand references …; extract only what the Rep utterance says.") and,
+  when the caller passes them, the last 3 spoken turns as an "Earlier turns"
+  block. Corpus lines may carry a `context` list of `{"role", "text"}` turns.
+  `--no-context` drops them. Lines without `context` run as before.
+- `HAIKU_P54` is the main corpus on the new prompt (no context). Against
+  `HAIKU_P43_FIX` (rescored): stance 0.869 → 0.880, private-info recall 1.000
+  → 1.000, terms 62/66 → 62/66. The largest class drop is stance `info` F1
+  0.920 → 0.891 (−0.029, inside the 0.03 gate).
+- `CONTEXT_OFF_P54` / `CONTEXT_ON_P54` are the new
+  `tests/nlu_corpus_context.jsonl` (16 lines) without and with the turns.
+  Terms 14/16 → 13/16 (cx03 got worse; cx05 and cx06 are ambiguous both ways).
+  No stale number was extracted and the controls did not change. Context did
+  not help Haiku here. The live-call shape is fixed in code instead.
+  Write-up: `docs/eval/nlu_context_20261013/summary.md`. Cost $0.064.
+- **Decision: dropped.** The live NLU prompt is back to the one behind
+  `HAIKU_P43_FIX`: no turns and no added sentence. There was no measured gain,
+  and it cost about 79 prompt tokens per turn. `--with-context` re-adds the
+  measured form, eval only (`--no-context` is gone).

@@ -3,7 +3,9 @@
 ``try_fast_readback`` reads a plain yes / no to a pending read-back;
 ``try_fast_field_answer`` reads a bare answer ("six", "$250") to the field
 question the agent just asked; ``try_resolve_cents_clarify`` reads the reply
-to "dollars or cents?". Each returns ``None`` when the line is anything more,
+to "dollars or cents?"; ``try_resolve_disputed_value`` reads which side of
+"$180 or $250?" the rep picked for a CONTRADICTED term ("$250", "the new
+one"). Each returns ``None`` when the line is anything more,
 so ``llm_call.analyze`` falls through to the model. Value checks reuse
 ``verify``'s helpers so a fast answer is held to the same bar.
 """
@@ -228,5 +230,96 @@ def try_resolve_cents_clarify(
                 verified=True,
             )
         ],
+        stance="info",
+    )
+
+
+# Which side of an open "which is it, X or Y?" the rep picked, without a value.
+# "first" / "earlier" alone can name a date ("the first", "an earlier date"),
+# so date fields take only the words below that cannot.
+_PICK_OLD_RE = re.compile(
+    r"\b(?:the\s+)?(?:first|earlier|old|older|original|former|previous)(?:\s+one)?\b",
+    re.IGNORECASE,
+)
+_PICK_NEW_RE = re.compile(
+    r"\b(?:the\s+)?(?:second|new|newer|latter|latest|updated|last)(?:\s+one)?\b",
+    re.IGNORECASE,
+)
+_PICK_DATE_SAFE_RE = re.compile(
+    r"\b(?:(?:first|second|earlier|last)\s+one|old|older|original|former|previous"
+    r"|new|newer|latter|latest|updated)\b",
+    re.IGNORECASE,
+)
+# A negated or hedged pick is not an answer ("not $250", "maybe the first").
+_PICK_VETO_RE = re.compile(
+    r"\b(?:not|never|neither|nor|\w+n['’]t|maybe|probably|perhaps|about|around"
+    r"|roughly|approximately|think|guess|either)\b",
+    re.IGNORECASE,
+)
+
+
+def try_resolve_disputed_value(
+    utterance: str,
+    field: str,
+    old: Any,
+    new: Any,
+    *,
+    ref: date | None = None,
+) -> VerifiedAnalysis | None:
+    """Read a short reply to "which is it, ``old`` or ``new``?" for a CONTRADICTED field.
+
+    The reply must fit the fast-path size limits and either name exactly one
+    of the two values (money with ``$`` / dollars for cents fields, a count
+    for count fields, a date for dates) or say "the first / earlier / old one"
+    vs "the second / new / latter one". Returns a verified, unhedged term for
+    the picked value, else None (a third value, both, neither, a negated or
+    hedged pick, or anything longer goes the usual way).
+    """
+    if field not in FIELDS_BY_NAME or old is None or new is None or old == new:
+        return None
+    kind = FIELDS_BY_NAME[field].kind
+    if kind not in ("cents", "int", "date"):
+        return None
+    text = utterance.strip()
+    if not text or len(text) > 40 or len(text.split()) > 4:
+        return None
+    if _PICK_VETO_RE.search(text):
+        return None
+
+    old_hit = _PICK_OLD_RE.search(text)
+    new_hit = _PICK_NEW_RE.search(text)
+    if bool(old_hit) != bool(new_hit):
+        hit = old_hit or new_hit
+        assert hit is not None
+        if kind == "date" and not _PICK_DATE_SAFE_RE.search(hit.group()):
+            return None
+        # The pick words parse as numbers ("first one" → 2); nothing else may.
+        rest = text[: hit.start()] + " " + text[hit.end() :]
+        if extract_tokens(rest, ref=ref or date.today()):
+            return None
+        return _picked(field, old if old_hit else new, hit.group())
+
+    tokens = extract_tokens(text, ref=ref or date.today())
+    if kind == "cents":
+        wanted = [t for t in tokens if t.kind == "money"]
+        values = [int(t.value) for t in wanted]
+        if not wanted and _utterance_has_money_unit(text):
+            # "250 dollars" parses as a count next to a unit word.
+            wanted = [t for t in tokens if t.kind == "count"]
+            values = [int(t.value) * 100 for t in wanted]
+    elif kind == "int":
+        wanted = [t for t in tokens if t.kind == "count"]
+        values = [int(t.value) for t in wanted]
+    else:
+        wanted = [t for t in tokens if t.kind == "date"]
+        values = [t.value for t in wanted]
+    if len(tokens) != 1 or len(wanted) != 1 or values[0] not in (old, new):
+        return None
+    return _picked(field, values[0], wanted[0].raw)
+
+
+def _picked(field: str, value: Any, quote: str) -> VerifiedAnalysis:
+    return VerifiedAnalysis(
+        terms=[VerifiedTerm(field=field, value=value, quote=quote, hedged=False, verified=True)],
         stance="info",
     )

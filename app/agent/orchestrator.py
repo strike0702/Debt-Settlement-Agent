@@ -52,7 +52,13 @@ from app.adapter.engine_adapter import (
     evaluate,
 )
 from app.adapter.validator import validate
-from app.agent.acts import acked_fields, attach_acts, is_ack_correction, is_ack_dispute
+from app.agent.acts import (
+    acked_fields,
+    attach_acts,
+    is_ack_correction,
+    is_ack_dispute,
+    is_change_request,
+)
 from app.agent.effects import apply_effects
 from app.agent.guards import _cross_match
 from app.agent.nlg import SAFE_FALLBACK, render_action, render_acts, speak_action
@@ -62,6 +68,7 @@ from app.agent.nlu import (
     resolve_amounts,
     try_resolve_amount_clarify,
     try_resolve_cents_clarify,
+    try_resolve_disputed_value,
 )
 from app.agent.nlu_types import TurnAnalysis
 from app.agent.numbers import extract_tokens
@@ -164,6 +171,9 @@ _BOOKKEEPING_EFFECT_KINDS: frozenset[str] = frozenset(
         "note_terms_countered",
     }
 )
+# Question bookkeeping a heard-but-barged ASK / CLARIFY keeps, so clarify counts
+# and the repeated-question guard advance even when the rep talks over the end.
+_QUESTION_EFFECT_KINDS: frozenset[str] = frozenset({"note_question", "note_clarify"})
 
 
 def _carries_new_terms(verified: VerifiedAnalysis, *, held_cents: int | None = None) -> bool:
@@ -183,6 +193,28 @@ def _carries_new_terms(verified: VerifiedAnalysis, *, held_cents: int | None = N
         or verified.settlement_ask_total_cents not in (None, held_cents)
         or verified.amount_ambiguous_cents not in (None, held_cents)
     )
+
+
+def _merge_clarify_pick(
+    verified: VerifiedAnalysis, picked: VerifiedAnalysis
+) -> VerifiedAnalysis:
+    """This turn's analysis with the code-read clarify answer as the disputed field's term.
+
+    The model's own term for that field is replaced, and a total or an
+    ambiguous amount equal to the picked value is cleared (it is the answer,
+    not a new amount to ask about). Stance and flags are kept.
+    """
+    term = picked.terms[0]
+    update: dict[str, Any] = {
+        "terms": [term, *(t for t in verified.terms if t.field != term.field)],
+    }
+    if term.field == "min_payment_cents" and verified.amount_ambiguous_cents == term.value:
+        update.update(amount_ambiguous_cents=None, amount_ambiguous_quote=None)
+    if term.field == "min_payment_cents" and verified.settlement_ask_total_cents == term.value:
+        update.update(settlement_ask_total_cents=None, ask_total_quote=None)
+    if verified.cents_ambiguity_field == term.field:
+        update.update(cents_ambiguity_bare=None, cents_ambiguity_field=None)
+    return verified.model_copy(update=update)
 
 
 def _merge_cents_answer(
@@ -454,6 +486,7 @@ class Orchestrator:
                 self._nlu_text = working
                 gen = self._nlu_gen
             t_nlu = time.perf_counter()
+            disputed = self._disputed_term()
 
             self._lock.release()
             try:
@@ -468,6 +501,7 @@ class Orchestrator:
                         audit=self.audit,
                         call_id=session.call_id,
                         ref=self._ref,
+                        disputed=disputed,
                     )
                 finally:
                     await self._lock.acquire()
@@ -501,6 +535,28 @@ class Orchestrator:
 
             async with self._meta:
                 self._stage = "post"
+            # A short reply that picks one side of an open clarify ("$250", "the
+            # new one") settles it in code, whatever the model made of it, and
+            # is not asked about again as a total-or-per-payment amount.
+            clarify_pick = (
+                try_resolve_disputed_value(working, *disputed, ref=self._ref)
+                if disputed is not None
+                else None
+            )
+            if clarify_pick is not None:
+                verified = _merge_clarify_pick(verified, clarify_pick)
+                picked = clarify_pick.terms[0]
+                self._audit(
+                    "nlu",
+                    "clarify_resolved",
+                    {
+                        "field": picked.field,
+                        "value": picked.value,
+                        "old": disputed[1] if disputed else None,
+                        "new": disputed[2] if disputed else None,
+                        "quote": picked.quote,
+                    },
+                )
             self._trace_ctx["verified"] = verified
             self._audit(
                 "nlu",
@@ -599,7 +655,7 @@ class Orchestrator:
 
             # Total-vs-per-payment amounts: answer a pending question,
             # then turn a dollar-total ask into bp or ask about a doubtful amount.
-            check_min_payment = True
+            check_min_payment = clarify_pick is None
             pending_amount = session.neg.pending_amount_clarify
             if pending_amount is not None:
                 resolved_amount = try_resolve_amount_clarify(
@@ -898,7 +954,10 @@ class Orchestrator:
 
         If the rep heard any sentence of a COUNTER / CONFIRM, still commit the
         offer/confirm bookkeeping effects so a follow-up accept does not latch
-        onto a stale prior counter.
+        onto a stale prior counter. A heard ASK / CLARIFY (the amount question
+        too) keeps its question counts (``note_question`` / ``note_clarify``),
+        so a question the rep keeps talking over still reaches its handoff.
+        Nothing the rep did not hear counts.
         """
         async with self._lock:
             pending = self.session.pending
@@ -933,6 +992,10 @@ class Orchestrator:
                         and pending.pending_agreed_bp is not None
                     ):
                         self.session.agreed_bp = pending.pending_agreed_bp
+            elif heard and pending.action.intent in (Intent.ASK, Intent.CLARIFY):
+                kept = [e for e in pending.action.effects if e.kind in _QUESTION_EFFECT_KINDS]
+                if kept:
+                    apply_effects(self.session, kept)
 
             dropped = pending.action
             self.session.pending = None
@@ -1048,6 +1111,16 @@ class Orchestrator:
             self.session.pending = None
             result.agreement = agreement
         return result
+
+    def _disputed_term(self) -> tuple[str, Any, Any] | None:
+        """``(field, old, new)`` of the CONTRADICTED term the clarify asks about, else None."""
+        contradicted = self.session.belief.contradicted_fields()
+        if not contradicted:
+            return None
+        term = self.session.belief.get(contradicted[0])
+        if not term.history:
+            return None
+        return contradicted[0], term.history[-1], term.value
 
     def _recent_public_turns(self) -> list[tuple[str, str]]:
         """Last ``NLG_CONTEXT_TURNS`` turns as ``(role, text)``, public lines only.
@@ -1232,9 +1305,10 @@ class Orchestrator:
         """Apply this turn's read-back answer and terms to belief.
 
         ``acked`` is what our previous line acknowledged. A correction of it
-        that says we misheard ("I said six payments") replaces the value
+        that says we misheard ("I said six payments") or asks us to change it
+        ("can you change it to $250", "make that 6") replaces the value
         outright instead of the CONTRADICTED → CLARIFY path; a bare "No, it's
-        six" or "No, actually make that six" may be the rep changing their own
+        six" or "No, actually it's six" may be the rep restating their own
         term, so it still clarifies. A dispute with no value
         ("that's not what I said") puts the acked terms back to TENTATIVE so
         they are read back.
@@ -1242,7 +1316,18 @@ class Orchestrator:
         session = self.session
         changes: list[BeliefChange] = []
         acked = acked or {}
-        correcting = bool(acked) and is_ack_correction(utterance)
+        # A change request names one new value; a line that restates several
+        # terms ("Actually, make that a maximum of 8 payments, minimum $100,
+        # even structure") is the rep re-stating their rules and still clarifies.
+        one_term = len({t.field for t in verified.terms}) == 1
+        cue = (
+            "misheard"
+            if is_ack_correction(utterance)
+            else "change_request"
+            if one_term and is_change_request(utterance)
+            else None
+        )
+        correcting = bool(acked) and cue is not None
 
         if session.neg.pending_readback and verified.readback_response in (
             "confirm",
@@ -1272,7 +1357,9 @@ class Orchestrator:
             ):
                 ch = session.belief.accept_alternative(term.field, term.value, term.quote, turn)
                 changes.append(ch)
-                self._audit("belief", "ack_corrected", ch.model_dump(mode="json"))
+                self._audit(
+                    "belief", "ack_corrected", {**ch.model_dump(mode="json"), "cue": cue}
+                )
                 continue
             # Post-proposal revision: accept new value without CONTRADICTED.
             if (

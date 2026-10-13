@@ -78,8 +78,11 @@ before its move ("Understood, up to 5 payments.", Phase 46b) needs no LLM at
 all: code picks the wording from a few fixed variants and fills only terms the
 creditor said, never a private figure, through the same two guards. If the rep
 then says we misheard ("I said six", "you misheard"), the new value replaces the
-acked one; a bare "No, it's six" or "No, actually make that six" may be the rep
-changing their own rule, so the agent asks which value to use (Phase 49).
+acked one, and so does a change request ("can you change it to $250", "make
+that 6", Phase 54) that changes that one term. A bare "No, it's six" may be the
+rep restating their own rule, so the agent asks which value to use (Phase 49).
+A short reply that names one side ("$250", "the new one") then settles the
+question in code, without a model call or the total-or-per-payment question.
 Since Phase 50 the payment structure is acked too ("Got it, a balloon
 schedule."), through a `text` fact: a fixed, digit-free phrase chosen by code
 from the structure the rep stated, so it adds no figure to check.
@@ -111,7 +114,10 @@ generated, the agent would believe it had offered something nobody heard.
 
 **Decision.** `Action.effects` are deferred. The browser acks each sentence
 after it plays (`sentence_done`); only then does `apply_effects` commit agreed
-terms, phases and drafts. On barge-in, effects of unheard sentences are dropped.
+terms, phases and drafts. On barge-in, effects of unheard sentences are dropped;
+if the rep heard part of a question (ASK / CLARIFY) before talking over it, its
+question counts still apply (Phase 54), so a question the rep keeps talking
+over still reaches its handoff.
 A small set of bookkeeping effects (`offer_counter`, `record_confirm`,
 `set_phase`, …) applies on emit, so a fast "yes" during TTS wraps instead of
 re-confirming.
@@ -211,6 +217,13 @@ question. Apart from the balance-statement case, the rules only add a flag
 or a question. When no rule fires, the model decides. On the saved runs they lifted hostility recall to 1.0 for Haiku, Groq
 and Cerebras, and Cerebras private-info recall from 0.882 to 1.0. No line got
 worse.
+
+Phase 54 measured giving the NLU prompt the last 3 spoken turns as context,
+and did not ship it. On a new 16-line context set, terms went from 14/16 to
+13/16, bare amounts stayed ambiguous, and each turn cost about 79 more tokens
+([measurement](eval/nlu_context_20261013/summary.md)). The model still reads
+one line plus the agent's last sentence. The call that prompted the test is
+fixed in code instead.
 
 ## ADR 7. How negotiation decisions are made
 

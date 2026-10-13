@@ -766,15 +766,15 @@ def test_context_corpus_schema() -> None:
         assert ln["context"][-1]["text"].endswith(line_agent_text(ln))
 
 
-async def test_context_goes_to_analyze_unless_switched_off() -> None:
+async def test_context_is_opt_in_and_eval_only() -> None:
     from app.llm.client import FakeLLM
     from eval.nlu_corpus import run_corpus
 
-    seen: list[str] = []
+    seen: list[tuple[str, str]] = []
 
     class Rec(FakeLLM):
         async def chat_text(self, role, messages, max_tokens, *, json_mode=False):
-            seen.append(messages[-1]["content"])
+            seen.append((messages[0]["content"], messages[-1]["content"]))
             return '{"terms": [], "stance": "info"}'
 
     line = {
@@ -787,14 +787,41 @@ async def test_context_goes_to_analyze_unless_switched_off() -> None:
         ],
     }
     plain = {"id": "c2", "text": "Six payments.", "stance": "info"}
+    # Default: the shipped prompt, no turns, same agent line.
     records, _ = await run_corpus([line, plain], profile="offline", llm=Rec())
-    assert "Earlier turns" in seen[0] and "Rep: $180." in seen[0]
-    assert "Agent last said: Do you need even payments?" in seen[0]
-    assert "Earlier turns" not in seen[1]
-    assert AGENT_LINES["default"] in seen[1]
-    assert [r["context_turns"] for r in records] == [2, 0]
+    assert "Earlier turns" not in seen[0][1]
+    assert "earlier turns" not in seen[0][0].lower()
+    assert "Agent last said: Do you need even payments?" in seen[0][1]
+    assert [r["context_turns"] for r in records] == [0, 0]
     seen.clear()
-    records, _ = await run_corpus([line], profile="offline", llm=Rec(), use_context=False)
-    assert "Earlier turns" not in seen[0]
-    assert "Agent last said: Do you need even payments?" in seen[0]
-    assert records[0]["context_turns"] == 0
+    records, _ = await run_corpus(
+        [line, plain], profile="offline", llm=Rec(), use_context=True
+    )
+    assert "Earlier turns" in seen[0][1] and "Rep: $180." in seen[0][1]
+    assert "Use earlier turns only" in seen[0][0]
+    assert "Earlier turns" not in seen[1][1]  # a line without context is unchanged
+    assert AGENT_LINES["default"] in seen[1][1]
+    assert [r["context_turns"] for r in records] == [2, 0]
+
+
+def test_with_context_reproduces_the_measured_p54_prompt() -> None:
+    from app.llm.prompts import nlu_messages
+    from eval.nlu_corpus import REF, _with_context
+
+    msgs = _with_context(
+        nlu_messages("$250.", "Which is it?", None, ref=REF),
+        [("agent", "A."), ("creditor", "R."), ("agent", "Which is it?")],
+    )
+    assert msgs[1]["content"] == (
+        f"Today's date: {REF.isoformat()}\n"
+        "Earlier turns (context only, do not extract from them):\n"
+        "Agent: A.\nRep: R.\nAgent: Which is it?\n"
+        "Agent last said: Which is it?\n"
+        "Pending read-back field: (none)\n"
+        "Rep utterance: $250.\n"
+        "Reply with JSON only."
+    )
+    assert (
+        "substring of the utterance.\nUse earlier turns only to understand references"
+        in msgs[0]["content"]
+    )

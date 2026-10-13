@@ -107,7 +107,7 @@ from app.domain.belief import BeliefChange, TermStatus
 from app.domain.facts import Fact
 from app.llm.call_audit import llm_call_scope
 from app.llm.client import LLMUnavailable, QueueWait, queue_wait_scope
-from app.llm.prompts import NLG_CONTEXT_TURNS, NLU_CONTEXT_TURNS
+from app.llm.prompts import NLG_CONTEXT_TURNS
 from app.schemas.events import (
     Affordability as TraceAffordability,
 )
@@ -487,7 +487,6 @@ class Orchestrator:
                 gen = self._nlu_gen
             t_nlu = time.perf_counter()
             disputed = self._disputed_term()
-            context = self._nlu_context_turns()
 
             self._lock.release()
             try:
@@ -503,7 +502,6 @@ class Orchestrator:
                         call_id=session.call_id,
                         ref=self._ref,
                         disputed=disputed,
-                        context=context,
                     )
                 finally:
                     await self._lock.acquire()
@@ -1123,23 +1121,6 @@ class Orchestrator:
         if not term.history:
             return None
         return contradicted[0], term.history[-1], term.value
-
-    def _nlu_context_turns(self) -> list[tuple[str, str]]:
-        """Spoken turns before the current rep line as ``(role, text)``, for the NLU prompt.
-
-        Consecutive lines of one speaker are one turn; agent lines the rep
-        never heard (barge-in) are skipped. The current rep line (the last
-        history entry) is left out: it is the utterance itself.
-        """
-        turns: list[tuple[str, list[str]]] = []
-        for t in self.session.history[:-1]:
-            if t.role == "agent" and not t.spoken:
-                continue
-            if turns and turns[-1][0] == t.role:
-                turns[-1][1].append(t.text)
-            else:
-                turns.append((t.role, [t.text]))
-        return [(role, " ".join(lines)) for role, lines in turns[-NLU_CONTEXT_TURNS:]]
 
     def _recent_public_turns(self) -> list[tuple[str, str]]:
         """Last ``NLG_CONTEXT_TURNS`` turns as ``(role, text)``, public lines only.

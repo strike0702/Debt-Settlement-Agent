@@ -45,15 +45,18 @@ Lines may also label ``ask_total_cents`` (a dollar-total ask) and
 
 A line may carry ``context``: the earlier turns, oldest first, as
 ``{"role": "agent" | "rep", "text": ...}`` (``tests/nlu_corpus_context.jsonl``).
-They go to ``analyze`` as the call's recent turns, and a line with context but
-no ``agent`` alias replies to its last agent turn. ``--no-context`` drops them
-(same agent line), so one file measures context off vs on. Lines without
-``context`` run exactly as before.
+A line with context but no ``agent`` alias replies to the last sentence of its
+last agent turn. The shipped NLU prompt has no turn context (measured and
+dropped, ``docs/eval/nlu_context_20261013/summary.md``), so by default the
+turns are ignored. ``--with-context`` adds them back eval-only, in the exact
+form that was measured (``_with_context``: the "Earlier turns" block plus one
+system sentence), so ``CONTEXT_ON_P54`` can be reproduced. Lines without
+``context`` run exactly as before either way.
 
 Not the policy eval (``eval.run_eval``): no orchestrator, no simulator.
 CLI: ``python -m eval.nlu_corpus --label BEFORE [--profile demo] [--corpus PATH]
 [--providers PATH] [--no-repair-stance] [--from-records PATH [--rescore-guards]]
-[--rules-only] [--amount-view] [--allow-mixed-models] [--no-context]``. ``--rules-only`` and
+[--rules-only] [--amount-view] [--allow-mixed-models] [--with-context]``. ``--rules-only`` and
 ``--amount-view`` make no LLM call: see ``rules_only_records`` and
 ``amount_view``.
 """
@@ -96,6 +99,7 @@ from app.config import get_settings
 from app.domain.fields import FIELDS_BY_NAME
 from app.llm.call_audit import audit_llm_calls, llm_call_scope
 from app.llm.client import LLMUnavailable, make_client
+from app.llm.prompts import format_recent_turns
 from app.store.audit import AuditLog
 from eval.run_eval import _DEFAULT_PROVIDERS, without_budgeted
 
@@ -151,8 +155,34 @@ _CONTEXT_ROLES = {"agent": "agent", "rep": "creditor", "creditor": "creditor"}
 
 
 def line_context(line: dict[str, Any]) -> list[tuple[str, str]]:
-    """A line's ``context`` turns as ``(role, text)`` for ``analyze`` (``rep`` → ``creditor``)."""
+    """A line's ``context`` turns as ``(role, text)`` (``rep`` → ``creditor``)."""
     return [(_CONTEXT_ROLES[t["role"]], str(t["text"])) for t in line.get("context", [])]
+
+
+# The turn-context prompt measured in Phase 54 and not shipped: kept here so
+# ``--with-context`` reproduces it exactly.
+_CONTEXT_TURNS = 3
+_CONTEXT_SENTENCE = (
+    'Use earlier turns only to understand references ("it", "that", a bare value\n'
+    "answering a question); extract only what the Rep utterance says.\n"
+)
+_CONTEXT_AFTER = "substring of the utterance.\n"
+_CONTEXT_HEADER = "Earlier turns (context only, do not extract from them):\n"
+
+
+def _with_context(
+    messages: list[dict[str, Any]], context: list[tuple[str, str]]
+) -> list[dict[str, Any]]:
+    """The shipped NLU messages with the measured turn context added (eval only)."""
+    system, user = dict(messages[0]), dict(messages[1])
+    if _CONTEXT_AFTER not in system["content"] or "Agent last said:" not in user["content"]:
+        raise RuntimeError("NLU prompt changed: --with-context no longer fits it")
+    system["content"] = system["content"].replace(
+        _CONTEXT_AFTER, _CONTEXT_AFTER + _CONTEXT_SENTENCE, 1
+    )
+    block = _CONTEXT_HEADER + format_recent_turns(context[-_CONTEXT_TURNS:]) + "\n"
+    user["content"] = user["content"].replace("Agent last said:", block + "Agent last said:", 1)
+    return [system, user, *messages[2:]]
 
 
 def line_agent_text(line: dict[str, Any]) -> str:
@@ -265,20 +295,26 @@ class _NluReplyRecorder:
     """Proxy over the LLM client that keeps each task's last NLU reply text.
 
     ``analyze`` may call twice (JSON retry); the last reply is the one it used.
-    Everything else is forwarded to the wrapped client unchanged.
+    A task's ``context`` turns, when set, are added to its NLU prompt
+    (``_with_context``). Everything else is forwarded to the wrapped client
+    unchanged.
     """
 
     def __init__(self, inner: Any) -> None:
         self._inner = inner
         self.last: dict[int, str] = {}
+        self.context: dict[int, list[tuple[str, str]]] = {}
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._inner, name)
 
     async def chat_text(self, role: Any, messages: Any, max_tokens: int, **kw: Any) -> str:
+        tid = id(asyncio.current_task())
+        if role == "nlu" and self.context.get(tid):
+            messages = _with_context(list(messages), self.context[tid])
         text = await self._inner.chat_text(role, messages, max_tokens, **kw)
         if role == "nlu":
-            self.last[id(asyncio.current_task())] = text
+            self.last[tid] = text
         return text
 
 
@@ -615,7 +651,7 @@ async def run_corpus(
     min_interval_s: float = 0.0,
     providers_path: Path | None = None,
     allow_budgeted: bool = False,
-    use_context: bool = True,
+    use_context: bool = False,
 ) -> tuple[list[dict[str, Any]], Counter[str]]:
     """Analyze every line; returns per-line records and answering-model counts.
 
@@ -627,7 +663,8 @@ async def run_corpus(
     ``llm`` overrides the client built from ``profile`` (tests);
     ``providers_path`` replaces ``config/providers.yaml`` for the built client;
     without it, ``budgeted`` (paid) targets are dropped unless ``allow_budgeted``.
-    ``use_context=False`` ignores each line's ``context`` turns.
+    ``use_context=True`` adds each line's ``context`` turns to its NLU prompt
+    (``_with_context``; eval only, the shipped prompt has none).
     """
     settings = get_settings().model_copy(
         update={
@@ -701,11 +738,12 @@ async def run_corpus(
                 "terms": expected_terms(line),
             },
         }
+        recorder.context[tid] = context
         try:
             with llm_call_scope(f"corpus:{line['id']}"):
                 out = await analyze(
                     line["text"], agent, line.get("pending"),
-                    llm=recorder, settings=settings, ref=REF, context=context or None,
+                    llm=recorder, settings=settings, ref=REF,
                 )
         except Exception as e:  # noqa: BLE001 - any failure is a skip, retried below
             rec["skipped"] = True
@@ -839,8 +877,8 @@ def main(argv: list[str] | None = None) -> int:
         help="no LLM: an empty analysis through post_verify, so only code-side rules decide",
     )
     ap.add_argument(
-        "--no-context", action="store_true",
-        help="ignore each line's `context` turns (same agent line); measures context off",
+        "--with-context", action="store_true",
+        help="add each line's `context` turns to the NLU prompt (eval only; not shipped)",
     )
     ap.add_argument(
         "--allow-mixed-models", action="store_true",
@@ -877,7 +915,7 @@ def main(argv: list[str] | None = None) -> int:
                     min_interval_s=args.min_interval_s,
                     providers_path=args.providers,
                     allow_budgeted=args.allow_budgeted,
-                    use_context=not args.no_context,
+                    use_context=args.with_context,
                 )
             )
         finally:
@@ -927,8 +965,8 @@ def main(argv: list[str] | None = None) -> int:
     }
     if mixed:
         meta["mixed"] = True
-    if args.no_context:
-        meta["stance_variant"] += "; line `context` turns ignored (--no-context)"
+    if args.with_context:
+        meta["stance_variant"] += "; line `context` turns added (--with-context, eval only)"
     if args.from_records is not None:
         meta["stance_variant"] += f"; rescored from `{args.from_records}`"
     if args.rescore_guards:

@@ -3,9 +3,8 @@
 The model only reads; code decides what to trust. ``analyze`` (``llm_call``)
 first tries the code-only ``fast_paths`` (a plain yes / no to a read-back, a
 short pick between the two values of an open clarify, a bare answer to the
-field we just asked), then makes one JSON ``nlu`` call, with the last few
-spoken turns as context (retried once on a validation failure) and parses it
-(``parse``).
+field we just asked), then makes one JSON ``nlu`` call (retried once on a
+validation failure) and parses it (``parse``).
 ``verify.post_verify`` then drops bad quotes and out-of-range values and sets
 ``verified`` from ``app.agent.numbers.extract_tokens`` matches, and the
 ``cues`` repairs fix the stance (accept phrase, dominant short ack, never

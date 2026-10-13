@@ -218,12 +218,12 @@ or a question. When no rule fires, the model decides. On the saved runs they lif
 and Cerebras, and Cerebras private-info recall from 0.882 to 1.0. No line got
 worse.
 
-Since Phase 54 the NLU prompt also gets the last 3 spoken turns, as context
-only: quotes must still come from the current line. On Haiku the added prompt
-sentence kept the main corpus inside the gate (stance 0.869 → 0.880, private
-recall 1.0), but the turns did not help on a new 16-line context set (terms
-14/16 → 13/16; bare amounts still ambiguous;
-[measurement](eval/nlu_context_20261013/summary.md)).
+Phase 54 measured giving the NLU prompt the last 3 spoken turns as context,
+and did not ship it. On a new 16-line context set, terms went from 14/16 to
+13/16, bare amounts stayed ambiguous, and each turn cost about 79 more tokens
+([measurement](eval/nlu_context_20261013/summary.md)). The model still reads
+one line plus the agent's last sentence. The call that prompted the test is
+fixed in code instead.
 
 ## ADR 7. How negotiation decisions are made
 

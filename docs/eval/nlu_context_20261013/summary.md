@@ -1,5 +1,20 @@
 # NLU turn context on Claude Haiku 5.5 (Phase 54, 2026-10-13)
 
+## Decision
+
+**Dropped from the live prompt** (user decision, 2026-10-13). The turns gave
+no measured gain: terms went from 14/16 to 13/16 on the context set, and each
+turn cost about 79 more prompt tokens. Code fixes A–C in Phase 54 cover the
+live call (change request applied directly, a short pick settles an open
+clarify, talked-over questions count). The shipped NLU prompt is again
+byte-identical to the one behind `HAIKU_P43_FIX`. The context could be retried
+later with different wording. The corpus `context` field,
+`tests/nlu_corpus_context.jsonl` and the records stay. `eval.nlu_corpus
+--with-context` adds the measured block and sentence back, eval only, so
+`CONTEXT_ON_P54` can be reproduced exactly.
+
+## What was measured
+
 The NLU prompt now gets the last 3 spoken turns before the rep's line, as
 earlier context, plus one system sentence: "Use earlier turns only to
 understand references ("it", "that", a bare value answering a question);
@@ -28,6 +43,13 @@ uv run python -m eval.nlu_corpus --label CONTEXT_ON_P54  --corpus tests/nlu_corp
   --providers $P --profile claude_haiku_nlu
 uv run python -m eval.nlu_corpus --label HAIKU_P54 --providers $P --profile claude_haiku_nlu
 ```
+
+These are the commands as run, on the prompt with the context sentence.
+After the decision, the flags changed. `--no-context` is gone, because the
+default now runs the shipped prompt (no sentence, no turns). `--with-context`
+reproduces the `CONTEXT_ON_P54` prompt byte for byte. The
+`CONTEXT_OFF_P54` and `HAIKU_P54` prompt (the sentence without turns) is no
+longer reproducible, and was never shipped.
 
 Rows `CONTEXT_OFF_P54`, `CONTEXT_ON_P54` and `HAIKU_P54` are in
 [`../nlu_corpus.md`](../nlu_corpus.md). Raw answers are in

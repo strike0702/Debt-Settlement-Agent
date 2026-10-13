@@ -7,8 +7,9 @@
   question.
 - A clarify / ask the rep heard part of before barging in still counts, so the
   second unresolved clarify hands off.
-- The NLU prompt sees the last 3 spoken turns as earlier context; quotes still
-  come from the current utterance, and the response cache keys on the context.
+- The NLU prompt has no turn context: it was measured (Phase 54) and dropped,
+  so the live call sends the same prompt as before. A value the model lifts
+  from an earlier turn still fails the verbatim-quote check.
 """
 
 from __future__ import annotations
@@ -24,13 +25,13 @@ from app.agent.acts import is_ack_correction, is_change_request
 from app.agent.nlu import try_resolve_disputed_value
 from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
 from app.agent.orchestrator import Orchestrator
-from app.agent.session import CallSession, Turn
+from app.agent.session import CallSession
 from app.domain.actions import Intent
 from app.domain.belief import TermStatus
+from app.domain.fields import FIELDS_BY_NAME
 from app.domain.scenario import load_scenario
 from app.llm.client import FakeLLM
 from app.llm.prompts import nlu_messages
-from app.llm.response_cache import _cache_key
 from app.store.audit import AuditLog
 from tests.wsutil import offline_settings
 
@@ -390,60 +391,25 @@ async def test_heard_ask_keeps_only_its_question_count(tmp_path: Path) -> None:
     assert [e["kind"] for e in ev["payload"]["kept_effects"]] == ["note_question"]
 
 
-# ----- D. recent turns for the NLU -----
+# ----- D. turn context: measured, not shipped -----
 
 
 @pytest.mark.asyncio
-async def test_nlu_sees_last_three_spoken_turns(tmp_path: Path) -> None:
+async def test_live_nlu_prompt_has_no_turn_context(tmp_path: Path) -> None:
+    """The context block and its sentence were dropped (no measured gain)."""
     orch, llm = await _min_180_acked(tmp_path)
     llm.enqueue("nlu", _nlu(("min_payment_cents", 25000, "$250"), stance="counter"))
     await orch.on_creditor_text("Sorry, can you change it to $250?")
-    user = llm.nlu_messages[-1][-1]["content"]
-    earlier, rest = user.split("Agent last said:")
-    _, block = earlier.split("Earlier turns (context only, do not extract from them):\n")
-    lines = block.strip().split("\n")
-    assert [ln.split(":")[0] for ln in lines] == ["Agent", "Rep", "Agent"]
-    assert lines[0].endswith("What's the minimum payment amount?")
-    assert lines[1] == "Rep: $180"
-    assert "$180" in lines[2] and lines[2].endswith("a flexible schedule?")
-    assert "Rep utterance: Sorry, can you change it to $250?" in rest
-    # The opening is older than three turns and stays out.
-    assert "Well, it is eight." not in earlier
-
-
-def test_context_skips_unheard_agent_lines_and_the_current_line(tmp_path: Path) -> None:
-    orch = _orch(tmp_path)
-    h = orch.session.history
-    h += [
-        Turn(role="agent", text="A1.", spoken=True),
-        Turn(role="creditor", text="R1.", spoken=True),
-        Turn(role="agent", text="A2.", spoken=True),
-        Turn(role="agent", text="A2b.", spoken=True),
-        Turn(role="creditor", text="R2.", spoken=True),
-        Turn(role="agent", text="Never heard.", spoken=False),
-        Turn(role="creditor", text="R3.", spoken=True),
-        Turn(role="creditor", text="current", spoken=True),
-    ]
-    assert orch._nlu_context_turns() == [
-        ("creditor", "R1."),
-        ("agent", "A2. A2b."),
-        ("creditor", "R2. R3."),
-    ]
-
-
-def test_nlu_prompt_without_context_is_unchanged() -> None:
-    base = nlu_messages("Six.", "What is it?", None, ref=_REF)
-    assert nlu_messages("Six.", "What is it?", None, ref=_REF, context=[]) == base
-    assert "Earlier turns" not in base[1]["content"]
-    assert "Use earlier turns only to understand references" in base[0]["content"]
-
-
-def test_response_cache_key_includes_the_context() -> None:
-    a = nlu_messages("$250", "Which is it?", None, ref=_REF, context=[("creditor", "$180")])
-    b = nlu_messages("$250", "Which is it?", None, ref=_REF, context=[("creditor", "$200")])
-    c = nlu_messages("$250", "Which is it?", None, ref=_REF)
-    keys = {_cache_key("p", "m", m, 0.0, 100) for m in (a, b, c)}
-    assert len(keys) == 3
+    system, user = (m["content"] for m in llm.nlu_messages[-1])
+    assert "Earlier turns" not in user and "$180" not in user
+    assert "earlier turns" not in system.lower()
+    assert user.startswith("Today's date: ") and "Agent last said: " in user
+    assert user == nlu_messages(
+        "Sorry, can you change it to $250?",
+        FIELDS_BY_NAME["payment_structure"].ask_text,
+        None,
+        ref=orch._ref,
+    )[1]["content"]
 
 
 @pytest.mark.asyncio

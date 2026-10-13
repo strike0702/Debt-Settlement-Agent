@@ -1,13 +1,11 @@
 """``analyze``: the NLU entry point for one rep turn.
 
 Order: oracle mode first (a caller-supplied ``TurnAnalysis``, for the sim and
-tests; it ignores turn context); else the ``fast_paths`` that need no model
+tests); else the ``fast_paths`` that need no model
 (plain yes/no to a read-back, a short pick between the two values of an open
 clarify, a bare answer to the field we just asked); else one JSON ``nlu`` call
-through ``app.llm.client`` with the last few spoken turns as context (retried
-once on a parse / validation failure, with no broad ``except``), then
-``verify.post_verify``, which still checks every quote against the current
-utterance only. Dollar amounts are resolved
+through ``app.llm.client`` (retried once on a parse / validation failure, with
+no broad ``except``), then ``verify.post_verify``. Dollar amounts are resolved
 later by the orchestrator (``amounts.resolve_amounts``), once the balance is
 known. Does not update belief.
 """
@@ -65,13 +63,11 @@ async def analyze(
     call_id: str | None = None,
     ref: date | None = None,
     disputed: tuple[str, Any, Any] | None = None,
-    context: list[tuple[str, str]] | None = None,
 ) -> VerifiedAnalysis:
     """Run NLU (or oracle) then post-verify. Empty analysis on double validation fail.
 
     ``disputed``: ``(field, old, new)`` of a CONTRADICTED term we are asking
-    about; a short reply that picks one side skips the LLM. ``context``: the
-    turns before this one as ``(role, text)``, for the LLM prompt only.
+    about; a short reply that picks one side skips the LLM.
     """
     cfg = settings or get_settings()
     empty = TurnAnalysis(stance="other")
@@ -137,9 +133,7 @@ async def analyze(
     if llm is None:
         raise ValueError("llm is required when nlu_mode is not oracle")
 
-    messages = nlu_messages(
-        utterance, last_agent_line, pending_readback, ref=ref, context=context
-    )
+    messages = nlu_messages(utterance, last_agent_line, pending_readback, ref=ref)
     analysis: TurnAnalysis | None = None
     last_err: str | None = None
 

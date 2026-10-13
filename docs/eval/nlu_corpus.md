@@ -2425,3 +2425,7 @@ starts with Haiku 5.5.
   No stale number was extracted and the controls did not change. Context did
   not help Haiku here. The live-call shape is fixed in code instead.
   Write-up: `docs/eval/nlu_context_20261013/summary.md`. Cost $0.064.
+- **Decision: dropped.** The live NLU prompt is back to the one behind
+  `HAIKU_P43_FIX`: no turns and no added sentence. There was no measured gain,
+  and it cost about 79 prompt tokens per turn. `--with-context` re-adds the
+  measured form, eval only (`--no-context` is gone).

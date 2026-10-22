@@ -153,7 +153,7 @@ def test_second_infeasible_fixture_oracle():
         creditor="Tight2",
         creditor_balance_cents=40000,
         original_balance_cents=40000,
-        settlement_pct=0.5,
+        settlement_bp=5000,
         first_payment_date=date(2026, 1, 31),
     )
     rules = CreditorRules(
@@ -166,7 +166,7 @@ def test_second_infeasible_fixture_oracle():
         is_ballooning_allowed=False,
         max_segments=3,
         bank_fee_cents=0,
-        program_fee_pct=0.1,
+        program_fee_bp=1000,
     )
     r = evaluate_offer(client, offer, rules)
     assert r.feasible is False
@@ -197,7 +197,7 @@ def test_increment_unfixable_before_any_draft():
         creditor="PreDraft",
         creditor_balance_cents=10000,
         original_balance_cents=10000,
-        settlement_pct=0.5,
+        settlement_bp=5000,
         first_payment_date=date(2026, 3, 31),
     )
     rules = CreditorRules(
@@ -210,7 +210,7 @@ def test_increment_unfixable_before_any_draft():
         is_ballooning_allowed=False,
         max_segments=1,
         bank_fee_cents=0,
-        program_fee_pct=0.0,
+        program_fee_bp=0,
     )
     r = evaluate_offer(client, offer, rules)
     # May or may not be feasible depending on recovery; if infeasible, increment
@@ -242,7 +242,7 @@ def test_guardrail_reject_large_lump():
         creditor="HugeGap",
         creditor_balance_cents=20000,
         original_balance_cents=20000,
-        settlement_pct=0.5,  # S=10000
+        settlement_bp=5000,  # S=10000
         first_payment_date=date(2026, 1, 31),
     )
     rules = CreditorRules(
@@ -255,7 +255,7 @@ def test_guardrail_reject_large_lump():
         is_ballooning_allowed=False,
         max_segments=1,
         bank_fee_cents=0,
-        program_fee_pct=0.0,
+        program_fee_bp=0,
     )
     r = evaluate_offer(client, offer, rules)
     assert r.feasible is False

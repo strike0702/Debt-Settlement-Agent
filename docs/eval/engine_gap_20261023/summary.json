@@ -1,0 +1,33 @@
+{
+  "bug_illegal_legacy_vector": 0,
+  "bug_legacy_feasible_oracle_not": 0,
+  "bug_legacy_phi_above_oracle": 0,
+  "bug_legacy_phi_mismatch": 0,
+  "bug_rescue_under": 0,
+  "bug_validator_on_oracle": 0,
+  "cap_model": [
+    {
+      "draws": 4000,
+      "feasible": 1051,
+      "k_hi": 6,
+      "miss": 0,
+      "s_hi": 40,
+      "worse_phi": 0
+    },
+    {
+      "draws": 4000,
+      "feasible": 1085,
+      "k_hi": 8,
+      "miss": 0,
+      "s_hi": 60,
+      "worse_phi": 0
+    }
+  ],
+  "cases": 5000,
+  "false_infeasible": 0,
+  "rescue_over_increment": 0,
+  "rescue_over_lump": 0,
+  "seed": 1,
+  "skipped": 0,
+  "worse_phi": 0
+}

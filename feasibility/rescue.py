@@ -1,4 +1,13 @@
-"""Part 2: closed-form minimal lump sum and monthly increment."""
+"""Part 2 rescue: minimal lump sum and minimal monthly draft increment.
+
+Runs only when no candidate is feasible. For each candidate vector the lump is
+closed form (largest overdraft, or the fee shortfall on the last window) and the
+increment is the largest ``ceil(shortfall / drafts landed by then)``; the answer
+is the minimum over the candidate family from ``shapes.generate_candidates``, so
+it is exact only relative to that family (see the Phase 55 gap report). Guardrail
+caps come from ``constants.py``. Called by ``engine.py``; returns plain results
+that the engine wraps as ``FundsOption``.
+"""
 
 from __future__ import annotations
 
@@ -12,12 +21,25 @@ from feasibility.constants import (
 )
 from feasibility.models import Client
 from feasibility.shapes import Candidate
-from feasibility.simulate import simulate
+from feasibility.simulate import SimulationResult, apply_payments, simulate
 from feasibility.util import ceil_div, round_half_up
+
+
+def _simulate(
+    client: Client,
+    cand: Candidate,
+    cadence: list[date],
+    bank_fee_cents: int,
+    base: SimulationResult | None,
+) -> SimulationResult:
+    if base is not None:
+        return apply_payments(base, cadence, cand.payments, bank_fee_cents)
+    return simulate(client, list(zip(cadence[: cand.k], cand.payments)), cadence, bank_fee_cents)
 
 
 @dataclass(frozen=True)
 class LumpResult:
+    """Minimal single extra credit and the latest date it can safely land."""
     amount_cents: int
     date: date | None
     within_guardrail: bool
@@ -26,6 +48,7 @@ class LumpResult:
 
 @dataclass(frozen=True)
 class IncrementResult:
+    """Minimal uniform addition to every future draft (``num_drafts`` of them)."""
     amount_cents: int
     num_drafts: int
     within_guardrail: bool
@@ -33,7 +56,10 @@ class IncrementResult:
 
 
 def _cents_to_dollars(cents: int) -> str:
-    return f"${cents / 100:.2f}"
+    """Reason-text rendering only (never a money path): integer split, no float."""
+    sign = "-" if cents < 0 else ""
+    whole, frac = divmod(abs(cents), 100)
+    return f"${sign}{whole}.{frac:02d}"
 
 
 def _structural_unfixable_reason() -> str:
@@ -51,6 +77,7 @@ def compute_lump(
     bank_fee_cents: int,
     F: int,
     S: int,
+    base: SimulationResult | None = None,
 ) -> LumpResult:
     """Global min lump L* and latest-safe placement date."""
     if not candidates or not cadence:
@@ -65,8 +92,7 @@ def compute_lump(
     best: tuple[int, int, tuple[int, ...], date] | None = None
 
     for cand in candidates:
-        payments = list(zip(cadence[: cand.k], cand.payments))
-        sim = simulate(client, payments, cadence, bank_fee_cents)
+        sim = _simulate(client, cand, cadence, bank_fee_cents, base)
         max_overdraft = max(((-b) for b in sim.balances.values()), default=0)
         fee_short = F - sim.w[len(cadence)]
         L = max(0, max_overdraft, fee_short)
@@ -114,6 +140,7 @@ def compute_increment(
     cadence: list[date],
     bank_fee_cents: int,
     F: int,
+    base: SimulationResult | None = None,
 ) -> IncrementResult:
     """Global min uniform monthly draft increment X*."""
     future_drafts = [
@@ -139,8 +166,7 @@ def compute_increment(
     saw_pre_draft_shortfall = False
 
     for cand in candidates:
-        payments = list(zip(cadence[: cand.k], cand.payments))
-        sim = simulate(client, payments, cadence, bank_fee_cents)
+        sim = _simulate(client, cand, cadence, bank_fee_cents, base)
         required = 0
         unfixable = False
         for v, b in sim.balances.items():

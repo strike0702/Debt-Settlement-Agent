@@ -1,10 +1,12 @@
-"""Bridge between belief/scenario and the vendored feasibility engine.
+"""Bridge between belief/scenario and the feasibility engine (owned v2).
 
 Builds ``CreditorRules`` from usable belief fields (raises ``NeedsInfo`` when
 required terms are missing), runs ``evaluate`` / ``affordability``, and tags
 returned amounts as PUBLIC or PRIVATE ``Fact``s. Settlement percentages are
-integer **basis points** (bp): 100 bp = 1%, 4500 bp = 45%, 10000 bp = 100%.
-Convert with ``bp_to_decimal(bp)`` → ``Decimal(bp) / 10000`` for the engine.
+integer **basis points** (bp): 100 bp = 1%, 4500 bp = 45%, 10000 bp = 100%,
+passed to the engine as ``Offer.settlement_bp``. The firm's fractional
+``program_fee_pct`` is converted to ``CreditorRules.program_fee_bp`` exactly once,
+in ``build_rules`` (values that are not whole bp are rejected).
 Never use float for money math; cents and bp stay ints end-to-end.
 """
 
@@ -21,8 +23,10 @@ from app.domain.fields import FIELD_REGISTRY, REQUIRED_FIELDS
 from app.domain.scenario import CallScenario
 from app.domain.units import bp_to_decimal
 from feasibility.engine import AdditionalFunds, Result, ScheduleRow, evaluate_offer
+from feasibility.engine import evaluate as engine_evaluate
 from feasibility.models import CreditorRules, Offer
-from feasibility.util import round_half_up
+from feasibility.problem import build_problem
+from feasibility.util import fraction_to_bp, round_half_up
 
 
 class FirmFees(Protocol):
@@ -77,7 +81,8 @@ def build_rules(belief: BeliefState, firm: FirmFees) -> CreditorRules:
 
     Only KNOWN/ASSUMED fields are usable. Raises NeedsInfo if any *required*
     field (max_payments, min_payment_cents, payment_structure) is not usable.
-    Firm fees are never asked of the rep — they come from firm.json.
+    Firm fees are never asked of the rep — they come from firm.json. Raises
+    ``ValueError`` if ``firm.program_fee_pct`` is not a whole basis point.
     """
     missing = [
         name
@@ -126,7 +131,7 @@ def build_rules(belief: BeliefState, firm: FirmFees) -> CreditorRules:
         is_ballooning_allowed=balloon,
         max_segments=max_segments,
         bank_fee_cents=int(firm.bank_fee_cents),
-        program_fee_pct=float(firm.program_fee_pct),
+        program_fee_bp=fraction_to_bp(firm.program_fee_pct),
     )
 
 
@@ -152,18 +157,19 @@ def evaluate(
     Builds an Offer, calls ``evaluate_offer``, and wraps the result with a
     FactSet whose visibility marks each fact speakable or client-private.
     """
-    settlement = bp_to_decimal(bp)  # e.g. 4500 -> Decimal("0.45")
     offer = Offer(
         creditor=scenario.creditor,
         creditor_balance_cents=scenario.creditor_balance_cents,
         original_balance_cents=scenario.original_balance_cents,
-        settlement_pct=float(settlement),
+        settlement_bp=bp,
         first_payment_date=first_payment_date,
     )
     result = evaluate_offer(scenario.client, offer, rules)
-    # Recompute totals with Decimal half-up so Fact values match engine money rules.
-    offer_total = round_half_up(settlement, scenario.creditor_balance_cents)
-    program_fee = round_half_up(rules.program_fee_pct, scenario.original_balance_cents)
+    # Same Decimal half-up as the engine, so Fact values match its money rules.
+    offer_total = round_half_up(bp_to_decimal(bp), scenario.creditor_balance_cents)
+    program_fee = round_half_up(
+        bp_to_decimal(rules.program_fee_bp), scenario.original_balance_cents
+    )
     facts = _facts_from_result(result, offer_total, first_payment_date)
     return EvalSummary(
         feasible=result.feasible,
@@ -306,13 +312,8 @@ def _facts_from_result(
 
 
 def _rules_tuple(rules: CreditorRules) -> tuple[Any, ...]:
-    """Hashable CreditorRules for lru_cache keys.
-
-    ``program_fee_pct`` is stored as integer basis points (not float) so
-    tiny float drift cannot miss or falsely hit the affordability cache.
-    """
+    """Hashable CreditorRules for lru_cache keys (all ints/bools; fee in bp)."""
     tiers = tuple((int(a), int(b)) for a, b in rules.min_payment_tiers)
-    fee_bp = int(round(float(rules.program_fee_pct) * 10_000))
     return (
         rules.max_terms,
         rules.max_payments,
@@ -323,7 +324,7 @@ def _rules_tuple(rules: CreditorRules) -> tuple[Any, ...]:
         rules.is_ballooning_allowed,
         rules.max_segments,
         rules.bank_fee_cents,
-        fee_bp,
+        rules.program_fee_bp,
     )
 
 
@@ -357,7 +358,8 @@ def affordability(
 ) -> Affordability:
     """Scan every 100 bp from 100..10000; cache by (scenario, rules, fpd).
 
-    Callers on the async path should wrap with ``asyncio.to_thread``.
+    Builds one engine ``Problem`` (cadence, floors, base simulation) per scan and
+    reuses it for all 100 points. Callers on the async path should wrap with ``asyncio.to_thread``.
     Do not assume the feasible set is a single contiguous band.
     """
     return _affordability_cached(
@@ -375,11 +377,17 @@ def _affordability_cached(
     scenario = _scenario_from_key(scenario_key)
     rules = _rules_from_tuple(rules_tuple)
     fpd = date.fromisoformat(fpd_iso)
+    problem = build_problem(
+        scenario.client,
+        rules,
+        fpd,
+        creditor_balance_cents=scenario.creditor_balance_cents,
+        original_balance_cents=scenario.original_balance_cents,
+    )
     curve: list[bool] = []
     feasible_bps: list[int] = []
     for bp in range(100, 10001, 100):  # 1%, 2%, ..., 100%
-        summary = evaluate(scenario, rules, bp, fpd)
-        ok = summary.feasible
+        ok = engine_evaluate(problem, bp).feasible
         curve.append(ok)
         if ok:
             feasible_bps.append(bp)
@@ -402,7 +410,7 @@ def _rules_from_tuple(t: tuple[Any, ...]) -> CreditorRules:
         is_ballooning_allowed=bool(t[6]),
         max_segments=int(t[7]),
         bank_fee_cents=int(t[8]),
-        program_fee_pct=float(t[9]) / 10_000.0,
+        program_fee_bp=int(t[9]),
     )
 
 

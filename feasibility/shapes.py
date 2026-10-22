@@ -1,16 +1,27 @@
-"""Floor function, payment-shape generators, static validator, labeling."""
+"""Candidate payment vectors: per-position floors, the shape family, static legality.
+
+``compute_floors`` turns base minimum, token-pay limit and tiers into a floor per
+position. ``generate_candidates`` enumerates the even / staircase / balloon family the
+engine scores (structured, not exhaustive: early staircase levels are pinned to their
+floors and only the last two levels are solved). ``is_statically_valid`` is the
+money-independent legality filter, ``label_shape`` names the shape by rule. No ledger
+or fee logic here: simulation is ``simulate.py``, scoring ``scoring.py``. Phase 55
+froze a copy of this generator in ``legacy.py`` for comparisons.
+"""
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from itertools import combinations
-from typing import Iterator
 
 from feasibility.models import CreditorRules
 
 
 @dataclass(frozen=True)
 class Candidate:
+    """One payment vector of length ``k`` with its rule-based shape label."""
+
     k: int
     payments: tuple[int, ...]
     label: str  # "even" | "staircase" | "balloon"
@@ -43,6 +54,7 @@ def label_shape(
 
 
 def even_vector(S: int, k: int) -> tuple[int, ...]:
+    """As-equal-as-possible split, remainder cents on the latest payments."""
     q, r = divmod(S, k)
     return tuple([q] * (k - r) + [q + 1] * r)
 

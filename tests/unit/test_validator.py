@@ -55,7 +55,7 @@ def _rules_of(**kwargs: object) -> CreditorRules:
         "is_ballooning_allowed": base.is_ballooning_allowed,
         "max_segments": base.max_segments,
         "bank_fee_cents": base.bank_fee_cents,
-        "program_fee_pct": base.program_fee_pct,
+        "program_fee_bp": base.program_fee_bp,
     }
     data.update(kwargs)
     return CreditorRules(**data)  # type: ignore[arg-type]
@@ -137,7 +137,7 @@ def test_fail_token_count() -> None:
         is_ballooning_allowed=True,
         max_segments=base.max_segments,
         bank_fee_cents=base.bank_fee_cents,
-        program_fee_pct=base.program_fee_pct,
+        program_fee_bp=base.program_fee_bp,
     )
     v = validate(list(result.schedule), client, total, fee, rules, fpd)
     assert any(x.rule == RULE_TOKEN_COUNT for x in v)

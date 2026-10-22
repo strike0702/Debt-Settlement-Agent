@@ -1,4 +1,11 @@
-"""Behavioral knobs, scoring policies, and guardrail thresholds."""
+"""Engine constants: rounding notes, soft-buffer and cliff knobs, Part 2 guardrails.
+
+Pure data, imported by ``engine.py``, ``scoring.py`` and ``rescue.py``. The Tier C
+buffer defaults to 0 (strict take-home compliance); Tier B cliff flattening is on.
+Guardrail percentages are Decimals and are applied with ``util.round_half_up``.
+Changing any value here changes engine output: it needs a golden-corpus update and a
+PROGRESS note (see CLAUDE.md).
+"""
 
 from __future__ import annotations
 

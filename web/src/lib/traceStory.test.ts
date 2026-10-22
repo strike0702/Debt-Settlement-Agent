@@ -9,6 +9,7 @@ import {
   ackLine,
   heardLines,
   ignoredLines,
+  keyNumber,
   ladderMove,
   modelName,
   noteLine,
@@ -57,9 +58,29 @@ describe("ladder moves", () => {
     expect(turnTitle(tr(4, "CONFIRM_SCHEDULE", "bp=4000", 4000, { stance: "offer" }), [first, concede])).toBe("Accepted 40%");
   });
 
-  it("calls every no-deal ending a handoff, and the dead NO_DEAL_WRAP a close", () => {
+  it("calls every no-deal ending a handoff; NO_DEAL_WRAP has no label of its own", () => {
     expect(turnTitle(tr(6, "ESCALATE", "above_accept_line", null))).toBe("Handed off to a specialist");
-    expect(turnTitle(tr(6, "NO_DEAL_WRAP", "infeasible", null))).toBe("Closed the call");
+    expect(turnTitle(tr(6, "NO_DEAL_WRAP", "infeasible", null))).toBe("Made a move");
+    expect(turnTitle(tr(6, "CLOSE", "post_wrap", null))).toBe("Closed the call");
+  });
+});
+
+describe("key number", () => {
+  const alt = (field: "first_payment_date" | "min_payment_cents" | "max_payments", value: number | string) =>
+    tr(4, "COUNTER_TERMS", `alt_${field}`, null, { ask_bp: 8000, term_alt: { field, value } });
+
+  it("shows the term we asked for on a term proposal, not the rep's ask", () => {
+    expect(keyNumber(alt("first_payment_date", "2026-03-31"))).toBe("Mar 31");
+    expect(keyNumber(alt("min_payment_cents", 10000))).toBe("$100");
+    expect(keyNumber(alt("max_payments", 5))).toBe("5 payments");
+    expect(keyNumber(alt("max_payments", 1))).toBe("1 payment");
+    // An older frame without the term shows nothing rather than the 80% ask.
+    expect(keyNumber(tr(4, "COUNTER_TERMS", "alt_max_payments", null, { ask_bp: 8000 }))).toBeNull();
+  });
+
+  it("still shows the percentage on price moves", () => {
+    expect(keyNumber(tr(2, "COUNTER", "bp=4900", 4900, { ask_bp: 7000 }))).toBe("49%");
+    expect(keyNumber(tr(3, "ASK_SETTLEMENT", null, null, { ask_bp: 7000 }))).toBe("70%");
   });
 });
 

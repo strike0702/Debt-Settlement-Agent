@@ -181,6 +181,7 @@ export interface TurnTraceEvent {
   reader?: TraceReader | null;
   spoken: SpokenSentence[];
   stance: ("offer" | "counter" | "accept" | "reject" | "stall" | "info" | "question" | "other") | null;
+  term_alt?: TraceTermAlt | null;
   terms: TraceTerm[];
   timings: {
     [k: string]: number | null;
@@ -294,6 +295,16 @@ export interface TraceReader {
 export interface SpokenSentence {
   id: string;
   text: string;
+}
+/**
+ * The payment term a COUNTER_TERMS move asked the rep for (public once said).
+ *
+ * ``field`` is the belief field (``first_payment_date`` ISO date,
+ * ``min_payment_cents`` cents, ``max_payments`` count).
+ */
+export interface TraceTermAlt {
+  field: "first_payment_date" | "min_payment_cents" | "max_payments";
+  value: number | string;
 }
 /**
  * A term NLU extracted and ``post_verify`` kept; ``quote`` is a span of the rep line.

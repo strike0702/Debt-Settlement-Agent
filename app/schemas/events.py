@@ -120,6 +120,17 @@ class SpokenSentence(_Model):
     text: str
 
 
+class TraceTermAlt(_Model):
+    """The payment term a COUNTER_TERMS move asked the rep for (public once said).
+
+    ``field`` is the belief field (``first_payment_date`` ISO date,
+    ``min_payment_cents`` cents, ``max_payments`` count).
+    """
+
+    field: Literal["first_payment_date", "min_payment_cents", "max_payments"]
+    value: int | str
+
+
 class TraceReader(_Model):
     """Who read the rep's line this turn. Operator only, like the trace.
 
@@ -197,6 +208,8 @@ class TurnTrace(_Model):
     decide: Decide
     # Our counter or confirmed bp when this move speaks one (public once said).
     counter_bp: int | None
+    # Set on COUNTER_TERMS: the term we asked for (the trace row's key number).
+    term_alt: TraceTermAlt | None = None
     nlg: NlgTrace
     spoken: list[SpokenSentence]
     timings: dict[str, float | None]

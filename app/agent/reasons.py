@@ -91,9 +91,9 @@ REASON_TEXT: dict[str, str] = {
         "did not move since our last offer."
     ),
     "step": (
-        "We move up to {counter_pct}, because the rep is holding their number. We take two "
-        "equal steps: halfway to their number or our limit, whichever is lower, then the "
-        "rest of the way."
+        "We move up to {counter_pct}, because the rep is holding their number. We close the "
+        "gap in two equal steps: first halfway to their number or our limit, whichever is "
+        "lower, then all the way to it."
     ),
     "final_counter": (
         "The rep says they cannot go lower, so we make one last offer of {counter_pct}, "
@@ -139,13 +139,15 @@ REASON_TEXT: dict[str, str] = {
         "has not given a start date and that one lets a payment plan fit the client's "
         "savings."
     ),
+    # Worded for both cases: the rep may have stated the term or we assumed it
+    # (``policy._counter_terms_action(rep_stated=...)``), so neither blames the rep.
     "alt_min_payment_cents": (
-        "We suggest a lower minimum payment of {alt_min_payment_cents}, because their "
-        "current minimum makes every plan unaffordable for the client."
+        "We ask whether the minimum payment could be {alt_min_payment_cents}, because at "
+        "the current minimum no payment plan fits the client's savings."
     ),
     "alt_max_payments": (
-        "We suggest allowing up to {alt_max_payments} payments, because spreading the "
-        "payments out lets the client afford a better offer."
+        "We ask whether up to {alt_max_payments} payments would be possible, because with "
+        "more payments a payment plan fits the client's savings."
     ),
     # Wrap
     "confirmed": "The rep agreed to the payment plan, so we send it to the client to approve.",
@@ -260,21 +262,21 @@ REASON_SHORT: dict[str, str] = {
     "counter": "A step toward their ask, within our limit.",
     "counter_no_total": "A step toward their ask, within our limit.",
     "hold": "They did not move, so we hold our offer.",
-    "step": "They are holding, so we close the gap in two equal steps.",
+    "step": "They are holding: halfway, then the rest, in equal steps.",
     "final_counter": "They will not go lower; one last offer halfway.",
     "confirm": "The client can afford it, so we ask for a yes.",
     "ask_within_offer": "Their ask is no more than our own offer.",
     "rep_firm": "They repeated their number, and it is within our limit.",
-    "rep_held": "They held their number, and it is within our limit.",
+    "rep_held": "They held through both steps, within our limit.",
     "counters_exhausted": "No counteroffers left, and their ask is within our limit.",
     "no_lower_counter": "No lower offer could be scheduled.",
     "terms_revised": "The rules changed since we last confirmed.",
     # Neutral on purpose: ``app.voice.ws`` keys the short form by reason code only,
-    # and the same code covers a start date the rep gave and one we assumed.
+    # and each code covers a term the rep gave and one we assumed.
     "alt_first_payment_date": "Asked for a start date that fits the client's plan.",
     "alt_first_payment_date_assumed": "Asked for a start date that fits the client's plan.",
-    "alt_min_payment_cents": "Their minimum payment blocks every affordable plan.",
-    "alt_max_payments": "More payments make a better offer affordable.",
+    "alt_min_payment_cents": "Asked for a minimum payment that fits the client's plan.",
+    "alt_max_payments": "Asked for more payments, so a plan fits the client.",
     "confirmed": "The rep agreed; the client approves next.",
     "thanks_accept": "Deal agreed, so we thank them and close.",
     "post_wrap": "The proposal is already with the client.",

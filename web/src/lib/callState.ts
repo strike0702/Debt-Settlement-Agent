@@ -201,6 +201,7 @@ export function ladderPoints(traces: readonly TurnTraceEvent[]): LadderPoint[] {
     .map((t) => ({ turn: t.turn, ask: t.ask_bp, counter: t.counter_bp }));
 }
 
+/** A call is over once it ends as a deal (END) or a handoff (ESCALATE phase or event). */
 export function isCallOver(state: CallState): boolean {
-  return state.phase === "END" || state.phase === "ESCALATE";
+  return state.phase === "END" || state.phase === "ESCALATE" || state.escalation != null;
 }

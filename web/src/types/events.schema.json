@@ -1705,6 +1705,38 @@
       "title": "TraceTerm",
       "type": "object"
     },
+    "TraceTermAlt": {
+      "additionalProperties": false,
+      "description": "The payment term a COUNTER_TERMS move asked the rep for (public once said).\n\n``field`` is the belief field (``first_payment_date`` ISO date,\n``min_payment_cents`` cents, ``max_payments`` count).",
+      "properties": {
+        "field": {
+          "enum": [
+            "first_payment_date",
+            "min_payment_cents",
+            "max_payments"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "field",
+        "value"
+      ],
+      "title": "TraceTermAlt",
+      "type": "object"
+    },
     "TranscriptEvent": {
       "additionalProperties": false,
       "properties": {
@@ -1917,6 +1949,17 @@
             }
           ],
           "title": "Stance"
+        },
+        "term_alt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TraceTermAlt"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "terms": {
           "items": {

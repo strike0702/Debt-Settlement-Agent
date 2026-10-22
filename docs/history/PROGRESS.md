@@ -23,9 +23,9 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 13 | CI + frozen evidence (ROADMAP) | done |
 | 14 | `decide()` bugs, bounded extract, invariants (ROADMAP) | done |
 | 15 | NLU and safety corpus, flag fixes | done |
-| 16 | LLM-only baseline (ROADMAP) | not done |
-| 17 | Latency timeouts + measurement (ROADMAP) | not done |
-| 18 | LLM audit log + replay CLI (ROADMAP) | not done |
+| 16 | LLM-only baseline (ROADMAP) | superseded by 24a |
+| 17 | Latency timeouts + measurement (ROADMAP) | superseded by 21 |
+| 18 | LLM audit log + replay CLI (ROADMAP) | dropped |
 | 19 | Results-first README (ROADMAP) | done |
 | 20 | Correctness and honesty fixes (REVIEW_PLAN) | done |
 | 21 | Latency: measure then cut (REVIEW_PLAN) | done |
@@ -64,6 +64,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 51 | README demo clip re-recorded on the Haggling rep scenario; stills and web screenshot retaken | done |
 | 53 | Docs for outside readers: reader-first README, DESIGN overview, eval records moved to `docs/eval/records/` | done |
 | 54 | Correction loop fix: change-request corrections, disputed-value answers, barged questions count; NLU turn context measured and dropped | done |
+| 56 | Leftover cleanup: reason copy, singular counts, trace key number for term proposals, mic on handoff, phone card scroll, screenshots | done (UI awaits the user's browser check) |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -2113,3 +2114,25 @@ Fixed: icon in the reader badge and end-of-call rules `aria-hidden`; outcome tex
   - (c) `turn_notes` / `TraceNoteKind` have no `clarify_resolved` note (deviation 3).
   - (d) `HAIKU_P54` measured a prompt that is no longer shipped. The shipped prompt is the `HAIKU_P43_FIX` one again, so those numbers stand.
 - **Checks (after the drop):** `uv run ruff check .` clean; `uv run pytest -q` 1363 passed / 2 skipped / 25 xfailed; fast suite (`-m "not slow"`) with `.env` moved aside (restored) 1359 passed / 2 skipped / 4 deselected / 25 xfailed; oracle eval `eval_20261013_000059_s7` thresholds PASS. Its `summary.json` (apart from latency) and all 100 per-call records match main's `eval_20261012_233358_s7`. Web job not run (no `web/src` change). No new paid calls; total spent stays $0.064.
+
+### Phase 56 (leftover cleanup) (2026-10-23) — docs/ENGINE_PLAN.md "What is unfinished today"
+
+- **1. Reason copy** (`app/agent/reasons.py`). `step`: "…We close the gap in two equal steps: first halfway to their number or our limit, whichever is lower, then all the way to it." (short: "They are holding: halfway, then the rest, in equal steps."); `rep_held` short: "They held through both steps, within our limit." (full unchanged, it already said "both steps"). `alt_min_payment_cents` / `alt_max_payments` full and short sentences no longer say "their": "We ask whether the minimum payment could be {x}, because at the current minimum no payment plan fits the client's savings." / "We ask whether up to {n} payments would be possible, because with more payments a payment plan fits the client's savings."; shorts "Asked for a minimum payment that fits the client's plan." / "Asked for more payments, so a plan fits the client.". Keys and placeholders unchanged (53 keys, pinned test passes unmodified).
+- **2. Singular counts.** `app.agent.nlg.singular_count_template(template, count_ids)` (new, public) is the one rule: "{n} payments totaling {x}" → "{n} payment of {x}", any other "{n} payments|installments" → singular. Used at fill time (`_singular_counts`, so bank, default and LLM lines say "1 payment of $500") and by `ack_template(singular=True)`. `scripts/build_template_bank.py` `template_ok` now also requires `singular_ok` (with every `PAYMENT_COUNT_IDS` placeholder at 1, no plural may follow the count), so a build can never keep "{n} monthly payments". Every shipped bank line already passes, so `config/nlg_bank.json` is unchanged (no rebuild, no hand edit).
+- **3. Fixtures / 4. `.env.example`:** already done in Phase 46a (`no_space` `expected: escalate`, asserted against autoplay in `test_autoplay.py`; `.env.example` without `CLOSE_GAP_BP`, with `ACCEPT_LINE_PCT_OF_MAX_BP`, `MAX_SAME_QUESTION`, `MAX_NO_PROGRESS_TURNS`, tested in `test_config_settings.py`) and Phase 50b (haggling_rep card "holds, steps up, makes a last offer, then accepts the rep's lowest number" matches autoplay: anchor, hold, step, final counter, `rep_firm`; `test_curated_fixtures.py`). Re-checked here, no change. `no_space` is `escalate` because every no-deal ending is a handoff since Phase 45.
+- **5. Web.** Mic: `micEventFor` returns `call_over` for an `escalate` event and for any END / ESCALATE phase event, with or without an intent (before: only intent-free phases); `isCallOver` also counts `state.escalation`. Trace: `NO_DEAL_WRAP` case removed from `turnTitle` (unknown intents get "Made a move"). COUNTER_TERMS key number: the turn trace gains `term_alt {field, value}` (set by the orchestrator from the action's `alt_*` fact; schema + `events.ts` regenerated); `keyNumber` shows "Mar 31" / "$100" / "5 payments" (or nothing on old frames), never the rep's settlement ask. Phone cards: the selected card is scrolled into its sideways row (`lib/scrollRow.ts` `revealInRow`, row `scrollLeft` only, never the page; `motion-safe:scroll-smooth`).
+- **6. Docs.** Status rows 16 / 17 → superseded by 24a / 21, 18 → dropped. `web/README.md` screenshots retaken (headless Chrome via puppeteer-core 23.11.1 from the scratchpad, local `LLM_PROFILE=offline` server, light): `console-1440-operator.webp` (haggling_rep after the deal, step row open with the new wording), `console-390.webp` (No room to settle selected, card scrolled into view), `console-1440-rep-handoff.webp` (Creditor rep view after the no_space handoff); alt text rewritten.
+- **Files:** `app/agent/{reasons,nlg,orchestrator}.py`, `app/schemas/events.py`, `scripts/build_template_bank.py`, `web/src/{lib/mic.ts,lib/callState.ts,lib/traceStory.ts,components/AppShell.tsx,types/events.schema.json,types/events.ts}`, new `web/src/lib/scrollRow.ts`, `web/src/components/AppShell.test.tsx`, `tests/unit/test_singular_counts.py`; tests edited `tests/unit/{test_reasons,test_trace_reader,test_call_replay}.py`, `web/src/{handoff.test.tsx,lib/traceStory.test.ts}`; `web/README.md`, `web/docs/screenshots/*.webp`, this file.
+- **Interfaces:**
+  - `app.agent.nlg`: `PAYMENT_COUNT_IDS: frozenset[str]`; `singular_count_template(template: str, count_ids: set[str] | frozenset[str]) -> str`.
+  - `app.schemas.events`: `TraceTermAlt(field: Literal["first_payment_date","min_payment_cents","max_payments"], value: int | str)`; `TurnTrace.term_alt: TraceTermAlt | None = None`.
+  - `app.agent.orchestrator._term_alt_of(action) -> TraceTermAlt | None`.
+  - `scripts/build_template_bank.py`: `singular_ok(text, placeholders) -> bool`.
+  - Web: `revealInRow(row, item, inset=16)`; `keyNumber` reads `term_alt`.
+- **Test changes, with reasons:** `test_call_replay.py::test_one_payment_plan_is_spoken_singular` expects "1 payment of $500" (was "1 payment totaling / totalling $500"): the new wording for a one-payment plan. `traceStory.test.ts` NO_DEAL_WRAP now reads "Made a move" (label removed).
+- **Deviations:** (1) The plan asked to "use the existing assumed detection" for the min / max alt reasons; that would add two display keys and change the pinned 53-key test, which must pass. One neutral sentence per code instead, true whether the rep stated the term or we assumed it; the start-date variant keeps its detection. (2) Singular wording is applied at fill time and enforced by the build check rather than stored as extra bank variants, because the bank text is shared across counts. (3) The COUNTER_TERMS fix needed a server field (`term_alt`), since the trace carried no copy of the proposed term; display only, no policy change.
+- **Oracle eval** (`--nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7`, `.env` aside, `eval_20261022_184607_s7`): thresholds PASS; agreement_valid 1.0, deal | zopa 0.913, no_deal_correct 1.0, escalation_correct 1.0, unverified / leaks / guard_blocks 0, turns 5.38, surplus 0.873 (same as Phase 50).
+- **UI review:** screenshots in `../dsa-orch-tools/p56-shots/` (`negotiator-haggling-step-row.png`, `negotiator-no-space-term-row.png` with the "Mar 31" key number, `rep-no-space-handoff.png`, `phone-390-selected-card.png`). Not mergeable until the user checks it in the browser.
+- **Checks:** `uv run ruff check .` clean; `uv run pytest -q` 1374 passed / 2 skipped / 25 xfailed; web CI chain green (16 files, 126 tests); oracle eval PASS. No paid calls.
+- **Open issues:** (a) `rep_held` stays nearly unreachable under equal steps (Phase 50 deviation 4). (b) `render_acts` still skips the bank for a singular ack, though the fill-time rule would now cover it. (c) The haggling_rep autoplay shows a "Checked a term with the rep" READ_BACK after the deal is sent (T7), seen in the new screenshot; not investigated (policy out of scope).
+

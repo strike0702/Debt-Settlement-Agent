@@ -120,12 +120,32 @@ from app.schemas.events import (
     SpokenSentence,
     TraceBeliefChange,
     TraceTerm,
+    TraceTermAlt,
     TurnTrace,
 )
 from app.store.audit import AuditLog
 from feasibility.models import (
     default_first_payment_date,
 )
+
+# COUNTER_TERMS fact id → the belief field it proposes (``policy._counter_terms_action``).
+_ALT_FIELD_BY_FACT: dict[str, str] = {
+    "alt_first_payment_date": "first_payment_date",
+    "alt_min_payment_cents": "min_payment_cents",
+    "alt_max_payments": "max_payments",
+}
+
+
+def _term_alt_of(action: Action) -> TraceTermAlt | None:
+    """The term a COUNTER_TERMS move asked for, for the trace; None for any other move."""
+    if action.intent != Intent.COUNTER_TERMS:
+        return None
+    for fid, field_name in _ALT_FIELD_BY_FACT.items():
+        fact = action.facts.get(fid)
+        if fact is not None:
+            value = fact.value.isoformat() if isinstance(fact.value, date) else fact.value
+            return TraceTermAlt.model_validate({"field": field_name, "value": value})
+    return None
 
 
 @dataclass
@@ -1282,6 +1302,7 @@ class Orchestrator:
                 if spoken_bp is not None and isinstance(spoken_bp.value, int)
                 else None
             ),
+            term_alt=_term_alt_of(action),
             nlg=NlgTrace(
                 mode=nlg.get("mode", "template"),
                 source=nlg.get("source", "default"),

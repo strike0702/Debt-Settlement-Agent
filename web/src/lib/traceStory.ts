@@ -137,14 +137,14 @@ export function turnTitle(t: TurnTraceEvent, earlier: readonly TurnTraceEvent[] 
       return "Read out the payment schedule";
     case "PROPOSE_WRAP":
       return "Sent the deal to the client";
-    // The policy never emits NO_DEAL_WRAP (every no-deal ending is a handoff); old logs read as a close.
     case "CLOSE":
-    case "NO_DEAL_WRAP":
       return "Closed the call";
     case "ESCALATE":
       return HANDOFF_TITLE;
     case "ANSWER":
       return "Answered the rep's question";
+    default:
+      return "Made a move";
   }
 }
 
@@ -387,8 +387,27 @@ export function spokenText(t: TurnTraceEvent): string {
   return t.spoken.map((s) => s.text).join(" ");
 }
 
-/** The key number of a turn for the compact list ("40%"), or null. */
+/** "Mar 31" from an ISO date (the compact list has no room for the year). */
+function monthDay(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+/**
+ * The key number of a turn for the compact list ("40%"), or null.
+ * A term proposal shows the term we asked for ("Mar 31", "$100", "5 payments"),
+ * not the rep's settlement ask, which that move does not answer.
+ */
 export function keyNumber(t: TurnTraceEvent): string | null {
+  if (t.decide.intent === "COUNTER_TERMS") {
+    const alt = t.term_alt;
+    if (!alt) return null;
+    if (alt.field === "first_payment_date") return typeof alt.value === "string" ? monthDay(alt.value) : null;
+    if (typeof alt.value !== "number") return null;
+    if (alt.field === "min_payment_cents") return moneyShort(alt.value);
+    return alt.value === 1 ? "1 payment" : `${alt.value} payments`;
+  }
   const bp = t.counter_bp ?? t.ask_bp;
   return bp != null ? pct(bp) : null;
 }

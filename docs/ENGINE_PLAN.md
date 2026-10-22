@@ -1,0 +1,371 @@
+# Engine v2 plan (Phases 55–61)
+
+## Context
+
+Retape AI wants an in-person interview after Shreyan's outreach email. The email leads on the
+feasibility engine (the take-home) and on "code decides every move, the engine computes every
+number". The engine is still the take-home code, vendored read-only, with three weaknesses
+Shreyan named himself in the take-home README and interview notes:
+
+1. **Candidate family is structured, not exhaustive.** Pinned early levels plus a Diophantine
+   scan on the last two staircase levels. It can call an offer infeasible when a legal schedule
+   exists, and then the agent walks away from a deal it could make. Part 2 rescue minima are
+   relative to the same family.
+2. **Ranking serves the firm only.** Fee timing first, then fewest payments. On easy_deal the
+   agent offers "2 payments totaling $500" though the rep allows 8 (Phase 25 open issue; memory
+   note: engine redesign deferred to now).
+3. **No explanation.** Infeasible is just `false`. The agent's term alternatives
+   (`app/agent/term_alts.py`) brute-force up to 24×100 engine runs to find which term change
+   helps, and the trace cannot say why a price does not fit.
+
+User decisions (2026-10-22): do exact search + proof, client-first ranking, why-infeasible +
+what-if; the engine becomes an **owned v2** in this repo; add **one cleanup phase** for
+leftovers; about two weeks, so the full set plus docs and evidence. No "exact max % to the
+basis point" phase (not chosen); speed is only a budget the exact search must meet.
+
+## What is unfinished today (from docs/history/PROGRESS.md)
+
+- Status table: Phases 16, 17, 18 say "not done". 16 and 17 were superseded by 24a (LLM-only
+  arm) and 21 (latency); 18 (replay CLI) never shipped. Fix the table, don't build 18.
+- Leftovers for the cleanup phase:
+  - `app/agent/reasons.py`: "two small steps" wording for `step` / `rep_held` (equal steps since
+    P50); `alt_first_payment_date` short reason says "Their start date" when it was assumed;
+    `alt_min_payment_cents` / `alt_max_payments` blame the rep when the term was assumed.
+  - NLG bank: "1 payments" ("We could set 1 payments totaling $500", late_start_date).
+  - `fixtures/scenarios/no_space/meta.json` says `expected: no_deal`, autoplay gives `escalate`.
+  - haggling_rep card text ("holds, steps up, offers once more, then accepts") does not match
+    autoplay (deal on the first step).
+  - `.env.example` lists the ignored `CLOSE_GAP_BP` and lacks the three P45 settings.
+  - Web: `mic.ts` returns to listening after a handoff (only `END` → `call_over`); dead
+    `NO_DEAL_WRAP` label in `traceStory.ts`; COUNTER_TERMS row shows the rep's ask as its key
+    number; phone card row does not scroll the selected card into view; `web/README.md`
+    screenshots predate P35/36/48 (`console-1440-operator.webp` shows "step up to 51%").
+- Not scheduled (listed only): human judge check is done (P50); native tool calling for the
+  ReAct eval arm; NLU "N% balance" asks; bare amounts after "take your time" (P54 a); hosted
+  demo redeploy (user step).
+
+## Approach
+
+### The formulation that makes exact search possible
+
+Fix the first payment date and the cadence `t_1..t_M`. Simulate the ledger once with no creditor
+payments and no fee: base balance `B0(v)`. A k-payment vector `p` with prefix sums `P_j` is
+feasible iff for every window j the base window minimum minus `P_min(j,k)` and the bank fees
+stays ≥ 0, and the last window still covers the fee `F`. That is: **prefix sums under a fixed
+cap vector**, caps computed once per (client, rules, first payment date) and independent of the
+settlement %. The fee-first objective (lexicographic Φ\*, suffix-min closed form) only gets
+better when prefix sums get pointwise smaller. So:
+
+- Feasibility and fee timing depend on the vector only through its prefix sums.
+- Balloon allowed: the floors-pinned balloon has pointwise-minimal prefix sums, so it is optimal
+  and a one-line certificate when it fails.
+- Staircase (≤ `max_segments` levels): search compositions × levels by branch and bound, prune
+  any partial vector whose prefix sum already passes its cap or whose remaining sum cannot fit
+  the floors/segments. The old generator's miss is the divisibility pin (early levels fixed at
+  their floor); the new search lifts early levels as needed.
+- Even: one vector per k, unchanged.
+- Speed: caps and the base simulation are reused across all 100 bp of an affordability scan and
+  across term what-ifs, so per-bp work is only the vector search.
+
+Proof of completeness is empirical plus a written argument: a brute-force oracle that enumerates
+every legal non-decreasing vector on small instances, run on thousands of seeded random cases,
+must agree with the engine on feasibility, Φ\*, and Part 2 minima. The independent validator
+(`app/adapter/validator.py`) checks every schedule.
+
+### Owned v2, not a rewrite of the callers
+
+`feasibility/` stays the package name (11 importers in `app/`, `sim/`, `eval/`). Phase 55
+removes the vendored/read-only status, brings it under ruff, takes settlement % as integer bp
+(no float in `Offer`), and adds a `Problem` object (precomputed base sim + caps). The old
+`evaluate_offer(client, offer, rules)` stays as a compatibility wrapper and keeps the take-home
+behaviour as objective `fee_first`. The old candidate generator is kept as
+`feasibility/legacy.py` until Phase 61 so the gap report can compare.
+
+### Objectives and fee policy (Phase 59)
+
+- `fee_first` (take-home): Φ\* lexicographic, then the old tie-breaks. Kept bit-identical except
+  where exact search finds a better Φ\*.
+- `client_first` (agent default): maximise post-fee cushion (minimum window slack), then
+  minimise the largest creditor payment, then Φ\*, then fewer payments, then the deterministic
+  tie-break. Exact key written in docs before coding; the worker may adjust the order only with
+  a measured reason recorded in PROGRESS.
+- Optional `fee_policy = "proportional"`: fee collected by `t_j` ≤ `F × P_j / S` (rounded down),
+  modelled on the FTC Telemarketing Sales Rule advance-fee provision. Still a suffix-min closed
+  form (the cap is non-decreasing). Default stays `front_loaded`. The worker checks the
+  citation before writing it in docs and says it is a model, not legal advice.
+
+### Explain and what-if (Phase 60)
+
+- `explain(problem, bp) -> Infeasibility` with a reason code (`floors`, `segments`,
+  `cash_short`, `fee_short`, `horizon`), the binding date, the shortfall in cents, and the k it
+  is closest at. All of it is PRIVATE (client finances): operator trace only, never NLG, never
+  the rep stream.
+- `what_if(problem, change) -> max_bp / feasible set` and `unlocking_changes(problem, ask_bp)`
+  for first payment date, min payment, max payments, structure, segments. `term_alts.py` keeps
+  its order and ranking rules but calls these instead of rebuilding rules and rescanning.
+
+## Phases
+
+| # | Name | Main paths | Depends on |
+|---|---|---|---|
+| 55 | Engine v2 foundation: owned package, bp input, `Problem`, golden corpus, oracle, gap report | `feasibility/`, `tests/engine/`, `scripts/engine_gap_report.py`, `pyproject.toml`, `CLAUDE.md`, `app/adapter/engine_adapter.py` (bp only) | — |
+| 56 | Cleanup leftovers | `app/agent/reasons.py`, `config/nlg_bank.json` (+ bank build), `fixtures/scenarios/{no_space,haggling_rep}`, `.env.example`, `web/src/lib/{mic,traceStory}.ts`, phone card row, `web/README.md` + shots, PROGRESS status table | — (parallel with 55, 57) |
+| 57 | Exact Part 1 search | `feasibility/search.py` (new), `engine.py`, `scoring.py`, `tests/engine/` | 55 |
+| 58 | Exact Part 2 rescue | `feasibility/rescue.py`, `tests/engine/test_rescue*.py` | 57 |
+| 59 | Objectives + fee policy | `feasibility/objectives.py` (new), `scoring.py`, adapter, `app/config.py`, validator (proportional rule), policy CONFIRM wording if counts change, eval | 58 |
+| 60 | Explain + what-if, term_alts on the engine, trace line (UI, manual review) | `feasibility/explain.py`, `feasibility/whatif.py` (new), `app/agent/term_alts.py`, `app/agent/orchestrator.py` (`_engine_context`), `app/voice/views.py`, `app/schemas/events.py`, `web/src` trace | 59, 56 merged |
+| 61 | Docs + evidence | `docs/ENGINE.md` (new), `docs/DESIGN.md` ADR 5 + new ADR, README engine section, `docs/eval/engine_v2_<date>/`, remove `feasibility/legacy.py` | 60 |
+
+### Execution strategy
+
+- **Wave 1 (parallel worktrees):** 55 ∥ 56. 55 touches only `feasibility/`, `tests/engine/`,
+  the adapter's Offer construction, `pyproject.toml` and `CLAUDE.md`; 56 touches copy, fixtures,
+  web and docs. No shared files. One rule: 56 must not edit `CLAUDE.md` or `pyproject.toml`.
+- **Wave 2:** 57 after 55 merges (56 may still be running; still disjoint).
+- **Waves 3–6 sequential:** 58 → 59 → 60 → 61. All change the engine's public API in
+  `feasibility/engine.py` and the adapter, so parallel branches would conflict. 60 needs 56
+  merged (both touch `traceStory.ts`).
+- 56 and 60 have UI changes: the user checks them in the browser before merge (screenshots in
+  `../dsa-orch-tools/p<N>-shots/`, local run command in the reply).
+- After merge of each wave: orchestrator runs `uv run pytest -q`, `uv run ruff check .`, the
+  oracle eval, and saves the log as `../dsa-orch-tools/gates-main-p<N>.log`.
+
+## Phase prompts
+
+On approval, this plan is copied to `docs/ENGINE_PLAN.md` and each prompt below is saved as
+`../dsa-orch-tools/prompt-p<N>.txt` with the standard worktree header (branch `phase-<N>`, no
+merge, DEFERRED lines, `PHASE <N> DONE <sha>` last line) and this tail:
+
+> NOTIFICATIONS: do not use Monitor or background waits that wake you for progress (per-N
+> calls, per-scenario). Run long commands in the foreground; wake only on process exit or error.
+
+Common to all engine phases: money in integer cents, settlement in integer bp, no float on any
+money path; every new module opens with a docstring per CLAUDE.md; seeded stdlib `random` for
+generated cases (no new dependency); no paid LLM calls (oracle eval only:
+`uv run python -m eval.run_eval --nlu oracle --nlg template --sim-phrasing template --scenarios 100 --seed 7`
+with `.env` moved aside and restored).
+
+---
+
+### Phase 55 — Engine v2 foundation
+
+You are implementing Phase 55 (engine v2 foundation) for Debt-Settlement-Agent. Read CLAUDE.md,
+docs/ENGINE_PLAN.md (Context, Approach), docs/history/PROGRESS.md (Environment facts, Deviations,
+`app.adapter.engine_adapter` interface), then every file in `feasibility/`,
+`app/adapter/engine_adapter.py`, `app/adapter/validator.py`, `tests/engine/`.
+
+Scope: no behaviour change. Every engine output on every input stays identical.
+
+1. **Owned package.** Remove `feasibility` from ruff `extend-exclude`; fix lint without changing
+   logic. Add module docstrings in the repo style. Update CLAUDE.md: replace "`feasibility/` is
+   read-only except for bug fixes" with "`feasibility/` is the owned engine v2: every behaviour
+   change ships with an oracle or golden test and a PROGRESS note". Update the memory-backed
+   note in PROGRESS Deviations (ruff exclude gone).
+2. **bp input.** `Offer.settlement_bp: int` replaces `settlement_pct: float`; `offer_total_cents`
+   uses `Decimal(bp) / 10000`. `program_fee_pct` becomes `program_fee_bp: int` in
+   `CreditorRules` (adapter converts `firm.program_fee_pct` once, exactly, rejecting values that
+   are not whole bp). Keep JSON loaders accepting the old float keys for the take-home fixtures.
+3. **`Problem`.** New `feasibility/problem.py`: `build_problem(client, rules, first_payment_date)
+   -> Problem` holding cadence, M, k_max, floors, the base simulation (no creditor payments, no
+   fee), base window minima and pre-window minimum. `evaluate_offer` builds one internally;
+   new `evaluate(problem, bp) -> Result` uses it. Adapter `affordability` builds the Problem
+   once per scan and calls `evaluate(problem, bp)` 100 times. Document the prefix-cap
+   identity in the docstring and **test it**: for every candidate on the golden corpus, the
+   per-candidate simulation equals base sim minus prefix payments and bank fees.
+4. **Golden corpus.** `tests/engine/golden/`: the 5 engine fixtures, the 7 scenarios × 100 bp
+   (true rules), and 600 seeded random cases (generator in `tests/engine/gen_cases.py`: varied
+   horizon 3–24 months, ledgers with committed debits, tiers, token limits, all three
+   structures, segments 1–4, mid-month and EOM start dates). Store the current `to_dict()`
+   output compactly (one JSONL, aim < 3 MB). `test_golden.py` asserts identical output.
+5. **Brute-force oracle.** `tests/engine/oracle.py`: on small instances (S ≤ ~400 cents scaled,
+   k_max ≤ 6, M ≤ 8), enumerate every vector legal under ASSIGNMENT §5 rules 1–9 (not the
+   generator's family), simulate with the suffix-min fee, and return feasibility, the
+   lexicographically best Φ\*, and Part 2 minima by binary search on L and X. Write the rules
+   from the problem statement independently of `shapes.py`; cross-check legality with
+   `app/adapter/validator.py` on every oracle schedule.
+6. **Gap report.** Copy the current generator to `feasibility/legacy.py` (frozen, used only by
+   the report and later golden comparisons). `scripts/engine_gap_report.py --cases 5000 --seed 1`
+   compares legacy vs oracle on small random cases: false-infeasible count, worse-Φ\* count,
+   rescue over-estimates, with 3 minimal examples each. Save output to
+   `docs/eval/engine_gap_<date>/summary.md`. This is evidence; do not fix anything here.
+
+Acceptance: golden test identical; prefix-cap identity test green; oracle agrees with legacy on
+every legacy-feasible case's legality; gap report written; affordability scan median on the
+demo fixture no slower than the PROGRESS figure (8.3 ms) +20%; pytest, ruff, oracle eval
+thresholds PASS with `summary.json` identical to main except latency.
+Commit: `phase 55: engine v2 foundation — owned package, bp input, Problem, golden corpus, oracle, gap report`.
+
+---
+
+### Phase 56 — Cleanup leftovers (parallel with 55/57)
+
+You are implementing Phase 56 (leftover cleanup) for Debt-Settlement-Agent. Read CLAUDE.md,
+docs/ENGINE_PLAN.md ("What is unfinished today"), PROGRESS entries for Phases 45, 48, 50, 50b,
+54. Do not touch `feasibility/`, `tests/engine/`, `pyproject.toml`, `CLAUDE.md`, the adapter, or
+policy decisions. Copy rules: sentence case, plain words for people outside debt settlement.
+
+1. `reasons.py`: `step` / `rep_held` describe equal steps (one step halfway, then the limit);
+   `alt_first_payment_date` / `alt_min_payment_cents` / `alt_max_payments` full and short
+   sentences do not blame the rep when the term was assumed (use the existing assumed
+   detection; keep keys and placeholders, the pinned test must pass).
+2. NLG bank: singular count ("1 payment of $500" / "a single payment of $500"); fix through the
+   bank build script, not by hand-editing generated output; test that no rendered bank line
+   says "1 payments".
+3. Fixtures: `no_space/meta.json` expected matches autoplay (`escalate`) with a one-line reason
+   in PROGRESS; haggling_rep card text matches what autoplay does.
+4. `.env.example`: drop `CLOSE_GAP_BP`, add the P45 settings with one-line comments.
+5. Web: mic goes to `call_over` on any handoff ending too; remove the dead `NO_DEAL_WRAP` label;
+   COUNTER_TERMS row key number shows the term we asked for, not the rep's ask; selected phone
+   card scrolls into view. Tests for each.
+6. Docs: PROGRESS status rows 16/17 → "superseded by 24a / 21", 18 → "dropped"; retake
+   `web/README.md` screenshots and alt text.
+
+UI review: save screenshots to `../dsa-orch-tools/p56-shots/`, give the local run command, and
+do not consider the phase mergeable until the user approves in the browser. Design refs:
+`../dsa-orch-tools/design-refs/`.
+Acceptance: pytest, ruff, web CI chain (`npm ci && npm run gen:types && git diff --exit-code
+src/types/events.ts && npm run typecheck && npm run lint && npm test && npm run build`), oracle
+eval PASS. Commit: `phase 56: leftover cleanup — reason copy, singular counts, fixtures, env example, mic, trace labels, screenshots`.
+
+---
+
+### Phase 57 — Exact Part 1 search
+
+You are implementing Phase 57 (exact payment search) for Debt-Settlement-Agent. Read CLAUDE.md,
+docs/ENGINE_PLAN.md (Approach), PROGRESS Phase 55 handoff, `feasibility/` (problem.py, shapes.py,
+scoring.py, engine.py, legacy.py), `tests/engine/oracle.py`, the Phase 55 gap report.
+
+1. Write the dominance argument first, in `docs/ENGINE.md` § "Exact search" (draft): feasibility
+   and Φ\* depend only on prefix sums; balloon-allowed optimum is the floors-pinned balloon;
+   for staircases, which levels can be pinned and which must be searched (the divisibility
+   case the legacy generator misses, with a gap-report example).
+2. `feasibility/search.py`: for each k, even (closed form), balloon (pinned + certificate),
+   staircase branch and bound over compositions and levels with prefix-cap and remaining-sum
+   pruning; returns the fee-first best vector per k. `engine.evaluate` uses it; candidate
+   ranking across k keeps the fee-first key from scoring.py; cliff flattening stays a post-pass.
+3. Tests: oracle agreement on ≥ 20 000 seeded small cases (feasibility and Φ\* exactly; mark a
+   slow subset with the existing `slow` marker, keep ≥ 2 000 in the fast suite); every
+   feasible schedule passes the validator; golden corpus: no case goes feasible → infeasible,
+   Φ\* never worse; every changed golden case listed in a report file and the golden file
+   regenerated with a `--update` flag (commit the diff summary).
+4. Performance: affordability scan on the 7 scenarios and the demo fixture, p50 and max over
+   20 runs, before vs after, in `docs/eval/engine_v2_<date>/bench.md`. Budget: p50 ≤ 2× the
+   Phase 55 figure and max ≤ 150 ms per scan; if over, reuse caps across bp / memoise per
+   (k, composition) before loosening anything.
+5. Effect on the agent: re-run the scenarios' affordability curves; record which bp flipped and
+   whether the "non-monotonic" curve in DESIGN ADR 5 was partly a generator artifact. Oracle
+   eval thresholds PASS; list every metric that moved and why.
+
+Commit: `phase 57: exact payment search — branch and bound on prefix caps, oracle-verified`.
+
+---
+
+### Phase 58 — Exact Part 2 rescue
+
+You are implementing Phase 58 (exact rescue minima) for Debt-Settlement-Agent. Read CLAUDE.md,
+docs/ENGINE_PLAN.md, PROGRESS Phase 57 handoff, `feasibility/rescue.py`, `search.py`,
+`tests/engine/test_rescue.py`, `oracle.py`.
+
+1. Minimum lump L\* (and its latest date) and minimum uniform increment X\* over **all** legal
+   vectors, not the legacy family: in the prefix-cap form, a lump on date d raises every cap
+   from d on; search the vector minimising the required L (and X) with the same branch and
+   bound, using the current closed forms as the per-vector inner step.
+2. Keep guardrail rules and reason texts; `within_guardrail` semantics unchanged.
+3. Tests: oracle (binary search on L and X) agrees on ≥ 5 000 seeded infeasible small cases;
+   existing rescue tests pass or are updated with a one-line reason each (the old expected
+   amounts were family-relative); strict minimality (L\*−1, X\*−1 infeasible) on the fixtures.
+4. Agent effect: `rescue_escalate` and `no_space` scenarios, and every eval call that hit
+   `rescue_check`; list any changed escalate decision. Oracle eval PASS.
+
+Commit: `phase 58: exact rescue minima over all legal schedules, oracle-verified`.
+
+---
+
+### Phase 59 — Objectives and fee policy
+
+You are implementing Phase 59 (schedule objectives) for Debt-Settlement-Agent. Read CLAUDE.md,
+docs/ENGINE_PLAN.md (Objectives and fee policy), PROGRESS 57/58 handoffs, `feasibility/scoring.py`,
+`search.py`, `app/adapter/engine_adapter.py`, `app/adapter/validator.py`, `app/config.py`,
+`app/agent/policy/moves.py` (CONFIRM wording), `docs/DESIGN.md` ADR 7.
+
+1. `feasibility/objectives.py`: `Objective = fee_first | client_first` as explicit sort keys,
+   written in docs/ENGINE.md before code. The search returns enough per-k candidates (or
+   Pareto set on prefix sums) that `client_first` is exact, not "best of the fee-first
+   winners"; extend the oracle to rank by each objective and require agreement.
+2. `fee_policy = front_loaded | proportional` on `Problem`; proportional caps Φ\_j at
+   ⌊F·P_j/S⌋ inside the suffix-min. Validator gains a `fee_proportional` rule checked only when
+   the policy is on. Oracle covers both policies.
+3. Settings: `ENGINE_OBJECTIVE` (default `client_first`) and `ENGINE_FEE_POLICY` (default
+   `front_loaded`) in `app/config.py` and `.env.example`; affordability cache key includes both.
+   `evaluate_offer` (take-home wrapper) stays `fee_first` + `front_loaded`; golden corpus under
+   that mode unchanged.
+4. Agent effect: easy_deal now offers a plan that uses the allowed payment count when that
+   leaves more cushion; check CONFIRM read-back for every shape and count (no "1 payments",
+   staircase "starting at … rising to …"). Oracle eval PASS; add an eval metric
+   `min_cushion_cents` (PRIVATE, report only) comparing objectives on the 100 calls.
+
+Commit: `phase 59: fee-first and client-first objectives, proportional fee option`.
+
+---
+
+### Phase 60 — Explain and what-if (UI phase, manual review)
+
+You are implementing Phase 60 (why-infeasible and what-if) for Debt-Settlement-Agent. Read
+CLAUDE.md, docs/ENGINE_PLAN.md (Explain and what-if), PROGRESS 59 handoff and Phases 35/36/48
+(trace design), `app/agent/term_alts.py`, `orchestrator._engine_context`, `app/voice/views.py`,
+`app/schemas/events.py`, `web/src/components/DecisionTrace.tsx`, `web/src/lib/traceStory.ts`.
+
+1. `feasibility/explain.py`: `explain(problem, bp, objective) -> Infeasibility | None` (reason
+   code, binding date, shortfall cents, closest k). Tests: one per reason code; oracle check
+   that the shortfall is exact (adding it as a lump on that date makes the oracle feasible
+   for that k).
+2. `feasibility/whatif.py`: `what_if(problem, change)` and `unlocking_changes(problem, ask_bp)`
+   reusing the base simulation where the change allows (min payment, max payments, structure,
+   segments); first-payment-date changes rebuild the Problem.
+3. `term_alts.py` calls the engine API; same order (date → min payment → max payments), same
+   ranking, same `terms_countered` skip. Test: on all 7 scenarios and the 100 eval calls the
+   chosen alternative equals the Phase 59 result, or each difference is listed and justified;
+   record engine_ms before/after on the term-alt turns.
+4. Trace: `TurnTrace.infeasible_reason` (optional; schema + `events.ts` regenerated), filled
+   on the operator stream only; `views.py` strips it from the rep stream (test like the
+   existing private-field test); the leak scan blocklist adds the shortfall. Operator trace
+   line, plain words: e.g. "At 52% the client's savings run short by $140 on March 31."
+   Never in NLG input (test).
+
+UI review: screenshots in `../dsa-orch-tools/p60-shots/`, local run command, user approves
+before merge; design refs in `../dsa-orch-tools/design-refs/`.
+Acceptance: pytest, ruff, web CI chain, oracle eval PASS. Commit:
+`phase 60: why-infeasible and what-if in the engine; term alternatives and trace use them`.
+
+---
+
+### Phase 61 — Docs and evidence
+
+You are implementing Phase 61 (engine v2 docs) for Debt-Settlement-Agent. Read CLAUDE.md,
+docs/ENGINE_PLAN.md, PROGRESS 55–60 handoffs, docs/ENGINE.md draft, README, docs/DESIGN.md,
+docs/eval/README.md.
+
+1. `docs/ENGINE.md` for an outside reader: problem, prefix-cap formulation, exact search and
+   dominance argument, objectives and fee policy, explain/what-if, verification (oracle counts,
+   validator, golden), the gap report numbers (what the take-home missed), benchmarks.
+2. DESIGN ADR 5 updated with the curve finding from 57; new ADR "Engine v2: exact search,
+   objectives, explanations". README engine paragraph + links. docs/eval index rows.
+3. Remove `feasibility/legacy.py` and anything that only served the gap report (keep the
+   frozen report). Golden test keeps working without it.
+4. Re-run the oracle eval and the engine benchmark on main; freeze them under
+   `docs/eval/engine_v2_<date>/`.
+
+Acceptance: `tests/unit/test_docs.py` link check, pytest, ruff, oracle eval PASS. Commit:
+`phase 61: engine v2 docs and frozen evidence`.
+
+## Verification (whole plan)
+
+- Every phase: `uv run pytest -q`, `uv run ruff check .`, oracle eval thresholds PASS, and the
+  phase's own acceptance list; UI phases also the web CI chain and the user's browser check.
+- Engine correctness: oracle agreement counts (Part 1 ≥ 20 000 cases, Part 2 ≥ 5 000, both
+  objectives and both fee policies), validator on every produced schedule, golden corpus
+  regression rules (never feasible → infeasible, Φ\* never worse under `fee_first`).
+- End to end: run the app locally, autoplay easy_deal (plan uses the allowed count),
+  late_start_date and rescue_escalate (trace shows the shortfall line on the operator view,
+  absent on the rep view), and one typed call where the rep's ask is unreachable (term
+  alternative still offered in the same order).

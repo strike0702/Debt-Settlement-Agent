@@ -9,6 +9,10 @@ rebuilt into engine objects with ``case_to_objects``. Two sizes:
   first payment dates. Used by the golden corpus.
 - ``random_case(rng, small=True)``: the same knobs scaled down (S ≤ ~400 cents,
   k_max ≤ 6, M ≤ 8) so ``tests/engine/oracle.py`` can enumerate every legal vector.
+- ``adversarial_case(rng)`` (Phase 57): full-size staircase-heavy cases with a planted
+  vector, shared-factor run lengths, tiers/tokens inside runs and tight window cash,
+  built by ``planted_case`` (also used for structural witnesses in ``hunt.py``).
+  Appended after ``random_case`` so the golden corpus stream is unchanged.
 
 Only stdlib ``random`` (seeded by the caller). Not imported by ``app/``.
 """
@@ -184,3 +188,221 @@ def random_cases(seed: int, n: int, *, small: bool = False, prefix: str = "r") -
     """``n`` cases from one ``Random(seed)`` stream (ids ``<prefix><seed>_<i>``)."""
     rng = Random(seed)
     return [random_case(rng, f"{prefix}{seed}_{i:04d}", small=small) for i in range(n)]
+
+
+# --- adversarial full-size cases (Phase 57 hunt) ------------------------------
+
+_SHARED_RUNS = ((2, 4), (4, 2), (3, 6), (6, 3), (2, 6), (6, 2), (4, 6), (6, 4), (2, 2), (3, 3),
+                (4, 4), (3, 9), (4, 8))
+
+
+def adv_floors(min_pay: int, tokens: int, tiers: list[list[int]], k: int) -> list[int]:
+    """1-indexed floors (base minimum, tiers, +1 cent after the token limit)."""
+    out = [0] * (k + 1)
+    for i in range(1, k + 1):
+        f = min_pay
+        for frm, m in tiers:
+            if i >= frm:
+                f = max(f, m)
+        if i > tokens:
+            f = max(f, min_pay + 1)
+        out[i] = f
+    return out
+
+
+def planted_case(
+    case_id: str,
+    planted: list[int],
+    rules: dict[str, Any],
+    *,
+    t1: date,
+    F: int,
+    window_slack: list[int],
+    tail_extra: list[int],
+    as_of_days: int = 10,
+    balance: int = 0,
+    dip: dict[int, int] | None = None,
+    lead_days: list[int] | None = None,
+) -> Case:
+    """A case whose window cash is ``planted``'s prefix sums plus bank fees plus slack.
+
+    ``window_slack[j-1]`` is the slack of window j < k (cap minus the planted prefix);
+    ``tail_extra`` (one per window k..M) is the cash left above S plus k bank fees, its
+    last entry is the room for the fee F. Net cash for window j lands as one credit up
+    to ``lead_days[j-1]`` days before ``t_j`` (or one debit on ``t_j`` when the net is
+    negative), so each window's minimum is exactly its target; ``dip`` adds a
+    debit/credit pair inside window j that lowers its minimum by the given amount.
+    S = sum(planted); the offer is 50 % of 2S, the fee 20 % of 5F (both exact).
+    """
+    k = len(planted)
+    bf = int(rules["bank_fee_cents"])
+    M = k + len(tail_extra) - 1
+    cad = monthly_payment_dates(t1, M)
+    S = sum(planted)
+    target: list[int] = []
+    run = 0
+    for j in range(1, k):
+        run += planted[j - 1]
+        target.append(run + bf * j + window_slack[j - 1])
+    target += [S + bf * k + e for e in tail_extra]
+    as_of = t1 - timedelta(days=as_of_days)
+    ledger: list[list[Any]] = []
+    prev_cash = balance
+    for j, d in enumerate(cad):
+        net = target[j] - prev_cash
+        prev_cash = target[j]
+        if net > 0 or j == M - 1:
+            lead = lead_days[j] if lead_days and j < M - 1 else 0
+            when = max(d - timedelta(days=lead), as_of + timedelta(days=1))
+            ledger.append([when.isoformat(), net, "credit"])
+            if net <= 0:  # the horizon needs a draft on t_M
+                ledger[-1][1] = 1
+                ledger.append([d.isoformat(), 1 - net, "debit"])
+        elif net < 0:
+            ledger.append([d.isoformat(), -net, "debit"])
+        if dip and dip.get(j + 1) and j < M - 1:
+            ledger.append([(d + timedelta(days=5)).isoformat(), dip[j + 1], "debit"])
+            ledger.append([(d + timedelta(days=6)).isoformat(), dip[j + 1], "credit"])
+    ledger.sort(key=lambda e: (e[0], e[2] != "credit"))
+    credits = [e for e in ledger if e[2] == "credit"]
+    first_draft = date.fromisoformat(credits[0][0])
+    draft = max(1, sorted(e[1] for e in credits)[len(credits) // 2])
+    return {
+        "id": case_id,
+        "client": {
+            "draft_amount_cents": draft,
+            "draft_day": first_draft.day,
+            "first_draft_date": first_draft.isoformat(),
+            "last_draft_date": cad[-1].isoformat(),
+            "as_of_date": as_of.isoformat(),
+            "current_balance_cents": balance,
+            "ledger": ledger,
+        },
+        "creditor_balance_cents": 2 * S,
+        "original_balance_cents": 5 * F if F else 2 * S,
+        "settlement_bp": 5000,
+        "first_payment_date": t1.isoformat(),
+        "rules": {**rules, "program_fee_bp": 2000 if F else 0},
+        "planted": list(planted),
+    }
+
+
+def adversarial_case(rng: Random, case_id: str) -> Case:
+    """A full-size case aimed at the legacy generator's pinned early staircase levels.
+
+    Staircase-heavy (80 %, ``max_segments`` 3–4), run lengths whose last two runs often
+    share a factor (2 and 4, 3 and 6, ...), tiers and token limits placed inside runs, and
+    a *planted* vector whose early levels sit a little above their lower bounds, so S is
+    often not reachable with those levels pinned. Window cash is the planted prefix sum
+    (or, in "cheap" mode, the floors-only prefix sum) plus a slack that is exactly 0–3
+    cents in "tight" mode; some slacks are negative (infeasible cases, for the rescue
+    comparison). First payment dates are mid-month or end of month.
+    """
+    roll = rng.random()
+    even, balloon = (True, False) if roll < 0.1 else ((False, True) if roll < 0.2 else
+                                                       (False, False))
+    segs = rng.choice([3, 4]) if not (even or balloon) else rng.randint(1, 4)
+    m = min(rng.choice([2, 3, 3, 4, 4]) if segs >= 3 else rng.randint(1, segs), segs)
+    if m >= 2 and rng.random() < 0.7:
+        counts = [rng.choice([1, 1, 2, 3, rng.randint(1, 6)]) for _ in range(m - 2)]
+        counts += list(rng.choice(_SHARED_RUNS))
+    else:
+        counts = [rng.randint(1, 6) for _ in range(m)]
+    while sum(counts) > 24:
+        i = max(range(m), key=lambda j: counts[j])
+        counts[i] -= 1
+    k = sum(counts)
+    ends = [sum(counts[: i + 1]) for i in range(m)]
+
+    min_pay = rng.randint(10, 150) * 100 + rng.choice([0, 0, rng.randint(1, 99)])
+    tokens = rng.choice([k, rng.randint(0, k), rng.choice(ends) - rng.randint(0, 1)])
+    tokens = max(0, min(tokens, k))
+    tiers: list[list[int]] = []
+    for _ in range(rng.choice([0, 1, 1, 2])):
+        frm = rng.randint(2, max(2, k))
+        tiers.append([frm, min_pay + rng.choice([1, rng.randint(1, 99), rng.randint(1, 50) * 100])])
+    tiers.sort()
+    f = adv_floors(min_pay, tokens, tiers, k)
+
+    levels: list[int] = []
+    prev = 0
+    for i in range(m):
+        lo = max(f[ends[i]], prev + 1) if i else f[ends[i]]
+        if i < m - 2:
+            lift = rng.choice([1, 1, 2, 3, rng.randint(1, 9), rng.randint(1, 5000)])
+        else:
+            lift = rng.choice([0, 1, rng.randint(0, 99), rng.randint(0, 20000)])
+        levels.append(lo + lift)
+        prev = levels[-1]
+    planted: list[int] = []
+    for c, v in zip(counts, levels):
+        planted.extend([v] * c)
+    if even:
+        q, r = divmod(sum(planted), k)
+        planted = [q] * (k - r) + [q + 1] * r
+
+    bank_fee = rng.choice([0, rng.randint(1, 15) * 100, rng.randint(1, 1500)])
+    F = rng.choice([0, rng.randint(1, 400) * 100, rng.randint(1, 60000)])
+    M = k + rng.choice([0, 0, 1, 2, 3])
+    scale = max(1, F, min_pay // 4)
+    tight = rng.random() < 0.35
+
+    def slack() -> int:
+        if tight:
+            return rng.randint(0, 3)
+        return rng.choice([0, rng.randint(0, 50), rng.randint(0, scale), rng.randint(0, 2 * scale)])
+
+    window_slack = []
+    run_p = run_f = 0
+    cheap = rng.random() < 0.3
+    for j in range(1, k):
+        run_p += planted[j - 1]
+        run_f += f[j]
+        # Cheap mode: caps just above the floors-only prefix (often below the planted one).
+        window_slack.append((run_f - run_p if cheap else 0) + slack())
+    if rng.random() < 0.25 and k > 1:
+        window_slack[rng.randint(0, k - 2)] -= rng.randint(1, max(1, scale // 2))
+    tail_extra = sorted(slack() for _ in range(M - k + 1))
+    tail_extra[-1] = max(tail_extra[-1], F + rng.choice([0, 0, rng.randint(0, 100)]))
+    if rng.random() < 0.15:
+        tail_extra[-1] -= rng.randint(1, max(1, scale // 4))
+
+    year = 2026 + rng.randint(0, 1)
+    month = rng.randint(1, 12)
+    if rng.random() < 0.4:
+        t1 = end_of_month(date(year, month, 1))
+    else:
+        day = rng.choice([1, 5, 10, 15, 20, 28, 29, 30])
+        t1 = date(year, month, min(day, end_of_month(date(year, month, 1)).day))
+    max_payments = rng.choice([k, k, min(24, M)])
+    rules = {
+        "max_terms": max_payments,
+        "max_payments": max_payments,
+        "min_payment_cents": min_pay,
+        "max_token_pays": tokens,
+        "min_payment_tiers": tiers,
+        "even_pays": even,
+        "is_ballooning_allowed": balloon,
+        "max_segments": segs,
+        "bank_fee_cents": bank_fee,
+    }
+    dip = {j: rng.randint(1, scale) for j in range(1, M) if rng.random() < 0.1}
+    return planted_case(
+        case_id,
+        planted,
+        rules,
+        t1=t1,
+        F=F,
+        window_slack=window_slack,
+        tail_extra=tail_extra,
+        as_of_days=rng.randint(4, 40),
+        balance=rng.choice([0, 0, rng.randint(0, min_pay)]),
+        dip=dip,
+        lead_days=[rng.choice([0, 0, 1, 2, 3]) for _ in range(M)],
+    )
+
+
+def adversarial_cases(seed: int, n: int, *, prefix: str = "a") -> list[Case]:
+    """``n`` adversarial cases from one ``Random(seed)`` stream."""
+    rng = Random(seed)
+    return [adversarial_case(rng, f"{prefix}{seed}_{i:05d}") for i in range(n)]

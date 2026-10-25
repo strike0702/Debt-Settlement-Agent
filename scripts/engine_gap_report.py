@@ -14,7 +14,15 @@ through ``legacy.legacy_evaluate`` and ``tests/engine/oracle.solve`` and counts:
 Writes ``summary.md`` (and ``summary.json``) with 3 minimal examples per gap. Evidence
 only: nothing in the engine is changed by this script.
 
+``--mode full`` (Phase 57) compares legacy with the exact full-size reference
+(``tests/engine/reference.py``, per-case logic in ``tests/engine/hunt.py``): the
+reference is first checked against the oracle on small seeded sets, then legacy is
+compared on the golden inputs, seeded full-size random cases, adversarial cases and a
+cap-free structural dominance sweep; misses are shrunk and the smallest reported in
+``docs/eval/engine_gap_<date>_full/``.
+
     uv run python scripts/engine_gap_report.py --cases 5000 --seed 1
+    uv run python scripts/engine_gap_report.py --mode full --seed 57
 """
 
 from __future__ import annotations
@@ -40,7 +48,7 @@ from feasibility.legacy import legacy_candidates, legacy_evaluate  # noqa: E402
 from feasibility.models import CreditorRules  # noqa: E402
 from feasibility.problem import Problem, build_problem  # noqa: E402
 from feasibility.shapes import compute_floors  # noqa: E402
-from tests.engine import gen_cases, oracle  # noqa: E402
+from tests.engine import gen_cases, hunt, oracle, reference  # noqa: E402
 
 UNFIXABLE_PREFIX = "no additional funding"
 
@@ -371,6 +379,361 @@ def render(
     return "\n".join(out) + "\n"
 
 
+# --- full mode (Phase 57): legacy vs the exact reference at full size ---------------
+
+FULL_TITLES = {
+    "false_infeasible": "False infeasible (legacy walks away from a legal deal)",
+    "worse_phi": "Worse Φ* (legacy collects the fee later than possible)",
+    "rescue_over_lump": "Rescue over-estimate: lump sum",
+    "rescue_over_increment": "Rescue over-estimate: monthly increment",
+}
+
+
+def _refcheck_one(case: dict[str, Any]) -> tuple[bool, bool]:
+    """(reference agrees with the oracle, oracle feasible) on one small case."""
+    client, offer, rules = gen_cases.case_to_objects(case)
+    problem = build_problem(
+        client, rules, offer.first_payment_date,
+        creditor_balance_cents=offer.creditor_balance_cents,
+        original_balance_cents=offer.original_balance_cents,
+    )
+    S = problem.offer_total(offer.settlement_bp)
+    F = problem.program_fee_cents
+    r = reference.solve(problem, S)
+    o = oracle.solve(client, rules, problem.first_payment_date, S, F)
+    got = (r.feasible, r.phi, r.lump_cents, r.increment_cents)
+    return got == (o.feasible, o.phi, o.lump_cents, o.increment_cents), o.feasible
+
+
+def golden_cases() -> list[dict[str, Any]]:
+    """Every golden input: 5 fixtures, 7 scenarios x 100 bp, 600 random (embedded inputs)."""
+    from tests.engine.golden.build_golden import GOLDEN, expand
+
+    out: list[dict[str, Any]] = []
+    for line in GOLDEN.read_text().splitlines():
+        rec = json.loads(line)
+        for c in expand(rec):
+            out.append({**c, "id": f"{c['id']}@{c['settlement_bp']}"} if "bps" in rec else c)
+    return out
+
+
+def structural_draw(rng: Random, i: int, small: bool) -> tuple[dict[str, Any], int, int]:
+    """Random staircase rules and S close to the floors' sum (where pins bite)."""
+    k = rng.randint(3, 10 if small else 24)
+    segs = rng.choice([3, 4])
+    if small:
+        base = rng.randint(1, 30)
+    else:
+        base = rng.randint(10, 150) * 100 + rng.choice([0, rng.randint(1, 99)])
+    tiers = sorted(
+        [rng.randint(2, k), base + rng.choice([rng.randint(1, max(2, base)),
+                                               rng.randint(1, 99)])]
+        for _ in range(rng.choice([0, 1, 1, 2]))
+    )
+    rules = {
+        "max_terms": k, "max_payments": k, "min_payment_cents": base,
+        "max_token_pays": rng.randint(0, k), "min_payment_tiers": tiers,
+        "even_pays": False, "is_ballooning_allowed": False, "max_segments": segs,
+        "bank_fee_cents": 0 if small else rng.choice([0, rng.randint(1, 1500)]),
+    }
+    f = gen_cases.adv_floors(base, rules["max_token_pays"], tiers, k)
+    floor_sum = sum(f[1:])
+    spread = 300 if small else 300_000
+    S = floor_sum + rng.choice(
+        [rng.randint(0, k * k), rng.randint(0, 20 * k), rng.randint(0, max(1, spread - floor_sum))]
+    )
+    return rules, k, S
+
+
+def _structural_one(args: tuple[int, int, bool, bool]) -> dict[str, Any]:
+    seed, i, small, flat = args
+    rng = Random(seed * 1_000_003 + i)
+    rules_d, k, S = structural_draw(rng, i, small)
+    if flat:  # same draw with the tiers removed (floors: base, +1 after the token limit)
+        rules_d = {**rules_d, "min_payment_tiers": []}
+    rules = CreditorRules(**{**rules_d, "program_fee_bp": 0})
+    n_fam, misses = hunt.structural_misses(rules, S, k)
+    out: dict[str, Any] = {"family": n_fam, "misses": len(misses), "rules": rules_d, "S": S,
+                           "k": k, "small": small, "flat": flat,
+                           "tiers": bool(rules_d["min_payment_tiers"])}
+    if misses:
+        vec = min(misses, key=lambda v: (sum(v), v))
+        t1 = date(2027, rng.randint(1, 12), rng.choice([1, 15, 28]))
+        F = 0 if small else rng.choice([0, rng.randint(1, 20000)])
+        case = hunt.structural_witness_case(f"s{seed}_{i:05d}", rules_d, vec, t1=t1, F=F)
+        rec = hunt.compare_case(case)
+        out.update(vec=list(vec), case=case, rec=rec,
+                   verified="false_infeasible" in rec["kinds"] and not rec["bugs"])
+    return out
+
+
+def _compare_safe(case: dict[str, Any]) -> dict[str, Any]:
+    t = time.perf_counter()
+    rec = hunt.compare_case(case)
+    rec["secs"] = time.perf_counter() - t
+    rec["case"] = case
+    return rec
+
+
+def _prune_check_one(case: dict[str, Any]) -> bool:
+    a = hunt.compare_case(case)
+    b = hunt.compare_case(case, prune=False)
+    keys = ("ref_feasible", "ref_phi", "ref_lump", "ref_increment")
+    return all(a.get(x) == b.get(x) for x in keys)
+
+
+def _fmt_full(rec: dict[str, Any]) -> str:
+    c = rec["case"]
+    ru = c["rules"]
+    debits = [(d, a) for d, a, t in c["client"]["ledger"] if t == "debit"]
+    credits = [(d, a) for d, a, t in c["client"]["ledger"] if t == "credit"]
+    lines = [
+        f"- `{rec['id']}`: S={rec['S']}, F={rec['F']}, k_max={rec['k_max']}, M={rec['M']}, "
+        f"{rec['structure']}, min={ru['min_payment_cents']}, tokens={ru['max_token_pays']}, "
+        f"tiers={ru['min_payment_tiers']}, segments={ru['max_segments']}, "
+        f"bank_fee={ru['bank_fee_cents']}, first payment {c['first_payment_date'] or 'default'}",
+        f"  - client: balance {c['client']['current_balance_cents']}, as of "
+        f"{c['client']['as_of_date']}, credits {credits}, debits {debits}",
+    ]
+    if rec["legacy_feasible"]:
+        lines.append(f"  - legacy: {rec['legacy_vec']}, Φ={rec['legacy_phi']}")
+    else:
+        lines.append(f"  - legacy: infeasible, lump={rec.get('legacy_lump')}, "
+                     f"increment={rec.get('legacy_increment')}")
+    if rec["ref_feasible"]:
+        lines.append(f"  - reference: {rec['ref_vec']}, Φ*={rec['ref_phi']} "
+                     f"(runs {rec.get('runs')}, lifted levels {rec.get('lifted')})")
+    else:
+        lines.append(
+            f"  - reference: infeasible, lump={rec['ref_lump']} via {rec['ref_lump_vec']}, "
+            f"increment={rec['ref_increment']} via {rec['ref_increment_vec']} "
+            f"(runs {rec.get('runs')}, lifted levels {rec.get('lifted')})"
+        )
+    return "\n".join(lines)
+
+
+def run_full(args: argparse.Namespace) -> int:
+    """Golden + random + adversarial + structural sweep; writes summary.md/json."""
+    from multiprocessing import Pool
+
+    out_dir = args.out or ROOT / "docs" / "eval" / f"engine_gap_{date.today():%Y%m%d}_full"
+    t_all = time.perf_counter()
+    timing: dict[str, float] = {}
+    summary: dict[str, Any] = {"args": {k: (str(v) if isinstance(v, Path) else v)
+                                        for k, v in vars(args).items()}}
+    with Pool(args.workers) as pool:
+        # 1. Reference vs oracle on small cases.
+        t = time.perf_counter()
+        refcheck = []
+        for spec in args.ref_check.split(","):
+            seed, n = (int(x) for x in spec.split(":"))
+            res = pool.map(_refcheck_one, gen_cases.random_cases(seed, n, small=True, prefix="g"),
+                           chunksize=64)
+            refcheck.append({"seed": seed, "cases": n, "disagree": sum(not a for a, _ in res),
+                             "feasible": sum(b for _, b in res)})
+        timing["reference_vs_oracle"] = time.perf_counter() - t
+        summary["reference_vs_oracle"] = refcheck
+
+        # 2. The three full-size case sets.
+        sets = {
+            "golden": golden_cases(),
+            "random": gen_cases.random_cases(args.seed, args.random, prefix="f"),
+            "adversarial": gen_cases.adversarial_cases(args.seed, args.adversarial),
+        }
+        recs: dict[str, list[dict[str, Any]]] = {}
+        for name, cases in sets.items():
+            t = time.perf_counter()
+            recs[name] = pool.map(_compare_safe, cases, chunksize=16)
+            timing[name] = time.perf_counter() - t
+
+        # 3. Pruning self-check (whole family scored) on a prefix of each set.
+        t = time.perf_counter()
+        pc_cases = [c for cs in sets.values() for c in cs[: args.prune_check]]
+        pc = pool.map(_prune_check_one, pc_cases, chunksize=8)
+        timing["prune_check"] = time.perf_counter() - t
+        summary["prune_check"] = {"cases": len(pc), "disagree": sum(not x for x in pc)}
+
+        # 4. Structural (cap-free) dominance sweep.
+        t = time.perf_counter()
+        jobs = [(args.seed, i, True, False) for i in range(args.structural_small)]
+        jobs += [(args.seed, i + 10**6, False, False) for i in range(args.structural)]
+        jobs += [(args.seed, i, True, True) for i in range(args.structural_small)]
+        jobs += [(args.seed, i + 10**6, False, True) for i in range(args.structural)]
+        struct = pool.map(_structural_one, jobs, chunksize=8)
+        timing["structural"] = time.perf_counter() - t
+
+    # 5. Shrink the smallest misses per kind.
+    t = time.perf_counter()
+    misses: dict[str, list[dict[str, Any]]] = {k: [] for k in hunt.KINDS}
+    for name, rs in recs.items():
+        for r in rs:
+            for kind in r["kinds"]:
+                misses[kind].append({**r, "set": name})
+    for s in struct:
+        if s.get("verified") and not s["flat"]:
+            misses["false_infeasible"].append({**s["rec"], "case": s["case"], "set": "structural"})
+    shrunk: dict[str, list[dict[str, Any]]] = {}
+    for kind, rs in misses.items():
+        pool_rs = sorted(rs, key=hunt.size_key)[: args.shrink]
+        out = []
+        for r in pool_rs:
+            case, rec = hunt.shrink(r["case"], kind, budget=args.shrink_budget)
+            out.append({**rec, "case": case, "set": r["set"], "from": r["id"]})
+        uniq: dict[tuple, dict[str, Any]] = {}
+        for r in sorted(out, key=hunt.size_key):
+            uniq.setdefault(hunt.size_key(r) + (str(r.get("ref_vec")),), r)
+        shrunk[kind] = list(uniq.values())[:3]
+    timing["shrink"] = time.perf_counter() - t
+    timing["total"] = time.perf_counter() - t_all
+
+    # Counts.
+    table: dict[str, dict[str, Any]] = {}
+    for name, rs in recs.items():
+        row: dict[str, Any] = {
+            "cases": len(rs),
+            "ref_feasible": sum(r["ref_feasible"] for r in rs),
+            "legacy_feasible": sum(r["legacy_feasible"] for r in rs),
+            "both_infeasible": sum(not r["ref_feasible"] and not r["legacy_feasible"] for r in rs),
+            "max_secs": max(r["secs"] for r in rs),
+            "p50_secs": sorted(r["secs"] for r in rs)[len(rs) // 2],
+        }
+        for kind in hunt.KINDS:
+            row[kind] = sum(kind in r["kinds"] for r in rs)
+        row["bugs"] = sum(bool(r["bugs"]) for r in rs)
+        table[name] = row
+    by_struct: dict[str, int] = {}
+    by_runs: dict[str, int] = {}
+    mech: dict[str, int] = {}
+    for kind, rs in misses.items():
+        for r in rs:
+            key = f"{kind} | {r['set']} | {r['structure']} s={r['segments']}"
+            by_struct[key] = by_struct.get(key, 0) + 1
+            rk = f"{kind} | runs {r.get('runs')}"
+            by_runs[rk] = by_runs.get(rk, 0) + 1
+            mk = (f"{kind} | lifted {'yes' if r.get('lifted') else 'no'} | legacy family "
+                  f"{'empty' if r.get('legacy_empty') else 'not empty'}")
+            mech[mk] = mech.get(mk, 0) + 1
+    groups = {
+        "small": [s for s in struct if s["small"] and not s["flat"]],
+        "full": [s for s in struct if not s["small"] and not s["flat"]],
+        "small, tiers removed": [s for s in struct if s["small"] and s["flat"]],
+        "full, tiers removed": [s for s in struct if not s["small"] and s["flat"]],
+        "all draws without tiers": [s for s in struct if not s["tiers"]],
+        "all draws with tiers": [s for s in struct if s["tiers"]],
+    }
+
+    def sstat(ss: list[dict[str, Any]]) -> dict[str, int]:
+        return {
+            "draws": len(ss),
+            "family_vectors": sum(s["family"] for s in ss),
+            "draws_with_miss": sum(s["misses"] > 0 for s in ss),
+            "vectors_not_dominated": sum(s["misses"] for s in ss),
+            "witness_verified": sum(bool(s.get("verified")) for s in ss),
+        }
+
+    summary.update(
+        sets=table, structural={name: sstat(ss) for name, ss in groups.items()},
+        by_structure=by_struct, by_runs=by_runs, mechanism=mech,
+        timing_secs={k: round(v, 1) for k, v in timing.items()},
+        bugs=[{"id": r["id"], "bugs": r["bugs"]} for rs in recs.values() for r in rs if r["bugs"]],
+    )
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    (out_dir / "summary.md").write_text(render_full(summary, shrunk, args))
+    print(json.dumps({k: summary[k] for k in ("sets", "structural", "prune_check",
+                                               "reference_vs_oracle", "timing_secs")},
+                     sort_keys=True))
+    print(f"wrote {out_dir / 'summary.md'}")
+    bad = summary["bugs"] or summary["prune_check"]["disagree"] or any(
+        r["disagree"] for r in refcheck
+    )
+    return 1 if bad else 0
+
+
+def render_full(summary: dict[str, Any], shrunk: dict[str, list[dict[str, Any]]],
+                args: argparse.Namespace) -> str:
+    """Markdown for the full-size hunt."""
+    a = summary["args"]
+    cmd = (f"uv run python scripts/engine_gap_report.py --mode full --seed {a['seed']} "
+           f"--random {a['random']} --adversarial {a['adversarial']} --structural "
+           f"{a['structural']} --structural-small {a['structural_small']} --ref-check "
+           f"{a['ref_check']} --prune-check {a['prune_check']}")
+    out = [
+        "# Engine gap report, full size: legacy family vs exact reference "
+        f"({date.today():%Y-%m-%d})",
+        "",
+        f"Command: `{cmd}` ({summary['timing_secs']['total']} s on {a['workers']} workers).",
+        "",
+        "Legacy = `feasibility/legacy.py` (frozen take-home family) scored by the engine. "
+        "Reference = `tests/engine/reference.py` (exact over every vector legal under rules "
+        "1–9, by a dominating family and branch and bound; exactness argument in its "
+        "docstring). Every reference witness is replayed by `oracle.Instance` (independent "
+        "ledger replay) and checked by `app/adapter/validator.py`; rescue witnesses are "
+        "feasible at exactly L*/X* and not one cent below. Evidence only; nothing is fixed.",
+        "",
+        "## Reference vs brute-force oracle (small cases)",
+        "",
+        "| seed | cases | oracle feasible | disagreements (feasibility, Φ*, L*, X*) |",
+        "|---|---|---|---|",
+    ]
+    for r in summary["reference_vs_oracle"]:
+        out.append(f"| {r['seed']} | {r['cases']} | {r['feasible']} | {r['disagree']} |")
+    pc = summary["prune_check"]
+    out += ["", f"Pruning self-check (whole dominating family scored, no bounds): "
+            f"{pc['disagree']} disagreements on {pc['cases']} full-size cases.", "",
+            "## Full-size case sets", "",
+            "| set | cases | ref feasible | legacy feasible | both infeasible | false infeasible "
+            "| worse Φ* | lump over | increment over | bugs | ref p50 / max s |",
+            "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for name, r in summary["sets"].items():
+        out.append(
+            f"| {name} | {r['cases']} | {r['ref_feasible']} | {r['legacy_feasible']} | "
+            f"{r['both_infeasible']} | {r['false_infeasible']} | {r['worse_phi']} | "
+            f"{r['rescue_over_lump']} | {r['rescue_over_increment']} | {r['bugs']} | "
+            f"{r['p50_secs']:.3f} / {r['max_secs']:.2f} |"
+        )
+    out += ["", "Golden = 5 fixtures + 7 scenarios × 100 bp (true rules) + 600 random "
+            "(`gen_cases.random_cases(55, 600)`). Random = `gen_cases.random_cases(seed, n)`. "
+            "Adversarial = `gen_cases.adversarial_cases(seed, n)` (planted lifted levels, "
+            "shared-factor runs, tiers/tokens inside runs, tight caps, mid-month/EOM). "
+            "\"ref p50 / max s\" is reference + legacy + witness checks per case.", "",
+            "## Structural sweep (no ledger)", "",
+            "For random staircase rules (3–4 segments, tiers, tokens) and S near the floors' "
+            "sum (each draw also repeated with its tiers removed), every reference family "
+            "vector is tested for a legacy vector of the same k "
+            "with pointwise smaller or equal prefix sums. No such vector means a ledger exists "
+            "(caps equal to its prefix sums) where legacy misses; one is built and verified "
+            "end to end for the smallest non-dominated vector of each draw.", "",
+            "| size | draws | family vectors | draws with a miss | vectors not dominated | "
+            "witnesses verified (false infeasible) |", "|---|---|---|---|---|---|"]
+    for size, r in summary["structural"].items():
+        out.append(f"| {size} | {r['draws']} | {r['family_vectors']} | {r['draws_with_miss']} | "
+                   f"{r['vectors_not_dominated']} | {r['witness_verified']} |")
+    out += ["", "## Misses by kind, set and structure", "", "| kind / set / structure | count |",
+            "|---|---|"]
+    for k, v in sorted(summary["by_structure"].items()):
+        out.append(f"| {k} | {v} |")
+    out += ["", "| kind / witness run lengths | count |", "|---|---|"]
+    for k, v in sorted(summary["by_runs"].items(), key=lambda kv: -kv[1])[:25]:
+        out.append(f"| {k} | {v} |")
+    out += ["", "| kind / witness has a lifted early level (above the legacy pin) / legacy "
+            "family empty for this S | count |",
+            "|---|---|"]
+    for k, v in sorted(summary["mechanism"].items()):
+        out.append(f"| {k} | {v} |")
+    if summary["bugs"]:
+        out += ["", "## Consistency bugs", ""] + [f"- {b}" for b in summary["bugs"][:20]]
+    out += ["", "## Run time (s)", "", "| step | seconds |", "|---|---|"]
+    for k, v in summary["timing_secs"].items():
+        out.append(f"| {k} | {v} |")
+    for kind, title in FULL_TITLES.items():
+        out += ["", f"## {title}: smallest shrunk witnesses", ""]
+        rs = shrunk.get(kind, [])
+        out.append("\n".join(f"{_fmt_full(r)}\n  - (set {r['set']}, shrunk from `{r['from']}`)"
+                             for r in rs) if rs else "None found.")
+    return "\n".join(out) + "\n"
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point."""
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -378,7 +741,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--out", type=Path, default=None, help="output dir (default docs/eval/...)")
     p.add_argument("--cap-draws", type=int, default=4000, help="prefix-cap model draws per size")
+    p.add_argument("--mode", choices=("small", "full"), default="small")
+    p.add_argument("--random", type=int, default=20000, help="full: seeded random cases")
+    p.add_argument("--adversarial", type=int, default=20000, help="full: adversarial cases")
+    p.add_argument("--structural", type=int, default=2000, help="full: full-size rule draws")
+    p.add_argument("--structural-small", type=int, default=5000, help="full: small rule draws")
+    p.add_argument("--ref-check", default="1:5000,2:10000", help="full: seed:n small sets")
+    p.add_argument("--prune-check", type=int, default=300, help="full: unpruned cases per set")
+    p.add_argument("--shrink", type=int, default=12, help="full: misses shrunk per kind")
+    p.add_argument("--shrink-budget", type=int, default=300)
+    p.add_argument("--workers", type=int, default=8)
     args = p.parse_args(argv)
+    if args.mode == "full":
+        return run_full(args)
     out_dir = args.out or ROOT / "docs" / "eval" / f"engine_gap_{date.today():%Y%m%d}"
     t0 = time.perf_counter()
     rows: list[Row] = []

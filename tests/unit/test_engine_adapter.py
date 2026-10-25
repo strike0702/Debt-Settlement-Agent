@@ -21,6 +21,7 @@ from app.adapter.validator import validate
 from app.domain.belief import BeliefState
 from app.domain.scenario import CallScenario, load_scenario
 from feasibility.models import CreditorRules, load_case, load_creditor_rules
+from feasibility.util import bp_fraction, fraction_to_bp
 
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE = ROOT / "fixtures" / "engine"
@@ -70,7 +71,7 @@ def _scenario_from_engine(case_dir: Path) -> tuple[CallScenario, CreditorRules, 
         creditor=offer.creditor,
         creditor_balance_cents=offer.creditor_balance_cents,
         original_balance_cents=offer.original_balance_cents,
-        program_fee_pct=rules.program_fee_pct,
+        program_fee_pct=float(bp_fraction(rules.program_fee_bp)),
         bank_fee_cents=rules.bank_fee_cents,
     )
     fpd = offer.first_payment_date or date(2026, 2, 28)
@@ -116,7 +117,7 @@ def test_build_rules_ok() -> None:
     assert rules.even_pays is True
     assert rules.is_ballooning_allowed is False
     assert rules.bank_fee_cents == scenario.bank_fee_cents
-    assert rules.program_fee_pct == scenario.program_fee_pct
+    assert rules.program_fee_bp == fraction_to_bp(scenario.program_fee_pct)
     assert rules.max_token_pays == 6
 
 
@@ -184,7 +185,7 @@ def test_affordability_max_bp_none_when_nothing_feasible() -> None:
         is_ballooning_allowed=False,
         max_segments=1,
         bank_fee_cents=5000,
-        program_fee_pct=0.5,
+        program_fee_bp=5000,
     )
     aff = affordability(scenario, rules, fpd)
     assert aff.max_bp is None
@@ -221,7 +222,7 @@ def test_affordability_demo_timing() -> None:
 def test_validator_passes_engine_feasible(case_name: str) -> None:
     scenario, rules, fpd = _scenario_from_engine(ENGINE / case_name)
     client, offer, _ = load_case(ENGINE / case_name)
-    bp = int(round(offer.settlement_pct * 10000))
+    bp = offer.settlement_bp
     summary = evaluate(scenario, rules, bp, fpd)
     assert summary.feasible is True
     assert summary.rows is not None
@@ -257,7 +258,7 @@ def test_validator_passes_demo_feasible() -> None:
 
 
 def test_evaluate_offer_total_matches_decimal_half_up() -> None:
-    """F13: float Offer.settlement_pct must not drift offer_total vs Decimal bp."""
+    """F13: adapter offer_total must match offer_total vs Decimal bp."""
     from decimal import Decimal
 
     from app.domain.units import bp_to_decimal

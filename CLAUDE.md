@@ -1,7 +1,7 @@
 
 # Debt Settlement Agent
 
-Voice agent that negotiates debt settlements. Code-based policy decides every move; the LLM only extracts terms (NLU) and phrases moves with fact placeholders (NLG). The vendored `feasibility/` engine is the source of truth for every number.
+Voice agent that negotiates debt settlements. Code-based policy decides every move; the LLM only extracts terms (NLU) and phrases moves with fact placeholders (NLG). The owned `feasibility/` engine is the source of truth for every number.
 
 ## Before doing anything in a new session
 1. Read `docs/history/PROGRESS.md` (phase status, interfaces built so far, deviations, open issues).
@@ -9,8 +9,8 @@ Voice agent that negotiates debt settlements. Code-based policy decides every mo
 3. Read existing code only when you need an interface not recorded in `docs/history/PROGRESS.md`.
 
 ## Ground rules
-- Money is integer cents. Settlement percentages are integer basis points (4500 = 45%). Convert to the engine with `Decimal(bp) / Decimal(10000)`. Never use float for money. Dates are `datetime.date`.
-- `feasibility/` is read-only except for bug fixes, and every fix ships with a test.
+- Money is integer cents. Settlement percentages are integer basis points (4500 = 45%). The engine takes bp directly (`Offer.settlement_bp`, `CreditorRules.program_fee_bp`) and converts with `Decimal(bp) / Decimal(10000)`. Never use float for money. Dates are `datetime.date`.
+- `feasibility/` is the owned engine v2: every behaviour change ships with an oracle or golden test and a PROGRESS note.
 - The LLM never produces digits or number words for speech. Spoken numbers only come from `Fact.render()`.
 - The NLG prompt never receives PRIVATE facts or client financials.
 - All LLM and STT calls go through `app/llm/client.py`, by role (`nlu`, `nlg`, `sim`, `stt`), never by model name.

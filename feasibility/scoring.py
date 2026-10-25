@@ -1,4 +1,12 @@
-"""Suffix-min fee placement, lexicographic scoring, Tier B cliff flattening."""
+"""Fee placement, candidate scoring and the Tier B cliff flattening post-pass.
+
+``place_fee`` is the closed-form fee-first placement: cumulative fee by ``t_j`` is
+``min(F, suffix-min of window minima)``. ``score_key`` ranks feasible candidates
+(Φ vector lexicographically, then fewer payments, slack, cliff, shape, payments).
+``evaluate_candidate`` simulates one vector (full replay, or the prefix-cap shortcut
+when given the ``base`` run) and places the fee. Candidate *generation* lives in
+``shapes.py``; Part 2 rescue amounts live in ``rescue.py``. Called by ``engine.py``.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +21,7 @@ from feasibility.constants import (
 )
 from feasibility.models import Client, CreditorRules
 from feasibility.shapes import Candidate, is_statically_valid
-from feasibility.simulate import SimulationResult, simulate
+from feasibility.simulate import SimulationResult, apply_payments, simulate
 
 
 @dataclass(frozen=True)
@@ -63,11 +71,13 @@ def place_fee(
 
 
 def median_low(payments: tuple[int, ...]) -> int:
+    """Lower median of the payments."""
     k = len(payments)
     return sorted(payments)[(k - 1) // 2]
 
 
 def cliff_ratio(payments: tuple[int, ...]) -> Fraction:
+    """Last payment over the lower median (median floored at 1 cent)."""
     med = max(1, median_low(payments))
     return Fraction(payments[-1], med)
 
@@ -107,10 +117,18 @@ def evaluate_candidate(
     bank_fee_cents: int,
     F: int,
     buffer: int,
+    base: SimulationResult | None = None,
 ) -> tuple[FeePlacement, SimulationResult] | None:
-    """Simulate + place fee. Returns None if infeasible under buffer."""
-    payments = list(zip(cadence[: cand.k], cand.payments))
-    sim = simulate(client, payments, cadence, bank_fee_cents)
+    """Simulate + place fee. Returns None if infeasible under buffer.
+
+    With ``base`` (the no-payment run for this cadence) the simulation uses the
+    prefix-cap identity instead of a full replay; the result is identical.
+    """
+    if base is not None:
+        sim = apply_payments(base, cadence, cand.payments, bank_fee_cents)
+    else:
+        payments = list(zip(cadence[: cand.k], cand.payments))
+        sim = simulate(client, payments, cadence, bank_fee_cents)
     placement = place_fee(sim.w, sim.pre_min, F, buffer)
     if not placement.feasible:
         return None
@@ -134,6 +152,7 @@ def flatten_cliff(
     rules: CreditorRules,
     placement: FeePlacement,
     sim: SimulationResult,
+    base: SimulationResult | None = None,
 ) -> tuple[Candidate, FeePlacement, SimulationResult]:
     """Tier B: transfer delta from p_k to p_{k-1} without changing Phi*."""
     if not ENABLE_CLIFF_FLATTENING:
@@ -170,7 +189,7 @@ def flatten_cliff(
         return cand, placement, sim
 
     new_cand = Candidate(k=k, payments=new_payments, label=new_label)
-    result = evaluate_candidate(client, new_cand, cadence, bank_fee_cents, F, buffer)
+    result = evaluate_candidate(client, new_cand, cadence, bank_fee_cents, F, buffer, base)
     if result is None:
         return cand, placement, sim
     new_placement, new_sim = result

@@ -64,13 +64,15 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 51 | README demo clip re-recorded on the Haggling rep scenario; stills and web screenshot retaken | done |
 | 53 | Docs for outside readers: reader-first README, DESIGN overview, eval records moved to `docs/eval/records/` | done |
 | 54 | Correction loop fix: change-request corrections, disputed-value answers, barged questions count; NLU turn context measured and dropped | done |
+| 55 | Engine v2 foundation: owned package, bp input, `Problem`, golden corpus, oracle, gap report | done |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
 - Feasibility by settlement % is non-monotonic (for example `0000111100001111...`), and low percentages fail on payment floors.
 - Ollama 0.30.10 is installed. Pull `qwen3.5:9b` and `gemma4:e4b` before using the `local` profile.
-- Python 3.12 via `uv venv --python 3.12`. Ruff excludes vendored `feasibility/`.
+- Python 3.12 via `uv venv --python 3.12`. Ruff covers `feasibility/` (owned engine v2 since Phase 55; the old `extend-exclude` is gone).
 - Demo affordability scan (`range(100, 10001, 100)`, even rules, `fixtures/demo`): median **8.3 ms** cold (5 runs: 8.0–8.5 ms); `lru_cache` hit is sub-ms. `max_bp=10000`, 99/100 grid points feasible.
+- Phase 55 re-measure (same scan, 15 cold runs, one machine, 2026-10-23): main `b9daba6` median 16.5 ms; Phase 55 (one `Problem` per scan, prefix-cap simulation) median **6.7 ms**. The 8.3 ms figure above came from a faster machine; compare runs on the same machine.
 
 ## Interfaces
 
@@ -129,6 +131,20 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 - `evaluate(scenario, rules, bp, first_payment_date, *, assumed=None) -> EvalSummary` — PUBLIC: offer_total, num_payments, first_payment_date, last_payment, payment_level_*; PRIVATE: balances, program/bank fees, rescue amounts
 - `affordability(scenario, rules, fpd) -> Affordability` — `lru_cache` on `(scenario_key, rules_tuple, fpd)`
 - `clear_affordability_cache() -> None`
+- Phase 55: `build_rules` sets `CreditorRules.program_fee_bp = fraction_to_bp(firm.program_fee_pct)` (raises `ValueError` if not a whole bp); `evaluate` passes `Offer(settlement_bp=bp)`; `affordability` builds one `feasibility.problem.Problem` per scan and calls `feasibility.engine.evaluate(problem, bp)` for the 100 points; `_rules_tuple` index 9 is `program_fee_bp`.
+
+### `feasibility` (owned engine v2, Phase 55)
+- `models.Offer` — `creditor`, `creditor_balance_cents`, `original_balance_cents`, `settlement_bp: int`, `first_payment_date: date | None`
+- `models.CreditorRules` — fields as before but `program_fee_bp: int` replaces `program_fee_pct`; `__init__` also accepts the legacy keyword `program_fee_pct=` (fraction, converted exactly, write-only) for `sim.scenarios.to_creditor_rules`. `dataclasses.replace` works.
+- `models.load_offer` / `load_creditor_rules` accept `settlement_bp` / `program_fee_bp` or the take-home `settlement_pct` / `program_fee_pct` floats (exact, whole bp only); `offer_total_cents`, `program_fee_cents` use `Decimal(bp) / 10000`.
+- `util.bp_fraction(bp: int) -> Decimal`; `util.fraction_to_bp(value) -> int` (raises `ValueError` for non-whole bp); `util.BP_PER_UNIT = 10000`
+- `problem.Problem` (frozen) — `client`, `rules`, `first_payment_date`, `creditor_balance_cents`, `original_balance_cents`, `cadence`, `M`, `k_max`, `floors`, `program_fee_cents`, `base: SimulationResult`; properties `base_w`, `pre_min`; `offer_total(bp) -> int`; `simulate_vector(payments) -> SimulationResult`
+- `problem.build_problem(client, rules, first_payment_date: date | None, *, creditor_balance_cents: int, original_balance_cents: int) -> Problem`; `problem.build_cadence(client, first_payment_date) -> list[date]`
+- `simulate.apply_payments(base, cadence, payments, bank_fee_cents) -> SimulationResult` — prefix-cap identity, equal to `simulate(...)`
+- `engine.evaluate(problem: Problem, bp: int) -> Result`; `engine.evaluate_candidates(problem, S, candidates) -> Result`; `engine.evaluate_offer(client, offer, rules) -> Result` (wrapper, unchanged output)
+- `scoring.evaluate_candidate(..., base=None)`, `scoring.flatten_cliff(..., base=None)`, `rescue.compute_lump(..., base=None)`, `rescue.compute_increment(..., base=None)` — optional base run for the shortcut
+- `legacy.legacy_candidates(S, k_max, floors, rules) -> list[Candidate]` (frozen take-home generator), `legacy.legacy_evaluate(problem, bp) -> Result`
+- Test helpers: `tests.engine.gen_cases.random_case(rng, case_id, *, small=False)`, `random_cases(seed, n, *, small=False, prefix="r")`, `case_to_objects(case)`, `client_to_dict(client)`; `tests.engine.oracle.solve(client, rules, first_payment_date, S, F) -> OracleResult` (`feasible`, `phi`, `best`, `rows`, `lump_cents`, `increment_cents`), `oracle.is_legal(vec, S, k_cap, rules)`, `oracle.phi_of(...)`, `oracle.Instance`, `oracle.OracleTooBig`; `tests.engine.golden.build_golden` (`build()`, `run_case`, `compact`, `expand`, `corpus_inputs`)
 
 ### `app.adapter.validator`
 - `class Violation` — `rule: str`, `message: str`
@@ -394,7 +410,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 
 ## Deviations from PLAN.md (`docs/history/PLAN.md`)
 
-- Ruff `extend-exclude = ["feasibility"]` so vendored engine stays untouched (UP035 on `shapes.py` otherwise).
+- ~~Ruff `extend-exclude = ["feasibility"]` so vendored engine stays untouched~~ (removed in Phase 55: `feasibility/` is the owned engine v2 and is linted; the one UP035 import in `shapes.py` was fixed).
 - Synthetic fixtures under `fixtures/engine/{even_ok,rescue_gap,balloon_ok,tier_ok,gap_curve}` replace take-home `cases/`; engine tests re-pointed; rescue expected amounts match `rescue_gap` (lump 17500, incr 4375 × 5 drafts).
 - `max_token_pays` has no static `default_factory`; BeliefState keeps it ASSUMED and copies `max_payments` when that field is observed (PLAN: default is max_payments / no limit).
 - Domain unit helpers live in `app/domain/units.py` (PLAN/PHASES said `money.py`); covers money, pct, date, and count.
@@ -2113,3 +2129,26 @@ Fixed: icon in the reader badge and end-of-call rules `aria-hidden`; outcome tex
   - (c) `turn_notes` / `TraceNoteKind` have no `clarify_resolved` note (deviation 3).
   - (d) `HAIKU_P54` measured a prompt that is no longer shipped. The shipped prompt is the `HAIKU_P43_FIX` one again, so those numbers stand.
 - **Checks (after the drop):** `uv run ruff check .` clean; `uv run pytest -q` 1363 passed / 2 skipped / 25 xfailed; fast suite (`-m "not slow"`) with `.env` moved aside (restored) 1359 passed / 2 skipped / 4 deselected / 25 xfailed; oracle eval `eval_20261013_000059_s7` thresholds PASS. Its `summary.json` (apart from latency) and all 100 per-call records match main's `eval_20261012_233358_s7`. Web job not run (no `web/src` change). No new paid calls; total spent stays $0.064.
+
+### Phase 55 (engine v2 foundation) (2026-10-23) — docs/ENGINE_PLAN.md; no behaviour change
+- **Owned package.** `feasibility` is out of ruff's `extend-exclude`; the only finding was UP035 in `shapes.py` (import moved, no logic change). Every module has a repo-style docstring. `CLAUDE.md` now says `feasibility/` is the owned engine v2 (behaviour changes ship with an oracle or golden test and a PROGRESS note) and that the engine takes bp directly. The Deviations note on the ruff exclude is struck through.
+- **bp input.** `Offer.settlement_bp: int`, `CreditorRules.program_fee_bp: int`; `offer_total_cents` / `program_fee_cents` use `Decimal(bp) / 10000`. Loaders accept `*_bp` or the take-home float keys (`settlement_pct`, `program_fee_pct`) through `util.fraction_to_bp`, which is exact and rejects values that are not whole bp. The adapter converts `firm.program_fee_pct` once in `build_rules`. Its `_rules_tuple` key is all ints. `rescue._cents_to_dollars` no longer uses float (same text, checked against the old f-string on 200k values).
+- **`Problem`.** `feasibility/problem.py`: `build_problem(...)` precomputes the cadence, M, k_max, floors, F and the base simulation (no creditor payments, no bank fees, no fee), which gives `base_w` and `pre_min`. `simulate.apply_payments` implements the prefix-cap identity, documented in `problem.py`. `engine.evaluate(problem, bp)` uses it for every candidate, and so do `flatten_cliff` and both rescue functions through an optional `base=`. `evaluate_offer` builds a `Problem` and calls `evaluate`. The adapter's `affordability` builds one `Problem` per scan for the 100 points.
+- **Golden corpus.** `tests/engine/golden/golden.jsonl` (1.07 MB, 612 records, 1,305 outputs) holds the 5 engine fixtures, the 7 scenarios with true `sim.json` rules × 100 bp, and 600 seeded random cases (`gen_cases.random_cases(55, 600)`: 229 feasible; 99 staircase / 66 even / 64 balloon). Inputs are embedded. It was written by main's engine (old float API, through a scratch shim). The committed `build_golden.py` (new API) regenerates it byte for byte. `test_golden.py` covers outputs, one shared `Problem` per scenario scan, and the frozen legacy generator.
+- **Prefix-cap identity test.** `test_prefix_cap.py`: for all 66,870 candidates the engine generates on the golden corpus, `apply_payments` equals a full `simulate` replay (every balance, `w`, `pre_min`), and each balance equals `base(d) - P_min(j,k) - bf*min(j,k)`.
+- **Oracle.** `tests/engine/oracle.py` is written from the problem statement (rules 1–9), not from `shapes` / `scoring` / `simulate`. It enumerates legal vectors by DFS, pruning only on facts true for every extension: sum bounds, token count, the segment cap when no balloon is possible, causality per window, a later-payments lower bound, the k-only tail, and a pointwise Φ upper bound for branch and bound. It has its own ledger replay and suffix-min fee. Part 2 is a binary search on L (credited before every event) and on X. `test_oracle.py` checks the pruned oracle against an unpruned enumeration on 120 tiny cases (Φ\*, L, X); `is_legal` against the validator's static rules on 1,000+ random vectors; legacy legality, fee timing and Φ ≤ Φ\* on 450 small cases; and the validator on every feasible oracle vector of 200 tiny cases.
+- **Gap report.** `feasibility/legacy.py` is the frozen generator plus `legacy_evaluate`. `scripts/engine_gap_report.py --cases 5000 --seed 1` → `docs/eval/engine_gap_20261023/{summary.md,summary.json,notes.md}`: **0** false infeasible, **0** worse Φ\*, **0** rescue over-estimates; all consistency checks 0. Seeds 2–9 (80,000 more cases) and a prefix-cap model sweep (k ≤ 8) also show 0. `notes.md` says what this does not show (large k) and what it means for Phase 57.
+- **Acceptance.** Golden identical. Prefix-cap identity green. Oracle agrees with legacy on every legacy-feasible case's legality. Gap report written. Demo affordability median **6.6 ms**, against main's **16.1 ms** measured the same way on the same machine (the 8.3 ms figure came from a faster machine; 6.6 ms is below 8.3 ms + 20% anyway). Oracle eval (`.env` moved aside, restored) on this branch `eval_20261022_185548_s7` vs a `git archive` export of main `eval_20261022_185552_s7`: thresholds PASS on both. `summary.json` identical apart from `latency`; all 100 per-call records identical; `run.json` differs only in run id, git sha, latency and path.
+- **Files.** Edited: `feasibility/{__init__,constants,engine,models,rescue,scoring,shapes,simulate,util}.py`, `app/adapter/engine_adapter.py`, `pyproject.toml`, `CLAUDE.md`, this file. Tests edited for the bp fields: `tests/engine/{test_units,test_rescue}.py`, `tests/unit/{test_engine_adapter,test_validator}.py`. New: `feasibility/{problem,legacy}.py`, `tests/engine/{gen_cases,oracle,test_golden,test_prefix_cap,test_oracle}.py`, `tests/engine/golden/{__init__,build_golden}.py`, `tests/engine/golden/golden.jsonl`, `scripts/engine_gap_report.py`, `docs/eval/engine_gap_20261023/`.
+- **Deviations.**
+  1. `build_problem` takes `creditor_balance_cents` and `original_balance_cents` as keyword-only arguments. `evaluate(problem, bp)` needs S and F, and the plan's signature had no offer.
+  2. `CreditorRules.__init__` also accepts the legacy keyword `program_fee_pct=`, converted exactly and write-only, because `sim/scenarios.py` (outside this phase) still passes a float. Reading `rules.program_fee_pct` raises `AttributeError`; `dataclasses.replace` works (term_alts, sim creditor).
+  3. `build_rules` now raises `ValueError` for a firm fee that is not a whole bp (e.g. a custom upload with 0.17335). The upload validator in `app/domain/scenario.py` still accepts such values (out of scope; see open issues).
+  4. Oracle reading of rule 9: a vector is exempt from `max_segments` only when ballooning is allowed and its last payment is strictly above the one before. This is the validator's reading; §4's "ignored when ballooning is set" could also mean the flag alone. Φ\* ties go to the first vector found (k ascending, then lexicographic).
+  5. `legacy_evaluate` freezes the generator only and scores with the engine's current `evaluate_candidates`. If scoring changes (Phase 59), `test_frozen_legacy_generator_matches_golden` will flag it.
+- **Open issues.**
+  - (a) No legacy gap was found at oracle scale, so Phase 57's exact search has no measured small-case miss to fix. It should compare against legacy on full-size cases (see `notes.md`).
+  - (b) `sim/scenarios.py::to_creditor_rules` should pass `program_fee_bp`, so the legacy keyword can go.
+  - (c) `CallScenario.program_fee_pct` is still a float. The custom-upload validator should reject sub-bp fees, or the scenario should store bp.
+  - (d) `util.round_half_up` still accepts float inputs (engine paths pass Decimal; old unit tests pass floats).
+- **Checks.** `uv run ruff check .` clean; `uv run pytest -q` 3334 passed / 2 skipped / 25 xfailed; oracle eval thresholds PASS, identical to main except latency. No paid calls.

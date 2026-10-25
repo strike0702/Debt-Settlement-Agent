@@ -94,7 +94,7 @@ def test_token_pays_zero_forces_above_base():
         is_ballooning_allowed=False,
         max_segments=3,
         bank_fee_cents=0,
-        program_fee_pct=0.0,
+        program_fee_bp=0,
     )
     floors = compute_floors(rules, 3)
     assert floors[1] == 2501
@@ -112,7 +112,7 @@ def test_tier_at_position_one():
         is_ballooning_allowed=False,
         max_segments=2,
         bank_fee_cents=0,
-        program_fee_pct=0.0,
+        program_fee_bp=0,
     )
     floors = compute_floors(rules, 4)
     assert all(floors[i] == 5000 for i in range(1, 5))
@@ -129,7 +129,7 @@ def test_tier_beyond_k_inactive():
         is_ballooning_allowed=False,
         max_segments=2,
         bank_fee_cents=0,
-        program_fee_pct=0.0,
+        program_fee_bp=0,
     )
     floors = compute_floors(rules, 3)
     assert floors[3] == 2500
@@ -163,7 +163,7 @@ def test_staircase_respects_max_segments():
         is_ballooning_allowed=False,
         max_segments=2,
         bank_fee_cents=0,
-        program_fee_pct=0.0,
+        program_fee_bp=0,
     )
     floors = compute_floors(rules, 6)
     cands = generate_candidates(12000, 6, floors, rules)
@@ -184,7 +184,7 @@ def test_balloon_exempt_from_segments():
         is_ballooning_allowed=True,
         max_segments=1,  # would forbid multi-level staircase
         bank_fee_cents=0,
-        program_fee_pct=0.0,
+        program_fee_bp=0,
     )
     floors = compute_floors(rules, 4)
     cands = generate_candidates(20000, 4, floors, rules)
@@ -356,7 +356,7 @@ def test_max_segments_one_with_tier():
         is_ballooning_allowed=False,
         max_segments=1,
         bank_fee_cents=0,
-        program_fee_pct=0.0,
+        program_fee_bp=0,
     )
     floors = compute_floors(rules, 8)
     # For k>=4, floors jump at 4 → cannot be single-valued unless all at >=5000.

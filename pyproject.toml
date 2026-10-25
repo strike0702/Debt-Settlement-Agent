@@ -36,7 +36,6 @@ markers = ["slow: offline oracle sweeps (DSA_INVARIANT_SEEDS seeds)"]
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-extend-exclude = ["feasibility"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]

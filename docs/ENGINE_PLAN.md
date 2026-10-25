@@ -44,6 +44,14 @@ basis point" phase (not chosen); speed is only a budget the exact search must me
   ReAct eval arm; NLU "N% balance" asks; bare amounts after "take your time" (P54 a); hosted
   demo redeploy (user step).
 
+## Revision 2026-10-25 (after Phase 55)
+
+Phase 55's gap report (`docs/eval/engine_gap_20261023/`) found **no** miss by the take-home
+candidate family: 85,000 small random cases and a random-cap sweep (k ≤ 8) gave 0 false
+infeasible, 0 worse Φ\*, 0 rescue over-estimates. User decision: hunt large cases first.
+Phase 57 is now that hunt (prompt below). The original exact-search phase becomes 57b; its
+scope, and whether 58 stays, are decided from 57's result. 59–61 are unchanged for now.
+
 ## Approach
 
 ### The formulation that makes exact search possible
@@ -110,8 +118,9 @@ behaviour as objective `fee_first`. The old candidate generator is kept as
 |---|---|---|---|
 | 55 | Engine v2 foundation: owned package, bp input, `Problem`, golden corpus, oracle, gap report | `feasibility/`, `tests/engine/`, `scripts/engine_gap_report.py`, `pyproject.toml`, `CLAUDE.md`, `app/adapter/engine_adapter.py` (bp only) | — |
 | 56 | Cleanup leftovers | `app/agent/reasons.py`, `config/nlg_bank.json` (+ bank build), `fixtures/scenarios/{no_space,haggling_rep}`, `.env.example`, `web/src/lib/{mic,traceStory}.ts`, phone card row, `web/README.md` + shots, PROGRESS status table | — (parallel with 55, 57) |
-| 57 | Exact Part 1 search | `feasibility/search.py` (new), `engine.py`, `scoring.py`, `tests/engine/` | 55 |
-| 58 | Exact Part 2 rescue | `feasibility/rescue.py`, `tests/engine/test_rescue*.py` | 57 |
+| 57 | Large-case hunt: does the take-home family miss anything at full size? (replaces the original 57, see Revision) | `tests/engine/reference.py` (new), `scripts/engine_gap_report.py`, `docs/eval/engine_gap_*` | 55 |
+| 57b | Exact Part 1 search (original 57; scope set after 57's result) | `feasibility/search.py` (new), `engine.py`, `scoring.py`, `tests/engine/` | 57 |
+| 58 | Exact Part 2 rescue (kept, dropped or merged after 57) | `feasibility/rescue.py`, `tests/engine/test_rescue*.py` | 57b |
 | 59 | Objectives + fee policy | `feasibility/objectives.py` (new), `scoring.py`, adapter, `app/config.py`, validator (proportional rule), policy CONFIRM wording if counts change, eval | 58 |
 | 60 | Explain + what-if, term_alts on the engine, trace line (UI, manual review) | `feasibility/explain.py`, `feasibility/whatif.py` (new), `app/agent/term_alts.py`, `app/agent/orchestrator.py` (`_engine_context`), `app/voice/views.py`, `app/schemas/events.py`, `web/src` trace | 59, 56 merged |
 | 61 | Docs + evidence | `docs/ENGINE.md` (new), `docs/DESIGN.md` ADR 5 + new ADR, README engine section, `docs/eval/engine_v2_<date>/`, remove `feasibility/legacy.py` | 60 |
@@ -229,7 +238,54 @@ eval PASS. Commit: `phase 56: leftover cleanup — reason copy, singular counts,
 
 ---
 
-### Phase 57 — Exact Part 1 search
+### Phase 57 — Large-case hunt
+
+You are implementing Phase 57 (large-case hunt) for Debt-Settlement-Agent. Read CLAUDE.md,
+docs/ENGINE_PLAN.md (Revision 2026-10-25, Approach), PROGRESS Phase 55 handoff,
+`docs/eval/engine_gap_20261023/{summary,notes}.md`, `feasibility/` (problem.py, shapes.py,
+scoring.py, legacy.py), `tests/engine/{oracle,gen_cases}.py`, `scripts/engine_gap_report.py`.
+
+Question to answer: does the take-home candidate family (`feasibility/legacy.py`) ever give a
+worse answer than the full legal set (ASSIGNMENT rules 1–9) on full-size cases (k up to 24,
+offer totals in the thousands of dollars, up to 4 levels)? Worse = false infeasible, later
+fee (worse Φ\*), or a higher rescue amount. **Evidence only: no engine behaviour change.**
+Nothing under `feasibility/` changes except a bug fix with its own test.
+
+1. **Reference solver** `tests/engine/reference.py`: exact over the full legal set at full
+   size, using the prefix-cap identity (`feasibility/problem.py`). For each k and level
+   composition, search level values by branch and bound with prefix-cap and remaining-sum
+   pruning; it must not reuse the legacy family's pins. Write its exactness argument in the
+   module docstring (what is pruned and why that cannot lose the optimum). It is a test
+   tool, so clarity beats speed, but a full-size case should finish in seconds.
+2. **Check the reference:** it agrees with `tests/engine/oracle.py` on every small case of
+   the Phase 55 sets (seed 1, 5,000 cases, plus one 10,000-case seed): feasibility, Φ\*,
+   both rescue minima. Any disagreement is a reference bug: fix it before going on.
+3. **Hunt** (extend `scripts/engine_gap_report.py`, e.g. `--mode full`):
+   - the 600 full-size golden cases and the 7 scenarios × 100 bp (true rules);
+   - ≥ 20,000 seeded full-size random cases;
+   - an adversarial generator aimed at the legacy pins: max_segments 3–4, run lengths with
+     a shared factor (e.g. 2 and 4, 3 and 6), offer totals not divisible by them, tiers and
+     token limits that split runs, tight cash (caps just above the cheapest legal prefix
+     sums), mid-month and EOM starts; ≥ 20,000 cases.
+   For each miss, keep a validator-checked witness and shrink it (fewer payments, smaller
+   amounts) while it still misses. Report counts by kind and structure, the 3 smallest
+   witnesses per kind, and run time.
+4. **Read the result** in `docs/eval/engine_gap_<date>_full/notes.md`:
+   - misses found: how often, which rule combination, and the mechanism (which pin loses it);
+   - none found: the strongest statement the data supports, plus a proof sketch of why the
+     family is complete for fee-first (or the exact gap in that sketch). Do not claim a
+     proof that is not one.
+   End with a recommendation for 57b (exact search in the engine: needed / not needed for
+   fee-first; whether 59's client-first ranking still needs it) and for 58 (rescue).
+
+Acceptance: reference agrees with the oracle on every small case; report and notes written;
+pytest (new tests fast, big runs only in the script or under the `slow` marker), ruff,
+oracle eval thresholds PASS with `summary.json` identical to main except latency.
+Commit: `phase 57: large-case hunt — exact reference solver vs the take-home family at full size`.
+
+---
+
+### Phase 57b — Exact Part 1 search (original Phase 57; rescoped after the hunt)
 
 You are implementing Phase 57 (exact payment search) for Debt-Settlement-Agent. Read CLAUDE.md,
 docs/ENGINE_PLAN.md (Approach), PROGRESS Phase 55 handoff, `feasibility/` (problem.py, shapes.py,

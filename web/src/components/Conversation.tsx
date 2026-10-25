@@ -8,8 +8,12 @@
  * are disabled. `interim` is the voice cue or a live browser-STT partial.
  * `ended` closes the transcript with a quiet line saying how the
  * call ended ("Call ended: handed off to a specialist").
+ * `error` is the newest call error, shown as an alert above the text box
+ * (plain copy; `detail` is the raw server text, Debt negotiator view only).
+ * A new error puts the rep's last sent line back in an empty text box, so
+ * "try sending it again" is one click.
  */
-import { Mic, MicOff, Send, X } from "lucide-react";
+import { AlertTriangle, Mic, MicOff, Send, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -37,6 +41,8 @@ export interface ConversationProps {
   onDismissNotice?: () => void;
   sttMode?: "server" | "browser";
   onSttMode?: (m: "server" | "browser") => void;
+  /** Newest call error; `seq` changes with each new one. */
+  error?: { text: string; detail?: string | null; seq: number } | null;
 }
 
 const MIC_DOT: Record<MicState, string> = {
@@ -60,8 +66,15 @@ export function Conversation({
   onDismissNotice,
   sttMode,
   onSttMode,
+  error,
 }: ConversationProps) {
   const [draft, setDraft] = useState("");
+  const lastSent = useRef("");
+  const errorSeq = error?.seq;
+  // A failed line comes back to the empty text box; a draft already typed is kept.
+  useEffect(() => {
+    if (errorSeq != null && lastSent.current) setDraft((d) => d || lastSent.current);
+  }, [errorSeq]);
   const log = useRef<HTMLDivElement>(null);
   // Scroll the transcript box only; scrollIntoView would also scroll the page.
   useEffect(() => {
@@ -73,6 +86,7 @@ export function Conversation({
   const unique = [...new Set(suggested)];
   const send = (text: string) => {
     if (!onSend || !text.trim()) return;
+    lastSent.current = text.trim();
     onSend(text.trim());
     setDraft("");
   };
@@ -148,6 +162,16 @@ export function Conversation({
               <X className="h-4 w-4" aria-hidden />
             </button>
           )}
+        </div>
+      )}
+
+      {error && (
+        <div role="alert" data-testid="call-error" className="mx-4 mb-2 flex flex-col gap-0.5 rounded-lg border border-bad bg-surface-2 px-3 py-2 text-sm">
+          <span className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-bad" aria-hidden />
+            <span>{error.text}</span>
+          </span>
+          {error.detail && <span className="pl-6 text-xs break-words text-muted">Server message: {error.detail}</span>}
         </div>
       )}
 

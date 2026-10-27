@@ -3,7 +3,8 @@
  *
  * Opens a socket per call (the view is fixed when it connects), sends `start`
  * (plain or autoplay; with `payload`, a custom test case as `scenario_payload`,
- * which the server only plays by hand), and collects every frame. It does not fold state or
+ * which the server only plays by hand; with `minCushionCents`, this call's minimum client
+ * cushion as `start.min_cushion_cents`), and collects every frame. It does not fold state or
  * filter privacy: App folds `events` with `reduceCall` after `eventsForLens`,
  * and the rep view is filtered by the server. Raw frames also go to
  * `subscribe` listeners (the voice engine). `lastCallId` survives the end of
@@ -24,6 +25,8 @@ export interface StartOptions {
   autoplay?: boolean;
   /** A custom test case's JSON (`start.scenario_payload`); the server refuses autoplay on it. */
   payload?: Record<string, unknown>;
+  /** This call's minimum client cushion (cents); omitted = the scenario's firm default. */
+  minCushionCents?: number;
 }
 
 export interface UseCall {
@@ -100,11 +103,13 @@ export function useCall(
       // Handlers check identity so a late frame from a replaced socket cannot touch the new call.
       ws.onopen = () => {
         if (sock.current !== ws) return;
-        const msg: ClientEvent = opts.payload
+        const base: ClientEvent = opts.payload
           ? { type: "start", scenario_id: scenarioId, scenario_payload: opts.payload }
           : opts.autoplay
             ? { type: "start", scenario_id: scenarioId, autoplay: true, autoplay_pause_ms: AUTOPLAY_PAUSE_MS }
             : { type: "start", scenario_id: scenarioId };
+        const msg: ClientEvent =
+          opts.minCushionCents === undefined ? base : { ...base, min_cushion_cents: opts.minCushionCents };
         ws.send(JSON.stringify(msg));
         setStatus("live");
       };

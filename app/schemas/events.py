@@ -84,6 +84,17 @@ class Affordability(_Model):
     curve: list[CurvePoint]
 
 
+class TraceCushion(_Model):
+    """PRIVATE: the firm's minimum client cushion and whether the drafted plan kept it.
+
+    Set only on the turn that drafts a plan (CONFIRM) when a cushion is set. Operator
+    only: the rep stream carries no ``turn_trace``.
+    """
+
+    min_cushion_cents: int
+    kept: bool
+
+
 class Decide(_Model):
     """Policy move: raw ``reason`` code, its ``REASON_TEXT`` key and sentence."""
 
@@ -197,6 +208,8 @@ class TurnTrace(_Model):
     decide: Decide
     # Our counter or confirmed bp when this move speaks one (public once said).
     counter_bp: int | None
+    # Phase 59: soft client cushion on the plan-drafting turn (PRIVATE, operator only).
+    cushion: TraceCushion | None = None
     nlg: NlgTrace
     spoken: list[SpokenSentence]
     timings: dict[str, float | None]
@@ -409,6 +422,9 @@ class StartEvent(_Model):
     autoplay: bool = False
     # Pause between autoplay turns; default 1200, clamped to 0–10000.
     autoplay_pause_ms: int | None = None
+    # This call's minimum client cushion in cents (operator setting, PRIVATE). Absent:
+    # the scenario's firm default. 0..500000; the server rejects anything else.
+    min_cushion_cents: int | None = None
 
 
 class EndEvent(_Model):

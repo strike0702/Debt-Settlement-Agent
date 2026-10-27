@@ -10,10 +10,15 @@ in ``build_rules`` (values that are not whole bp are rejected).
 Never use float for money math; cents and bp stay ints end-to-end.
 
 Which legal plan the engine returns follows ``ENGINE_OBJECTIVE`` and
-``ENGINE_FEE_POLICY`` (``app.config``; defaults ``client_first`` / ``front_loaded``,
+``ENGINE_FEE_POLICY`` (``app.config``; defaults ``fee_first`` / ``front_loaded``,
 docs/ENGINE.md), unless a caller passes them. Both are part of the affordability
 cache key. ``feasibility.engine.evaluate_offer`` (the take-home wrapper) is not used
 here: it is always ``fee_first`` + ``front_loaded``.
+
+``scenario.min_cushion_cents`` (firm default, or the call's override) is the engine's
+soft client cushion: ``evaluate`` reports ``cushion_kept`` and tags the cushion as a
+PRIVATE fact (blocklisted, never in NLG). The affordability scan ignores it: the
+cushion never changes which prices are affordable.
 """
 
 from __future__ import annotations
@@ -63,6 +68,9 @@ class EvalSummary:
     facts: FactSet
     offer_total_cents: int
     program_fee_cents: int
+    # Soft client cushion used for this run (0 = none) and whether the plan kept it.
+    min_cushion_cents: int = 0
+    cushion_kept: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -186,6 +194,7 @@ def evaluate(
         creditor_balance_cents=scenario.creditor_balance_cents,
         original_balance_cents=scenario.original_balance_cents,
         fee_policy=fee_policy,
+        min_cushion_cents=scenario.min_cushion_cents,
     )
     result = engine_evaluate(problem, bp, objective)
     # Same Decimal half-up as the engine, so Fact values match its money rules.
@@ -194,6 +203,17 @@ def evaluate(
         bp_to_decimal(rules.program_fee_bp), scenario.original_balance_cents
     )
     facts = _facts_from_result(result, offer_total, first_payment_date)
+    if scenario.min_cushion_cents > 0:
+        # Client-protection policy: PRIVATE, so it is blocklisted and never reaches NLG.
+        facts.add(
+            Fact(
+                id="min_cushion",
+                kind="money",
+                value=scenario.min_cushion_cents,
+                visibility="PRIVATE",
+                source="engine",
+            )
+        )
     return EvalSummary(
         feasible=result.feasible,
         shape=result.pay_shape_used,
@@ -203,6 +223,8 @@ def evaluate(
         facts=facts,
         offer_total_cents=offer_total,
         program_fee_cents=program_fee,
+        min_cushion_cents=scenario.min_cushion_cents,
+        cushion_kept=result.cushion_kept,
     )
 
 

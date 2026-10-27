@@ -16,7 +16,8 @@ Written before the code. `feasibility/objectives.py` implements these keys as wr
 - `w_j` is the lowest balance in window j (`t_j <= d < t_{j+1}`) after committed ledger
   entries, creditor payments and bank fees, before the program fee. By the prefix-cap
   identity (`feasibility/problem.py`), `w_j = base_w[j] - P_min(j,k) - bf*min(j,k)`.
-- `b` is the soft buffer (`constants.py`; currently 0).
+- `b` is the soft buffer: the firm's minimum client cushion for this call
+  (`Problem.min_cushion_cents`; 0 when none). See "Minimum client cushion" below.
 - `Φ_j` is the program fee collected by `t_j`.
 
 ### Fee policy (`Problem.fee_policy`)
@@ -61,11 +62,46 @@ cliff     = p_k / lower median of p,   shape_order: even < staircase < balloon
 then the firm's fee timing, then fewer payments. Its tail is the fee-first key, so ties
 break the same way. `evaluate_offer` (the take-home wrapper) is always `fee_first` +
 `front_loaded`. The agent uses `ENGINE_OBJECTIVE` / `ENGINE_FEE_POLICY` (defaults
-`client_first` / `front_loaded`).
+`fee_first` / `front_loaded`).
 
-Trade-off: more payments mean more bank fees (`bf` each), so a client-first plan can cost
-the client a few dollars more in total while keeping more money in the account at the
-tightest point. The key ranks the low point first, by design.
+**Default: fee-first (decision 2026-10-27).** Client-first was the first default. It
+spreads the price over more payments, and each payment carries the bank fee. Over the
+357 feasible scenario points it cost the client a median $19.00 (max $38.00) more in
+bank fees than fee-first. On the 100-call oracle eval the 21 deals went from an average
+of 3.0 to 8.3 payments. So the default is the take-home ranking. Client protection comes
+from the firm's minimum cushion instead, which is a floor, not a preference for more
+payments. `client_first` stays available as a setting, with its tests and the
+measurements below as evidence.
+
+### Minimum client cushion (soft, per firm, per call)
+
+- **What it is.** `min_cushion_cents`: money the plan should leave in the client's
+  account at every point, with fees taken. It is the firm's client-protection policy.
+- **Where it comes from.** `firm.json` `min_cushion_cents` (integer cents, 0 to 500,000,
+  i.e. up to $5,000; 0 when absent) is the firm default. The operator can change it for
+  one call in the Debt negotiator view; it travels in the `start` event
+  (`start.min_cushion_cents`), is validated by the server, and is not stored.
+- **How the engine uses it.** It is the Tier C buffer `b`, under every objective and fee
+  policy. The engine first looks for the best plan that keeps every balance at or above
+  `b` (pre-window balances, every window after the fee). When no plan at that price can,
+  it falls back to the best plan at `b = 0`. `Result.cushion_kept` says which (`None`
+  when the cushion is 0 or nothing is feasible).
+- **What it never changes.** Which prices are affordable: the affordability scan
+  (`is_feasible`) runs at `b = 0`, so the agent's highest offer does not move. Nor the
+  rescue amounts L\* and X\*, or the take-home wrapper `evaluate_offer` (always 0).
+- **Who sees it.** PRIVATE. It is in the operator brief, the operator trace ("The plan
+  keeps at least $100 in the client's account." / "No plan at this price keeps $100 in
+  the client's account, so the agent used one that goes lower."), a private audit row and
+  the guard blocklist. Never the rep stream, never NLG input.
+- **Check.** Requiring `b` on every balance equals starting the client `b` lower and
+  requiring 0, so a kept result must match the cushion-0 result for the shifted client
+  payment for payment (`tests/engine/test_cushion.py`, all four modes). That check found a
+  latent bug in the cliff post-pass: its slack bound ignored the buffer (fixed; no
+  effect at `b = 0`).
+
+Trade-off of `client_first`: more payments mean more bank fees (`bf` each), so a
+client-first plan can cost the client a few dollars more in total while keeping more
+money in the account at the tightest point. That key ranks the low point first, by design.
 
 ### Why cushion holds the whole fee back (measured before fixing the key)
 

@@ -1,10 +1,11 @@
 """Engine objective / fee policy settings through the adapter, and CONFIRM read-back.
 
-Phase 59: ``ENGINE_OBJECTIVE`` (default ``client_first``) and ``ENGINE_FEE_POLICY``
-(default ``front_loaded``) reach ``engine_adapter.evaluate`` / ``affordability``; the
-affordability cache key includes both; the validator's ``fee_proportional`` rule is off
-unless asked for; CONFIRM read-back renders every engine shape and count correctly
-("1 payment", never "1 payments"; the count spoken equals the plan's).
+Phase 59: ``ENGINE_OBJECTIVE`` (default ``fee_first`` since the 2026-10-27 decision) and
+``ENGINE_FEE_POLICY`` (default ``front_loaded``) reach ``engine_adapter.evaluate`` /
+``affordability``; the affordability cache key includes both; the validator's
+``fee_proportional`` rule is off unless asked for; CONFIRM read-back renders every
+engine shape and count correctly ("1 payment", never "1 payments"; the count spoken
+equals the plan's).
 """
 
 from __future__ import annotations
@@ -41,14 +42,14 @@ def _true_rules(name: str) -> tuple[object, CreditorRules, date]:
 
 def test_settings_defaults() -> None:
     s = Settings()
-    assert (s.engine_objective, s.engine_fee_policy) == ("client_first", "front_loaded")
-    assert ea.engine_mode() == ("client_first", "front_loaded")
+    assert (s.engine_objective, s.engine_fee_policy) == ("fee_first", "front_loaded")
+    assert ea.engine_mode() == ("fee_first", "front_loaded")
     assert ea.engine_mode("fee_first", "proportional") == ("fee_first", "proportional")
 
 
 def test_env_example_lists_the_engine_settings() -> None:
     text = (ROOT / ".env.example").read_text()
-    assert "ENGINE_OBJECTIVE=client_first" in text
+    assert "ENGINE_OBJECTIVE=fee_first" in text
     assert "ENGINE_FEE_POLICY=front_loaded" in text
 
 
@@ -57,20 +58,20 @@ def test_adapter_evaluate_follows_engine_objective_setting(
 ) -> None:
     call, rules, fpd = _true_rules("easy_deal")
     n = ea.evaluate(call, rules, 4000, fpd).facts.get("num_payments").value
-    assert n == 5  # client-first: the most payments the $100 minimum allows
-    monkeypatch.setenv("ENGINE_OBJECTIVE", "fee_first")
+    assert n == 2  # fee-first default: the take-home plan
+    monkeypatch.setenv("ENGINE_OBJECTIVE", "client_first")
     get_settings.cache_clear()
-    assert ea.evaluate(call, rules, 4000, fpd).facts.get("num_payments").value == 2
-    assert ea.evaluate(call, rules, 4000, fpd, objective="client_first").facts.get(
+    assert ea.evaluate(call, rules, 4000, fpd).facts.get("num_payments").value == 5
+    assert ea.evaluate(call, rules, 4000, fpd, objective="fee_first").facts.get(
         "num_payments"
-    ).value == 5
+    ).value == 2
 
 
 def test_affordability_cache_key_includes_mode() -> None:
     ea.clear_affordability_cache()
     call, rules, fpd = _true_rules("counter_ladder")
     a = ea.affordability(call, rules, fpd)
-    b = ea.affordability(call, rules, fpd, objective="fee_first")
+    b = ea.affordability(call, rules, fpd, objective="client_first")
     c = ea.affordability(call, rules, fpd, fee_policy="proportional")
     info = ea._affordability_cached.cache_info()
     assert info.misses == 3 and info.hits == 0

@@ -18,6 +18,12 @@
  * refetches on every `turn_done`, so the trace is there whichever
  * view the call was started in.
  *
+ * Minimum client cushion: the Debt negotiator view shows `CushionField` before a
+ * call, pre-filled with the scenario's firm default (`brief.firm.min_cushion_cents`,
+ * or a custom case's `firm.min_cushion_cents`). An edited value is sent as
+ * `start.min_cushion_cents` for that call only; it is never stored. The Creditor rep
+ * view never shows it.
+ *
  * Custom test cases: "Add a test case" opens `CaseEditor`; saved
  * cases join the cards, persist in `localStorage` and start with
  * `start.scenario_payload` (played by hand: autoplay is curated-only).
@@ -36,6 +42,7 @@ import { AppShell } from "@/components/AppShell";
 import { CaseEditor } from "@/components/CaseEditor";
 import { ClientLedger } from "@/components/ClientLedger";
 import { Conversation } from "@/components/Conversation";
+import { CushionField } from "@/components/CushionField";
 import { ScenarioBrief } from "@/components/ScenarioBrief";
 import { YourAccount } from "@/components/YourAccount";
 import { Button } from "@/components/ui/button";
@@ -60,6 +67,7 @@ import {
   type ScenarioSource,
   serverId,
 } from "@/lib/customCases";
+import { formatCushion, parseCushion } from "@/lib/cushion";
 import { type Lens, viewFor } from "@/lib/lens";
 import { micEventFor, micReducer, type MicState } from "@/lib/mic";
 import { endedLine } from "@/lib/outcome";
@@ -198,6 +206,13 @@ const OUTCOME: Record<string, string> = {
 
 type EditorState = { mode: "add" } | { mode: "edit"; key: string };
 
+/** A custom case's firm default cushion (`firm.min_cushion_cents`), 0 when absent or not a number. */
+function customCushion(payload: Record<string, unknown>): number {
+  const firm = payload.firm as { min_cushion_cents?: unknown } | undefined;
+  const v = firm?.min_cushion_cents;
+  return typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : 0;
+}
+
 const DEFAULT_SCENARIO = "easy_deal";
 
 function LiveApp() {
@@ -269,20 +284,34 @@ function LiveApp() {
     if (over) void engine.stopMic(true);
   }, [over, engine]);
 
+  const brief = useScenarioBrief(source, lens, source !== null);
+
+  // ------------------------------------------------ minimum client cushion (this call only)
+  const [cushionEdit, setCushionEdit] = useState<{ id: string; text: string } | null>(null);
+  const firmCushion = custom ? customCushion(custom.payload) : (brief?.firm.min_cushion_cents ?? 0);
+  const edited = cushionEdit?.id === selected;
+  const cushionText = edited ? cushionEdit.text : formatCushion(firmCushion);
+  const cushionParsed = parseCushion(cushionText);
+  const cushionInvalid = lens === "operator" && "error" in cushionParsed;
+  const cushionOverride =
+    lens === "operator" && edited && "cents" in cushionParsed && cushionParsed.cents !== firmCushion
+      ? cushionParsed.cents
+      : undefined;
+
   const { start } = call;
   const startCall = useCallback(
     (autoplay: boolean) => {
       if (custom && autoplay) return;
       engine.reset(autoplay);
       if (autoplay) void engine.stopMic();
-      if (custom) start(serverId(custom.payload), { view: viewFor(lens), payload: custom.payload });
-      else start(selected, { view: viewFor(lens), autoplay });
+      const minCushionCents = cushionOverride;
+      if (custom) start(serverId(custom.payload), { view: viewFor(lens), payload: custom.payload, minCushionCents });
+      else start(selected, { view: viewFor(lens), autoplay, minCushionCents });
     },
-    [start, engine, selected, lens, custom],
+    [start, engine, selected, lens, custom, cushionOverride],
   );
 
   const scenario = scenarios.find((s) => s.id === selected) ?? null;
-  const brief = useScenarioBrief(source, lens, source !== null);
   const inCall = call.status === "connecting" || call.status === "live" || call.status === "ending";
   const callRunning = inCall && !over;
 
@@ -376,7 +405,7 @@ function LiveApp() {
         if (!inCall || over) setSelected(id);
       }}
       onWatch={() => startCall(true)}
-      watchDisabled={!scenario || call.status === "connecting" || custom !== null}
+      watchDisabled={!scenario || call.status === "connecting" || custom !== null || cushionInvalid}
       watchDisabledReason={custom ? CUSTOM_WATCH_REASON : undefined}
       watchLabel={call.autoplay && call.events.length > 0 ? "Watch again" : "Watch a call"}
       playing={call.autoplay && call.events.length > 0}
@@ -404,6 +433,9 @@ function LiveApp() {
       }
       actions={
         <>
+          {lens === "operator" && !callRunning && (
+            <CushionField text={cushionText} onText={(text) => setCushionEdit({ id: selected, text })} />
+          )}
           {call.lastCallId && (
             <a
               className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-surface px-4 text-sm font-medium hover:bg-surface-2"
@@ -418,7 +450,7 @@ function LiveApp() {
               <PhoneOff className="h-4 w-4" aria-hidden /> End call
             </Button>
           ) : (
-            <Button onClick={() => startCall(false)} disabled={!scenario}>
+            <Button onClick={() => startCall(false)} disabled={!scenario || cushionInvalid}>
               <PhoneCall className="h-4 w-4" aria-hidden /> Start call
             </Button>
           )}

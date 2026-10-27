@@ -117,6 +117,8 @@ def _private_values(scenario: Scenario) -> set[tuple[str, int | date]]:
     }
     for entry in client.ledger:
         out.add(("money", entry.amount_cents))
+    if scenario.call.min_cushion_cents > 0:  # firm client-protection policy
+        out.add(("money", scenario.call.min_cushion_cents))
     return out
 
 

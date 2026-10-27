@@ -141,10 +141,12 @@ class Settings(BaseSettings):
     max_no_progress_turns: int = 4
 
     # Which plan the engine picks among the legal ones (docs/ENGINE.md, Phase 59):
-    # client_first = most cushion, then smallest largest payment; fee_first = the
-    # take-home ranking (earliest program fee). The fee policy changes fee timing
-    # only, never which prices are affordable.
-    engine_objective: Literal["fee_first", "client_first"] = "client_first"
+    # fee_first = the take-home ranking (earliest program fee, then fewest payments;
+    # default, user decision 2026-10-27: client_first cost clients a median $19 more
+    # in bank fees); client_first = most cushion, then smallest largest payment. The
+    # firm's soft cushion (firm.json min_cushion_cents) applies under both. The fee
+    # policy changes fee timing only, never which prices are affordable.
+    engine_objective: Literal["fee_first", "client_first"] = "fee_first"
     engine_fee_policy: Literal["front_loaded", "proportional"] = "front_loaded"
 
     firm_name: str = "Synthetic Debt Relief"

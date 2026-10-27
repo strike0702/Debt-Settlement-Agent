@@ -18,6 +18,10 @@ candidate on the golden corpus.
 (the take-home rule) or ``proportional`` (fee by ``t_j`` at most ``floor(F*P_j/S)``); see
 ``objectives.py`` and docs/ENGINE.md. It changes fee timing only, never feasibility.
 
+``min_cushion_cents`` (Phase 59) is the soft client cushion: ``engine.evaluate`` first
+looks for a plan that keeps every balance at or above it (Tier C buffer) and falls back
+to 0 when none exists at that price. 0 (the default) means no cushion.
+
 ``window_caps`` and ``window_items`` are the same caps in the form the exact search
 (``search.py``) uses; they are cached on first use. Pure data: no search or scoring
 here. ``engine.evaluate(problem, bp)`` consumes it; the adapter builds one per
@@ -57,6 +61,7 @@ class Problem:
     program_fee_cents: int  # F
     base: SimulationResult  # no creditor payments, no bank fees, no program fee
     fee_policy: str = "front_loaded"  # "front_loaded" | "proportional"
+    min_cushion_cents: int = 0  # soft Tier C buffer; 0 = none
 
     @property
     def base_w(self) -> list[int]:
@@ -129,13 +134,17 @@ def build_problem(
     creditor_balance_cents: int,
     original_balance_cents: int,
     fee_policy: str = "front_loaded",
+    min_cushion_cents: int = 0,
 ) -> Problem:
     """Precompute cadence, caps inputs and the base simulation for one client + rules.
 
     ``first_payment_date=None`` means the default (end of the first draft's month).
     The two balances are keyword-only so ``evaluate(problem, bp)`` needs nothing else.
-    ``fee_policy`` is ``front_loaded`` (default) or ``proportional``.
+    ``fee_policy`` is ``front_loaded`` (default) or ``proportional``;
+    ``min_cushion_cents`` (>= 0) is the soft client cushion.
     """
+    if min_cushion_cents < 0:
+        raise ValueError("min_cushion_cents must be >= 0")
     if fee_policy not in ("front_loaded", "proportional"):
         raise ValueError(f"unknown fee_policy: {fee_policy!r}")
     t1 = first_payment_date or default_first_payment_date(client)
@@ -158,4 +167,5 @@ def build_problem(
         program_fee_cents=F,
         base=base,
         fee_policy=fee_policy,
+        min_cushion_cents=min_cushion_cents,
     )

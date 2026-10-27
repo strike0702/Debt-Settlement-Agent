@@ -13,7 +13,8 @@
  * repeated it"), a handoff is "Handed off to a specialist", and the server's
  * `reader` / `notes` become "Read by Claude Haiku" and plain lines about acks,
  * corrections, held-back amounts and dropped questions. Each dropped term says
- * why it was dropped (`DroppedTerm.reason`).
+ * why it was dropped (`DroppedTerm.reason`). `cushionLine` says whether the plan
+ * drafted on that turn keeps the firm's minimum client cushion (PRIVATE).
  */
 import { fieldLabel, isoDate, moneyShort, pct, termValue } from "@/lib/format";
 import type { TraceNote, TraceReader, TurnTraceEvent } from "@/types/protocol";
@@ -316,6 +317,19 @@ export function ackLine(t: TurnTraceEvent): string | null {
   ];
   const what = parts.length > 0 ? ` (${parts.join(", ")})` : "";
   return `The reply opens by repeating back what the rep just said${what}. Code builds that sentence from the rep's own words, before the template below.`;
+}
+
+/**
+ * Whether the drafted plan keeps the minimum client cushion, in plain words; null when
+ * the turn drafted no plan or no cushion was set. PRIVATE (negotiator view only).
+ */
+export function cushionLine(t: TurnTraceEvent): string | null {
+  const c = t.cushion;
+  if (!c) return null;
+  const amount = moneyShort(c.min_cushion_cents);
+  return c.kept
+    ? `The plan keeps at least ${amount} in the client's account.`
+    : `No plan at this price keeps ${amount} in the client's account, so the agent used one that goes lower.`;
 }
 
 export type Afford = { tone: "good" | "bad" | "neutral"; text: string } | null;

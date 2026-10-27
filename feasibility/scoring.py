@@ -192,7 +192,8 @@ def flatten_cliff(
         MAX_CLIFF_RATIO.denominator
     )
 
-    d_slack = sim.w[k - 1] - placement.Phi[k - 1]
+    # Room in window k-1 above the buffer (the re-check below demands the buffer too).
+    d_slack = sim.w[k - 1] - placement.Phi[k - 1] - buffer
     d_order = (p[k - 1] - p[k - 2] - 1) // 2
     d_need = p[k - 1] - target
     delta = max(0, min(d_slack, d_order, d_need))

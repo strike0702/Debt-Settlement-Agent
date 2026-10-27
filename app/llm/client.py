@@ -46,6 +46,11 @@ that failed before the call moved to another key. Each meta carries ``key_id``
 cooldown waits); ``queue_wait_scope`` sums it for a turn.
 ``app.llm.call_audit`` turns that hook into audit-log rows.
 
+STT: ``transcribe_detailed`` asks Whisper models for ``verbose_json`` and
+returns the text with per-segment ``no_speech_prob`` / ``avg_logprob``
+(``Transcription``); ``transcribe`` returns the text only. Deciding whether a
+transcript is a hallucination is ``app.voice.stt``'s job, not this client's.
+
 Daily budget: a route entry may carry ``budgeted: true`` (only the
 demo ``nlu`` route's Claude target does; a ``judge`` route may not, so eval
 judging is never capped). Its provider must list the model under
@@ -140,7 +145,9 @@ OnCallHook = Callable[[dict[str, Any]], Awaitable[None] | None]
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_PROVIDERS = _REPO_ROOT / "config" / "providers.yaml"
-_WHISPER_PROMPT = "settlement, minimum payment, balloon, monthly payments, percent"
+#: Whisper bias prompt. On non-speech audio Whisper tends to "hear" these
+#: words, so ``app.voice.stt`` also drops transcripts made only of them.
+WHISPER_PROMPT = "settlement, minimum payment, balloon, monthly payments, percent"
 _FENCE_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```\s*$", re.DOTALL | re.IGNORECASE)
 _SHORT_RETRY_S = 20.0
 _MAX_SHORT_RETRIES = 3
@@ -155,6 +162,49 @@ def _estimate_tokens(messages: Sequence[Mapping[str, Any]]) -> int:
 
 class LLMUnavailable(Exception):
     """Every routed target exhausted or otherwise unusable."""
+
+
+@dataclass(frozen=True)
+class SttSegment:
+    """Whisper's confidence for one transcript segment (``verbose_json``)."""
+
+    no_speech_prob: float
+    avg_logprob: float
+    compression_ratio: float | None = None
+
+
+@dataclass(frozen=True)
+class Transcription:
+    """STT text plus segment scores; ``segments`` is ``None`` when the provider gave none."""
+
+    text: str
+    segments: tuple[SttSegment, ...] | None = None
+
+
+def _wants_verbose_stt(model: str) -> bool:
+    """Whisper models return ``verbose_json`` segment scores; other STT models may reject it."""
+    return "whisper" in model.lower()
+
+
+def _num_field(obj: Any, key: str) -> float | None:
+    """``obj[key]`` / ``obj.key`` as a float, or ``None`` when missing or not a number."""
+    v = obj.get(key) if isinstance(obj, dict) else getattr(obj, key, None)
+    return float(v) if isinstance(v, int | float) else None
+
+
+def _stt_segments(resp: Any) -> tuple[SttSegment, ...] | None:
+    """Segment scores from a ``verbose_json`` reply (SDK object or dict), else ``None``."""
+    raw = resp.get("segments") if isinstance(resp, dict) else getattr(resp, "segments", None)
+    if not raw:
+        return None
+    out: list[SttSegment] = []
+    for seg in raw:
+        nsp, lp = _num_field(seg, "no_speech_prob"), _num_field(seg, "avg_logprob")
+        if nsp is None or lp is None:
+            return None
+        out.append(SttSegment(nsp, lp, _num_field(seg, "compression_ratio")))
+    return tuple(out)
+
 
 
 def strip_json_fences(text: str) -> str:
@@ -307,8 +357,14 @@ class FakeLLM:
         return json.dumps(raw)
 
     async def transcribe(self, wav_bytes: bytes, prompt: str | None = None) -> str:
+        return (await self.transcribe_detailed(wav_bytes, prompt)).text
+
+    async def transcribe_detailed(
+        self, wav_bytes: bytes, prompt: str | None = None
+    ) -> Transcription:
+        """Scripted STT: a queued ``Transcription`` as is, anything else as text with no scores."""
         raw = await self._take("stt")
-        return str(raw)
+        return raw if isinstance(raw, Transcription) else Transcription(str(raw))
 
     async def aclose(self) -> None:
         """No-op; matches ``LLMClient.aclose`` for shared teardown."""
@@ -1264,13 +1320,19 @@ class LLMClient:
         return text, pt, ct, latency_ms, key.label
 
     async def transcribe(self, wav_bytes: bytes, prompt: str | None = None) -> str:
+        return (await self.transcribe_detailed(wav_bytes, prompt)).text
+
+    async def transcribe_detailed(
+        self, wav_bytes: bytes, prompt: str | None = None
+    ) -> Transcription:
+        """Transcribe a WAV blob; Whisper targets also return segment scores."""
         if self._fake is not None and self.settings.llm_profile == "offline":
-            return await self._fake.transcribe(wav_bytes, prompt)
+            return await self._fake.transcribe_detailed(wav_bytes, prompt)
 
         route = self._route("stt")
         failover_from: str | None = None
         last_err: Exception | None = None
-        use_prompt = prompt if prompt is not None else _WHISPER_PROMPT
+        use_prompt = prompt if prompt is not None else WHISPER_PROMPT
 
         for target in route:
             provider, model = target.provider, target.model
@@ -1280,7 +1342,7 @@ class LLMClient:
             t0 = time.perf_counter()
             queue = QueueWait()
             try:
-                text, latency_ms, key_id = await self._transcribe_once(
+                result, latency_ms, key_id = await self._transcribe_once(
                     provider, model, wav_bytes, use_prompt,
                     params=target.params, queue=queue, timeout_s=timeout_s,
                     failover_from=failover_from,
@@ -1308,7 +1370,7 @@ class LLMClient:
                 queue_ms=queue.ms,
                 key_id=key_id,
             )
-            return text
+            return result
 
         raise LLMUnavailable(str(last_err) if last_err else "no usable STT targets")
 
@@ -1323,11 +1385,12 @@ class LLMClient:
         queue: QueueWait | None = None,
         timeout_s: float | None = None,
         failover_from: str | None = None,
-    ) -> tuple[str, float, str]:
-        """One STT target on its key pool, under one STT deadline; returns ``(text, ms, key)``."""
+    ) -> tuple[Transcription, float, str]:
+        """One STT target on its key pool, under one STT deadline; returns ``(result, ms, key)``."""
         timeout_s = timeout_s or self._timeout_for("stt")
         if self._providers[provider].api == "anthropic":
             raise _TargetFailed(f"{provider}/{model} has no speech-to-text API")
+        verbose = _wants_verbose_stt(model)
 
         async def send(client: AsyncOpenAI, remaining_s: float) -> Any:
             # The SDK wants a named file-like object; a fresh one per attempt.
@@ -1335,6 +1398,7 @@ class LLMClient:
             bio.name = "audio.wav"
             return await client.audio.transcriptions.create(
                 model=model,
+                **({"response_format": "verbose_json"} if verbose else {}),
                 file=bio,
                 language="en",
                 temperature=0,
@@ -1354,7 +1418,8 @@ class LLMClient:
             failover_from=failover_from,
         )
         text = resp.text if hasattr(resp, "text") else str(resp)
-        return text, latency_ms, key.label
+        segments = _stt_segments(resp) if verbose else None
+        return Transcription(text, segments), latency_ms, key.label
 
     async def aclose(self) -> None:
         for keys in self._keys.values():

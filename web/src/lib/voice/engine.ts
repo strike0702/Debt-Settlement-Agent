@@ -13,20 +13,29 @@
  *   unless a barge-in drops it; then `barge_in.spoken_ids` names what was heard,
  *   including the sentence in flight.
  * - `ttsGen` bumps on every cancel, so a stale `onend`/`onerror` never acks.
- * - Speech that starts while the agent talks (or within the echo guard) can
- *   barge, but its clip is "contaminated" and never sent to STT.
+ * - Speech that starts while the agent talks, within the onset guard, or in
+ *   the echo tail after the agent stops is "contaminated" and never sent to
+ *   STT. Over the agent it barges only on `BARGE_SENSITIVITY` evidence
+ *   (strong frames for ~0.5 s), because Chrome does not cancel TTS echo.
  * - Browser STT is stopped for the whole agent turn (it would hear the TTS).
  * - The backchannel ("One moment.", rotated) is local: never sent, never acked.
  */
 import type { ClientEvent, ServerEvent } from "@/types/protocol";
 import { isBenignTtsError, pickVoice, speakableText, type VoiceLike } from "./speech";
-import { MIC_CONSTRAINTS, type VadCallbacks, type VadLike } from "./vad";
+import { BARGE_SENSITIVITY, MIC_CONSTRAINTS, type VadCallbacks, type VadLike } from "./vad";
 import { encodeWav } from "./wav";
 
 export type SttMode = "server" | "browser";
 
 /** Ignore barge for this long after TTS starts (speaker-onset echo). */
 export const BARGE_ECHO_GUARD_MS = 750;
+/**
+ * After the agent (or the backchannel) stops, speaker echo and room reverb
+ * linger. Speech that starts within this tail is treated like speech during
+ * TTS: its clip is dropped, never sent to STT (Whisper turns it into
+ * "payment, payment"). Listening re-arms when the tail ends.
+ */
+export const ECHO_TAIL_MS = 700;
 /** Filler lines, played in turn so consecutive waits never repeat. No digits. */
 export const BACKCHANNEL_PHRASES = [
   "One moment.",
@@ -190,6 +199,9 @@ export class VoiceEngine {
   private backchannelNext = 0;
   private bargeSuppressUntil = 0;
   private utteranceContaminated = false;
+  /** A contaminated segment over the agent: count strong frames toward a barge. */
+  private bargeWatch = false;
+  private bargeRun = 0;
   private browserIgnoreResults = false;
   private browserPausedForTts = false;
   private vad: VadLike | null = null;
@@ -364,6 +376,7 @@ export class VoiceEngine {
   private drainQueue(): void {
     const next = this.queue.shift();
     if (!next) {
+      if (this.snap.speaking) this.startEchoTail();
       this.set({ speaking: false });
       this.currentUtter = null;
       this.turnSayAt = null;
@@ -457,7 +470,9 @@ export class VoiceEngine {
     utter.rate = 1.05;
     this.backchannelUtter = utter;
     const release = () => {
-      if (this.backchannelUtter === utter) this.backchannelUtter = null;
+      if (this.backchannelUtter !== utter) return;
+      this.backchannelUtter = null;
+      this.startEchoTail();
     };
     utter.onend = release;
     utter.onerror = release;
@@ -467,6 +482,11 @@ export class VoiceEngine {
     } catch {
       this.backchannelUtter = null;
     }
+  }
+
+  /** Treat the next `ECHO_TAIL_MS` like agent speech (see the constant). */
+  private startEchoTail(): void {
+    this.bargeSuppressUntil = Math.max(this.bargeSuppressUntil, this.deps.now() + ECHO_TAIL_MS);
   }
 
   get backchannelPlaying(): boolean {
@@ -487,6 +507,25 @@ export class VoiceEngine {
     this.io.sendJson({ type: "barge_in", spoken_ids: spoken });
     // Abandon the mixed clip; the rep's next words start a clean utterance.
     void this.armMicAfterAgent();
+  }
+
+  /** Count strong speech frames over the agent; barge once `BARGE_SENSITIVITY` is met. */
+  private bargeEvidence(isSpeech: number): void {
+    if (!this.bargeWatch) return;
+    if (!this.agentIsTalking()) {
+      this.bargeWatch = false;
+      return;
+    }
+    // The onset guard: the first echo of each sentence never counts.
+    if (this.deps.now() < this.bargeSuppressUntil) {
+      this.bargeRun = 0;
+      return;
+    }
+    if (isSpeech >= BARGE_SENSITIVITY.positiveSpeechThreshold) this.bargeRun += 1;
+    else if (isSpeech < BARGE_SENSITIVITY.negativeSpeechThreshold) this.bargeRun = 0;
+    if (this.bargeRun < BARGE_SENSITIVITY.minSpeechFrames) return;
+    this.bargeWatch = false;
+    if (this.maybeBargeFromMic()) this.set({ interim: LABEL.listening });
   }
 
   private maybeBargeFromMic(): boolean {
@@ -527,6 +566,7 @@ export class VoiceEngine {
    */
   private async resetVadCapture(): Promise<void> {
     this.utteranceContaminated = false;
+    this.bargeWatch = false;
     const instance = this.vad;
     if (!this.snap.micOn || !instance) return;
     try {
@@ -631,12 +671,18 @@ export class VoiceEngine {
 
   private vadCallbacks(gen: number): VadCallbacks {
     return {
+      onFrameProcessed: (probs) => {
+        if (gen !== this.micGen) return;
+        this.bargeEvidence(probs.isSpeech);
+      },
       onSpeechStart: () => {
         if (gen !== this.micGen) return;
-        // Speech over the agent can barge, but its audio is not safe to transcribe.
+        // Speech over the agent or in its echo tail is not safe to transcribe;
+        // over the agent it may still barge once the evidence is strong enough.
         if (this.agentIsTalking() || this.deps.now() < this.bargeSuppressUntil) {
           this.utteranceContaminated = true;
-          if (this.maybeBargeFromMic()) this.set({ interim: LABEL.listening });
+          this.bargeWatch = this.agentIsTalking();
+          this.bargeRun = 0;
           return;
         }
         this.utteranceContaminated = false;
@@ -645,10 +691,12 @@ export class VoiceEngine {
       onVADMisfire: () => {
         if (gen !== this.micGen) return;
         this.utteranceContaminated = false;
+        this.bargeWatch = false;
         this.maybeShowListening();
       },
       onSpeechEnd: (audio) => {
         if (gen !== this.micGen) return;
+        this.bargeWatch = false;
         if (this.utteranceContaminated) {
           // TTS bleed or a mixed barge clip: drop it and wait for a clean one.
           this.utteranceContaminated = false;

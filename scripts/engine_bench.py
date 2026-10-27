@@ -11,8 +11,12 @@ Times what ``app.adapter.engine_adapter.affordability`` does on a cache miss
 
 Prints JSON (median per fixed target over ``--repeat`` runs; p50 / p95 / max over the
 case sets). Read-only timing: never changes engine output. Phase 57b, ``bench.md``.
+``--objective`` / ``--fee-policy`` (Phase 59) pick the engine mode every scan runs under
+(default ``fee_first`` / ``front_loaded``, the 57b numbers). ``--scan feasible`` times the
+adapter's scan since Phase 59 (``engine.is_feasible`` per point, no ranking).
 
     uv run python scripts/engine_bench.py --repeat 15 --adversarial 300
+    uv run python scripts/engine_bench.py --objective client_first --adversarial 300
 """
 
 from __future__ import annotations
@@ -29,23 +33,32 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from feasibility.engine import evaluate  # noqa: E402
+from feasibility.engine import evaluate, is_feasible  # noqa: E402
 from feasibility.models import CreditorRules  # noqa: E402
 from feasibility.problem import build_problem  # noqa: E402
 from tests.engine import gen_cases  # noqa: E402
 from tests.engine.golden import build_golden as bg  # noqa: E402
 
 SCAN = range(100, 10001, 100)
+SINGLE: list[float] = []  # every timed single evaluate (``--scan evaluate``)
+MODE = {"objective": "fee_first", "fee_policy": "front_loaded", "scan": "evaluate"}
 
 
 def scan_secs(client: Any, rules: CreditorRules, fpd: Any, cb: int, ob: int) -> float:
     """Wall time of one cold 100-point scan (Problem build included)."""
     t = time.perf_counter()
     problem = build_problem(
-        client, rules, fpd, creditor_balance_cents=cb, original_balance_cents=ob
+        client, rules, fpd, creditor_balance_cents=cb, original_balance_cents=ob,
+        fee_policy=MODE["fee_policy"],
     )
-    for bp in SCAN:
-        evaluate(problem, bp)
+    if MODE["scan"] == "feasible":  # what engine_adapter.affordability does since P59
+        for bp in SCAN:
+            is_feasible(problem, bp)
+    else:
+        for bp in SCAN:
+            t1 = time.perf_counter()
+            evaluate(problem, bp, MODE["objective"])
+            SINGLE.append(time.perf_counter() - t1)
     return time.perf_counter() - t
 
 
@@ -96,9 +109,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--repeat", type=int, default=15)
     p.add_argument("--adversarial", type=int, default=300)
     p.add_argument("--seed", type=int, default=57)
+    p.add_argument("--objective", choices=("fee_first", "client_first"), default="fee_first")
+    p.add_argument(
+        "--fee-policy", choices=("front_loaded", "proportional"), default="front_loaded"
+    )
+    p.add_argument("--scan", choices=("evaluate", "feasible"), default="evaluate")
     args = p.parse_args(argv)
+    MODE.update(objective=args.objective, fee_policy=args.fee_policy, scan=args.scan)
 
-    out: dict[str, Any] = {"fixed_median_ms": {}, "fixed_max_ms": {}}
+    out: dict[str, Any] = {"mode": dict(MODE), "fixed_median_ms": {}, "fixed_max_ms": {}}
     fixed: dict[str, tuple[Any, ...]] = dict(demo_targets())
     for name in bg.SCENARIOS:
         c = bg.scenario_case(name)
@@ -111,17 +130,25 @@ def main(argv: list[str] | None = None) -> int:
         out["fixed_median_ms"][name] = round(statistics.median(runs) * 1000, 2)
         out["fixed_max_ms"][name] = round(max(runs) * 1000, 2)
 
+    if SINGLE:
+        out["single_evaluate_fixed"] = dist(SINGLE)
+        SINGLE.clear()
     fx = [case_secs(bg.fixture_case(n)) for n in bg.FIXTURE_CASES]
     out["engine_fixtures"] = dist(fx)
     golden = gen_cases.random_cases(bg.RANDOM_SEED, bg.RANDOM_COUNT)
     gt = [(case_secs(c), c["id"]) for c in golden]
     out["golden_random"] = dist([t for t, _ in gt])
     out["golden_random_slowest"] = [[i, round(t * 1000, 1)] for t, i in sorted(gt)[-5:]]
+    if SINGLE:
+        out["single_evaluate_fixtures_golden"] = dist(SINGLE)
+        SINGLE.clear()
     if args.adversarial:
         adv = gen_cases.adversarial_cases(args.seed, args.adversarial)
         at = [(case_secs(c), c["id"]) for c in adv]
         out["adversarial"] = dist([t for t, _ in at])
         out["adversarial_slowest"] = [[i, round(t * 1000, 1)] for t, i in sorted(at)[-5:]]
+    if SINGLE:
+        out["single_evaluate_adversarial"] = dist(SINGLE)
     print(json.dumps(out, indent=2))
     return 0
 

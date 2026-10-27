@@ -3,7 +3,8 @@
 API keys, LLM profile and per-role request timeouts, NLG/NLU mode (and the
 NLG template-bank path), DB path,
 negotiation knobs (max turns, anchor ratio, accept line, loop guard, firm
-disclosure). Call
+disclosure), and the engine's schedule objective and fee policy
+(``ENGINE_OBJECTIVE`` / ``ENGINE_FEE_POLICY``, docs/ENGINE.md). Call
 ``get_settings()``; do not construct ``Settings`` ad hoc in hot paths.
 
 ``claude_daily_budget_usd`` (env ``CLAUDE_DAILY_BUDGET_USD``) caps the
@@ -21,7 +22,7 @@ from __future__ import annotations
 import re
 from decimal import Decimal
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field, SecretStr
 from pydantic.fields import FieldInfo
@@ -138,6 +139,13 @@ class Settings(BaseSettings):
     # many + 1 times, or after this many rep turns in a row with no progress.
     max_same_question: int = 2
     max_no_progress_turns: int = 4
+
+    # Which plan the engine picks among the legal ones (docs/ENGINE.md, Phase 59):
+    # client_first = most cushion, then smallest largest payment; fee_first = the
+    # take-home ranking (earliest program fee). The fee policy changes fee timing
+    # only, never which prices are affordable.
+    engine_objective: Literal["fee_first", "client_first"] = "client_first"
+    engine_fee_policy: Literal["front_loaded", "proportional"] = "front_loaded"
 
     firm_name: str = "Synthetic Debt Relief"
     opening_disclosure: str = (

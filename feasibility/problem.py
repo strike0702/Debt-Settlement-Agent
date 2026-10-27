@@ -14,6 +14,10 @@ gives a fixed cap on ``P_j``. ``simulate.apply_payments`` implements this and
 ``tests/engine/test_prefix_cap.py`` checks it against a full replay for every
 candidate on the golden corpus.
 
+``fee_policy`` (Phase 59) says how the program fee may be collected: ``front_loaded``
+(the take-home rule) or ``proportional`` (fee by ``t_j`` at most ``floor(F*P_j/S)``); see
+``objectives.py`` and docs/ENGINE.md. It changes fee timing only, never feasibility.
+
 ``window_caps`` and ``window_items`` are the same caps in the form the exact search
 (``search.py``) uses; they are cached on first use. Pure data: no search or scoring
 here. ``engine.evaluate(problem, bp)`` consumes it; the adapter builds one per
@@ -52,6 +56,7 @@ class Problem:
     floors: list[int]  # 1-indexed floors[1..max(k_max, 1)]
     program_fee_cents: int  # F
     base: SimulationResult  # no creditor payments, no bank fees, no program fee
+    fee_policy: str = "front_loaded"  # "front_loaded" | "proportional"
 
     @property
     def base_w(self) -> list[int]:
@@ -123,12 +128,16 @@ def build_problem(
     *,
     creditor_balance_cents: int,
     original_balance_cents: int,
+    fee_policy: str = "front_loaded",
 ) -> Problem:
     """Precompute cadence, caps inputs and the base simulation for one client + rules.
 
     ``first_payment_date=None`` means the default (end of the first draft's month).
     The two balances are keyword-only so ``evaluate(problem, bp)`` needs nothing else.
+    ``fee_policy`` is ``front_loaded`` (default) or ``proportional``.
     """
+    if fee_policy not in ("front_loaded", "proportional"):
+        raise ValueError(f"unknown fee_policy: {fee_policy!r}")
     t1 = first_payment_date or default_first_payment_date(client)
     cadence = build_cadence(client, t1)
     M = len(cadence)
@@ -148,4 +157,5 @@ def build_problem(
         floors=floors,
         program_fee_cents=F,
         base=base,
+        fee_policy=fee_policy,
     )

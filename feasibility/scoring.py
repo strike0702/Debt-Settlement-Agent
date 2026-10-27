@@ -1,7 +1,8 @@
 """Fee placement, candidate scoring and the Tier B cliff flattening post-pass.
 
 ``place_fee`` is the closed-form fee-first placement: cumulative fee by ``t_j`` is
-``min(F, suffix-min of window minima)``. ``score_key`` ranks feasible candidates
+``min(F, suffix-min of window minima)``, optionally capped by ``proportional_cap`` (the
+Phase 59 ``proportional`` fee policy; ``objectives.py``). ``score_key`` ranks feasible candidates
 (Φ vector lexicographically, then fewer payments, slack, cliff, shape, payments).
 ``evaluate_candidate`` simulates one vector (full replay, or the prefix-cap shortcut
 when given the ``base`` run) and places the fee. Candidate *generation* lives in
@@ -38,10 +39,12 @@ def place_fee(
     pre_min: int,
     F: int,
     buffer: int = 0,
+    cap: list[int] | None = None,
 ) -> FeePlacement:
     """Pointwise-maximal feasible cumulative fee via suffix minima.
 
-    Phi[j] = min(F, suffix_min(w[j..M]) - buffer).
+    Phi[j] = min(F, suffix_min(w[j..M]) - buffer), further capped by ``cap[j]`` when
+    given (1-indexed, non-decreasing: the proportional policy's ``floor(F*P_j/S)``).
     Feasible iff pre_min >= buffer, min(w) >= buffer, and w[M] - buffer >= F.
     """
     M = len(w) - 1  # w is 1-indexed
@@ -58,6 +61,8 @@ def place_fee(
     fee = [0] * (M + 1)
     for j in range(1, M + 1):
         Phi[j] = min(F, suffix[j] - buffer)
+        if cap is not None and cap[j] < Phi[j]:
+            Phi[j] = cap[j]
         if Phi[j] < 0:
             Phi[j] = 0
         fee[j] = Phi[j] - Phi[j - 1]
@@ -68,6 +73,21 @@ def place_fee(
     if feasible and Phi[M] != F:
         feasible = False
     return FeePlacement(Phi=Phi, fee=fee, feasible=feasible)
+
+
+def proportional_cap(payments: tuple[int, ...] | list[int], M: int, F: int) -> list[int]:
+    """1-indexed ``floor(F * P_j / S)`` for j = 1..M (``P_j = S`` from the last payment on).
+
+    The proportional fee policy's cap on the cumulative fee; non-decreasing, ``F`` at M.
+    """
+    S = sum(payments)
+    cap = [0] * (M + 1)
+    run = 0
+    for j in range(1, M + 1):
+        if j <= len(payments):
+            run += payments[j - 1]
+        cap[j] = F * run // S if S > 0 else F
+    return cap
 
 
 def median_low(payments: tuple[int, ...]) -> int:
@@ -118,18 +138,20 @@ def evaluate_candidate(
     F: int,
     buffer: int,
     base: SimulationResult | None = None,
+    fee_cap: list[int] | None = None,
 ) -> tuple[FeePlacement, SimulationResult] | None:
     """Simulate + place fee. Returns None if infeasible under buffer.
 
     With ``base`` (the no-payment run for this cadence) the simulation uses the
     prefix-cap identity instead of a full replay; the result is identical.
+    ``fee_cap`` is passed to ``place_fee`` (proportional policy, ``proportional_cap``).
     """
     if base is not None:
         sim = apply_payments(base, cadence, cand.payments, bank_fee_cents)
     else:
         payments = list(zip(cadence[: cand.k], cand.payments))
         sim = simulate(client, payments, cadence, bank_fee_cents)
-    placement = place_fee(sim.w, sim.pre_min, F, buffer)
+    placement = place_fee(sim.w, sim.pre_min, F, buffer, fee_cap)
     if not placement.feasible:
         return None
     # Also require all raw balances >= buffer (place_fee checks window mins /

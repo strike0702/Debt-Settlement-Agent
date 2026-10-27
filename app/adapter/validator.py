@@ -3,6 +3,10 @@
 Re-checks binding creditor rules (cadence, floors, fees, ledger, …) without
 importing ``feasibility.simulate``, ``shapes``, or ``scoring``. Used to prove
 agreements are legal even if the engine path is wrong or mocked.
+
+``fee_proportional`` (Phase 59) is checked only when the caller passes
+``fee_policy="proportional"``: the program fee collected by each row date must not
+exceed ``floor(F * creditor payments made by that date / offer total)``.
 """
 
 from __future__ import annotations
@@ -31,6 +35,7 @@ RULE_SEGMENTS = "segments"
 RULE_FEES_HORIZON = "fees_and_horizon"
 RULE_LEDGER = "ledger_nonnegative"
 RULE_BALANCE_MATCH = "balance_match"
+RULE_FEE_PROPORTIONAL = "fee_proportional"  # only under the proportional fee policy
 
 BINDING_RULES: tuple[str, ...] = (
     RULE_CADENCE,
@@ -75,8 +80,13 @@ def validate(
     program_fee: int,
     rules: CreditorRules,
     first_payment_date: date,
+    *,
+    fee_policy: str = "front_loaded",
 ) -> list[Violation]:
-    """Check all 10 binding rules. Empty list means the schedule is valid."""
+    """Check all 10 binding rules (plus ``fee_proportional`` under that policy).
+
+    Empty list means the schedule is valid.
+    """
     violations: list[Violation] = []
     pay_rows = _payment_rows(schedule_rows)
     payments = [r.creditor_payment_cents for r in pay_rows]
@@ -213,6 +223,24 @@ def validate(
                 )
             )
             break
+
+    # Proportional fee policy: cumulative fee never ahead of the share paid.
+    if fee_policy == "proportional" and offer_total > 0:
+        paid = fee = 0
+        for r in sorted(schedule_rows, key=lambda row: row.date):
+            paid += r.creditor_payment_cents
+            fee += r.program_fee_cents
+            allowed = program_fee * paid // offer_total
+            if fee > allowed:
+                violations.append(
+                    Violation(
+                        RULE_FEE_PROPORTIONAL,
+                        f"fee by {r.date} is {fee} > {allowed} (share of payments made)",
+                    )
+                )
+                break
+    elif fee_policy not in ("front_loaded", "proportional"):
+        raise ValueError(f"unknown fee_policy: {fee_policy!r}")
 
     # 9–10. Ledger replay: credits before debits, balance >= 0, balance_cents match.
     replay_violations = _replay_ledger(

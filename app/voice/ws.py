@@ -4,7 +4,8 @@ Client events: ``start``, ``end``, binary WAV, ``text``, ``sentence_done``,
 ``barge_in``, ``timing``. Server events (every ``type`` this module sends):
 ``transcript``, ``say``, ``belief``, ``eval``, ``blocked``, ``escalate``,
 ``latency``, ``audit``, ``phase``, ``agreement``, ``stt_error``, ``error``,
-``turn_done``, ``turn_trace`` (one per agent turn, operator only; it gains
+``turn_done``, ``speech_dropped`` (unheard sentences a barge dropped; the
+client cancels them), ``turn_trace`` (one per agent turn, operator only; it gains
 ``needs_info`` when the engine did not run, ``decide.reason_short``, and on
 rep turns ``reader`` (which model, code path or script read the line) and
 ``notes`` (acks, corrections, held-back amounts, dropped questions), both
@@ -786,6 +787,7 @@ class _CallConnection:
             audit=self.audit,
             auto_ack=False,
         )
+        self.orch.on_speech_dropped = self._on_speech_dropped
         self.audit.append(
             self.call_id,
             "orchestrator",
@@ -965,6 +967,10 @@ class _CallConnection:
         async with self._send_lock:
             await _send(self.ws, _phase_payload(self.orch.session))
             await self._audit_tail_and_done()
+
+    async def _on_speech_dropped(self, ids: list[str]) -> None:
+        """Tell the client to cancel sentences a barge dropped (it may still be playing them)."""
+        await self._send_one({"type": "speech_dropped", "ids": ids})
 
     async def _on_timing(self, data: dict[str, Any]) -> None:
         vad_ms = data.get("vad_end_to_first_audio_ms")

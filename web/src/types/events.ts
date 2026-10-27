@@ -24,7 +24,8 @@ export type ServerEvent =
   | ErrorEvent
   | TurnDoneEvent
   | TurnTraceEvent
-  | AutoplayDoneEvent;
+  | AutoplayDoneEvent
+  | SpeechDroppedEvent;
 export type Intent =
   | "OPENING"
   | "ASK"
@@ -322,6 +323,13 @@ export interface AutoplayDoneEvent {
   phase: Phase;
   turns: number;
   type: "autoplay_done";
+}
+/**
+ * The server dropped these unheard ``say`` sentences: stop them now, never ack them.
+ */
+export interface SpeechDroppedEvent {
+  ids: string[];
+  type: "speech_dropped";
 }
 /**
  * Start a call. ``autoplay`` lets the sim creditor drive it (curated ids only).

@@ -174,6 +174,9 @@ export function reduceCall(state: CallState, ev: CallEvent): CallState {
       };
     case "turn_done":
       return state;
+    case "speech_dropped":
+      // Voice-only: the engine stops those sentences; the transcript keeps the lines.
+      return state;
   }
 }
 

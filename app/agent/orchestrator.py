@@ -6,7 +6,12 @@ new creditor text arrives during NLU, and defers most ``Action.effects`` until
 (``offer_counter``, ``record_confirm``, ``set_phase``, …) applies eagerly on
 emit so a fast typed or voice accept wraps instead of re-confirming mid-TTS.
 Barge-in still keeps those kinds when any sentence was heard; other pending
-effects are dropped. Each public turn method runs inside
+effects are dropped. A barge that heard *nothing* undoes the whole turn: the
+state from before it (``TurnRollback``) is restored, so an unheard hold never
+moves the ladder, the client is told to cancel those sentences
+(``on_speech_dropped``), and the rep line is merged into the rep's next line
+(one NLU pass on the joined text). A late ``sentence_done`` for a dropped
+sentence is ignored and audited (``sentence_done_ignored``). Each public turn method runs inside
 ``llm_call_scope(call_id)`` so every NLU / NLG call is audited under this call.
 Every ``Utterance`` carries a ``TurnTrace`` (``app.schemas.events``) assembled
 from what the turn already computed — NLU terms and drops, belief changes,
@@ -34,6 +39,7 @@ effect → session mapping in ``app.agent.effects``; both are re-exported here.
 from __future__ import annotations
 
 import asyncio
+import copy
 import functools
 import time
 import uuid
@@ -93,7 +99,7 @@ from app.agent.policy import (
     speak_schedule_action,
 )
 from app.agent.reasons import reason_key, reason_text
-from app.agent.session import CallSession, PendingSpeech, Turn
+from app.agent.session import CallSession, PendingSpeech, Turn, TurnRollback
 
 # The find_alt_* searches are re-exported for callers that import them from here.
 from app.agent.term_alts import (  # noqa: F401
@@ -366,6 +372,15 @@ class Orchestrator:
         # Belief field → value the last emitted move acknowledged; the
         # next rep turn may correct it. Cleared when that turn starts.
         self._last_ack: dict[str, Any] = {}
+        # State from before the rep turn in flight; travels with its pending speech.
+        self._turn_rollback: TurnRollback | None = None
+        # A rep line whose reply was dropped unheard: still unanswered, so it is
+        # prepended to the rep's next line.
+        self._unheard_text: str | None = None
+        # Sentence ids dropped by a barge; a late ack of one is ignored.
+        self._dropped_ids: set[str] = set()
+        # Set by the voice socket: cancel these sentence ids on the client.
+        self.on_speech_dropped: Callable[[list[str]], Awaitable[None]] | None = None
 
     def _begin_trace(self, creditor_text: str | None) -> None:
         self._trace_ctx = {"creditor_text": creditor_text}
@@ -380,6 +395,8 @@ class Orchestrator:
         async with self._lock:
             t0 = time.perf_counter()
             self._begin_trace(None)
+            self._turn_rollback = None
+            self._unheard_text = None
             action = opening_action(settings=self.settings)
             action = action.model_copy(
                 update={
@@ -421,6 +438,11 @@ class Orchestrator:
         # is not overwritten without applying/dropping effects.
         if self.session.pending is not None:
             await self.on_barge_in(list(self.session.pending.acked))
+        # The rep's previous line got no heard reply: it and this one are one line.
+        unheard, self._unheard_text = self._unheard_text, None
+        if unheard:
+            text = f"{unheard} {text}".strip()
+            self._audit("orchestrator", "unheard_merge", {"merged": text[:200]})
 
         async with self._meta:
             merge_fut: asyncio.Future[Utterance] | None = None
@@ -488,12 +510,22 @@ class Orchestrator:
         """Caller must hold ``self._lock``. Releases it only during NLU await."""
         session = self.session
         t_server = time.perf_counter()
+        rollback = TurnRollback(
+            neg=copy.deepcopy(session.neg),
+            last_eval=session.last_eval,
+            agreed_bp=session.agreed_bp,
+            history_len=len(session.history),
+            belief_terms=copy.deepcopy(session.belief.terms),
+            last_ack=dict(self._last_ack),
+        )
+        self._turn_rollback = rollback
         acked, self._last_ack = self._last_ack, {}
 
         while True:
             session.neg.turn_idx += 1
             turn = session.neg.turn_idx
             working = text
+            rollback.rep_text = working
 
             session.history.append(Turn(role="creditor", text=working, spoken=True))
             self._begin_trace(working)
@@ -931,6 +963,17 @@ class Orchestrator:
         queued: str | None = None
         async with self._lock:
             pending = self.session.pending
+            known = set(pending.sentence_ids) if pending is not None else set()
+            stale = [sid for sid in ids if sid not in known]
+            if stale:
+                # Dropped by a barge (the client may ack before it hears of the drop).
+                reason = "dropped" if self._dropped_ids.issuperset(stale) else "unknown"
+                self._audit(
+                    "orchestrator", "sentence_done_ignored", {"ids": stale, "reason": reason}
+                )
+                ids = [sid for sid in ids if sid in known]
+                if not ids:
+                    return None
             if pending is None:
                 return None
             for sid in ids:
@@ -977,8 +1020,11 @@ class Orchestrator:
         onto a stale prior counter. A heard ASK / CLARIFY (the amount question
         too) keeps its question counts (``note_question`` / ``note_clarify``),
         so a question the rep keeps talking over still reaches its handoff.
-        Nothing the rep did not hear counts.
+        Nothing the rep did not hear counts: with no sentence heard the turn is
+        rolled back (``_roll_back``). Unheard sentence ids go to
+        ``on_speech_dropped`` so the client never plays them later.
         """
+        unheard_ids: list[str] = []
         async with self._lock:
             pending = self.session.pending
             spoken = set(spoken_ids)
@@ -991,8 +1037,14 @@ class Orchestrator:
                     turn.spoken = turn.sentence_id in spoken
 
             heard = bool(spoken.intersection(pending.sentence_ids))
+            unheard_ids = [sid for sid in pending.sentence_ids if sid not in spoken]
+            self._dropped_ids.update(unheard_ids)
             kept: list[Effect] = []
-            if heard and pending.action.intent in (
+            rolled_back = not heard and pending.rollback is not None
+            if rolled_back:
+                assert pending.rollback is not None
+                self._roll_back(pending.rollback)
+            elif heard and pending.action.intent in (
                 Intent.COUNTER,
                 Intent.CONFIRM_SCHEDULE,
                 Intent.COUNTER_TERMS,
@@ -1026,6 +1078,7 @@ class Orchestrator:
                 {
                     "spoken_ids": list(spoken),
                     "dropped_intent": dropped.intent.value,
+                    "rolled_back": rolled_back,
                     "kept_effects": [e.model_dump() for e in kept],
                     "dropped_effects": [
                         e.model_dump()
@@ -1034,6 +1087,23 @@ class Orchestrator:
                     ],
                 },
             )
+        if unheard_ids and self.on_speech_dropped is not None:
+            await self.on_speech_dropped(unheard_ids)
+
+    def _roll_back(self, rb: TurnRollback) -> None:
+        """Undo a turn the rep heard none of; its rep line waits to merge with the next."""
+        session = self.session
+        session.neg = rb.neg
+        session.last_eval = rb.last_eval
+        session.agreed_bp = rb.agreed_bp
+        if rb.belief_terms is not None:
+            session.belief.terms = rb.belief_terms
+        if rb.rep_text is None:
+            return
+        tail = session.history[rb.history_len :]
+        session.history[rb.history_len :] = [t for t in tail if t.role != "creditor"]
+        self._last_ack = rb.last_ack
+        self._unheard_text = rb.rep_text
 
     @_call_scoped
     async def on_rep_end(self) -> Utterance:
@@ -1041,6 +1111,8 @@ class Orchestrator:
         async with self._lock:
             t0 = time.perf_counter()
             self._begin_trace(None)
+            self._turn_rollback = None
+            self._unheard_text = None
             if self.session.neg.phase == Phase.WRAP:
                 action = Action(
                     intent=Intent.CLOSE,
@@ -1069,6 +1141,14 @@ class Orchestrator:
         timings: dict[str, float],
         belief_changes: list[BeliefChange],
     ) -> Utterance:
+        # A turn with no rep line still undoes its eager bookkeeping if unheard.
+        rollback = self._turn_rollback or TurnRollback(
+            neg=copy.deepcopy(self.session.neg),
+            last_eval=self.session.last_eval,
+            agreed_bp=self.session.agreed_bp,
+            history_len=len(self.session.history),
+        )
+        self._turn_rollback = None
         pairs: list[tuple[str, str]] = []
         for text in sentences:
             sid = str(uuid.uuid4())
@@ -1082,6 +1162,7 @@ class Orchestrator:
             sentence_ids=[sid for sid, _ in pairs],
             pending_eval=self._turn_eval,
             pending_agreed_bp=self._turn_agreed_bp,
+            rollback=rollback,
         )
         # Eager READ_BACK pending so barge-in doesn't lose the field before ack.
         if action.intent == Intent.READ_BACK:

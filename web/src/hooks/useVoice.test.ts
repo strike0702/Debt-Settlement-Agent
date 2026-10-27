@@ -346,6 +346,40 @@ describe("barge-in and echo guard", () => {
   });
 });
 
+describe("server-dropped speech", () => {
+  it("cancels the dropped sentence in flight and the queued one, never acks them, and plays only the newer turn", () => {
+    const h = harness();
+    const hook = mount(h);
+    server(hook, { type: "say", id: "hold1", text: "We are staying at 52% of the balance, which is $650." });
+    server(hook, { type: "say", id: "hold2", text: "Can you come down from your number?" });
+    act(() => vi.advanceTimersByTime(20));
+    const inFlight = h.spoken.at(-1)!;
+    act(() => inFlight.onstart?.());
+    act(() => vi.advanceTimersByTime(260)); // 260 ms in, as in the live call
+    const cancels = (h.deps.synth!.cancel as Mock).mock.calls.length;
+    server(hook, { type: "speech_dropped", ids: ["hold1", "hold2"] });
+    expect((h.deps.synth!.cancel as Mock).mock.calls.length).toBe(cancels + 1);
+    expect(hook.result.current.snapshot.speaking).toBe(false);
+    act(() => inFlight.onend?.()); // the cancelled utterance's late end
+    act(() => vi.advanceTimersByTime(1000));
+    expect(h.spoken.map((u) => u.text)).toEqual([inFlight.text]);
+    const step = say(hook, h, "step1", "Could you consider 63% of the balance?");
+    act(() => step.onend?.());
+    expect(acks(h)).toEqual(["step1"]);
+    expect(types(h)).not.toContain("barge_in");
+  });
+
+  it("ignores ids it is not playing (the client already barged them)", () => {
+    const h = harness();
+    const hook = mount(h);
+    const u = say(hook, h, "s1");
+    server(hook, { type: "speech_dropped", ids: ["old"] });
+    expect(hook.result.current.snapshot.speaking).toBe(true);
+    act(() => u.onend?.());
+    expect(acks(h)).toEqual(["s1"]);
+  });
+});
+
 describe("listening cues", () => {
   it("shows Loading mic… until VAD is ready, then Listening… without waiting for speech", async () => {
     let release!: () => void;

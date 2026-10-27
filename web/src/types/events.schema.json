@@ -1122,6 +1122,30 @@
       "title": "SentenceDoneEvent",
       "type": "object"
     },
+    "SpeechDroppedEvent": {
+      "additionalProperties": false,
+      "description": "The server dropped these unheard ``say`` sentences: stop them now, never ack them.",
+      "properties": {
+        "ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ids",
+          "type": "array"
+        },
+        "type": {
+          "const": "speech_dropped",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "ids"
+      ],
+      "title": "SpeechDroppedEvent",
+      "type": "object"
+    },
     "SpokenSentence": {
       "additionalProperties": false,
       "properties": {
@@ -2062,6 +2086,7 @@
           "latency": "#/$defs/LatencyEvent",
           "phase": "#/$defs/PhaseEvent",
           "say": "#/$defs/SayEvent",
+          "speech_dropped": "#/$defs/SpeechDroppedEvent",
           "stt_error": "#/$defs/SttErrorEvent",
           "transcript": "#/$defs/TranscriptEvent",
           "turn_done": "#/$defs/TurnDoneEvent",
@@ -2114,6 +2139,9 @@
         },
         {
           "$ref": "#/$defs/AutoplayDoneEvent"
+        },
+        {
+          "$ref": "#/$defs/SpeechDroppedEvent"
         }
       ],
       "title": "Serverevent"

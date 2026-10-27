@@ -3,7 +3,7 @@
 Server events are what ``app.voice.ws`` sends (``transcript``, ``say``,
 ``belief``, ``eval``, ``blocked``, ``escalate``, ``latency``, ``audit``,
 ``phase``, ``agreement``, ``stt_error``, ``error``, ``turn_done``,
-``turn_trace``, ``autoplay_done``); client events are what it accepts. The web
+``turn_trace``, ``autoplay_done``, ``speech_dropped``); client events are what it accepts. The web
 UI's TypeScript types are generated from the exported schema, so this file is
 the protocol's single source of truth. ``TurnTrace`` is also the type of
 ``Orchestrator``'s ``Utterance.trace``.
@@ -355,6 +355,13 @@ class TurnDoneEvent(_Model):
     type: Literal["turn_done"]
 
 
+class SpeechDroppedEvent(_Model):
+    """The server dropped these unheard ``say`` sentences: stop them now, never ack them."""
+
+    type: Literal["speech_dropped"]
+    ids: list[str]
+
+
 class TurnTraceEvent(TurnTrace):
     type: Literal["turn_trace"]
 
@@ -385,7 +392,8 @@ ServerEvent = Annotated[
     | ErrorEvent
     | TurnDoneEvent
     | TurnTraceEvent
-    | AutoplayDoneEvent,
+    | AutoplayDoneEvent
+    | SpeechDroppedEvent,
     Field(discriminator="type"),
 ]
 SERVER_EVENT_ADAPTER: TypeAdapter[Any] = TypeAdapter(ServerEvent)
@@ -405,6 +413,7 @@ SERVER_EVENT_TYPES: tuple[str, ...] = (
     "turn_done",
     "turn_trace",
     "autoplay_done",
+    "speech_dropped",
 )
 
 

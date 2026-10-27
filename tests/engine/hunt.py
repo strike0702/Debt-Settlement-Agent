@@ -14,6 +14,9 @@ cases. This module holds the per-case logic so the script and the tests share it
   ``reference.py`` this is the cap-free form of the question: with no such vector, the
   legacy family is exact for every ledger on these rules and S.
 - ``shrink(case, kind)``: greedy smaller witnesses that still miss the same way.
+- ``compare_engine(case)`` (Phase 57b): the same miss kinds for the engine itself
+  (``feasibility.engine.evaluate``, the exact search) against the reference, plus
+  strict minimality of its rescue amounts and the validator on its schedule.
 
 Returns plain dicts (picklable for ``multiprocessing``). Never used by ``app/``.
 """
@@ -26,7 +29,7 @@ from itertools import accumulate
 from typing import Any
 
 from app.adapter.validator import validate
-from feasibility.engine import Result
+from feasibility.engine import Result, evaluate
 from feasibility.legacy import legacy_candidates, legacy_evaluate
 from feasibility.models import CreditorRules
 from feasibility.problem import Problem, build_problem
@@ -118,8 +121,77 @@ def _check_rescue(
     return ok(amount) and (amount == 0 or not ok(amount - 1))
 
 
+def _kinds_vs_ref(
+    problem: Problem, result: Result, ref: reference.RefResult, rec: dict[str, Any], tag: str
+) -> tuple[list[str], list[str]]:
+    """Miss kinds and consistency bugs of one engine ``Result`` against the reference."""
+    kinds: list[str] = []
+    bugs: list[str] = []
+    if result.feasible:
+        phi = _legacy_phi(problem, result)
+        if not ref.feasible:
+            bugs.append(f"{tag}_feasible_ref_not")
+        else:
+            assert phi is not None and ref.phi is not None
+            if phi < ref.phi:
+                kinds.append("worse_phi")
+            elif phi > ref.phi:
+                bugs.append(f"{tag}_phi_above_ref")
+    elif ref.feasible:
+        kinds.append("false_infeasible")
+        rec[f"{tag}_lump"], rec[f"{tag}_increment"] = _legacy_rescue(result)
+    else:
+        lump, incr = _legacy_rescue(result)
+        rec[f"{tag}_lump"], rec[f"{tag}_increment"] = lump, incr
+        for kind, lv, rv in (
+            ("rescue_over_lump", lump, ref.lump_cents),
+            ("rescue_over_increment", incr, ref.increment_cents),
+        ):
+            if rv is not None and (lv is None or lv > rv):
+                kinds.append(kind)
+            if lv is not None and (rv is None or lv < rv):
+                bugs.append(f"{tag}_" + kind.replace("over", "under"))
+    return kinds, bugs
+
+
+def compare_engine(
+    case: dict[str, Any], ref: reference.RefResult | None = None, *, minimal: bool = False
+) -> dict[str, Any]:
+    """Engine (exact search) vs reference on one case: ``kinds`` must be empty.
+
+    Also validates the engine's schedule, and with ``minimal=True`` replays its L*/X*
+    (feasible at the amount, not one cent below) on the reference's witness vectors.
+    """
+    client, offer, rules, problem = _problem(case)
+    S = problem.offer_total(offer.settlement_bp)
+    F = problem.program_fee_cents
+    res = evaluate(problem, offer.settlement_bp)
+    if ref is None:
+        ref = reference.solve(problem, S)
+    rec: dict[str, Any] = {"id": case["id"], "feasible": res.feasible,
+                           "ref_feasible": ref.feasible}
+    kinds, bugs = _kinds_vs_ref(problem, res, ref, rec, "engine")
+    if res.schedule is not None:
+        fpd = problem.first_payment_date
+        if validate(res.schedule, client, S, F, rules, fpd):
+            bugs.append("engine_validator")
+    elif minimal and not kinds:
+        inst = oracle.Instance(client, rules, problem.first_payment_date, S, F)
+        for which, vec, amount in (
+            ("L", ref.lump_vec, rec.get("engine_lump")),
+            ("X", ref.increment_vec, rec.get("engine_increment")),
+        ):
+            if not _check_rescue(inst, rules, S, problem.k_max, vec, amount, which):
+                bugs.append(f"engine_{which}_not_minimal")
+    rec["kinds"], rec["bugs"] = kinds, bugs
+    return rec
+
+
 def compare_case(case: dict[str, Any], *, prune: bool = True) -> dict[str, Any]:
-    """Legacy vs reference on one case: kinds, bugs and a compact record."""
+    """Legacy vs reference on one case: kinds, bugs and a compact record.
+
+    ``engine_kinds`` / ``engine_bugs`` hold the same comparison for the engine itself.
+    """
     client, offer, rules, problem = _problem(case)
     S = problem.offer_total(offer.settlement_bp)
     F = problem.program_fee_cents
@@ -197,6 +269,8 @@ def compare_case(case: dict[str, Any], *, prune: bool = True) -> dict[str, Any]:
     # Legacy has no statically legal vector at all (its rescue says "unfixable").
     rec["legacy_empty"] = not leg.feasible and rec.get("legacy_lump") is None
     rec["kinds"], rec["bugs"] = kinds, bugs
+    eng = compare_engine(case, ref)
+    rec["engine_kinds"], rec["engine_bugs"] = eng["kinds"], eng["bugs"]
     return rec
 
 

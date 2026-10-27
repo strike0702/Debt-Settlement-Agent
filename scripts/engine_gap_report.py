@@ -19,7 +19,11 @@ only: nothing in the engine is changed by this script.
 reference is first checked against the oracle on small seeded sets, then legacy is
 compared on the golden inputs, seeded full-size random cases, adversarial cases and a
 cap-free structural dominance sweep; misses are shrunk and the smallest reported in
-``docs/eval/engine_gap_<date>_full/``.
+``docs/eval/engine_gap_<date>_full/``. Since Phase 57b the same sets also compare the
+engine itself (``engine.evaluate``, exact search) with the reference (``engine_*``
+columns; every count must be 0), and every legacy-miss case and verified structural
+witness is written to ``witnesses.jsonl`` (the source of
+``tests/engine/golden/witnesses_57.jsonl``).
 
     uv run python scripts/engine_gap_report.py --cases 5000 --seed 1
     uv run python scripts/engine_gap_report.py --mode full --seed 57
@@ -600,6 +604,9 @@ def run_full(args: argparse.Namespace) -> int:
         for kind in hunt.KINDS:
             row[kind] = sum(kind in r["kinds"] for r in rs)
         row["bugs"] = sum(bool(r["bugs"]) for r in rs)
+        for kind in hunt.KINDS:
+            row[f"engine_{kind}"] = sum(kind in r["engine_kinds"] for r in rs)
+        row["engine_bugs"] = sum(bool(r["engine_bugs"]) for r in rs)
         table[name] = row
     by_struct: dict[str, int] = {}
     by_runs: dict[str, int] = {}
@@ -629,6 +636,10 @@ def run_full(args: argparse.Namespace) -> int:
             "draws_with_miss": sum(s["misses"] > 0 for s in ss),
             "vectors_not_dominated": sum(s["misses"] for s in ss),
             "witness_verified": sum(bool(s.get("verified")) for s in ss),
+            "engine_misses": sum(
+                bool(s["rec"]["engine_kinds"] or s["rec"]["engine_bugs"])
+                for s in ss if s.get("rec")
+            ),
         }
 
     summary.update(
@@ -636,15 +647,27 @@ def run_full(args: argparse.Namespace) -> int:
         by_structure=by_struct, by_runs=by_runs, mechanism=mech,
         timing_secs={k: round(v, 1) for k, v in timing.items()},
         bugs=[{"id": r["id"], "bugs": r["bugs"]} for rs in recs.values() for r in rs if r["bugs"]],
+        engine_misses=[
+            {"id": r["id"], "kinds": r["engine_kinds"], "bugs": r["engine_bugs"]}
+            for rs in [*recs.values(), [s["rec"] for s in struct if s.get("rec")]]
+            for r in rs if r["engine_kinds"] or r["engine_bugs"]
+        ],
     )
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
     (out_dir / "summary.md").write_text(render_full(summary, shrunk, args))
+    wit = [{"set": name, "kinds": r["kinds"], "case": r["case"]}
+           for name, rs in recs.items() for r in rs if r["kinds"]]
+    wit += [{"set": "structural", "kinds": s["rec"]["kinds"], "case": s["case"]}
+            for s in struct if s.get("verified")]
+    (out_dir / "witnesses.jsonl").write_text(
+        "".join(json.dumps(w, sort_keys=True, separators=(",", ":")) + "\n" for w in wit)
+    )
     print(json.dumps({k: summary[k] for k in ("sets", "structural", "prune_check",
                                                "reference_vs_oracle", "timing_secs")},
                      sort_keys=True))
     print(f"wrote {out_dir / 'summary.md'}")
-    bad = summary["bugs"] or summary["prune_check"]["disagree"] or any(
+    bad = summary["bugs"] or summary["engine_misses"] or summary["prune_check"]["disagree"] or any(
         r["disagree"] for r in refcheck
     )
     return 1 if bad else 0
@@ -659,7 +682,7 @@ def render_full(summary: dict[str, Any], shrunk: dict[str, list[dict[str, Any]]]
            f"{a['structural']} --structural-small {a['structural_small']} --ref-check "
            f"{a['ref_check']} --prune-check {a['prune_check']}")
     out = [
-        "# Engine gap report, full size: legacy family vs exact reference "
+        "# Engine gap report, full size: legacy family and engine vs exact reference "
         f"({date.today():%Y-%m-%d})",
         "",
         f"Command: `{cmd}` ({summary['timing_secs']['total']} s on {a['workers']} workers).",
@@ -669,7 +692,8 @@ def render_full(summary: dict[str, Any], shrunk: dict[str, list[dict[str, Any]]]
         "1–9, by a dominating family and branch and bound; exactness argument in its "
         "docstring). Every reference witness is replayed by `oracle.Instance` (independent "
         "ledger replay) and checked by `app/adapter/validator.py`; rescue witnesses are "
-        "feasible at exactly L*/X* and not one cent below. Evidence only; nothing is fixed.",
+        "feasible at exactly L*/X* and not one cent below. Engine = `engine.evaluate` (the "
+        "Phase 57b exact search); its columns count the same misses for the engine.",
         "",
         "## Reference vs brute-force oracle (small cases)",
         "",
@@ -685,6 +709,9 @@ def render_full(summary: dict[str, Any], shrunk: dict[str, list[dict[str, Any]]]
             "| set | cases | ref feasible | legacy feasible | both infeasible | false infeasible "
             "| worse Φ* | lump over | increment over | bugs | ref p50 / max s |",
             "|---|---|---|---|---|---|---|---|---|---|---|"]
+    eng_rows = ["", "Engine (exact search) vs the reference on the same cases:", "",
+                "| set | cases | false infeasible | worse Φ* | lump over | increment over "
+                "| bugs (incl. validator) |", "|---|---|---|---|---|---|---|"]
     for name, r in summary["sets"].items():
         out.append(
             f"| {name} | {r['cases']} | {r['ref_feasible']} | {r['legacy_feasible']} | "
@@ -692,6 +719,12 @@ def render_full(summary: dict[str, Any], shrunk: dict[str, list[dict[str, Any]]]
             f"{r['rescue_over_lump']} | {r['rescue_over_increment']} | {r['bugs']} | "
             f"{r['p50_secs']:.3f} / {r['max_secs']:.2f} |"
         )
+        eng_rows.append(
+            f"| {name} | {r['cases']} | {r['engine_false_infeasible']} | {r['engine_worse_phi']} "
+            f"| {r['engine_rescue_over_lump']} | {r['engine_rescue_over_increment']} | "
+            f"{r['engine_bugs']} |"
+        )
+    out += eng_rows
     out += ["", "Golden = 5 fixtures + 7 scenarios × 100 bp (true rules) + 600 random "
             "(`gen_cases.random_cases(55, 600)`). Random = `gen_cases.random_cases(seed, n)`. "
             "Adversarial = `gen_cases.adversarial_cases(seed, n)` (planted lifted levels, "
@@ -705,10 +738,12 @@ def render_full(summary: dict[str, Any], shrunk: dict[str, list[dict[str, Any]]]
             "(caps equal to its prefix sums) where legacy misses; one is built and verified "
             "end to end for the smallest non-dominated vector of each draw.", "",
             "| size | draws | family vectors | draws with a miss | vectors not dominated | "
-            "witnesses verified (false infeasible) |", "|---|---|---|---|---|---|"]
+            "witnesses verified (false infeasible) | engine misses on them |",
+            "|---|---|---|---|---|---|---|"]
     for size, r in summary["structural"].items():
         out.append(f"| {size} | {r['draws']} | {r['family_vectors']} | {r['draws_with_miss']} | "
-                   f"{r['vectors_not_dominated']} | {r['witness_verified']} |")
+                   f"{r['vectors_not_dominated']} | {r['witness_verified']} | "
+                   f"{r['engine_misses']} |")
     out += ["", "## Misses by kind, set and structure", "", "| kind / set / structure | count |",
             "|---|---|"]
     for k, v in sorted(summary["by_structure"].items()):
@@ -723,6 +758,8 @@ def render_full(summary: dict[str, Any], shrunk: dict[str, list[dict[str, Any]]]
         out.append(f"| {k} | {v} |")
     if summary["bugs"]:
         out += ["", "## Consistency bugs", ""] + [f"- {b}" for b in summary["bugs"][:20]]
+    if summary["engine_misses"]:
+        out += ["", "## Engine misses", ""] + [f"- {b}" for b in summary["engine_misses"][:20]]
     out += ["", "## Run time (s)", "", "| step | seconds |", "|---|---|"]
     for k, v in summary["timing_secs"].items():
         out.append(f"| {k} | {v} |")

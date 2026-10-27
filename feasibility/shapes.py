@@ -1,12 +1,14 @@
 """Candidate payment vectors: per-position floors, the shape family, static legality.
 
 ``compute_floors`` turns base minimum, token-pay limit and tiers into a floor per
-position. ``generate_candidates`` enumerates the even / staircase / balloon family the
-engine scores (structured, not exhaustive: early staircase levels are pinned to their
-floors and only the last two levels are solved). ``is_statically_valid`` is the
-money-independent legality filter, ``label_shape`` names the shape by rule. No ledger
-or fee logic here: simulation is ``simulate.py``, scoring ``scoring.py``. Phase 55
-froze a copy of this generator in ``legacy.py`` for comparisons.
+position. ``is_statically_valid`` is the money-independent legality filter,
+``label_shape`` names the shape by rule, ``even_vector`` is the even split; the engine's
+exact search (``search.py``) uses all four. ``generate_candidates`` is the take-home
+enumeration (structured, not exhaustive: early staircase levels pinned to their floors,
+only the last two levels solved). Since Phase 57b the engine no longer scores it; it
+stays for the prefix-cap and unit tests and is the same family as ``legacy.py`` (both go
+in Phase 61). No ledger or fee logic here: simulation is ``simulate.py``, scoring
+``scoring.py``.
 """
 
 from __future__ import annotations

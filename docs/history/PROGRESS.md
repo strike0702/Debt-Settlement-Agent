@@ -66,6 +66,7 @@ Each phase appends its handoff here. Keep entries short: facts later phases need
 | 54 | Correction loop fix: change-request corrections, disputed-value answers, barged questions count; NLU turn context measured and dropped | done |
 | 55 | Engine v2 foundation: owned package, bp input, `Problem`, golden corpus, oracle, gap report | done |
 | 57 | Large-case hunt: exact reference solver vs the take-home family at full size (evidence only) | done |
+| 57b | Exact staircase search and exact rescue minima (old 58 merged), verified against the reference | done |
 
 ## Environment facts
 - Engine timing (measured before phase 0): a 100-point settlement scan takes 17–261 ms per case.
@@ -2170,3 +2171,41 @@ Fixed: icon in the reader badge and end-of-call rules `aria-hidden`; outcome tex
   - (a) A proof that the legacy family is complete for tier-free rules (conjecture, strong evidence).
   - (b) `slow`-marked tests still run by default (no `addopts` filter); the new slow pair adds about 4 s.
 - **Checks.** `uv run ruff check .` clean; `uv run pytest -q` 3341 passed / 2 skipped / 25 xfailed. Oracle eval (`.env` moved aside, restored), this branch `eval_20261025_064307_s7` vs a `git archive` export of main `eval_20261025_064355_s7`: thresholds PASS on both, `summary.json` identical apart from `latency`. No paid calls.
+
+### Phase 57b (exact search and exact rescue) (2026-10-27) — docs/ENGINE_PLAN.md Revision 2026-10-27; old Phase 58 merged in
+- **Search.** New `feasibility/search.py`, class `Search(problem, S)`. It does branch and bound over a dominating family in two stages, with the exactness argument in its docstring (prefix-sum monotonicity, the shift argument, why pruning cannot lose the optimum). Stage 1 (*pinned*) is the take-home family reduced to the vectors that can win: per composition only the closed-form smallest `v_{m-1}`, plus the quasi-even vector and the floors-pinned balloon. It picks the same `score_key` winner and the same (L, k, payments) rescue vector as before. Stage 2 (*box*) runs only for plain staircases with `max_segments ≥ 3`. It covers early levels in `[lo_l, lo_l + c_m/gcd(c_l, c_m))` with the last two levels in closed form, and its vectors are accepted only when strictly better than stage 1 (Φ for Part 1, L or X for Part 2). Even, balloon and ≤ 2-level staircases go through stage 1 only. The engine imports nothing from `tests/`.
+- **Engine.** `engine.evaluate(problem, bp)` uses `Search.best(buffer)` (Tier C two-pass unchanged). It simulates only the winner, then runs `flatten_cliff` and `_assemble_schedule` as before. Part 2 uses `rescue.exact_lump` / `rescue.exact_increment`. `evaluate_candidates` (score a given family) stays for `legacy.legacy_evaluate`. `shapes.generate_candidates` is no longer called by the engine and stays for tests.
+- **Rescue.** L\* and X\* are the minimum over the same family; there is no binary search. `compute_lump` / `compute_increment` keep their candidate-list form for legacy and now share `_latest_date`, `_lump_result` and `_increment_result` with the exact versions, so guardrails, reason texts and `within_guardrail` are unchanged. The lump date is still the first break date of the (L, k, payments)-smallest vector.
+- **Problem.** `Problem.window_caps` (`base_w[j] - bf*j`) and `Problem.window_items` (per window: base balance minus required, drafts landed) are `cached_property`s. They are settlement-independent, so a scan builds them once.
+- **Verification** (all 0 misses, 0 bugs):
+  - Engine vs `tests/engine/reference.py`: golden (1,305), 20,000 random and 20,000 adversarial (seed 57), and all 130 witness cases (112 structural, 18 adversarial).
+  - Gap report re-run: `docs/eval/engine_gap_20261027_full/` (95.6 s, 8 workers). It has new engine columns and writes `witnesses.jsonl`, frozen as `tests/engine/golden/witnesses_57.jsonl`. Legacy numbers are identical to Phase 57.
+  - Engine vs oracle on small cases (seeds 1+2, 15,000 cases, >5,000 infeasible): feasibility, Φ\*, L\*, X\* equal.
+  - Strict minimality at full size on the 5 fixtures, the 7 scenarios × 100 bp and every witness (366 amounts): topping the client up by L\* (or every draft by X\*) is feasible, and one cent less is not.
+  - Every engine schedule in these sets passes `app/adapter/validator.py`.
+  - Engine vs legacy: identical on golden and on 5,000 random; on the witnesses and adversarial samples every change is an improvement.
+- **Golden.** `build_golden` reports changes by default and writes only with `--update`. `--update` gave **0 changed outputs**; the file is byte-identical. The golden corpus has no staircase case where the pins lose, as Phase 57 found. Changed cases appear only in the adversarial and witness sets, and all are improvements. Examples: `a57_07972` goes from infeasible with a $161.78 lump ask to feasible; on `a57_05096` the lump drops from $44.00 to $14.18.
+- **Speed** (`docs/eval/engine_v2_20261027/bench.md`, `scripts/engine_bench.py`, same machine). Demo scan (even rules): 3.61 → **1.90 ms** (Phase 55 recorded 6.7 ms on its machine). Scenarios: 0.4–3.1 ms. Golden random max: **10.75 s → 78 ms** (p95 736 → 17 ms). Adversarial: 6 of 2,000 scans exceed 150 ms (max 220 ms), recorded and allowed; before, they took up to 9.2 s. Memoising per (k, composition) was not needed.
+- **Agent effect.** Oracle eval (`.env` moved aside, restored): this branch `eval_20261027_080140_s7` vs a `git archive` export of `8e7ab2e` `eval_20261027_080245_s7`. Thresholds PASS on both; `summary.json` identical apart from `latency`; all 100 per-call records identical. As expected, since the scenarios had no miss.
+- **Files.** New: `feasibility/search.py`, `tests/engine/test_search.py`, `tests/engine/golden/witnesses_57.jsonl`, `scripts/engine_bench.py`, `docs/eval/engine_gap_20261027_full/`, `docs/eval/engine_v2_20261027/bench.md`. Edited: `feasibility/{engine,rescue,problem,shapes}.py` (shapes: docstring only), `tests/engine/hunt.py` (`compare_engine`; `compare_case` adds `engine_kinds` / `engine_bugs`), `tests/engine/golden/build_golden.py` (`--update`, change kinds), `scripts/engine_gap_report.py` (engine columns, witness dump), this file.
+- **Interfaces for later phases.**
+  - `Search(problem: Problem, S: int)`
+  - `.best(buffer: int) -> tuple[tuple[int, ...], str] | None` (vector, label)
+  - `.min_lump() -> tuple[int, tuple[int, ...]] | None`
+  - `.min_increment() -> tuple[int | None, bool]` (X\* or None if unfixable; whether any legal vector exists)
+  - `.key4(P, k, buffer)`, `.lump_of(P, k)`, `.increment_of(P, k, const)`: objectives from prefix sums
+  - `.pinned(k, prune)`, `.boxed(k, prune)`: the two family generators; `prune(lower_prefix) -> bool`
+  - `rescue.exact_lump(problem, search) -> LumpResult`, `rescue.exact_increment(problem, search) -> IncrementResult`
+  - `hunt.compare_engine(case, ref=None, *, minimal=False) -> dict`
+- **Deviations.**
+  1. The prompt kept "today's code paths" for even, balloon and ≤ 2-level staircases. Today's path scored about 7,000 candidates per bp and took up to 10.8 s per golden scan, so the 150 ms budget could not be met without replacing it. Those cases now go through the pinned stage (same winner, proved in the docstring; golden byte-identical; identical to `legacy_evaluate` on 5,600 random cases).
+  2. The box stage takes a vector only if it strictly improves on the pinned stage. Ties keep the take-home winner and rescue date, so outputs change only where the old family was not exact.
+  3. The lump date keeps the take-home rule (first break date of the (L, k, payments)-smallest vector), not the latest date over all L\*-achieving vectors. "Its latest date" is read as that vector's latest safe date, which keeps output identical where L\* did not change.
+  4. `build_golden` without flags now only reports. Writing needs `--update`, as the prompt says.
+- **Open issues.**
+  - (a) "Legacy is complete without tiers" stays a **conjecture** (strong evidence, no proof; see `engine_gap_20261025_full/notes.md`). The engine no longer depends on it.
+  - (b) With many segments the composition tree grows: forcing `max_segments` 6 / 8 on a k = 18 adversarial case gives a 0.9 s / 4.4 s scan (legacy about 34 s / 117 s). Scenarios use 2–3 segments and the generators 1–4, so this is outside the budget sets.
+  - (c) `shapes.generate_candidates` duplicates `legacy.legacy_candidates` and only tests use it; remove both in Phase 61.
+  - (d) Phase 59's client-first "minimise the largest payment" is not monotone in prefix sums, so `Search` bounds do not apply to it as is (as Phase 57 noted).
+  - (e) `slow`-marked tests still run by default; this phase adds about 25 s of them (Phase 57 (b)).
+- **Checks.** `uv run ruff check .` clean; `uv run pytest -q` 3351 passed / 2 skipped / 25 xfailed (slow tests included); oracle eval thresholds PASS; no paid calls.

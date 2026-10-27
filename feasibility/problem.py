@@ -14,14 +14,17 @@ gives a fixed cap on ``P_j``. ``simulate.apply_payments`` implements this and
 ``tests/engine/test_prefix_cap.py`` checks it against a full replay for every
 candidate on the golden corpus.
 
-Pure data: no search or scoring here. ``engine.evaluate(problem, bp)`` consumes it;
-the adapter builds one per affordability scan and reuses it for all 100 bp.
+``window_caps`` and ``window_items`` are the same caps in the form the exact search
+(``search.py``) uses; they are cached on first use. Pure data: no search or scoring
+here. ``engine.evaluate(problem, bp)`` consumes it; the adapter builds one per
+affordability scan and reuses it for all 100 bp.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from functools import cached_property
 
 from feasibility.models import (
     Client,
@@ -59,6 +62,39 @@ class Problem:
     def pre_min(self) -> int:
         """Base minimum balance strictly before ``t_1`` (10**18 when no such date)."""
         return self.base.pre_min
+
+    @cached_property
+    def window_caps(self) -> list[int]:
+        """``base_w[j] - bf*j``, 1-indexed: window j < k is non-negative iff ``P_j <= cap``.
+
+        Settlement-independent, so ``search.Search`` reuses it across a whole scan.
+        """
+        bf = self.rules.bank_fee_cents
+        return [0] + [self.base_w[j] - bf * j for j in range(1, self.M + 1)]
+
+    @cached_property
+    def window_items(self) -> list[list[tuple[int, int]]]:
+        """Per window (0 = before ``t_1``): ``(base balance - required, drafts landed)``.
+
+        ``required`` is F on and after ``t_M`` (the fee must be collectable), else 0. The
+        uniform increment X for a window that a vector lowers by ``c`` is the largest
+        ``ceil((c - slack) / drafts)`` over its dates (``search.Search._window_x``).
+        """
+        client = self.client
+        drafts = sorted(
+            e.date for e in client.ledger if e.type == "credit" and e.date > client.as_of_date
+        )
+        M, cad, F = self.M, self.cadence, self.program_fee_cents
+        items: list[list[tuple[int, int]]] = [[] for _ in range(M + 1)]
+        j = n = 0
+        for d in self.base.ordered_dates:
+            while j < M and cad[j] <= d:
+                j += 1
+            while n < len(drafts) and drafts[n] <= d:
+                n += 1
+            req = F if j == M and M > 0 else 0
+            items[j].append((self.base.balances[d] - req, n))
+        return items
 
     def offer_total(self, bp: int) -> int:
         """S for a settlement of ``bp`` basis points (half-up on the creditor balance)."""

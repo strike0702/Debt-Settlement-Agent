@@ -8,9 +8,12 @@ Three groups, every input embedded so the corpus survives fixture edits:
 - 600 seeded random cases from ``gen_cases.random_cases(55, 600)``.
 
 Outputs are ``Result.to_dict()`` with schedule rows packed as
-``[date, creditor, program_fee, bank_fee, balance]`` (``compact``). Regenerate only
-for an intended behaviour change, with a PROGRESS note:
-``uv run python -m tests.engine.golden.build_golden``.
+``[date, creditor, program_fee, bank_fee, balance]`` (``compact``). Without flags the
+module only reports which outputs the current engine would change, each with its kind
+(``feasible->infeasible``, ``infeasible->feasible``, ``phi_better`` / ``phi_worse``,
+``same_phi_other_schedule``, ``rescue_lower`` / ``rescue_higher`` / ``rescue_text``).
+Regenerate only for an intended behaviour change, with a PROGRESS note:
+``uv run python -m tests.engine.golden.build_golden --update``.
 """
 
 from __future__ import annotations
@@ -170,19 +173,70 @@ def expand(record: dict[str, Any]) -> list[gen_cases.Case]:
     return [{**case, "settlement_bp": bp} for bp in record["bps"]]
 
 
-def build() -> None:
-    """Evaluate every record with the current engine and write ``golden.jsonl``."""
+def change_kind(old: dict[str, Any], new: dict[str, Any]) -> str:
+    """How one output changed (see the module docstring)."""
+    if old["feasible"] != new["feasible"]:
+        return "feasible->infeasible" if old["feasible"] else "infeasible->feasible"
+    if new["feasible"]:
+        # Same cadence, so compare Φ on the union of fee dates.
+        dates = sorted({r[0] for r in old["schedule"]} | {r[0] for r in new["schedule"]})
+
+        def on(out: dict[str, Any]) -> tuple[int, ...]:
+            fee = {r[0]: r[2] for r in out["schedule"]}
+            run, phi = 0, []
+            for d in dates:
+                run += fee.get(d, 0)
+                phi.append(run)
+            return tuple(phi)
+
+        a, b = on(old), on(new)
+        if a == b:
+            return "same_phi_other_schedule"
+        return "phi_better" if b > a else "phi_worse"
+    oa, na = old["additional_funds"], new["additional_funds"]
+    amounts = [(oa[x]["amount_cents"], na[x]["amount_cents"])
+               for x in ("lump_sum", "monthly_increment")]
+    if any(n > o for o, n in amounts):
+        return "rescue_higher"
+    if any(n < o for o, n in amounts):
+        return "rescue_lower"
+    return "rescue_text"
+
+
+def build(update: bool = False) -> list[tuple[str, str]]:
+    """Evaluate every record; list (case id, kind) per changed output; write if ``update``."""
+    old = {}
+    if GOLDEN.exists():
+        for line in GOLDEN.read_text().splitlines():
+            rec = json.loads(line)
+            old[rec["id"]] = rec
     lines: list[str] = []
+    changed: list[tuple[str, str]] = []
     for rec in corpus_inputs():
-        outs = [run_case(c) for c in expand(rec)]
+        cases = expand(rec)
+        outs = [run_case(c) for c in cases]
+        prev = old.get(rec["id"])
+        if prev is not None:
+            prev_outs = prev["outs"] if "bps" in prev else [prev["out"]]
+            for c, a, b in zip(cases, prev_outs, outs):
+                if a != b:
+                    cid = f"{c['id']}@{c['settlement_bp']}" if "bps" in rec else c["id"]
+                    changed.append((cid, change_kind(a, b)))
         if "bps" in rec:
             rec["outs"] = outs
         else:
             rec["out"] = outs[0]
         lines.append(json.dumps(rec, separators=(",", ":"), sort_keys=True))
-    GOLDEN.write_text("\n".join(lines) + "\n")
-    print(f"wrote {len(lines)} records to {GOLDEN} ({GOLDEN.stat().st_size} bytes)")
+    for cid, kind in changed:
+        print(f"changed {cid}: {kind}")
+    print(f"{len(changed)} changed outputs")
+    if update:
+        GOLDEN.write_text("\n".join(lines) + "\n")
+        print(f"wrote {len(lines)} records to {GOLDEN} ({GOLDEN.stat().st_size} bytes)")
+    return changed
 
 
 if __name__ == "__main__":
-    build()
+    import sys
+
+    build(update="--update" in sys.argv[1:])

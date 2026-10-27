@@ -1,12 +1,15 @@
 """Engine entry points: ``evaluate(problem, bp)`` and ``evaluate_offer(client, offer, rules)``.
 
-Part 1: generate the candidate family (``shapes``), simulate each vector via the
-prefix-cap shortcut on the ``Problem`` base run, place the fee (``scoring``), keep the
-best ``score_key``, flatten a cliff, and assemble schedule rows. Part 2 (no feasible
-candidate): minimal lump sum and monthly increment (``rescue``). ``evaluate_offer`` is
-the take-home compatible wrapper (builds a ``Problem`` per call); callers that scan many
-settlement % for one client (``app.adapter.engine_adapter.affordability``) build the
-``Problem`` once and call ``evaluate``. All money is integer cents; settlement is bp.
+Part 1: ``search.Search`` finds the best ``score_key`` over every legal vector by
+branch and bound on the ``Problem``'s prefix caps (Phase 57b; the take-home winner
+whenever the take-home family reaches Φ*), then the winner is simulated, its fee placed
+(``scoring``), a cliff flattened, and schedule rows assembled. Part 2 (nothing
+feasible): exact minimal lump sum and monthly increment (``rescue.exact_*``).
+``evaluate_candidates`` is the old score-a-given-family path, kept for ``legacy.py``.
+``evaluate_offer`` is the take-home compatible wrapper (builds a ``Problem`` per
+call); callers that scan many settlement % for one client
+(``app.adapter.engine_adapter.affordability``) build the ``Problem`` once and call
+``evaluate``. All money is integer cents; settlement is bp.
 """
 
 from __future__ import annotations
@@ -17,14 +20,22 @@ from datetime import date
 from feasibility.constants import BUFFER_DRAFT_PCT, DEFAULT_BUFFER_CENTS
 from feasibility.models import Client, CreditorRules, Offer
 from feasibility.problem import Problem, build_problem
-from feasibility.rescue import compute_increment, compute_lump
+from feasibility.rescue import (
+    IncrementResult,
+    LumpResult,
+    compute_increment,
+    compute_lump,
+    exact_increment,
+    exact_lump,
+)
 from feasibility.scoring import (
     FeePlacement,
     evaluate_candidate,
     flatten_cliff,
     score_key,
 )
-from feasibility.shapes import Candidate, generate_candidates
+from feasibility.search import Search
+from feasibility.shapes import Candidate
 from feasibility.simulate import SimulationResult
 from feasibility.util import round_half_up
 
@@ -209,18 +220,69 @@ def evaluate_offer(client: Client, offer: Offer, rules: CreditorRules) -> Result
 
 
 def evaluate(problem: Problem, bp: int) -> Result:
-    """Evaluate a settlement of ``bp`` basis points against a prebuilt ``Problem``."""
+    """Evaluate a settlement of ``bp`` basis points against a prebuilt ``Problem``.
+
+    Exact over every legal vector (``search.Search``): the take-home winner whenever the
+    take-home family already reaches Φ*, and the exact L*/X* when nothing is feasible.
+    """
     S = problem.offer_total(bp)
-    k_max = problem.k_max
-    candidates = generate_candidates(S, k_max, problem.floors, problem.rules) if k_max > 0 else []
-    return evaluate_candidates(problem, S, candidates)
+    search = Search(problem, S)
+    client, rules = problem.client, problem.rules
+    buffer = max(
+        DEFAULT_BUFFER_CENTS,
+        round_half_up(BUFFER_DRAFT_PCT, client.draft_amount_cents),
+    )
+    # Tier C: try with soft buffer, fall back to 0.
+    found = search.best(buffer)
+    if found is None and buffer > 0:
+        buffer = 0
+        found = search.best(0)
+    if found is not None:
+        vec, label = found
+        cand = Candidate(k=len(vec), payments=vec, label=label)
+        scored = evaluate_candidate(
+            client, cand, problem.cadence, rules.bank_fee_cents, problem.program_fee_cents,
+            buffer, problem.base,
+        )
+        assert scored is not None  # the search only returns feasible vectors
+        placement, sim = scored
+        cand, placement, sim = flatten_cliff(
+            client, cand, problem.cadence, rules.bank_fee_cents, problem.program_fee_cents,
+            buffer, S, problem.k_max, problem.floors, rules, placement, sim, problem.base,
+        )
+        rows = _assemble_schedule(cand, problem.cadence, placement, sim, rules.bank_fee_cents)
+        return Result(feasible=True, pay_shape_used=cand.label, schedule=rows)
+    return _infeasible(exact_lump(problem, search), exact_increment(problem, search))
+
+
+def _infeasible(lump: LumpResult, incr: IncrementResult) -> Result:
+    return Result(
+        feasible=False,
+        pay_shape_used=None,
+        schedule=None,
+        additional_funds=AdditionalFunds(
+            lump_sum=FundsOption(
+                amount_cents=lump.amount_cents,
+                within_guardrail=lump.within_guardrail,
+                reason=lump.reason,
+                date=lump.date,
+            ),
+            monthly_increment=FundsOption(
+                amount_cents=incr.amount_cents,
+                within_guardrail=incr.within_guardrail,
+                reason=incr.reason,
+                num_drafts=incr.num_drafts,
+            ),
+        ),
+    )
 
 
 def evaluate_candidates(problem: Problem, S: int, candidates: list[Candidate]) -> Result:
     """Score a given candidate family for offer total ``S`` (Part 1, else Part 2).
 
-    ``evaluate`` passes ``shapes.generate_candidates``; ``legacy.legacy_evaluate``
-    passes the frozen take-home family so the gap report can compare generators.
+    The enumerate-and-score path, relative to the family passed in. Only
+    ``legacy.legacy_evaluate`` uses it now (the frozen take-home family, for the gap
+    report); ``evaluate`` searches the full legal set instead.
     """
     client = problem.client
     rules = problem.rules
@@ -259,22 +321,4 @@ def evaluate_candidates(problem: Problem, S: int, candidates: list[Candidate]) -
     # Part 2 — only issued from a buffer=0 evaluation (we already are here).
     lump = compute_lump(client, candidates, cadence, rules.bank_fee_cents, F, S, base)
     incr = compute_increment(client, candidates, cadence, rules.bank_fee_cents, F, base)
-    return Result(
-        feasible=False,
-        pay_shape_used=None,
-        schedule=None,
-        additional_funds=AdditionalFunds(
-            lump_sum=FundsOption(
-                amount_cents=lump.amount_cents,
-                within_guardrail=lump.within_guardrail,
-                reason=lump.reason,
-                date=lump.date,
-            ),
-            monthly_increment=FundsOption(
-                amount_cents=incr.amount_cents,
-                within_guardrail=incr.within_guardrail,
-                reason=incr.reason,
-                num_drafts=incr.num_drafts,
-            ),
-        ),
-    )
+    return _infeasible(lump, incr)

@@ -52,6 +52,16 @@ infeasible, 0 worse Φ\*, 0 rescue over-estimates. User decision: hunt large cas
 Phase 57 is now that hunt (prompt below). The original exact-search phase becomes 57b; its
 scope, and whether 58 stays, are decided from 57's result. 59–61 are unchanged for now.
 
+## Revision 2026-10-27 (after Phase 57)
+
+Phase 57 (`docs/eval/engine_gap_20261025_full/`) found validated misses: staircases with
+≥ 3 levels, min-payment tiers and tight cash (0 in golden and 20,000 random cases; 25 in
+20,000 adversarial; 112 structural witnesses; worst a $161.78 lump asked when none is
+needed). Proved exact: even, balloon, ≤ 2 levels. User decision: one phase, **57b**, ports
+the reference's dominating family for staircases and makes rescue exact (old 58 merged in).
+Note for 59: "minimise the largest payment" is not monotone in prefix sums, so client-first
+needs its own search beyond the fee-first family.
+
 ## Approach
 
 ### The formulation that makes exact search possible
@@ -119,9 +129,8 @@ behaviour as objective `fee_first`. The old candidate generator is kept as
 | 55 | Engine v2 foundation: owned package, bp input, `Problem`, golden corpus, oracle, gap report | `feasibility/`, `tests/engine/`, `scripts/engine_gap_report.py`, `pyproject.toml`, `CLAUDE.md`, `app/adapter/engine_adapter.py` (bp only) | — |
 | 56 | Cleanup leftovers | `app/agent/reasons.py`, `config/nlg_bank.json` (+ bank build), `fixtures/scenarios/{no_space,haggling_rep}`, `.env.example`, `web/src/lib/{mic,traceStory}.ts`, phone card row, `web/README.md` + shots, PROGRESS status table | — (parallel with 55, 57) |
 | 57 | Large-case hunt: does the take-home family miss anything at full size? (replaces the original 57, see Revision) | `tests/engine/reference.py` (new), `scripts/engine_gap_report.py`, `docs/eval/engine_gap_*` | 55 |
-| 57b | Exact Part 1 search (original 57; scope set after 57's result) | `feasibility/search.py` (new), `engine.py`, `scoring.py`, `tests/engine/` | 57 |
-| 58 | Exact Part 2 rescue (kept, dropped or merged after 57) | `feasibility/rescue.py`, `tests/engine/test_rescue*.py` | 57b |
-| 59 | Objectives + fee policy | `feasibility/objectives.py` (new), `scoring.py`, adapter, `app/config.py`, validator (proportional rule), policy CONFIRM wording if counts change, eval | 58 |
+| 57b | Exact staircase search + exact rescue (old 58 merged in) | `feasibility/search.py` (new), `shapes.py`, `engine.py`, `rescue.py`, `tests/engine/` | 57 |
+| 59 | Objectives + fee policy | `feasibility/objectives.py` (new), `scoring.py`, adapter, `app/config.py`, validator (proportional rule), policy CONFIRM wording if counts change, eval | 57b |
 | 60 | Explain + what-if, term_alts on the engine, trace line (UI, manual review) | `feasibility/explain.py`, `feasibility/whatif.py` (new), `app/agent/term_alts.py`, `app/agent/orchestrator.py` (`_engine_context`), `app/voice/views.py`, `app/schemas/events.py`, `web/src` trace | 59, 56 merged |
 | 61 | Docs + evidence | `docs/ENGINE.md` (new), `docs/DESIGN.md` ADR 5 + new ADR, README engine section, `docs/eval/engine_v2_<date>/`, remove `feasibility/legacy.py` | 60 |
 
@@ -131,7 +140,7 @@ behaviour as objective `fee_first`. The old candidate generator is kept as
   the adapter's Offer construction, `pyproject.toml` and `CLAUDE.md`; 56 touches copy, fixtures,
   web and docs. No shared files. One rule: 56 must not edit `CLAUDE.md` or `pyproject.toml`.
 - **Wave 2:** 57 after 55 merges (56 may still be running; still disjoint).
-- **Waves 3–6 sequential:** 58 → 59 → 60 → 61. All change the engine's public API in
+- **Waves 3–6 sequential:** 57b → 59 → 60 → 61. All change the engine's public API in
   `feasibility/engine.py` and the adapter, so parallel branches would conflict. 60 needs 56
   merged (both touch `traceStory.ts`).
 - 56 and 60 have UI changes: the user checks them in the browser before merge (screenshots in
@@ -285,62 +294,60 @@ Commit: `phase 57: large-case hunt — exact reference solver vs the take-home f
 
 ---
 
-### Phase 57b — Exact Part 1 search (original Phase 57; rescoped after the hunt)
+### Phase 57b — Exact staircase search and exact rescue (57b + 58 merged)
 
-You are implementing Phase 57 (exact payment search) for Debt-Settlement-Agent. Read CLAUDE.md,
-docs/ENGINE_PLAN.md (Approach), PROGRESS Phase 55 handoff, `feasibility/` (problem.py, shapes.py,
-scoring.py, engine.py, legacy.py), `tests/engine/oracle.py`, the Phase 55 gap report.
+You are implementing Phase 57b (exact staircase search and exact rescue) for
+Debt-Settlement-Agent. Read CLAUDE.md, docs/ENGINE_PLAN.md (Revision 2026-10-27, Approach),
+PROGRESS Phase 55 and 57 handoffs, `docs/eval/engine_gap_20261025_full/{summary,notes}.md`,
+`tests/engine/reference.py` (the dominating family and its exactness argument),
+`tests/engine/{oracle,hunt,gen_cases}.py`, `feasibility/` (problem.py, shapes.py, scoring.py,
+engine.py, rescue.py, legacy.py), `scripts/engine_gap_report.py`.
 
-1. Write the dominance argument first, in `docs/ENGINE.md` § "Exact search" (draft): feasibility
-   and Φ\* depend only on prefix sums; balloon-allowed optimum is the floors-pinned balloon;
-   for staircases, which levels can be pinned and which must be searched (the divisibility
-   case the legacy generator misses, with a gap-report example).
-2. `feasibility/search.py`: for each k, even (closed form), balloon (pinned + certificate),
-   staircase branch and bound over compositions and levels with prefix-cap and remaining-sum
-   pruning; returns the fee-first best vector per k. `engine.evaluate` uses it; candidate
-   ranking across k keeps the fee-first key from scoring.py; cliff flattening stays a post-pass.
-3. Tests: oracle agreement on ≥ 20 000 seeded small cases (feasibility and Φ\* exactly; mark a
-   slow subset with the existing `slow` marker, keep ≥ 2 000 in the fast suite); every
-   feasible schedule passes the validator; golden corpus: no case goes feasible → infeasible,
-   Φ\* never worse; every changed golden case listed in a report file and the golden file
-   regenerated with a `--update` flag (commit the diff summary).
-4. Performance: affordability scan on the 7 scenarios and the demo fixture, p50 and max over
-   20 runs, before vs after, in `docs/eval/engine_v2_<date>/bench.md`. Budget: p50 ≤ 2× the
-   Phase 55 figure and max ≤ 150 ms per scan; if over, reuse caps across bp / memoise per
-   (k, composition) before loosening anything.
-5. Effect on the agent: re-run the scenarios' affordability curves; record which bp flipped and
-   whether the "non-monotonic" curve in DESIGN ADR 5 was partly a generator artifact. Oracle
-   eval thresholds PASS; list every metric that moved and why.
+Phase 57 proved the take-home family exact for even, balloon and staircases with ≤ 2 levels,
+and found validated misses for staircases with ≥ 3 levels, min-payment tiers and tight cash
+(the pin on levels v_1..v_{m-2}): false infeasible, worse Φ\*, and rescue over-asks (worst:
+a $161.78 lump asked when no extra money is needed). Fix exactly that, nothing more.
 
-Commit: `phase 57: exact payment search — branch and bound on prefix caps, oracle-verified`.
+1. **Staircase search in the engine.** New `feasibility/search.py` (or in `shapes.py` if
+   clearer): the reference's dominating family for staircases — per composition, early
+   levels in the box `[lo_l, lo_l + c_m/gcd(c_l, c_m))`, last two levels in closed form —
+   with branch and bound on the fee-first key. Even, balloon and ≤ 2-level staircases keep
+   today's code paths (proved exact; their golden output must not change). Carry the
+   exactness argument into the module docstring; the engine must not import from `tests/`.
+2. **Exact rescue (old Phase 58).** `rescue.py` computes L\* (and its latest date) and X\*
+   as the minimum over the same dominating family (monotone in prefix sums, so no binary
+   search). Guardrails, reason texts and `within_guardrail` semantics unchanged.
+3. **Speed.** Budget: affordability scan p50 ≤ 2× the Phase 55 figure on the same machine,
+   and max ≤ 150 ms per 100-point scan on the 7 scenarios, the demo fixture and the golden
+   full-size cases. The 57 reference took up to ~2.7 s on adversarial cases; reuse the
+   `Problem` caps across bp, memoise per (k, composition), and prune by the best key found
+   so far. Report before/after in `docs/eval/engine_v2_<date>/bench.md`. If an
+   adversarial case cannot meet the budget, record it and keep correctness; do not trim
+   the family.
+4. **Tests.**
+   - Engine vs `tests/engine/reference.py` on the Phase 57 sets (golden, 20,000 random,
+     20,000 adversarial, the 112 structural witnesses): feasibility, Φ\*, L\*, X\* equal on
+     every case (big sets under the `slow` marker; ≥ 2,000 in the fast suite including every
+     known witness).
+   - Engine vs oracle on ≥ 5,000 small infeasible cases for L\*/X\*, and strict minimality
+     (L\*−1, X\*−1 infeasible) on the fixtures and the witnesses.
+   - Every produced schedule passes `app/adapter/validator.py`.
+   - Golden corpus: no case goes feasible → infeasible, Φ\* never worse, rescue never
+     higher; regenerate with `--update`, list every changed case with its kind.
+   - The gap report re-run on main reports 0 misses for the engine (keep `legacy.py` for
+     the comparison until Phase 61).
+5. **Agent effect.** Oracle eval thresholds PASS; list any metric or per-call change and
+   why (expected: none, since scenarios showed no miss). Note in PROGRESS that "legacy is
+   complete without tiers" stays a conjecture.
 
----
-
-### Phase 58 — Exact Part 2 rescue
-
-You are implementing Phase 58 (exact rescue minima) for Debt-Settlement-Agent. Read CLAUDE.md,
-docs/ENGINE_PLAN.md, PROGRESS Phase 57 handoff, `feasibility/rescue.py`, `search.py`,
-`tests/engine/test_rescue.py`, `oracle.py`.
-
-1. Minimum lump L\* (and its latest date) and minimum uniform increment X\* over **all** legal
-   vectors, not the legacy family: in the prefix-cap form, a lump on date d raises every cap
-   from d on; search the vector minimising the required L (and X) with the same branch and
-   bound, using the current closed forms as the per-vector inner step.
-2. Keep guardrail rules and reason texts; `within_guardrail` semantics unchanged.
-3. Tests: oracle (binary search on L and X) agrees on ≥ 5 000 seeded infeasible small cases;
-   existing rescue tests pass or are updated with a one-line reason each (the old expected
-   amounts were family-relative); strict minimality (L\*−1, X\*−1 infeasible) on the fixtures.
-4. Agent effect: `rescue_escalate` and `no_space` scenarios, and every eval call that hit
-   `rescue_check`; list any changed escalate decision. Oracle eval PASS.
-
-Commit: `phase 58: exact rescue minima over all legal schedules, oracle-verified`.
+Commit: `phase 57b: exact staircase search and exact rescue minima, verified against the reference`.
 
 ---
 
 ### Phase 59 — Objectives and fee policy
 
 You are implementing Phase 59 (schedule objectives) for Debt-Settlement-Agent. Read CLAUDE.md,
-docs/ENGINE_PLAN.md (Objectives and fee policy), PROGRESS 57/58 handoffs, `feasibility/scoring.py`,
+docs/ENGINE_PLAN.md (Objectives and fee policy), PROGRESS 57/57b handoffs, `feasibility/scoring.py`,
 `search.py`, `app/adapter/engine_adapter.py`, `app/adapter/validator.py`, `app/config.py`,
 `app/agent/policy/moves.py` (CONFIRM wording), `docs/DESIGN.md` ADR 7.
 

@@ -347,19 +347,34 @@ Commit: `phase 57b: exact staircase search and exact rescue minima, verified aga
 ### Phase 59 — Objectives and fee policy
 
 You are implementing Phase 59 (schedule objectives) for Debt-Settlement-Agent. Read CLAUDE.md,
-docs/ENGINE_PLAN.md (Objectives and fee policy), PROGRESS 57/57b handoffs, `feasibility/scoring.py`,
-`search.py`, `app/adapter/engine_adapter.py`, `app/adapter/validator.py`, `app/config.py`,
+docs/ENGINE_PLAN.md (Objectives and fee policy), PROGRESS 57/57b handoffs, `feasibility/search.py` (the 57b
+search and its bounds), `feasibility/scoring.py`, `tests/engine/{oracle,reference}.py`,
+`app/adapter/engine_adapter.py`, `app/adapter/validator.py`, `app/config.py`,
 `app/agent/policy/moves.py` (CONFIRM wording), `docs/DESIGN.md` ADR 7.
 
 1. `feasibility/objectives.py`: `Objective = fee_first | client_first` as explicit sort keys,
    written in docs/ENGINE.md before code. The search returns enough per-k candidates (or
    Pareto set on prefix sums) that `client_first` is exact, not "best of the fee-first
    winners"; extend the oracle to rank by each objective and require agreement.
+   Known from 57/57b: the `Search` bounds are valid for keys that are monotone in prefix
+   sums (feasibility, Φ, cushion, L, X). "Minimise the largest creditor payment" is **not**
+   monotone in prefix sums, so it needs its own bound (e.g. a lower bound on the last run
+   level from the remaining sum) or a full-box search for that key; prove the bound in the
+   docstring and check it against the oracle and `reference.py`.
+   Before fixing the key order, measure whether "minimum post-fee window slack" is
+   degenerate under the front-loaded fee (often 0, because Φ\* fills windows to their
+   suffix minimum). If it is, define cushion on a basis that is not (e.g. the lowest balance
+   with the fee placed, or with a reserved buffer) and record the measurement and the
+   choice in docs/ENGINE.md and PROGRESS.
+   Speed budget as 57b: scan p50 ≤ 2× the 57b figure, max ≤ 150 ms on scenarios, demo and
+   golden; report in `docs/eval/engine_v2_<date>/bench.md` (append a section).
 2. `fee_policy = front_loaded | proportional` on `Problem`; proportional caps Φ\_j at
    ⌊F·P_j/S⌋ inside the suffix-min. Validator gains a `fee_proportional` rule checked only when
    the policy is on. Oracle covers both policies.
 3. Settings: `ENGINE_OBJECTIVE` (default `client_first`) and `ENGINE_FEE_POLICY` (default
-   `front_loaded`) in `app/config.py` and `.env.example`; affordability cache key includes both.
+   `front_loaded`) in `app/config.py` and `.env.example` (add them as a new block at the end
+   of `.env.example`: Phase 56, not yet merged, also edits that file); the affordability
+   cache key includes both.
    `evaluate_offer` (take-home wrapper) stays `fee_first` + `front_loaded`; golden corpus under
    that mode unchanged.
 4. Agent effect: easy_deal now offers a plan that uses the allowed payment count when that

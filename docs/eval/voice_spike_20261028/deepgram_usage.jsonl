@@ -1,0 +1,116 @@
+{"ts": "2026-10-28T22:12:41", "kind": "aura2_tts", "chars": 7, "seconds": 0.0, "usd": "0.000210", "note": "a01_mmhm"}
+{"ts": "2026-10-28T22:12:43", "kind": "aura2_tts", "chars": 110, "seconds": 0.0, "usd": "0.003300", "note": "a02_terms"}
+{"ts": "2026-10-28T22:12:45", "kind": "aura2_tts", "chars": 8, "seconds": 0.0, "usd": "0.000240", "note": "a03_correct"}
+{"ts": "2026-10-28T22:12:47", "kind": "aura2_tts", "chars": 18, "seconds": 0.0, "usd": "0.000540", "note": "a04_pause"}
+{"ts": "2026-10-28T22:12:48", "kind": "aura2_tts", "chars": 34, "seconds": 0.0, "usd": "0.001020", "note": "a04_pause"}
+{"ts": "2026-10-28T22:12:51", "kind": "aura2_tts", "chars": 64, "seconds": 0.0, "usd": "0.001920", "note": "a05_interrupt"}
+{"ts": "2026-10-28T22:12:53", "kind": "aura2_tts", "chars": 49, "seconds": 0.0, "usd": "0.001470", "note": "a06_date"}
+{"ts": "2026-10-28T22:12:54", "kind": "aura2_tts", "chars": 23, "seconds": 0.0, "usd": "0.000690", "note": "a07_yes"}
+{"ts": "2026-10-28T22:12:56", "kind": "aura2_tts", "chars": 30, "seconds": 0.0, "usd": "0.000900", "note": "a08_bye"}
+{"ts": "2026-10-28T22:12:57", "kind": "aura2_tts", "chars": 5, "seconds": 0.0, "usd": "0.000150", "note": "b01_okay"}
+{"ts": "2026-10-28T22:13:00", "kind": "aura2_tts", "chars": 97, "seconds": 0.0, "usd": "0.002910", "note": "b02_terms"}
+{"ts": "2026-10-28T22:13:01", "kind": "aura2_tts", "chars": 8, "seconds": 0.0, "usd": "0.000240", "note": "b03_correct"}
+{"ts": "2026-10-28T22:13:03", "kind": "aura2_tts", "chars": 49, "seconds": 0.0, "usd": "0.001470", "note": "b04_seventy"}
+{"ts": "2026-10-28T22:13:05", "kind": "aura2_tts", "chars": 57, "seconds": 0.0, "usd": "0.001710", "note": "b05_interrupt"}
+{"ts": "2026-10-28T22:13:07", "kind": "aura2_tts", "chars": 21, "seconds": 0.0, "usd": "0.000630", "note": "b06_pause"}
+{"ts": "2026-10-28T22:13:08", "kind": "aura2_tts", "chars": 21, "seconds": 0.0, "usd": "0.000630", "note": "b06_pause"}
+{"ts": "2026-10-28T22:13:09", "kind": "aura2_tts", "chars": 6, "seconds": 0.0, "usd": "0.000180", "note": "b07_right"}
+{"ts": "2026-10-28T22:13:11", "kind": "aura2_tts", "chars": 62, "seconds": 0.0, "usd": "0.001860", "note": "b08_date"}
+{"ts": "2026-10-28T22:13:13", "kind": "aura2_tts", "chars": 23, "seconds": 0.0, "usd": "0.000690", "note": "b09_yes"}
+{"ts": "2026-10-28T22:13:15", "kind": "aura2_tts", "chars": 30, "seconds": 0.0, "usd": "0.000900", "note": "b10_bye"}
+{"ts": "2026-10-28T22:13:23", "kind": "nova3_listen", "chars": 0, "seconds": 0.28, "usd": "0.000020", "note": "fixture check e/a01_mmhm.wav"}
+{"ts": "2026-10-28T22:13:25", "kind": "nova3_listen", "chars": 0, "seconds": 4.48, "usd": "0.000321", "note": "fixture check /a02_terms.wav"}
+{"ts": "2026-10-28T22:13:27", "kind": "nova3_listen", "chars": 0, "seconds": 0.64, "usd": "0.000046", "note": "fixture check 03_correct.wav"}
+{"ts": "2026-10-28T22:13:29", "kind": "nova3_listen", "chars": 0, "seconds": 4.16, "usd": "0.000298", "note": "fixture check /a04_pause.wav"}
+{"ts": "2026-10-28T22:13:32", "kind": "nova3_listen", "chars": 0, "seconds": 4.48, "usd": "0.000321", "note": "fixture check _interrupt.wav"}
+{"ts": "2026-10-28T22:13:34", "kind": "nova3_listen", "chars": 0, "seconds": 2.96, "usd": "0.000212", "note": "fixture check e/a06_date.wav"}
+{"ts": "2026-10-28T22:13:36", "kind": "nova3_listen", "chars": 0, "seconds": 1.06, "usd": "0.000076", "note": "fixture check ce/a07_yes.wav"}
+{"ts": "2026-10-28T22:13:37", "kind": "nova3_listen", "chars": 0, "seconds": 1.14, "usd": "0.000082", "note": "fixture check ce/a08_bye.wav"}
+{"ts": "2026-10-28T22:13:38", "kind": "nova3_listen", "chars": 0, "seconds": 0.3, "usd": "0.000021", "note": "fixture check e/b01_okay.wav"}
+{"ts": "2026-10-28T22:13:41", "kind": "nova3_listen", "chars": 0, "seconds": 4.44, "usd": "0.000318", "note": "fixture check /b02_terms.wav"}
+{"ts": "2026-10-28T22:13:42", "kind": "nova3_listen", "chars": 0, "seconds": 0.49, "usd": "0.000035", "note": "fixture check 03_correct.wav"}
+{"ts": "2026-10-28T22:13:44", "kind": "nova3_listen", "chars": 0, "seconds": 1.91, "usd": "0.000137", "note": "fixture check 04_seventy.wav"}
+{"ts": "2026-10-28T22:13:46", "kind": "nova3_listen", "chars": 0, "seconds": 2.72, "usd": "0.000195", "note": "fixture check _interrupt.wav"}
+{"ts": "2026-10-28T22:13:47", "kind": "nova3_listen", "chars": 0, "seconds": 3.54, "usd": "0.000254", "note": "fixture check /b06_pause.wav"}
+{"ts": "2026-10-28T22:13:48", "kind": "nova3_listen", "chars": 0, "seconds": 0.07, "usd": "0.000005", "note": "fixture check /b07_right.wav"}
+{"ts": "2026-10-28T22:13:51", "kind": "nova3_listen", "chars": 0, "seconds": 3.01, "usd": "0.000216", "note": "fixture check e/b08_date.wav"}
+{"ts": "2026-10-28T22:13:52", "kind": "nova3_listen", "chars": 0, "seconds": 1.42, "usd": "0.000102", "note": "fixture check ce/b09_yes.wav"}
+{"ts": "2026-10-28T22:13:54", "kind": "nova3_listen", "chars": 0, "seconds": 1.73, "usd": "0.000124", "note": "fixture check ce/b10_bye.wav"}
+{"ts": "2026-10-28T22:14:10", "kind": "aura2_tts", "chars": 7, "seconds": 0.0, "usd": "0.000210", "note": "a01_mmhm"}
+{"ts": "2026-10-28T22:14:15", "kind": "aura2_tts", "chars": 110, "seconds": 0.0, "usd": "0.003300", "note": "a02_terms"}
+{"ts": "2026-10-28T22:14:16", "kind": "aura2_tts", "chars": 8, "seconds": 0.0, "usd": "0.000240", "note": "a03_correct"}
+{"ts": "2026-10-28T22:14:17", "kind": "aura2_tts", "chars": 18, "seconds": 0.0, "usd": "0.000540", "note": "a04_pause"}
+{"ts": "2026-10-28T22:14:19", "kind": "aura2_tts", "chars": 34, "seconds": 0.0, "usd": "0.001020", "note": "a04_pause"}
+{"ts": "2026-10-28T22:14:22", "kind": "aura2_tts", "chars": 64, "seconds": 0.0, "usd": "0.001920", "note": "a05_interrupt"}
+{"ts": "2026-10-28T22:14:24", "kind": "aura2_tts", "chars": 49, "seconds": 0.0, "usd": "0.001470", "note": "a06_date"}
+{"ts": "2026-10-28T22:14:26", "kind": "aura2_tts", "chars": 23, "seconds": 0.0, "usd": "0.000690", "note": "a07_yes"}
+{"ts": "2026-10-28T22:14:28", "kind": "aura2_tts", "chars": 30, "seconds": 0.0, "usd": "0.000900", "note": "a08_bye"}
+{"ts": "2026-10-28T22:14:29", "kind": "aura2_tts", "chars": 5, "seconds": 0.0, "usd": "0.000150", "note": "b01_okay"}
+{"ts": "2026-10-28T22:14:32", "kind": "aura2_tts", "chars": 97, "seconds": 0.0, "usd": "0.002910", "note": "b02_terms"}
+{"ts": "2026-10-28T22:14:33", "kind": "aura2_tts", "chars": 8, "seconds": 0.0, "usd": "0.000240", "note": "b03_correct"}
+{"ts": "2026-10-28T22:14:35", "kind": "aura2_tts", "chars": 49, "seconds": 0.0, "usd": "0.001470", "note": "b04_seventy"}
+{"ts": "2026-10-28T22:14:37", "kind": "aura2_tts", "chars": 57, "seconds": 0.0, "usd": "0.001710", "note": "b05_interrupt"}
+{"ts": "2026-10-28T22:14:38", "kind": "aura2_tts", "chars": 21, "seconds": 0.0, "usd": "0.000630", "note": "b06_pause"}
+{"ts": "2026-10-28T22:14:40", "kind": "aura2_tts", "chars": 21, "seconds": 0.0, "usd": "0.000630", "note": "b06_pause"}
+{"ts": "2026-10-28T22:14:41", "kind": "aura2_tts", "chars": 6, "seconds": 0.0, "usd": "0.000180", "note": "b07_right"}
+{"ts": "2026-10-28T22:14:44", "kind": "aura2_tts", "chars": 62, "seconds": 0.0, "usd": "0.001860", "note": "b08_date"}
+{"ts": "2026-10-28T22:14:45", "kind": "aura2_tts", "chars": 23, "seconds": 0.0, "usd": "0.000690", "note": "b09_yes"}
+{"ts": "2026-10-28T22:14:47", "kind": "aura2_tts", "chars": 30, "seconds": 0.0, "usd": "0.000900", "note": "b10_bye"}
+{"ts": "2026-10-28T22:14:48", "kind": "nova3_listen", "chars": 0, "seconds": 0.29, "usd": "0.000021", "note": "fixture check e/a01_mmhm.wav"}
+{"ts": "2026-10-28T22:14:51", "kind": "nova3_listen", "chars": 0, "seconds": 6.31, "usd": "0.000452", "note": "fixture check /a02_terms.wav"}
+{"ts": "2026-10-28T22:14:52", "kind": "nova3_listen", "chars": 0, "seconds": 0.65, "usd": "0.000047", "note": "fixture check 03_correct.wav"}
+{"ts": "2026-10-28T22:14:54", "kind": "nova3_listen", "chars": 0, "seconds": 4.13, "usd": "0.000296", "note": "fixture check /a04_pause.wav"}
+{"ts": "2026-10-28T22:14:55", "kind": "nova3_listen", "chars": 0, "seconds": 4.21, "usd": "0.000302", "note": "fixture check _interrupt.wav"}
+{"ts": "2026-10-28T22:14:58", "kind": "nova3_listen", "chars": 0, "seconds": 2.4, "usd": "0.000172", "note": "fixture check e/a06_date.wav"}
+{"ts": "2026-10-28T22:14:59", "kind": "nova3_listen", "chars": 0, "seconds": 1.15, "usd": "0.000082", "note": "fixture check ce/a07_yes.wav"}
+{"ts": "2026-10-28T22:15:00", "kind": "nova3_listen", "chars": 0, "seconds": 1.48, "usd": "0.000106", "note": "fixture check ce/a08_bye.wav"}
+{"ts": "2026-10-28T22:15:02", "kind": "nova3_listen", "chars": 0, "seconds": 0.49, "usd": "0.000035", "note": "fixture check e/b01_okay.wav"}
+{"ts": "2026-10-28T22:15:04", "kind": "nova3_listen", "chars": 0, "seconds": 5.31, "usd": "0.000381", "note": "fixture check /b02_terms.wav"}
+{"ts": "2026-10-28T22:15:05", "kind": "nova3_listen", "chars": 0, "seconds": 0.7, "usd": "0.000050", "note": "fixture check 03_correct.wav"}
+{"ts": "2026-10-28T22:15:07", "kind": "nova3_listen", "chars": 0, "seconds": 2.28, "usd": "0.000163", "note": "fixture check 04_seventy.wav"}
+{"ts": "2026-10-28T22:15:08", "kind": "nova3_listen", "chars": 0, "seconds": 2.94, "usd": "0.000211", "note": "fixture check _interrupt.wav"}
+{"ts": "2026-10-28T22:15:10", "kind": "nova3_listen", "chars": 0, "seconds": 3.95, "usd": "0.000283", "note": "fixture check /b06_pause.wav"}
+{"ts": "2026-10-28T22:15:11", "kind": "nova3_listen", "chars": 0, "seconds": 0.42, "usd": "0.000030", "note": "fixture check /b07_right.wav"}
+{"ts": "2026-10-28T22:15:13", "kind": "nova3_listen", "chars": 0, "seconds": 3.0, "usd": "0.000215", "note": "fixture check e/b08_date.wav"}
+{"ts": "2026-10-28T22:15:15", "kind": "nova3_listen", "chars": 0, "seconds": 1.47, "usd": "0.000105", "note": "fixture check ce/b09_yes.wav"}
+{"ts": "2026-10-28T22:15:17", "kind": "nova3_listen", "chars": 0, "seconds": 1.37, "usd": "0.000098", "note": "fixture check ce/b10_bye.wav"}
+{"ts": "2026-10-28T22:15:27", "kind": "aura2_tts", "chars": 21, "seconds": 0.0, "usd": "0.000630", "note": "b06_pause"}
+{"ts": "2026-10-28T22:15:29", "kind": "aura2_tts", "chars": 21, "seconds": 0.0, "usd": "0.000630", "note": "b06_pause"}
+{"ts": "2026-10-28T22:15:30", "kind": "nova3_listen", "chars": 0, "seconds": 3.61, "usd": "0.000259", "note": "fixture check b06"}
+{"ts": "2026-10-28T22:15:32", "kind": "aura2_tts", "chars": 21, "seconds": 0.0, "usd": "0.000630", "note": "b06_pause"}
+{"ts": "2026-10-28T22:15:34", "kind": "aura2_tts", "chars": 21, "seconds": 0.0, "usd": "0.000630", "note": "b06_pause"}
+{"ts": "2026-10-28T22:15:36", "kind": "nova3_listen", "chars": 0, "seconds": 3.85, "usd": "0.000276", "note": "fixture check b06"}
+{"ts": "2026-10-28T22:34:04", "kind": "flux_stt", "chars": 0, "seconds": 131.16, "usd": "0.016833", "note": "spike"}
+{"ts": "2026-10-28T22:34:04", "kind": "aura2_tts", "chars": 753, "seconds": 0.0, "usd": "0.022590", "note": "spike"}
+{"ts": "2026-10-28T22:36:30", "kind": "aura2_tts", "chars": 32, "seconds": 0.0, "usd": "0.000960", "note": "aura numbers"}
+{"ts": "2026-10-28T22:36:32", "kind": "nova3_listen", "chars": 0, "seconds": 2.88, "usd": "0.000206", "note": "aura numbers"}
+{"ts": "2026-10-28T22:36:34", "kind": "aura2_tts", "chars": 32, "seconds": 0.0, "usd": "0.000960", "note": "aura numbers"}
+{"ts": "2026-10-28T22:36:37", "kind": "nova3_listen", "chars": 0, "seconds": 4.16, "usd": "0.000298", "note": "aura numbers"}
+{"ts": "2026-10-28T22:36:39", "kind": "aura2_tts", "chars": 49, "seconds": 0.0, "usd": "0.001470", "note": "aura numbers"}
+{"ts": "2026-10-28T22:36:42", "kind": "nova3_listen", "chars": 0, "seconds": 6.84, "usd": "0.000490", "note": "aura numbers"}
+{"ts": "2026-10-28T22:36:44", "kind": "aura2_tts", "chars": 27, "seconds": 0.0, "usd": "0.000810", "note": "aura numbers"}
+{"ts": "2026-10-28T22:36:46", "kind": "nova3_listen", "chars": 0, "seconds": 2.56, "usd": "0.000183", "note": "aura numbers"}
+{"ts": "2026-10-28T22:36:49", "kind": "aura2_tts", "chars": 25, "seconds": 0.0, "usd": "0.000750", "note": "aura numbers"}
+{"ts": "2026-10-28T22:36:51", "kind": "nova3_listen", "chars": 0, "seconds": 4.16, "usd": "0.000298", "note": "aura numbers"}
+{"ts": "2026-10-28T22:36:53", "kind": "aura2_tts", "chars": 28, "seconds": 0.0, "usd": "0.000840", "note": "aura numbers"}
+{"ts": "2026-10-28T22:36:55", "kind": "nova3_listen", "chars": 0, "seconds": 3.28, "usd": "0.000235", "note": "aura numbers"}
+{"ts": "2026-10-28T22:36:58", "kind": "aura2_tts", "chars": 32, "seconds": 0.0, "usd": "0.000960", "note": "aura numbers"}
+{"ts": "2026-10-28T22:37:01", "kind": "nova3_listen", "chars": 0, "seconds": 4.68, "usd": "0.000335", "note": "aura numbers"}
+{"ts": "2026-10-28T22:37:03", "kind": "aura2_tts", "chars": 42, "seconds": 0.0, "usd": "0.001260", "note": "aura numbers"}
+{"ts": "2026-10-28T22:37:04", "kind": "nova3_listen", "chars": 0, "seconds": 2.76, "usd": "0.000198", "note": "aura numbers"}
+{"ts": "2026-10-28T22:37:07", "kind": "aura2_tts", "chars": 42, "seconds": 0.0, "usd": "0.001260", "note": "aura numbers"}
+{"ts": "2026-10-28T22:37:09", "kind": "nova3_listen", "chars": 0, "seconds": 3.2, "usd": "0.000229", "note": "aura numbers"}
+{"ts": "2026-10-28T22:37:11", "kind": "aura2_tts", "chars": 35, "seconds": 0.0, "usd": "0.001050", "note": "aura numbers"}
+{"ts": "2026-10-28T22:37:12", "kind": "nova3_listen", "chars": 0, "seconds": 2.52, "usd": "0.000181", "note": "aura numbers"}
+{"ts": "2026-10-28T22:37:15", "kind": "aura2_tts", "chars": 33, "seconds": 0.0, "usd": "0.000990", "note": "aura numbers"}
+{"ts": "2026-10-28T22:37:16", "kind": "nova3_listen", "chars": 0, "seconds": 3.0, "usd": "0.000215", "note": "aura numbers"}
+{"ts": "2026-10-28T22:37:19", "kind": "aura2_tts", "chars": 30, "seconds": 0.0, "usd": "0.000900", "note": "aura numbers"}
+{"ts": "2026-10-28T22:37:21", "kind": "nova3_listen", "chars": 0, "seconds": 2.92, "usd": "0.000209", "note": "aura numbers"}
+{"ts": "2026-10-28T22:57:08", "kind": "flux_stt", "chars": 0, "seconds": 131.13, "usd": "0.016828", "note": "spike"}
+{"ts": "2026-10-28T22:57:08", "kind": "aura2_tts", "chars": 753, "seconds": 0.0, "usd": "0.022590", "note": "spike"}
+{"ts": "2026-10-28T22:59:40", "kind": "flux_stt", "chars": 0, "seconds": 151.13, "usd": "0.019395", "note": "spike"}
+{"ts": "2026-10-28T22:59:40", "kind": "aura2_tts", "chars": 1049, "seconds": 0.0, "usd": "0.031470", "note": "spike"}
+{"ts": "2026-10-28T23:02:44", "kind": "flux_stt", "chars": 0, "seconds": 166.53, "usd": "0.021372", "note": "spike"}
+{"ts": "2026-10-28T23:02:44", "kind": "aura2_tts", "chars": 471, "seconds": 0.0, "usd": "0.014130", "note": "spike"}
+{"ts": "2026-10-28T23:06:43", "kind": "flux_stt", "chars": 0, "seconds": 237.12, "usd": "0.030430", "note": "spike"}
+{"ts": "2026-10-28T23:06:43", "kind": "aura2_tts", "chars": 471, "seconds": 0.0, "usd": "0.014130", "note": "spike"}

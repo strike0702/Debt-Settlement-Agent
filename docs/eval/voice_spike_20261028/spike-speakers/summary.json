@@ -1,0 +1,67 @@
+{
+ "target": "spike",
+ "audio": "speakers",
+ "date": "2026-10-28 23:06",
+ "summary": {
+  "reply_turns": 13,
+  "replied": 5,
+  "first_audio_p50_ms": 2461.8,
+  "first_audio_p95_ms": 6701.0,
+  "any_audio_p50_ms": 2461.8,
+  "eot_p50_ms": 847.5,
+  "eager_eot_p50_ms": 40.0,
+  "final_p50_ms": 849.9,
+  "wer_mean": 0.915,
+  "number_recall": 0.083,
+  "numbers": "1/12",
+  "first_word_lost": 13,
+  "lines_scored": 15,
+  "split_turns": 0,
+  "phantom_finals": 3,
+  "false_barges": 1,
+  "backchannels_barged": "0/3",
+  "interrupts_over_agent": "1/2",
+  "interrupts_barged": "0/1",
+  "barge_stop_p50_ms": null,
+  "barge_stop_max_ms": null
+ },
+ "phantoms": [
+  {
+   "call": "numbers_easy#1",
+   "t": 1793208723144.496,
+   "kind": "final",
+   "text": "Just"
+  },
+  {
+   "call": "numbers_haggle#1",
+   "t": 1793208779124.8901,
+   "kind": "final",
+   "text": "She is survived by confusion, bitter planning was observed, tired by seeing her playing"
+  },
+  {
+   "call": "numbers_haggle#1",
+   "t": 1793208948702.2148,
+   "kind": "final",
+   "text": "six."
+  }
+ ],
+ "false_barges": [
+  {
+   "call": "numbers_haggle#1",
+   "t": 1793208769905.002,
+   "kind": "barge"
+  }
+ ],
+ "notes": [
+  "numbers_easy#1: a04_pause: agent did not finish a turn before this line",
+  "numbers_easy#1: a06_date: agent did not finish a turn before this line",
+  "numbers_easy#1: a07_yes: agent did not finish a turn before this line",
+  "numbers_haggle#1: b01_okay: agent never spoke 3000 ms in a row; played anyway",
+  "numbers_haggle#1: b03_correct: agent did not finish a turn before this line",
+  "numbers_haggle#1: b04_seventy: agent did not finish a turn before this line",
+  "numbers_haggle#1: b05_interrupt: agent never spoke 1200 ms in a row; played anyway",
+  "numbers_haggle#1: b06_pause: agent did not finish a turn before this line",
+  "numbers_haggle#1: b07_right: agent never spoke 1500 ms in a row; played anyway",
+  "numbers_haggle#1: b08_date: agent did not finish a turn before this line"
+ ]
+}

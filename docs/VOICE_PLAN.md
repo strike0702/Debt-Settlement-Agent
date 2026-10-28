@@ -31,6 +31,22 @@ What does **not** change: code decides every move, the engine computes every num
 only reads and phrases, spoken numbers come only from `Fact.render()`, and the rollback of
 unheard turns from Phase 56 stays the rule for what the rep heard.
 
+## Revision 2026-10-28 (after Phase 62)
+
+Spike verdict **go** (`docs/eval/voice_spike_20261028/summary.md`): reply audio p50 1.9 s vs
+4.5 s on main (fixed reply, NLU not included), numbers 12/12 vs 20/24, real interruptions 2/2 vs
+0/4, one echo-driven false start in 66 s of agent speech on laptop speakers. Changes:
+- Phase 63: drop item 7 (Aura-2 reads every `Fact.render()` format; no spoken form needed).
+  New first task: one-word turns ("Correct.", "Yes.") and backchannels never end a Flux turn at
+  default settings and get glued to the next utterance; tune `eot_timeout_ms` /
+  `eot_threshold` and the turn-start handling with harness lines `a03_correct` / `b03_correct`
+  before anything else. Count a barge only while the bot speaks (Pipecat broadcasts an
+  interruption at every Flux start of turn). Use the Pipecat 1.14 API notes in the spike report.
+- Phase 65: barge stop is about 1.3 s with Flux alone (target 300 ms); decide between accepting
+  it and a local VAD for the stop only while the agent speaks.
+- Phase 66: check image size (Pipecat adds about 430 MB; call RSS 118 MB) and RAM on Render
+  first; fallback: the webrtc transport without the OpenCV extra.
+
 ## Decisions (user, 2026-10-28)
 
 1. **Providers: Deepgram only.** Flux for streaming STT with built-in end-of-turn
@@ -187,8 +203,8 @@ Phase 62 report first and follow its go/no-go changes.
    `app/llm/client.py`.
 6. **Flag**: `VOICE_STACK=pipecat|legacy` (default `legacy` in this phase). Dependency
    justification in the commit message (`pipecat-ai` with the deepgram and webrtc extras).
-7. Numbers: apply the Phase 62 Aura-2 findings in `Fact.render()` (spoken form only where
-   Aura-2 misreads), with tests; the displayed text keeps today's format.
+7. Numbers: none needed (Phase 62: Aura-2 reads every format). First task instead: one-word
+   turns and backchannels with Flux (see Revision 2026-10-28).
 
 Paid cap: $5. Acceptance: unit tests for the processor, tracker, rollback, budget; the
 harness from 62 runs against the new pipeline with a minimal test page or the spike client

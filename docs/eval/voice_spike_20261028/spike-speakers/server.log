@@ -1,0 +1,406 @@
+warning: `VIRTUAL_ENV=/Users/shbagchi/projects/dsa-p62/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-10-28 22:59:56.572 | INFO     | pipecat:<module>:54 - ᓚᘏᗢ Pipecat 1.14.0 (Python 3.12.13 (main, Jun 11 2026, 03:55:21) [Clang 22.1.3 ]) ᓚᘏᗢ
+2026-10-28 22:59:56.880 | DEBUG    | pipecat.transports.smallwebrtc.connection:<module>:80 - [SCTP] USERDATA_MAX_LENGTH set to 1100
+INFO:     Started server process [85129]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:56772 (Press CTRL+C to quit)
+INFO:     127.0.0.1:56778 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56784 - "POST /events/reset HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56785 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56785 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+2026-10-28 22:59:58.407 | DEBUG    | pipecat.transports.smallwebrtc.connection:_initialize:332 - Initializing new peer connection
+2026-10-28 22:59:58.417 | DEBUG    | pipecat.transports.smallwebrtc.connection:_create_answer:429 - Creating answer
+2026-10-28 22:59:58.418 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_track:411 - Track audio received
+2026-10-28 22:59:58.419 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_icegatheringstatechange:407 - ICE gathering state is gathering
+2026-10-28 22:59:58.420 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_icegatheringstatechange:407 - ICE gathering state is complete
+2026-10-28 22:59:58.420 | DEBUG    | pipecat.transports.smallwebrtc.connection:_create_answer:432 - Setting the answer after the local description is created
+2026-10-28 22:59:58.420 | DEBUG    | pipecat.transports.smallwebrtc.request_handler:handle_web_request:218 - webrtc_connection_callback executed successfully for peer: SmallWebRTCConnection#0-c9a46d46cecf40e48455ff8392563d4b
+INFO:     127.0.0.1:56794 - "POST /api/offer HTTP/1.1" 200 OK
+2026-10-28 22:59:58.422 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking Pipeline#0::Source -> SmallWebRTCInputTransport#0
+2026-10-28 22:59:58.422 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking SmallWebRTCInputTransport#0 -> DeepgramFluxSTTService#0
+2026-10-28 22:59:58.422 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking DeepgramFluxSTTService#0 -> UserTurnProcessor#0
+2026-10-28 22:59:58.422 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking UserTurnProcessor#0 -> EchoReply#0
+2026-10-28 22:59:58.422 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking EchoReply#0 -> DeepgramTTSService#0
+2026-10-28 22:59:58.422 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking DeepgramTTSService#0 -> TtsProbe#0
+2026-10-28 22:59:58.423 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking TtsProbe#0 -> SmallWebRTCOutputTransport#0
+2026-10-28 22:59:58.423 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking SmallWebRTCOutputTransport#0 -> Pipeline#0::Sink
+/Users/shbagchi/projects/dsa-p62/scripts/voice_spike/server.py:210: DeprecationWarning: `PipelineTask` is deprecated since 1.3.0 and will be removed in 2.0.0. Use `PipelineWorker` instead.
+  task = PipelineTask(pipeline, params=PipelineParams(enable_metrics=True))
+2026-10-28 22:59:58.423 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking PipelineTask#0::Source -> RTVIProcessor#0
+2026-10-28 22:59:58.423 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking RTVIProcessor#0 -> Pipeline#0
+2026-10-28 22:59:58.423 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking Pipeline#0 -> PipelineTask#0::Sink
+/Users/shbagchi/projects/dsa-p62/scripts/voice_spike/server.py:219: DeprecationWarning: `PipelineRunner` is deprecated since 1.3.0 and will be removed in 2.0.0. Use `WorkerRunner` instead.
+  await PipelineRunner(handle_sigint=False).run(task)
+/Users/shbagchi/projects/dsa-p62/scripts/voice_spike/server.py:219: DeprecationWarning: `WorkerRunner.run(worker)` is deprecated since 1.3.0 and will be removed in 2.0.0. Use `WorkerRunner.add_workers()` before `run()` instead.
+  await PipelineRunner(handle_sigint=False).run(task)
+2026-10-28 22:59:58.423 | DEBUG    | pipecat.workers.runner:run:273 - WorkerRunner 'runner-8fa95d41': started running
+2026-10-28 22:59:58.423 | DEBUG    | pipecat.workers.runner:add_workers:230 - WorkerRunner 'runner-8fa95d41': added worker 'PipelineTask#0'
+2026-10-28 22:59:58.424 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_iceconnectionstatechange:401 - ICE connection state is checking, connection is connecting
+2026-10-28 22:59:58.424 | DEBUG    | pipecat.transports.smallwebrtc.connection:_monitoring_connecting_state:607 - Monitoring connecting state
+2026-10-28 22:59:58.424 | DEBUG    | pipecat.transports.smallwebrtc.connection:_handle_new_connection_state:683 - Connection state changed to: connecting
+2026-10-28 22:59:58.424 | DEBUG    | pipecat.workers.runner:_start_worker:459 - WorkerRunner 'runner-8fa95d41': starting worker 'PipelineTask#0'
+2026-10-28 22:59:58.427 | INFO     | pipecat.transports.smallwebrtc.transport:connect:544 - Connecting to Small WebRTC
+2026-10-28 22:59:58.433 | DEBUG    | pipecat.services.deepgram.tts:_connect_websocket:254 - Connecting to Deepgram WebSocket
+2026-10-28 22:59:58.433 | DEBUG    | pipecat.pipeline.worker:_wait_for_pipeline_start:1309 - PipelineTask#0: Starting. Waiting for StartFrame#0 to reach the end of the pipeline...
+2026-10-28 22:59:58.449 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_iceconnectionstatechange:401 - ICE connection state is completed, connection is connecting
+2026-10-28 22:59:58.451 | DEBUG    | pipecat.transports.smallwebrtc.connection:_cancel_monitoring_connecting_state:627 - Cancelling the connecting timeout task
+2026-10-28 22:59:58.451 | DEBUG    | pipecat.transports.smallwebrtc.connection:_handle_new_connection_state:683 - Connection state changed to: connected
+2026-10-28 22:59:58.451 | DEBUG    | pipecat.transports.smallwebrtc.transport:on_connected:270 - Peer connection established.
+2026-10-28 22:59:58.451 | WARNING  | pipecat.transports.smallwebrtc.connection:video_input_track:746 - No video transceiver is available
+2026-10-28 22:59:58.451 | WARNING  | pipecat.transports.smallwebrtc.connection:screen_video_input_track:768 - No screen video transceiver is available
+2026-10-28 22:59:58.451 | DEBUG    | pipecat.transports.smallwebrtc.connection:replace_audio_track:522 - Replacing audio track audio
+INFO:     127.0.0.1:56784 - "POST /say_opening HTTP/1.1" 200 OK
+2026-10-28 22:59:59.578 | DEBUG    | pipecat.services.deepgram.tts:_connect_websocket:277 - DeepgramTTSService#0: Websocket connection initialized: {"headers": {'dg-project-id': 'e04d5f6a-e977-4b0f-a172-8f90bcb788e4', 'dg-request-id': '01a1838f-c393-7463-87ea-34a3d5259fd7'}}
+2026-10-28 22:59:59.673 | DEBUG    | pipecat.services.deepgram.flux.stt:_connect_websocket:343 - DeepgramFluxSTTService#0: Websocket connection initialized: {"headers": {'dg-project-id': 'e04d5f6a-e977-4b0f-a172-8f90bcb788e4', 'dg-request-id': '01a1838f-c3c6-7a02-bfa5-3650350af6a3'}}
+2026-10-28 22:59:59.686 | INFO     | pipecat.services.deepgram.flux.stt_base:_handle_connection_established:749 - DeepgramFluxSTTService#0: Connected to Flux - ready to stream audio (request_id='01a1838f-c3c6-7a02-bfa5-3650350af6a3')
+2026-10-28 22:59:59.694 | DEBUG    | pipecat.registry.registry:register:132 - Worker 'PipelineTask#0' ready (local)
+2026-10-28 22:59:59.694 | DEBUG    | pipecat.workers.runner:_send_registry:511 - WorkerRunner 'runner-8fa95d41': broadcasting registry: ['PipelineTask#0']
+2026-10-28 22:59:59.694 | DEBUG    | pipecat.workers.base_worker:_maybe_activate:1284 - Worker 'PipelineTask#0': activated
+2026-10-28 22:59:59.694 | DEBUG    | pipecat.pipeline.worker:_wait_for_pipeline_start:1326 - PipelineTask#0: StartFrame#0 reached the end of the pipeline, pipeline is now ready.
+2026-10-28 22:59:59.697 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 22:59:59.697 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [Hi, this is the settlement agent from Synthetic Debt Relief, calling about an account with a balance of $1,250.00. We would like to talk about a settlement today. ]
+2026-10-28 22:59:59.699 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:00:00.076 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.379s
+2026-10-28 23:00:00.078 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-28 23:00:00.079 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:00:00.080 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:00:00.080 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:00:00.080 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:00:00.080 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:00:00.415 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.647s (0.268s leading silence)
+2026-10-28 23:00:00.418 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:00:02.931 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context c0974f56-1c49-4cd1-8319-fd470621f047
+2026-10-28 23:00:02.933 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:00:08.452 | WARNING  | pipecat.transports.smallwebrtc.connection:timeout_handler:648 - Data channel not established within 10s after connection. Clearing message queue and disabling future queueing.
+2026-10-28 23:00:10.173 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-28 23:00:10.173 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-28 23:00:13.569 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-28 23:00:13.569 | DEBUG    | pipecat.turns.user_start.external_user_turn_start_strategy:process_frame:71 - ExternalUserTurnStartStrategy#0: resolving a proposed user turn start
+2026-10-28 23:00:13.569 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_started:220 - UserTurnProcessor#0: User started speaking (strategy: ExternalUserTurnStartStrategy#0)
+2026-10-28 23:00:13.569 | DEBUG    | pipecat.processors.frame_processor:broadcast_interruption:1041 - UserTurnProcessor#0: broadcasting interruption
+2026-10-28 23:00:16.666 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-28 23:00:16.667 | DEBUG    | pipecat.turns.user_stop.external_user_turn_stop_strategy:_trigger_user_turn_stopped:214 - ExternalUserTurnStopStrategy#0: resolving a proposed user turn stop
+2026-10-28 23:00:16.668 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_inference_triggered:259 - UserTurnProcessor#0: User turn inference triggered (strategy: ExternalUserTurnStopStrategy#0)
+2026-10-28 23:00:16.668 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_stopped:238 - UserTurnProcessor#0: User stopped speaking (strategy: ExternalUserTurnStopStrategy#0)
+2026-10-28 23:00:16.670 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [Thanks. So that is 8 monthly payments of $120.00 each, starting on November 15, 2026. Does that work for you? ]
+2026-10-28 23:00:17.123 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.453s
+2026-10-28 23:00:17.126 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-28 23:00:17.154 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.527s (0.074s leading silence)
+2026-10-28 23:00:19.750 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 4d149348-9b3a-46af-a83f-8f81d2592db7
+2026-10-28 23:00:25.843 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-28 23:00:25.843 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-28 23:00:58.054 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-28 23:00:58.055 | DEBUG    | pipecat.turns.user_start.external_user_turn_start_strategy:process_frame:71 - ExternalUserTurnStartStrategy#0: resolving a proposed user turn start
+2026-10-28 23:00:58.055 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_started:220 - UserTurnProcessor#0: User started speaking (strategy: ExternalUserTurnStartStrategy#0)
+2026-10-28 23:00:58.055 | DEBUG    | pipecat.processors.frame_processor:broadcast_interruption:1041 - UserTurnProcessor#0: broadcasting interruption
+2026-10-28 23:00:59.164 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-28 23:00:59.166 | DEBUG    | pipecat.turns.user_stop.external_user_turn_stop_strategy:_trigger_user_turn_stopped:214 - ExternalUserTurnStopStrategy#0: resolving a proposed user turn stop
+2026-10-28 23:00:59.166 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_inference_triggered:259 - UserTurnProcessor#0: User turn inference triggered (strategy: ExternalUserTurnStopStrategy#0)
+2026-10-28 23:00:59.166 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_stopped:238 - UserTurnProcessor#0: User stopped speaking (strategy: ExternalUserTurnStopStrategy#0)
+2026-10-28 23:00:59.169 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [Understood. We could offer 42% of the balance, which is $525.00 in total, paid over 6 months. ]
+2026-10-28 23:00:59.535 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.367s
+2026-10-28 23:00:59.538 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-28 23:00:59.870 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.593s (0.226s leading silence)
+2026-10-28 23:01:01.815 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 828dd656-7be5-45e7-8e46-e73fe0cc6d57
+2026-10-28 23:01:07.592 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-28 23:01:07.592 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-28 23:01:34.205 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-28 23:01:34.206 | DEBUG    | pipecat.turns.user_start.external_user_turn_start_strategy:process_frame:71 - ExternalUserTurnStartStrategy#0: resolving a proposed user turn start
+2026-10-28 23:01:34.206 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_started:220 - UserTurnProcessor#0: User started speaking (strategy: ExternalUserTurnStartStrategy#0)
+2026-10-28 23:01:34.207 | DEBUG    | pipecat.processors.frame_processor:broadcast_interruption:1041 - UserTurnProcessor#0: broadcasting interruption
+2026-10-28 23:02:03.140 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-28 23:02:03.142 | DEBUG    | pipecat.turns.user_stop.external_user_turn_stop_strategy:_trigger_user_turn_stopped:214 - ExternalUserTurnStopStrategy#0: resolving a proposed user turn stop
+2026-10-28 23:02:03.142 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_inference_triggered:259 - UserTurnProcessor#0: User turn inference triggered (strategy: ExternalUserTurnStopStrategy#0)
+2026-10-28 23:02:03.143 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_stopped:238 - UserTurnProcessor#0: User stopped speaking (strategy: ExternalUserTurnStopStrategy#0)
+2026-10-28 23:02:03.145 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [Got it. The first payment would be on Dec 1, 2026, and the last one on Jun 1, 2027, for a total of $562.50. ]
+2026-10-28 23:02:03.517 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.372s
+2026-10-28 23:02:03.519 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-28 23:02:03.847 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.612s (0.240s leading silence)
+2026-10-28 23:02:06.452 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 1c4b33ba-6b8e-4b0c-8876-d06e98cd808f
+2026-10-28 23:02:13.862 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-28 23:02:13.863 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+INFO:     127.0.0.1:56871 - "GET /events HTTP/1.1" 200 OK
+2026-10-28 23:02:44.026 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:453 - Media stream error while reading the audio; clearing track.
+2026-10-28 23:02:44.026 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_ended:416 - Track audio ended
+2026-10-28 23:02:44.027 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_iceconnectionstatechange:401 - ICE connection state is closed, connection is closed
+2026-10-28 23:02:44.027 | DEBUG    | pipecat.transports.smallwebrtc.connection:_handle_new_connection_state:683 - Connection state changed to: closed
+2026-10-28 23:02:44.027 | INFO     | pipecat.transports.smallwebrtc.request_handler:handle_disconnected:212 - Discarding peer connection for pc_id: SmallWebRTCConnection#0-c9a46d46cecf40e48455ff8392563d4b
+2026-10-28 23:02:44.027 | DEBUG    | pipecat.transports.smallwebrtc.transport:on_closed:280 - Client connection closed.
+2026-10-28 23:02:44.027 | DEBUG    | pipecat.pipeline.worker:_cancel:1170 - Cancelling pipeline worker PipelineTask#0
+2026-10-28 23:02:44.027 | DEBUG    | pipecat.pipeline.worker:_wait_for_pipeline_end:1346 - PipelineTask#0: Closing. Waiting for CancelFrame#0(reason: None) to reach the end of the pipeline...
+2026-10-28 23:02:44.029 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_send_close_stream:506 - Sending CloseStream message to Deepgram Flux
+2026-10-28 23:02:44.029 | DEBUG    | pipecat.services.deepgram.flux.stt:_disconnect_websocket:366 - DeepgramFluxSTTService#0: Disconnecting from Deepgram Flux Websocket
+2026-10-28 23:02:44.539 | DEBUG    | pipecat.services.deepgram.tts:_disconnect_websocket:294 - DeepgramTTSService#0: Disconnecting from Deepgram WebSocket
+2026-10-28 23:02:44.953 | DEBUG    | pipecat.pipeline.worker:wait_for_cancel:1337 - PipelineTask#0: CancelFrame#0(reason: None) reached the end of the pipeline.
+2026-10-28 23:02:44.953 | DEBUG    | pipecat.utils.base_object:cleanup:179 - PipelineTask#0: waiting on event handlers to finish ['on_pipeline_finished']...
+2026-10-28 23:02:44.955 | DEBUG    | pipecat.pipeline.worker:run:909 - Pipeline worker PipelineTask#0 is finishing...
+2026-10-28 23:02:44.955 | DEBUG    | pipecat.pipeline.worker:run:914 - Pipeline worker PipelineTask#0 has finished
+2026-10-28 23:02:44.955 | DEBUG    | pipecat.workers.runner:run:316 - WorkerRunner 'runner-8fa95d41': finished running
+INFO:     127.0.0.1:56876 - "POST /events/reset HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56877 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56877 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+2026-10-28 23:02:46.494 | DEBUG    | pipecat.transports.smallwebrtc.connection:_idle_watcher:224 - Disabling receiver for audio track after 2.49s idle
+2026-10-28 23:02:46.494 | DEBUG    | pipecat.transports.smallwebrtc.connection:discard_old_frames:193 - Discarding old frames
+2026-10-28 23:02:46.674 | DEBUG    | pipecat.transports.smallwebrtc.connection:_initialize:332 - Initializing new peer connection
+2026-10-28 23:02:46.675 | DEBUG    | pipecat.transports.smallwebrtc.connection:_create_answer:429 - Creating answer
+2026-10-28 23:02:46.676 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_track:411 - Track audio received
+2026-10-28 23:02:46.677 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_icegatheringstatechange:407 - ICE gathering state is gathering
+2026-10-28 23:02:46.678 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_icegatheringstatechange:407 - ICE gathering state is complete
+2026-10-28 23:02:46.678 | DEBUG    | pipecat.transports.smallwebrtc.connection:_create_answer:432 - Setting the answer after the local description is created
+2026-10-28 23:02:46.678 | DEBUG    | pipecat.transports.smallwebrtc.request_handler:handle_web_request:218 - webrtc_connection_callback executed successfully for peer: SmallWebRTCConnection#1-2a03575d9edd46f0b7f55ff9320b407b
+INFO:     127.0.0.1:56889 - "POST /api/offer HTTP/1.1" 200 OK
+2026-10-28 23:02:46.680 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking Pipeline#2::Source -> SmallWebRTCInputTransport#1
+2026-10-28 23:02:46.680 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking SmallWebRTCInputTransport#1 -> DeepgramFluxSTTService#1
+2026-10-28 23:02:46.680 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking DeepgramFluxSTTService#1 -> UserTurnProcessor#1
+2026-10-28 23:02:46.680 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking UserTurnProcessor#1 -> EchoReply#1
+2026-10-28 23:02:46.680 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking EchoReply#1 -> DeepgramTTSService#1
+2026-10-28 23:02:46.680 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking DeepgramTTSService#1 -> TtsProbe#1
+2026-10-28 23:02:46.680 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking TtsProbe#1 -> SmallWebRTCOutputTransport#1
+2026-10-28 23:02:46.680 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking SmallWebRTCOutputTransport#1 -> Pipeline#2::Sink
+/Users/shbagchi/projects/dsa-p62/scripts/voice_spike/server.py:210: DeprecationWarning: `PipelineTask` is deprecated since 1.3.0 and will be removed in 2.0.0. Use `PipelineWorker` instead.
+  task = PipelineTask(pipeline, params=PipelineParams(enable_metrics=True))
+2026-10-28 23:02:46.680 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking PipelineTask#1::Source -> RTVIProcessor#1
+2026-10-28 23:02:46.680 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking RTVIProcessor#1 -> Pipeline#2
+2026-10-28 23:02:46.680 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking Pipeline#2 -> PipelineTask#1::Sink
+/Users/shbagchi/projects/dsa-p62/scripts/voice_spike/server.py:219: DeprecationWarning: `PipelineRunner` is deprecated since 1.3.0 and will be removed in 2.0.0. Use `WorkerRunner` instead.
+  await PipelineRunner(handle_sigint=False).run(task)
+2026-10-28 23:02:46.680 | DEBUG    | pipecat.workers.runner:run:273 - WorkerRunner 'runner-9c834ba4': started running
+2026-10-28 23:02:46.681 | DEBUG    | pipecat.workers.runner:add_workers:230 - WorkerRunner 'runner-9c834ba4': added worker 'PipelineTask#1'
+2026-10-28 23:02:46.681 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_iceconnectionstatechange:401 - ICE connection state is checking, connection is connecting
+2026-10-28 23:02:46.681 | DEBUG    | pipecat.transports.smallwebrtc.connection:_monitoring_connecting_state:607 - Monitoring connecting state
+2026-10-28 23:02:46.681 | DEBUG    | pipecat.transports.smallwebrtc.connection:_handle_new_connection_state:683 - Connection state changed to: connecting
+2026-10-28 23:02:46.681 | DEBUG    | pipecat.workers.runner:_start_worker:459 - WorkerRunner 'runner-9c834ba4': starting worker 'PipelineTask#1'
+2026-10-28 23:02:46.682 | INFO     | pipecat.transports.smallwebrtc.transport:connect:544 - Connecting to Small WebRTC
+2026-10-28 23:02:46.682 | DEBUG    | pipecat.services.deepgram.tts:_connect_websocket:254 - Connecting to Deepgram WebSocket
+2026-10-28 23:02:46.687 | DEBUG    | pipecat.pipeline.worker:_wait_for_pipeline_start:1309 - PipelineTask#1: Starting. Waiting for StartFrame#1 to reach the end of the pipeline...
+2026-10-28 23:02:46.701 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_iceconnectionstatechange:401 - ICE connection state is completed, connection is connecting
+2026-10-28 23:02:46.704 | DEBUG    | pipecat.transports.smallwebrtc.connection:_cancel_monitoring_connecting_state:627 - Cancelling the connecting timeout task
+2026-10-28 23:02:46.704 | DEBUG    | pipecat.transports.smallwebrtc.connection:_handle_new_connection_state:683 - Connection state changed to: connected
+2026-10-28 23:02:46.704 | DEBUG    | pipecat.transports.smallwebrtc.transport:on_connected:270 - Peer connection established.
+2026-10-28 23:02:46.704 | WARNING  | pipecat.transports.smallwebrtc.connection:video_input_track:746 - No video transceiver is available
+2026-10-28 23:02:46.704 | WARNING  | pipecat.transports.smallwebrtc.connection:screen_video_input_track:768 - No screen video transceiver is available
+2026-10-28 23:02:46.704 | DEBUG    | pipecat.transports.smallwebrtc.connection:replace_audio_track:522 - Replacing audio track audio
+INFO:     127.0.0.1:56876 - "POST /say_opening HTTP/1.1" 200 OK
+2026-10-28 23:02:48.209 | DEBUG    | pipecat.services.deepgram.tts:_connect_websocket:277 - DeepgramTTSService#1: Websocket connection initialized: {"headers": {'dg-project-id': 'e04d5f6a-e977-4b0f-a172-8f90bcb788e4', 'dg-request-id': '01a18392-5604-7483-820b-cc913e8fdaee'}}
+2026-10-28 23:02:48.237 | DEBUG    | pipecat.services.deepgram.flux.stt:_connect_websocket:343 - DeepgramFluxSTTService#1: Websocket connection initialized: {"headers": {'dg-project-id': 'e04d5f6a-e977-4b0f-a172-8f90bcb788e4', 'dg-request-id': '01a18392-5600-7f10-8b87-71155a994682'}}
+2026-10-28 23:02:48.237 | INFO     | pipecat.services.deepgram.flux.stt_base:_handle_connection_established:749 - DeepgramFluxSTTService#1: Connected to Flux - ready to stream audio (request_id='01a18392-5600-7f10-8b87-71155a994682')
+2026-10-28 23:02:48.254 | DEBUG    | pipecat.registry.registry:register:132 - Worker 'PipelineTask#1' ready (local)
+2026-10-28 23:02:48.254 | DEBUG    | pipecat.workers.runner:_send_registry:511 - WorkerRunner 'runner-9c834ba4': broadcasting registry: ['PipelineTask#1']
+2026-10-28 23:02:48.254 | DEBUG    | pipecat.workers.base_worker:_maybe_activate:1284 - Worker 'PipelineTask#1': activated
+2026-10-28 23:02:48.254 | DEBUG    | pipecat.pipeline.worker:_wait_for_pipeline_start:1326 - PipelineTask#1: StartFrame#1 reached the end of the pipeline, pipeline is now ready.
+2026-10-28 23:02:48.256 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:48.257 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [Hi, this is the settlement agent from Synthetic Debt Relief, calling about an account with a balance of $1,250.00. We would like to talk about a settlement today. ]
+2026-10-28 23:02:48.258 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:48.731 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.475s
+2026-10-28 23:02:48.733 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-28 23:02:48.735 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:48.738 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:48.738 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:48.738 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:48.738 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:48.791 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.600s (0.125s leading silence)
+2026-10-28 23:02:48.792 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:49.902 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-28 23:02:49.903 | DEBUG    | pipecat.turns.user_start.external_user_turn_start_strategy:process_frame:71 - ExternalUserTurnStartStrategy#2: resolving a proposed user turn start
+2026-10-28 23:02:49.903 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_started:220 - UserTurnProcessor#1: User started speaking (strategy: ExternalUserTurnStartStrategy#2)
+2026-10-28 23:02:49.903 | DEBUG    | pipecat.processors.frame_processor:broadcast_interruption:1041 - UserTurnProcessor#1: broadcasting interruption
+2026-10-28 23:02:49.909 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-28 23:02:49.909 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:49.909 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:49.911 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:50.048 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:50.048 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:50.178 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:50.178 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:50.281 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.281 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.281 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.283 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.283 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.291 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.291 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.291 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.292 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.293 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.293 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.293 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.293 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.293 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.293 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.293 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.293 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.293 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.293 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.293 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.293 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.293 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.293 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.294 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.294 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.294 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.294 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.295 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.295 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.295 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.295 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.295 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.299 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.300 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.300 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.300 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.300 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.302 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.302 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.302 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.302 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.302 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.302 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.302 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.302 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.302 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.302 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.303 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.303 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.303 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.303 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.303 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.303 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.303 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.303 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.303 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.304 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.304 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.304 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.304 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.304 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.304 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.304 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.304 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.304 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.304 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.307 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.318 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-28 23:02:50.328 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:50.328 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:50.434 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:50.435 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:50.573 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:50.574 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:50.754 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:50.754 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:50.970 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:50.970 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:51.130 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:51.131 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:51.297 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:51.297 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:51.539 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:51.539 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:51.680 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:51.680 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:51.944 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:51.944 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:52.070 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:52.070 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:52.234 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:52.234 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:52.481 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:52.481 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:52.791 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:52.791 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:53.001 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:53.001 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:53.311 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:53.311 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:53.555 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:53.555 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:53.760 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-28 23:02:53.761 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:53.926 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:53.926 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:54.237 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:54.237 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:54.406 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:54.406 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:54.709 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:54.710 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:54.886 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:54.886 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:55.207 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:55.207 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:55.418 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:55.418 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:55.671 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:55.671 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:55.891 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:55.891 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:56.207 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:56.208 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:56.403 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:56.403 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:56.581 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:56.581 | WARNING  | pipecat.transports.smallwebrtc.connection:send_app_message:803 - Message queue is full (50 messages). Discarding message.
+2026-10-28 23:02:56.705 | WARNING  | pipecat.transports.smallwebrtc.connection:timeout_handler:648 - Data channel not established within 10s after connection. Clearing message queue and disabling future queueing.
+2026-10-28 23:02:59.119 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-28 23:02:59.123 | DEBUG    | pipecat.turns.user_stop.external_user_turn_stop_strategy:_trigger_user_turn_stopped:214 - ExternalUserTurnStopStrategy#2: resolving a proposed user turn stop
+2026-10-28 23:02:59.123 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_inference_triggered:259 - UserTurnProcessor#1: User turn inference triggered (strategy: ExternalUserTurnStopStrategy#2)
+2026-10-28 23:02:59.123 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_stopped:238 - UserTurnProcessor#1: User stopped speaking (strategy: ExternalUserTurnStopStrategy#2)
+2026-10-28 23:02:59.126 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [Thanks. So that is 8 monthly payments of $120.00 each, starting on November 15, 2026. Does that work for you? ]
+2026-10-28 23:02:59.525 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.399s
+2026-10-28 23:02:59.528 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-28 23:02:59.593 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.520s (0.121s leading silence)
+2026-10-28 23:03:01.996 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context afc1b1a2-c25a-42d8-bdb1-f2e04de685fb
+2026-10-28 23:03:08.225 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-28 23:03:08.226 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-28 23:05:42.463 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-28 23:05:42.466 | DEBUG    | pipecat.turns.user_start.external_user_turn_start_strategy:process_frame:71 - ExternalUserTurnStartStrategy#2: resolving a proposed user turn start
+2026-10-28 23:05:42.466 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_started:220 - UserTurnProcessor#1: User started speaking (strategy: ExternalUserTurnStartStrategy#2)
+2026-10-28 23:05:42.467 | DEBUG    | pipecat.processors.frame_processor:broadcast_interruption:1041 - UserTurnProcessor#1: broadcasting interruption
+2026-10-28 23:05:48.699 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-28 23:05:48.700 | DEBUG    | pipecat.turns.user_stop.external_user_turn_stop_strategy:_trigger_user_turn_stopped:214 - ExternalUserTurnStopStrategy#2: resolving a proposed user turn stop
+2026-10-28 23:05:48.700 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_inference_triggered:259 - UserTurnProcessor#1: User turn inference triggered (strategy: ExternalUserTurnStopStrategy#2)
+2026-10-28 23:05:48.700 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_stopped:238 - UserTurnProcessor#1: User stopped speaking (strategy: ExternalUserTurnStopStrategy#2)
+2026-10-28 23:05:48.703 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [Understood. We could offer 42% of the balance, which is $525.00 in total, paid over 6 months. ]
+2026-10-28 23:05:49.085 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.382s
+2026-10-28 23:05:49.089 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-28 23:05:49.129 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.503s (0.121s leading silence)
+2026-10-28 23:05:51.395 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context eb7024b3-c309-426a-a0e3-32f2ee81b276
+2026-10-28 23:05:57.385 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-28 23:05:57.385 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-28 23:06:00.940 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-28 23:06:00.941 | DEBUG    | pipecat.turns.user_start.external_user_turn_start_strategy:process_frame:71 - ExternalUserTurnStartStrategy#2: resolving a proposed user turn start
+2026-10-28 23:06:00.941 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_started:220 - UserTurnProcessor#1: User started speaking (strategy: ExternalUserTurnStartStrategy#2)
+2026-10-28 23:06:00.941 | DEBUG    | pipecat.processors.frame_processor:broadcast_interruption:1041 - UserTurnProcessor#1: broadcasting interruption
+2026-10-28 23:06:01.825 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-28 23:06:01.827 | DEBUG    | pipecat.turns.user_stop.external_user_turn_stop_strategy:_trigger_user_turn_stopped:214 - ExternalUserTurnStopStrategy#2: resolving a proposed user turn stop
+2026-10-28 23:06:01.827 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_inference_triggered:259 - UserTurnProcessor#1: User turn inference triggered (strategy: ExternalUserTurnStopStrategy#2)
+2026-10-28 23:06:01.828 | DEBUG    | pipecat.turns.user_turn_processor:_on_user_turn_stopped:238 - UserTurnProcessor#1: User stopped speaking (strategy: ExternalUserTurnStopStrategy#2)
+2026-10-28 23:06:01.831 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [Got it. The first payment would be on Dec 1, 2026, and the last one on Jun 1, 2027, for a total of $562.50. ]
+2026-10-28 23:06:02.207 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.376s
+2026-10-28 23:06:02.210 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-28 23:06:02.590 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.580s (0.204s leading silence)
+2026-10-28 23:06:05.190 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context 05e1aa82-ab7b-4d0a-92cf-a4822c41bc60
+2026-10-28 23:06:13.066 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-28 23:06:13.067 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+INFO:     127.0.0.1:56949 - "GET /events HTTP/1.1" 200 OK
+2026-10-28 23:06:43.102 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:453 - Media stream error while reading the audio; clearing track.
+2026-10-28 23:06:43.102 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_ended:416 - Track audio ended
+2026-10-28 23:06:43.103 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_iceconnectionstatechange:401 - ICE connection state is closed, connection is closed
+2026-10-28 23:06:43.103 | DEBUG    | pipecat.transports.smallwebrtc.connection:_handle_new_connection_state:683 - Connection state changed to: closed
+2026-10-28 23:06:43.104 | INFO     | pipecat.transports.smallwebrtc.request_handler:handle_disconnected:212 - Discarding peer connection for pc_id: SmallWebRTCConnection#1-2a03575d9edd46f0b7f55ff9320b407b
+2026-10-28 23:06:43.104 | DEBUG    | pipecat.transports.smallwebrtc.transport:on_closed:280 - Client connection closed.
+2026-10-28 23:06:43.104 | DEBUG    | pipecat.pipeline.worker:_cancel:1170 - Cancelling pipeline worker PipelineTask#1
+2026-10-28 23:06:43.105 | DEBUG    | pipecat.pipeline.worker:_wait_for_pipeline_end:1346 - PipelineTask#1: Closing. Waiting for CancelFrame#1(reason: None) to reach the end of the pipeline...
+2026-10-28 23:06:43.106 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_send_close_stream:506 - Sending CloseStream message to Deepgram Flux
+2026-10-28 23:06:43.106 | DEBUG    | pipecat.services.deepgram.flux.stt:_disconnect_websocket:366 - DeepgramFluxSTTService#1: Disconnecting from Deepgram Flux Websocket
+2026-10-28 23:06:43.450 | DEBUG    | pipecat.services.deepgram.tts:_disconnect_websocket:294 - DeepgramTTSService#1: Disconnecting from Deepgram WebSocket
+2026-10-28 23:06:43.797 | DEBUG    | pipecat.pipeline.worker:wait_for_cancel:1337 - PipelineTask#1: CancelFrame#1(reason: None) reached the end of the pipeline.
+2026-10-28 23:06:43.797 | DEBUG    | pipecat.utils.base_object:cleanup:179 - PipelineTask#1: waiting on event handlers to finish ['on_pipeline_finished']...
+2026-10-28 23:06:43.798 | DEBUG    | pipecat.pipeline.worker:run:909 - Pipeline worker PipelineTask#1 is finishing...
+2026-10-28 23:06:43.799 | DEBUG    | pipecat.pipeline.worker:run:914 - Pipeline worker PipelineTask#1 has finished
+2026-10-28 23:06:43.799 | DEBUG    | pipecat.workers.runner:run:316 - WorkerRunner 'runner-9c834ba4': finished running
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [85129]

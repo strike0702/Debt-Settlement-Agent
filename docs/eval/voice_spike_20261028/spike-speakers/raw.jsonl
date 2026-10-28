@@ -1,0 +1,392 @@
+{"call": "numbers_easy#1", "src": "page", "t": 1793208598223.3, "kind": "mic_settings", "settings": "{\"autoGainControl\":true,\"channelCount\":1,\"deviceId\":\"default\",\"echoCancellation\":true,\"groupId\":\"167d8690d9057b55efcb2f3b5516951d2c76a6edf3e3e9c89d03f4e246ace295\",\"latency\":0.01,\"noiseSuppression\":true,\"sampleRate\":48000,\"sampleSize\":16,\"voiceIsolation\":false}"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208598424.9, "kind": "pc_state", "state": "connecting"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208598450.8, "kind": "pc_state", "state": "connected"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208600435.4, "kind": "agent_audio_on", "rms": 0.017157032046779992}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208603323.5999, "kind": "agent_audio_off"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208603835.5999, "kind": "agent_audio_on", "rms": 0.03700390377903232}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208607744.0999, "kind": "agent_audio_off"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208608264.7, "kind": "agent_audio_on", "rms": 0.029671825135674974}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208610156, "kind": "agent_audio_off"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208617304.0999, "kind": "agent_audio_on", "rms": 0.04556807076734139}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208617415.8, "kind": "agent_audio_off"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208617695, "kind": "agent_audio_on", "rms": 0.01105946359188173}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208617864.9, "kind": "agent_audio_off"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208618246, "kind": "agent_audio_on", "rms": 0.011100318461951125}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208621323, "kind": "agent_audio_off"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208621745, "kind": "agent_audio_on", "rms": 0.010798940633449163}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208624365.9, "kind": "agent_audio_off"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208624704.5, "kind": "agent_audio_on", "rms": 0.010268014288548788}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208625805.4, "kind": "agent_audio_off"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208659993.8, "kind": "agent_audio_on", "rms": 0.05562384547767803}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208660564.3, "kind": "agent_audio_off"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208661074.4, "kind": "agent_audio_on", "rms": 0.02266905490545076}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208663353.8, "kind": "agent_audio_off"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208663724.7, "kind": "agent_audio_on", "rms": 0.014753551432602725}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208665905.7, "kind": "agent_audio_off"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208666363.4, "kind": "agent_audio_on", "rms": 0.01211866619915529}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208667563.5, "kind": "agent_audio_off"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208723934.5999, "kind": "agent_audio_on", "rms": 0.01831085672353582}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208727424.2, "kind": "agent_audio_off"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208727804.7, "kind": "agent_audio_on", "rms": 0.025227764303424775}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208730383.4, "kind": "agent_audio_off"}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208730804.2, "kind": "agent_audio_on", "rms": 0.03061611990870797}
+{"call": "numbers_easy#1", "src": "page", "t": 1793208733854.3, "kind": "agent_audio_off"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208598423.747, "kind": "session_start"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208599698.545, "kind": "tts_started"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208600078.306, "kind": "tts_byte"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208600079.332, "kind": "bot_started"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208610174.187, "kind": "bot_stopped"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208613570.171, "kind": "start_of_turn", "text": "Sure."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208613571.759, "kind": "interruption"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208613839.03, "kind": "interim", "text": "Sure."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208614137.564, "kind": "interim", "text": "Sure. We can"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208614380.5818, "kind": "interim", "text": "Sure. We can take a"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208614610.9, "kind": "interim", "text": "Sure. We can take"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208614816.035, "kind": "interim", "text": "Sure. We can take"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208615099.2708, "kind": "interim", "text": "Sure. We can take"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208615261.666, "kind": "interim", "text": "Sure."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208615367.3389, "kind": "eager_end_of_turn", "text": "Sure."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208615556.603, "kind": "interim", "text": "Sure."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208615744.989, "kind": "interim", "text": "Sure."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208616141.833, "kind": "interim", "text": "Sure."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208616287.778, "kind": "interim", "text": "Sure."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208616620.1323, "kind": "interim", "text": "Sure."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208616667.768, "kind": "end_of_turn", "text": "Sure."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208616669.458, "kind": "final", "text": "Sure."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208616669.487, "kind": "reply", "text": "Thanks. So that is 8 monthly payments of $120.00 each, starting on November 15, 2026. Does that work for you?"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208616672.023, "kind": "tts_started"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208617125.8262, "kind": "tts_byte"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208617127.5552, "kind": "bot_started"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208625844.1228, "kind": "bot_stopped"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208658055.767, "kind": "start_of_turn", "text": "Forty"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208658057.108, "kind": "interruption"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208658292.247, "kind": "interim", "text": "Forty five"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208658414.9011, "kind": "eager_end_of_turn", "text": "Forty five"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208658530.819, "kind": "turn_resumed", "text": ""}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208658605.888, "kind": "eager_end_of_turn", "text": "Forty five percent."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208658775.273, "kind": "interim", "text": "Forty five percent."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208659026.4312, "kind": "interim", "text": "Forty five percent."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208659165.887, "kind": "end_of_turn", "text": "Forty five percent."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208659167.864, "kind": "final", "text": "Forty five percent."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208659167.895, "kind": "reply", "text": "Understood. We could offer 42% of the balance, which is $525.00 in total, paid over 6 months."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208659171.154, "kind": "tts_started"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208659537.9487, "kind": "tts_byte"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208659540.009, "kind": "bot_started"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208667593.672, "kind": "bot_stopped"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208693990.324, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208694207.4531, "kind": "start_of_turn", "text": "First payment was"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208694209.092, "kind": "interruption"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208694447.4968, "kind": "interim", "text": "First payment was"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208694688.302, "kind": "interim", "text": "First payment was the one"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208694937.397, "kind": "interim", "text": "First payment was the one to come"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208695171.224, "kind": "interim", "text": "First payment was the one on the"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208695450.36, "kind": "interim", "text": "First payment"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208695651.232, "kind": "interim", "text": "First payment"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208695887.5552, "kind": "interim", "text": "First payment"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208696137.2458, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208696372.4292, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208696625.673, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208696851.299, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208697087.789, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208697337.3142, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208697573.656, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208697810.067, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208698053.7578, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208698307.288, "kind": "interim", "text": "first"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208698527.4912, "kind": "interim", "text": "first"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208698774.851, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208699009.5771, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208699257.3252, "kind": "interim", "text": "first"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208699493.4678, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208699731.185, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208699969.881, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208700208.117, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208700449.936, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208700696.213, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208700931.3171, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208701173.4631, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208701409.659, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208701647.228, "kind": "interim", "text": "No."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208701895.177, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208702133.636, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208702366.92, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208702611.5032, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208702871.047, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208703096.655, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208703330.1199, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208703571.319, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208703816.818, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208704052.776, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208704297.334, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208704530.2, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208704766.9912, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208705046.339, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208705248.48, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208705486.872, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208705733.422, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208705971.955, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208706221.871, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208706450.861, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208706689.452, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208706931.193, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208707171.705, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208707411.3591, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208707657.269, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208707890.485, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208708134.8313, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208708370.6208, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208708606.8179, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208708851.255, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208709087.762, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208709336.257, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208709569.3582, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208709807.315, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208710046.897, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208710287.2808, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208710530.7463, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208710768.545, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208711006.967, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208711250.7688, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208711490.8748, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208711734.5212, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208711967.284, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208712207.469, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208712451.3818, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208712699.1428, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208712933.7612, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208713173.703, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208713409.7568, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208713654.6218, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208713891.4402, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208714130.376, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208714367.4612, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208714607.328, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208714847.507, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208715094.308, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208715334.1511, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208715568.238, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208715815.428, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208716053.5823, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208716291.426, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208716533.608, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208716776.3728, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208717017.4348, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208717258.4683, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208717490.873, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208717727.44, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208717967.4182, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208718210.7798, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208718451.7278, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208718694.774, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208718934.0361, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208719171.487, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208719414.5962, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208719653.634, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208719887.372, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208720131.427, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208720370.281, "kind": "interim", "text": "."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208720612.679, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208720770.241, "kind": "eager_end_of_turn", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208720850.9922, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208721091.275, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208721335.9128, "kind": "interim", "text": "First"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208721575.219, "kind": "turn_resumed", "text": ""}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208721650.067, "kind": "eager_end_of_turn", "text": "Just"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208721811.2158, "kind": "interim", "text": "Just"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208723142.5437, "kind": "end_of_turn", "text": "Just"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208723144.4658, "kind": "interim", "text": "Just"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208723144.496, "kind": "final", "text": "Just"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208723144.511, "kind": "reply", "text": "Got it. The first payment would be on Dec 1, 2026, and the last one on Jun 1, 2027, for a total of $562.50."}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208723146.7158, "kind": "tts_started"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208723519.003, "kind": "tts_byte"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208723520.452, "kind": "bot_started"}
+{"call": "numbers_easy#1", "src": "server", "t": 1793208733863.473, "kind": "bot_stopped"}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208602940.289, "kind": "line", "id": "a01_mmhm"}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208602949.255, "kind": "rep_start", "id": "a01_mmhm", "dur_ms": 290.0}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208603239.255, "kind": "rep_end", "id": "a01_mmhm"}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208612287.2231, "kind": "line", "id": "a02_terms"}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208612295.5671, "kind": "rep_start", "id": "a02_terms", "dur_ms": 6310.0}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208618605.5671, "kind": "rep_end", "id": "a02_terms"}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208627909.365, "kind": "line", "id": "a03_correct"}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208627914.243, "kind": "rep_start", "id": "a03_correct", "dur_ms": 650.0}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208628564.243, "kind": "rep_end", "id": "a03_correct"}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208654234.6548, "kind": "line", "id": "a04_pause"}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208654244.889, "kind": "rep_start", "id": "a04_pause", "dur_ms": 4130.0}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208658374.889, "kind": "rep_end", "id": "a04_pause"}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208662320.559, "kind": "line", "id": "a05_interrupt"}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208662326.8853, "kind": "rep_start", "id": "a05_interrupt", "dur_ms": 4210.0}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208666536.8853, "kind": "rep_end", "id": "a05_interrupt"}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208692240.0398, "kind": "line", "id": "a06_date"}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208692248.21, "kind": "rep_start", "id": "a06_date", "dur_ms": 2400.0}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208694648.21, "kind": "rep_end", "id": "a06_date"}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208720315.291, "kind": "line", "id": "a07_yes"}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208720322.82, "kind": "rep_start", "id": "a07_yes", "dur_ms": 1150.0}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208721472.82, "kind": "rep_end", "id": "a07_yes"}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208735947.1309, "kind": "line", "id": "a08_bye"}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208735954.1628, "kind": "rep_start", "id": "a08_bye", "dur_ms": 1480.0}
+{"call": "numbers_easy#1", "src": "driver", "t": 1793208737434.1628, "kind": "rep_end", "id": "a08_bye"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208766485.9001, "kind": "mic_settings", "settings": "{\"autoGainControl\":true,\"channelCount\":1,\"deviceId\":\"default\",\"echoCancellation\":true,\"groupId\":\"78c3cd554f9856ac1572d10549089f83bed028329a9ab7955080b937b187058a\",\"latency\":0.01,\"noiseSuppression\":true,\"sampleRate\":48000,\"sampleSize\":16,\"voiceIsolation\":false}"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208766682.8, "kind": "pc_state", "state": "connecting"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208766703.6, "kind": "pc_state", "state": "connected"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208768963, "kind": "agent_audio_on", "rms": 0.010570217345657487}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208770022.9001, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208779752.7002, "kind": "agent_audio_on", "rms": 0.05227516281434118}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208783802.5, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208784152, "kind": "agent_audio_on", "rms": 0.01333734242941066}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208786851.4001, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208787212.6, "kind": "agent_audio_on", "rms": 0.012499938105990266}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208788202.1, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208949302.4001, "kind": "agent_audio_on", "rms": 0.07845665515206443}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208950162.4001, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208950522.5, "kind": "agent_audio_on", "rms": 0.027223727111875564}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208952922, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208953323, "kind": "agent_audio_on", "rms": 0.020176896282664742}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208955642.1, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208956103, "kind": "agent_audio_on", "rms": 0.015190774661734317}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208957383, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208962621.6, "kind": "agent_audio_on", "rms": 0.013014359020696116}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208966152.8, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208966832.2002, "kind": "agent_audio_on", "rms": 0.0645955084868541}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208969410.9001, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208969824, "kind": "agent_audio_on", "rms": 0.035579351622015275}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793208973021.6, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208766680.913, "kind": "session_start"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208768257.64, "kind": "tts_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208768733.061, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208768734.993, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208769903.6028, "kind": "start_of_turn", "text": "She is"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208769905.002, "kind": "interruption"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208769909.973, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208770047.801, "kind": "interim", "text": "She is"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208770177.609, "kind": "interim", "text": "She is alive."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208770328.375, "kind": "interim", "text": "She is her current union."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208770434.238, "kind": "interim", "text": "She is her current union."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208770573.335, "kind": "interim", "text": "She is her current union."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208770753.439, "kind": "interim", "text": "She is her current union."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208770970.0461, "kind": "interim", "text": "She is her current union."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208771130.145, "kind": "interim", "text": "She is survived by union."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208771296.829, "kind": "interim", "text": "She is survived by confusion, bitter"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208771538.893, "kind": "interim", "text": "She is survived by confusion, bitter planning."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208771679.574, "kind": "interim", "text": "She is survived by confusion, bitter planning."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208771943.8562, "kind": "interim", "text": "She is survived by confusion, bitter planning was"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208772069.422, "kind": "interim", "text": "She is survived by confusion, bitter planning was"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208772233.8403, "kind": "interim", "text": "She is survived by confusion, bitter planning was"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208772480.527, "kind": "interim", "text": "She is survived by confusion, bitter planning was"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208772790.998, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208773000.385, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208773310.613, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed by"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208773554.687, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208773760.185, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208773925.554, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208774236.802, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing it completed"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208774405.655, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her complaining"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208774708.8052, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her complaining"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208774885.4558, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her complaining, he"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208775206.2312, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning his fate."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208775417.398, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning his fate."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208775670.688, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning, he spent the"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208775890.687, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning, he spent the entire"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208776207.1218, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning, he spent the following"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208776402.355, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning, he spent the entire"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208776580.427, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning, he spent the entire"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208776836.191, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning, he spent the entire"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208777182.827, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning, he spent the other days in"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208777268.306, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning, he spent the other days in her career"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208777724.541, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning, he spent the other days in her career."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208777894.9421, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning, he spent the other days in her career."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208778087.585, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning, he spent the other days in her town."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208778334.1692, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning, he spent the other days in her town."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208778527.773, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning, he spent the other days in her career."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208778817.014, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning, he spent the other days in her time"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208778869.85, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning, he spent the night"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208779098.878, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her planning"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208779119.0159, "kind": "eager_end_of_turn", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her playing"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208779122.556, "kind": "end_of_turn", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her playing"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208779123.9731, "kind": "interim", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her playing"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208779124.8901, "kind": "final", "text": "She is survived by confusion, bitter planning was observed, tired by seeing her playing"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208779124.917, "kind": "reply", "text": "Thanks. So that is 8 monthly payments of $120.00 each, starting on November 15, 2026. Does that work for you?"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208779128.7307, "kind": "tts_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208779527.6091, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208779529.8828, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208788227.051, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208894702.7332, "kind": "interim", "text": "So"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208942467.49, "kind": "start_of_turn", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208942469.5107, "kind": "interruption"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208942539.1282, "kind": "eager_end_of_turn", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208942700.628, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208942956.7869, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208943182.542, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208943439.2222, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208943662.406, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208943900.251, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208944142.227, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208944381.05, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208944677.74, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208944900.684, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208945101.2217, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208945341.294, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208945582.362, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208945819.573, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208946060.019, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208946300.67, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208946542.336, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208946821.166, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208947019.661, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208947260.127, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208947502.898, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208947739.698, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208947980.4858, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208948262.4377, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208948502.2258, "kind": "interim", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208948700.402, "kind": "end_of_turn", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208948702.2148, "kind": "final", "text": "six."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208948702.2588, "kind": "reply", "text": "Understood. We could offer 42% of the balance, which is $525.00 in total, paid over 6 months."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208948705.719, "kind": "tts_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208949088.685, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208949091.286, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208957386.7332, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208960702.45, "kind": "interim", "text": "This"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208960941.659, "kind": "start_of_turn", "text": "Yes. The"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208960942.8767, "kind": "interruption"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208961261.238, "kind": "interim", "text": "Yes. That works"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208961419.853, "kind": "interim", "text": "Yes. That works for"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208961500.264, "kind": "interim", "text": "Yes. That works for us."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208961582.618, "kind": "interim", "text": "Yes. That works for us."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208961665.661, "kind": "eager_end_of_turn", "text": "Yes. That works for us."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208961827.473, "kind": "end_of_turn", "text": "Yes. That works for us."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208961829.843, "kind": "final", "text": "Yes. That works for us."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208961829.8782, "kind": "reply", "text": "Got it. The first payment would be on Dec 1, 2026, and the last one on Jun 1, 2027, for a total of $562.50."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208961832.9128, "kind": "tts_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208962209.2732, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208962211.384, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793208973067.539, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208781756.85, "kind": "line", "id": "b01_okay"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208781767.0269, "kind": "rep_start", "id": "b01_okay", "dur_ms": 490.0}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208782257.0269, "kind": "rep_end", "id": "b01_okay"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208790295.5479, "kind": "line", "id": "b02_terms"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208790305.847, "kind": "rep_start", "id": "b02_terms", "dur_ms": 5310.0}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208795615.847, "kind": "rep_end", "id": "b02_terms"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208821312.8582, "kind": "line", "id": "b03_correct"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208821320.4128, "kind": "rep_start", "id": "b03_correct", "dur_ms": 700.0}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208822020.4128, "kind": "rep_end", "id": "b03_correct"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208847682.1199, "kind": "line", "id": "b04_seventy"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208847689.3152, "kind": "rep_start", "id": "b04_seventy", "dur_ms": 2280.0}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208849969.3152, "kind": "rep_end", "id": "b04_seventy"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208865067.517, "kind": "line", "id": "b05_interrupt"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208865075.1492, "kind": "rep_start", "id": "b05_interrupt", "dur_ms": 2940.0}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208868015.1492, "kind": "rep_end", "id": "b05_interrupt"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208893679.028, "kind": "line", "id": "b06_pause"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208893688.094, "kind": "rep_start", "id": "b06_pause", "dur_ms": 3850.0}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208897538.094, "kind": "rep_end", "id": "b06_pause"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208912594.473, "kind": "line", "id": "b07_right"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208912602.1052, "kind": "rep_start", "id": "b07_right", "dur_ms": 420.0}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208913022.1052, "kind": "rep_end", "id": "b07_right"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208938700.8362, "kind": "line", "id": "b08_date"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208938710.994, "kind": "rep_start", "id": "b08_date", "dur_ms": 3000.0}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208941710.994, "kind": "rep_end", "id": "b08_date"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208959500.253, "kind": "line", "id": "b09_yes"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208959509.925, "kind": "rep_start", "id": "b09_yes", "dur_ms": 1470.0}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208960979.925, "kind": "rep_end", "id": "b09_yes"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208975140.358, "kind": "line", "id": "b10_bye"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208975147.158, "kind": "rep_start", "id": "b10_bye", "dur_ms": 1370.0}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793208976517.158, "kind": "rep_end", "id": "b10_bye"}

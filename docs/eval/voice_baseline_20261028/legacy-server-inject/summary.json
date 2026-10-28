@@ -1,0 +1,45 @@
+{
+ "target": "legacy-server",
+ "audio": "inject",
+ "date": "2026-10-28 22:44",
+ "summary": {
+  "reply_turns": 26,
+  "replied": 21,
+  "first_audio_p50_ms": 4463.3,
+  "first_audio_p95_ms": 5171.8,
+  "any_audio_p50_ms": 2913.2,
+  "eot_p50_ms": 755.6,
+  "eager_eot_p50_ms": null,
+  "final_p50_ms": 1465.7,
+  "wer_mean": 0.086,
+  "number_recall": 0.833,
+  "numbers": "20/24",
+  "first_word_lost": 4,
+  "lines_scored": 30,
+  "split_turns": 4,
+  "phantom_finals": 0,
+  "false_barges": 2,
+  "backchannels_barged": "2/6",
+  "interrupts_over_agent": "0/4",
+  "interrupts_barged": "0/0",
+  "barge_stop_p50_ms": null,
+  "barge_stop_max_ms": null
+ },
+ "phantoms": [],
+ "false_barges": [
+  {
+   "call": "numbers_easy#2",
+   "t": 1793207419115.8,
+   "kind": "barge"
+  },
+  {
+   "call": "numbers_haggle#2",
+   "t": 1793207541993.7,
+   "kind": "barge"
+  }
+ ],
+ "notes": [
+  "numbers_haggle#1: b06_pause: agent did not finish a turn before this line",
+  "numbers_easy#2: a06_date: agent did not finish a turn before this line"
+ ]
+}

@@ -1,0 +1,14 @@
+# Throwaway Phase 62 spike: its own environment so Pipecat never enters the
+# app's dependencies (Phase 63 decides that). Run: uv run --project scripts/voice_spike ...
+[project]
+name = "dsa-voice-spike"
+version = "0.0.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pipecat-ai[deepgram,webrtc]",
+    "fastapi",
+    "uvicorn",
+]
+
+[tool.uv]
+package = false

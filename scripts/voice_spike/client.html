@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice spike</title>
+<style>body{font:15px system-ui;margin:2rem;max-width:40rem}button{font:inherit;padding:.4rem 1rem}#log{white-space:pre-wrap;font:12px ui-monospace,monospace;color:#555}</style>
+</head>
+<body>
+<h1>Voice spike (Phase 62)</h1>
+<p>Pipecat + Deepgram Flux and Aura-2 over WebRTC. The agent repeats fixed replies.
+Use laptop speakers to test echo.</p>
+<button id="go" onclick="spikeConnect()">Connect</button>
+<button onclick="spikeDisconnect()">Disconnect</button>
+<button onclick="fetch('/say_opening',{method:'POST'})">Agent speaks first</button>
+<audio id="remote" autoplay></audio>
+<div id="log"></div>
+<script>
+// Throwaway spike client: non-trickle offer/answer with /api/offer. The
+// harness probe (eval/voice/probe.js) wraps RTCPeerConnection and
+// getUserMedia before this runs; this page works without it too.
+let pc = null;
+const say = (m) => { document.getElementById("log").textContent += m + "\n"; };
+window.spikeConnect = async () => {
+  const mic = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  });
+  const settings = mic.getAudioTracks()[0].getSettings();
+  say("mic " + JSON.stringify(settings));
+  window.__vh?.log("mic_settings", { settings: JSON.stringify(settings) });
+  pc = new RTCPeerConnection();
+  pc.addTransceiver(mic.getAudioTracks()[0], { direction: "sendrecv" });
+  pc.ontrack = (ev) => {
+    const el = document.getElementById("remote");
+    el.srcObject = ev.streams[0] || new MediaStream([ev.track]);
+    void el.play();
+  };
+  pc.onconnectionstatechange = () => say("pc " + pc.connectionState);
+  await pc.setLocalDescription(await pc.createOffer());
+  await new Promise((res) => {
+    if (pc.iceGatheringState === "complete") return res();
+    pc.addEventListener("icegatheringstatechange", () => pc.iceGatheringState === "complete" && res());
+    setTimeout(res, 2000);
+  });
+  const r = await fetch("/api/offer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type }),
+  });
+  const answer = await r.json();
+  await pc.setRemoteDescription({ sdp: answer.sdp, type: answer.type });
+};
+window.spikeDisconnect = () => { pc?.close(); pc = null; say("closed"); };
+</script>
+</body>
+</html>

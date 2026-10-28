@@ -1,0 +1,57 @@
+INFO:     Started server process [76692]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:55823 (Press CTRL+C to quit)
+INFO:     127.0.0.1:55830 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55834 - "GET /?scenario=easy_deal&view=operator HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55834 - "GET /assets/index-C59R5Ywv.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55835 - "GET /assets/rolldown-runtime-hePW80VL.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55843 - "GET /assets/index-B4XA1bim.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55844 - "GET /assets/charts-xv0AxLdZ.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55834 - "GET /assets/StatePanel-BXzSKZWT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55844 - "GET /assets/DecisionTrace-BRsGjVrr.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55844 - "GET /scenarios HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55834 - "GET /favicon.svg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55834 - "GET /scenarios/easy_deal HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55849 - "WebSocket /ws/call/c513fab0-66f3-4538-9e30-65ab0fcf91c6?view=operator" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55940 - "GET /?scenario=haggling_rep&view=operator HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55940 - "GET /assets/index-C59R5Ywv.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55941 - "GET /assets/rolldown-runtime-hePW80VL.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55943 - "GET /assets/charts-xv0AxLdZ.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55942 - "GET /assets/index-B4XA1bim.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55943 - "GET /assets/DecisionTrace-BRsGjVrr.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55940 - "GET /assets/StatePanel-BXzSKZWT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55940 - "GET /scenarios HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55943 - "GET /favicon.svg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55940 - "GET /scenarios/haggling_rep HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55951 - "WebSocket /ws/call/501e0911-4371-4f7c-be24-f39121b99342?view=operator" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56010 - "GET /?scenario=easy_deal&view=operator HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56010 - "GET /assets/index-C59R5Ywv.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56011 - "GET /assets/rolldown-runtime-hePW80VL.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56012 - "GET /assets/index-B4XA1bim.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56013 - "GET /assets/charts-xv0AxLdZ.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56013 - "GET /assets/DecisionTrace-BRsGjVrr.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56010 - "GET /assets/StatePanel-BXzSKZWT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56010 - "GET /scenarios HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56013 - "GET /favicon.svg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56013 - "GET /scenarios/easy_deal HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56023 - "WebSocket /ws/call/e0e6fb71-c99e-4603-8ec6-9a13d7ceebd9?view=operator" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56094 - "GET /?scenario=haggling_rep&view=operator HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56095 - "GET /assets/rolldown-runtime-hePW80VL.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56094 - "GET /assets/index-C59R5Ywv.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56097 - "GET /assets/charts-xv0AxLdZ.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56096 - "GET /assets/index-B4XA1bim.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56097 - "GET /assets/DecisionTrace-BRsGjVrr.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56094 - "GET /assets/StatePanel-BXzSKZWT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56094 - "GET /scenarios HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56097 - "GET /favicon.svg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56097 - "GET /scenarios/haggling_rep HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56107 - "WebSocket /ws/call/28b194fa-60f0-40e2-9506-e15ec9ee332b?view=operator" [accepted]
+INFO:     connection open
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [76692]

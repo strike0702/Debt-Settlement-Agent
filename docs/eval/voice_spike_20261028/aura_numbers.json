@@ -1,0 +1,108 @@
+[
+ {
+  "text": "That is 8 payments of $120 each.",
+  "heard": "That is eight payments of one hundred twenty dollars each.",
+  "want": [
+   "<8>",
+   "<120>"
+  ],
+  "missing": []
+ },
+ {
+  "text": "We can offer $1,250.50 in total.",
+  "heard": "We can offer one thousand two hundred and fifty dollars and fifty cents in total.",
+  "want": [
+   "<1250>",
+   "<50>"
+  ],
+  "missing": []
+ },
+ {
+  "text": "That works out to $562.50, or 45% of the balance.",
+  "heard": "That works out to five hundred sixty two dollars and fifty cents, or forty five percent of the balance.",
+  "want": [
+   "<562>",
+   "<50>",
+   "<45>"
+  ],
+  "missing": []
+ },
+ {
+  "text": "Could you do 45.5% instead?",
+  "heard": "Could you do forty five point five percent instead?",
+  "want": [
+   "<45.5>"
+  ],
+  "missing": []
+ },
+ {
+  "text": "That is 65.25% of $2,000.",
+  "heard": "That is sixty five point two five percent of two thousand dollars",
+  "want": [
+   "<65.25>",
+   "<2000>"
+  ],
+  "missing": []
+ },
+ {
+  "text": "We could pay $99.99 a month.",
+  "heard": "We could pay ninety nine dollars and ninety nine cents a month.",
+  "want": [
+   "<99>",
+   "<99>"
+  ],
+  "missing": []
+ },
+ {
+  "text": "The balance is $12,345.67 today.",
+  "heard": "The balance is twelve thousand three hundred and forty five dollars and sixty seven cents today.",
+  "want": [
+   "<12345>",
+   "<67>"
+  ],
+  "missing": []
+ },
+ {
+  "text": "The first payment would be on November 15.",
+  "heard": "The first payment would be on November fifteenth.",
+  "want": [
+   "<d:11-15>"
+  ],
+  "missing": []
+ },
+ {
+  "text": "The last payment would be on June 1, 2027.",
+  "heard": "The last payment would be on June first twenty twenty seven.",
+  "want": [
+   "<d:6-1>",
+   "<2027>"
+  ],
+  "missing": []
+ },
+ {
+  "text": "So 6 payments, starting December 1.",
+  "heard": "So six payments starting December first.",
+  "want": [
+   "<6>",
+   "<d:12-1>"
+  ],
+  "missing": []
+ },
+ {
+  "text": "Then $75 from the 4th payment on.",
+  "heard": "Then seventy five dollars from the fourth payment on.",
+  "want": [
+   "<75>"
+  ],
+  "missing": []
+ },
+ {
+  "text": "That is $1,005 in 12 payments.",
+  "heard": "That is one thousand and five dollars in twelve payments.",
+  "want": [
+   "<1005>",
+   "<12>"
+  ],
+  "missing": []
+ }
+]

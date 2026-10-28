@@ -1,0 +1,52 @@
+{
+ "target": "spike",
+ "audio": "inject",
+ "date": "2026-10-28 22:59",
+ "summary": {
+  "reply_turns": 13,
+  "replied": 11,
+  "first_audio_p50_ms": 1940.2,
+  "first_audio_p95_ms": 2130.3,
+  "any_audio_p50_ms": 1940.2,
+  "eot_p50_ms": 974.0,
+  "eager_eot_p50_ms": 940.8,
+  "final_p50_ms": 974.3,
+  "wer_mean": 0.16,
+  "number_recall": 1.0,
+  "numbers": "12/12",
+  "first_word_lost": 2,
+  "lines_scored": 15,
+  "split_turns": 2,
+  "phantom_finals": 1,
+  "false_barges": 2,
+  "backchannels_barged": "0/3",
+  "interrupts_over_agent": "2/2",
+  "interrupts_barged": "2/2",
+  "barge_stop_p50_ms": 1344.0,
+  "barge_stop_max_ms": 1377.9
+ },
+ "phantoms": [
+  {
+   "call": "numbers_haggle#1",
+   "t": 1793208490028.29,
+   "kind": "final",
+   "text": "Correct."
+  }
+ ],
+ "false_barges": [
+  {
+   "call": "numbers_haggle#1",
+   "t": 1793208490780.619,
+   "kind": "barge"
+  },
+  {
+   "call": "numbers_haggle#1",
+   "t": 1793208518245.1892,
+   "kind": "barge"
+  }
+ ],
+ "notes": [
+  "numbers_easy#1: a04_pause: agent did not finish a turn before this line",
+  "numbers_haggle#1: b04_seventy: agent did not finish a turn before this line"
+ ]
+}

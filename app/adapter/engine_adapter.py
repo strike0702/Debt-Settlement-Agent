@@ -37,7 +37,7 @@ from app.domain.units import bp_to_decimal
 from feasibility.engine import AdditionalFunds, Result, ScheduleRow, is_feasible
 from feasibility.engine import evaluate as engine_evaluate
 from feasibility.models import CreditorRules
-from feasibility.problem import build_problem
+from feasibility.problem import Problem, build_problem
 from feasibility.util import fraction_to_bp, round_half_up
 
 
@@ -170,6 +170,30 @@ def assumed_fields(belief: BeliefState) -> list[str]:
     ]
 
 
+def scenario_problem(
+    scenario: CallScenario,
+    rules: CreditorRules,
+    first_payment_date: date,
+    *,
+    fee_policy: str | None = None,
+) -> Problem:
+    """The engine ``Problem`` for this call's client, rules and date (engine fee policy).
+
+    For callers that ask several questions of one client and rules (``explain``,
+    ``what_if``) without rebuilding the base simulation each time.
+    """
+    _, fee_policy = engine_mode(None, fee_policy)
+    return build_problem(
+        scenario.client,
+        rules,
+        first_payment_date,
+        creditor_balance_cents=scenario.creditor_balance_cents,
+        original_balance_cents=scenario.original_balance_cents,
+        fee_policy=fee_policy,
+        min_cushion_cents=scenario.min_cushion_cents,
+    )
+
+
 def evaluate(
     scenario: CallScenario,
     rules: CreditorRules,
@@ -187,15 +211,7 @@ def evaluate(
     client-private.
     """
     objective, fee_policy = engine_mode(objective, fee_policy)
-    problem = build_problem(
-        scenario.client,
-        rules,
-        first_payment_date,
-        creditor_balance_cents=scenario.creditor_balance_cents,
-        original_balance_cents=scenario.original_balance_cents,
-        fee_policy=fee_policy,
-        min_cushion_cents=scenario.min_cushion_cents,
-    )
+    problem = scenario_problem(scenario, rules, first_payment_date, fee_policy=fee_policy)
     result = engine_evaluate(problem, bp, objective)
     # Same Decimal half-up as the engine, so Fact values match its money rules.
     offer_total = round_half_up(bp_to_decimal(bp), scenario.creditor_balance_cents)

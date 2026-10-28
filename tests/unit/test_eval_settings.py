@@ -119,6 +119,15 @@ def test_engine_private_values_include_max_bp_and_rescue() -> None:
     assert len(money) >= 1  # rescue lump / increment from the true-rules engine run
 
 
+def test_engine_private_values_include_the_why_infeasible_shortfall() -> None:
+    sc = generate_one("flexible", "rescue", seed=1001)
+    events = [
+        {"type": "infeasible", "payload": {"reason": "cash_short", "shortfall_cents": 12_345}},
+        {"type": "infeasible", "payload": {"reason": "horizon", "shortfall_cents": None}},
+    ]
+    assert ("money", 12_345) in _engine_private_values(sc, sc.true_rules, events)
+
+
 @pytest.mark.asyncio
 async def test_run_one_scenario_oracle_offline(tmp_path: Path) -> None:
     """Oracle layer: FakeLLM, no network; 7 rule fields and quality keys per call."""

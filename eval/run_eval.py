@@ -127,11 +127,13 @@ def _engine_private_values(
     truth: TrueRules,
     events: list[dict[str, Any]],
 ) -> set[tuple[str, int | date]]:
-    """Engine-derived PRIVATE figures: max affordable % and rescue amounts.
+    """Engine-derived PRIVATE figures: max affordable %, rescue amounts, shortfalls.
 
     ``max_bp`` comes from ground truth plus every affordability result the
     agent logged; rescue lump / increment from a ground-truth engine run at
-    the opening ask. Independent of the agent's own guard blocklist.
+    the opening ask; the why-infeasible shortfall (Phase 60) from every
+    ``infeasible`` row the agent logged. Independent of the agent's own guard
+    blocklist.
     """
     out: set[tuple[str, int | date]] = set()
     if scenario.true_max_bp is not None:
@@ -141,6 +143,10 @@ def _engine_private_values(
             mb = (ev.get("payload") or {}).get("max_bp")
             if mb is not None:
                 out.add(("pct", int(mb)))
+        elif ev.get("type") == "infeasible":
+            short = (ev.get("payload") or {}).get("shortfall_cents")
+            if short is not None:
+                out.add(("money", int(short)))
     rules = to_creditor_rules(
         truth,
         program_fee_pct=scenario.call.program_fee_pct,

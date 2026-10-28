@@ -15,6 +15,8 @@
  * corrections, held-back amounts and dropped questions. Each dropped term says
  * why it was dropped (`DroppedTerm.reason`). `cushionLine` says whether the plan
  * drafted on that turn keeps the firm's minimum client cushion (PRIVATE).
+ * `infeasibleLine` says why the rep's ask has no plan and by how much
+ * (`infeasible_reason`, from the engine's `explain`; PRIVATE).
  */
 import { fieldLabel, isoDate, moneyShort, pct, termValue } from "@/lib/format";
 import type { TraceNote, TraceReader, TurnTraceEvent } from "@/types/protocol";
@@ -330,6 +332,44 @@ export function cushionLine(t: TurnTraceEvent): string | null {
   return c.kept
     ? `The plan keeps at least ${amount} in the client's account.`
     : `No plan at this price keeps ${amount} in the client's account, so the agent used one that goes lower.`;
+}
+
+const LONG_DATE = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+
+/** "2027-03-31" → "March 31, 2027" (full month: the line is read as a sentence). */
+function longDate(iso: string | null | undefined): string {
+  const [y, m, d] = (iso ?? "").split("-").map(Number);
+  return y && m && d ? LONG_DATE.format(new Date(Date.UTC(y, m - 1, d))) : "a date we could not read";
+}
+
+/**
+ * Why the rep's ask has no payment plan, in plain words; null when the turn has no
+ * explanation (the ask fits, or no ask). PRIVATE: the client's shortfall (negotiator view only).
+ */
+export function infeasibleLine(t: TurnTraceEvent): string | null {
+  const w = t.infeasible_reason;
+  if (!w) return null;
+  const at = `At ${pct(w.bp)}`;
+  const short = w.shortfall_cents != null ? moneyShort(w.shortfall_cents) : null;
+  const when = longDate(w.binding_date);
+  const nearest =
+    w.closest_k != null ? ` The nearest plan has ${w.closest_k} ${w.closest_k === 1 ? "payment" : "payments"}.` : "";
+  switch (w.reason) {
+    case "horizon":
+      return `${at} no payment can be scheduled: the first payment date, ${when}, is after the client's savings plan ends.`;
+    case "floors":
+      return `${at} the settlement is ${short ? `${short} ` : ""}below the creditor's minimum payment.`;
+    case "segments":
+      return (
+        `${at} no plan fits the creditor's limit of ${w.max_segments ?? "?"} different payment amounts: ` +
+        `the client's savings run short by ${short} on ${when}. One more payment amount would fit.`
+      );
+    case "fee_short":
+      return `${at} the client's savings fall ${short} short of the program fee by ${when}.${nearest}`;
+    case "cash_short":
+    default:
+      return `${at} the client's savings run short by ${short} on ${when}.${nearest}`;
+  }
 }
 
 export type Afford = { tone: "good" | "bad" | "neutral"; text: string } | null;

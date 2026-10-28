@@ -55,7 +55,9 @@ from app.adapter.engine_adapter import (
     affordability,
     assumed_fields,
     build_rules,
+    engine_mode,
     evaluate,
+    scenario_problem,
 )
 from app.adapter.validator import validate
 from app.agent.acts import (
@@ -126,12 +128,15 @@ from app.schemas.events import (
     SpokenSentence,
     TraceBeliefChange,
     TraceCushion,
+    TraceInfeasible,
     TraceTerm,
     TraceTermAlt,
     TurnTrace,
 )
 from app.store.audit import AuditLog
+from feasibility.explain import explain
 from feasibility.models import (
+    CreditorRules,
     default_first_payment_date,
 )
 
@@ -1333,8 +1338,8 @@ class Orchestrator:
     ) -> TurnTrace:
         """Assemble the decision trace from ``_trace_ctx`` and the emitted move.
 
-        Contains PRIVATE data (``affordability``, guard ``offending``, ``cushion``); the WS
-        view filter strips it for the rep stream.
+        Contains PRIVATE data (``affordability``, guard ``offending``, ``cushion``,
+        ``infeasible_reason``); the WS view filter strips it for the rep stream.
         """
         ctx = self._trace_ctx
         verified: VerifiedAnalysis | None = ctx.get("verified")
@@ -1406,6 +1411,7 @@ class Orchestrator:
             spoken=[SpokenSentence(id=sid, text=text) for sid, text in pairs],
             timings={k: float(v) for k, v in timings.items() if isinstance(v, (int, float))},
             cushion=cushion,
+            infeasible_reason=ctx.get("infeasible"),
         )
 
     def _apply_belief(
@@ -1600,6 +1606,7 @@ class Orchestrator:
         )
         if ask_unreachable:
             assert ask_bp is not None
+            await self._explain_ask(rules, fpd, ask_bp)
             if afford.max_bp is None:
                 summary = await asyncio.to_thread(
                     evaluate,
@@ -1650,6 +1657,30 @@ class Orchestrator:
             )
 
         return afford, rescue_ok, term_alt
+
+    async def _explain_ask(self, rules: CreditorRules, fpd: date, ask_bp: int) -> None:
+        """Why the ask has no plan, for the operator trace only (PRIVATE).
+
+        The shortfall joins the guard blocklist; it never becomes a fact, so NLG never
+        sees it.
+        """
+        objective, _ = engine_mode()
+        problem = scenario_problem(self.session.scenario, rules, fpd)
+        why = await asyncio.to_thread(explain, problem, ask_bp, objective)
+        if why is None:
+            return
+        info = TraceInfeasible(
+            reason=why.reason,
+            bp=why.bp,
+            binding_date=why.binding_date,
+            shortfall_cents=why.shortfall_cents,
+            closest_k=why.closest_k,
+            max_segments=rules.max_segments if why.reason == "segments" else None,
+        )
+        self._trace_ctx["infeasible"] = info
+        if why.shortfall_cents is not None:
+            self.session.private_blocklist.add(("money", why.shortfall_cents))
+        self._audit("engine", "infeasible", info.model_dump(mode="json"))
 
     async def _enrich_action(self, action: Action) -> Action:
         session = self.session

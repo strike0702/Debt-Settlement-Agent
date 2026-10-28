@@ -177,6 +177,7 @@ export interface TurnTraceEvent {
   cushion?: TraceCushion | null;
   decide: Decide;
   dropped: DroppedTerm[];
+  infeasible_reason?: TraceInfeasible | null;
   needs_info?: string[] | null;
   nlg: NlgTrace;
   notes?: TraceNote[] | null;
@@ -239,6 +240,23 @@ export interface DroppedTerm {
   quote?: string | null;
   reason: string;
   value?: unknown;
+}
+/**
+ * PRIVATE: why the rep's ask has no payment plan (``feasibility.explain``).
+ *
+ * Set on a rep turn whose ask is above the affordability curve. ``shortfall_cents``
+ * is what the client's savings lack by ``binding_date`` (None for ``horizon``);
+ * ``max_segments`` is the creditor's level limit, set only for ``segments``. Client
+ * finances: operator only. The rep stream carries no ``turn_trace``, and
+ * ``app.voice.views`` strips this field again by name.
+ */
+export interface TraceInfeasible {
+  binding_date: string | null;
+  bp: number;
+  closest_k: number | null;
+  max_segments?: number | null;
+  reason: "horizon" | "floors" | "segments" | "cash_short" | "fee_short";
+  shortfall_cents: number | null;
 }
 /**
  * How the line was phrased: mode, chosen template, guard verdicts, fallback.

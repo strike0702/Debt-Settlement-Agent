@@ -15,7 +15,9 @@ they end in a handoff with a price / feasibility reason
 (``NO_DEAL_HANDOFF_REASONS``) and no deal. ``escalation_correct`` counts every
 ``should_escalate`` call, which includes no_fix and above-the-line floors.
 
-Two informational blocks (no threshold): ``ladder_branches``,
+Report-only blocks (no threshold): ``min_cushion_cents`` (Phase 59, PRIVATE), the
+client's cushion at the agreed price by engine objective (integer cents, lower
+median). Two more informational blocks: ``ladder_branches``,
 how often each price-ladder branch fired, counted from the audit's
 ``policy/decide`` events (``ladder_branches``); and ``sim_rewrite_fallbacks``,
 how often the sim's LLM rewrite was dropped for the code-built draft, by reason.
@@ -308,6 +310,22 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
             rw_reasons[k] = rw_reasons.get(k, 0) + int(v)
     rw_count = sum(rw_reasons.values())
 
+    # --- PRIVATE, report only: client cushion at the agreed price by objective ---
+    cush = [r["min_cushion_cents"] for r in completed if r.get("min_cushion_cents")]
+
+    def _median_cents(vals: list[int]) -> int | None:
+        return sorted(vals)[(len(vals) - 1) // 2] if vals else None  # lower median, int
+
+    cushion = {
+        "n": len(cush),
+        "agent_median": _median_cents([c["agent"] for c in cush]),
+        "fee_first_median": _median_cents([c["fee_first"] for c in cush]),
+        "client_first_median": _median_cents([c["client_first"] for c in cush]),
+        "client_first_higher": sum(c["client_first"] > c["fee_first"] for c in cush),
+        "equal": sum(c["client_first"] == c["fee_first"] for c in cush),
+        "client_first_lower": sum(c["client_first"] < c["fee_first"] for c in cush),
+    }
+
     # --- latency ---
     stages = ("nlu_ms", "policy_ms", "nlg_ms", "server_total_ms")
     latency: dict[str, dict[str, float | None]] = {}
@@ -356,6 +374,7 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
             "rate": _rate(rw_count, rw_attempts),
             "by_reason": dict(sorted(rw_reasons.items())),
         },
+        "min_cushion_cents": cushion,
         "latency": latency,
     }
 
@@ -432,6 +451,19 @@ def render_summary_md(summary: dict[str, Any], *, run_meta: dict[str, Any] | Non
             f"draft (rate {_fmt(rw.get('rate'))}); by reason: {reasons or 'none'}",
         ]
 
+    cu = summary.get("min_cushion_cents") or {}
+    if cu.get("n"):
+        lines += [
+            "",
+            "## Client cushion at the agreed price (PRIVATE, report only)",
+            "",
+            "Lowest window balance with the whole program fee held back, in cents, over "
+            f"{cu['n']} deals. Median: drafted {_fmt(cu.get('agent_median'))}, fee-first "
+            f"{_fmt(cu.get('fee_first_median'))}, client-first "
+            f"{_fmt(cu.get('client_first_median'))}. Client-first higher on "
+            f"{cu.get('client_first_higher')}, equal on {cu.get('equal')}, lower on "
+            f"{cu.get('client_first_lower')}.",
+        ]
     lines += ["", "## Latency (ms)", "", "| stage | p50 | p95 | n |", "|---|---|---|---|"]
     for stage, stats in (summary.get("latency") or {}).items():
         lines.append(

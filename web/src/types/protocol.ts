@@ -62,7 +62,8 @@ export interface ScenarioBrief extends Omit<ScenarioMeta, "suggested"> {
     /** The whole dedicated-account ledger, oldest first; `scheduled` = after `as_of_date`. */
     ledger: (LedgerEntry & { scheduled: boolean })[];
   };
-  firm: { program_fee_bp: number; program_fee_cents: number; bank_fee_cents: number };
+  /** `min_cushion_cents`: the firm's default minimum client cushion (0 = none; PRIVATE). */
+  firm: { program_fee_bp: number; program_fee_cents: number; bank_fee_cents: number; min_cushion_cents?: number };
 }
 
 /**

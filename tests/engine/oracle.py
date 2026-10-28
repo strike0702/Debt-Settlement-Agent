@@ -13,6 +13,12 @@ its own ledger replay and the suffix-min fee placement, and returns:
   event) and smallest uniform draft increment ``X``, each by binary search on the
   amount with an existence check over all legal vectors.
 
+``solve_ranked`` (Phase 59) ranks every feasible legal vector by an objective
+(``fee_first``: Φ then fewer payments; ``client_first``: cushion = lowest window balance
+minus F, then the smallest largest payment, then Φ, then fewer payments) under a fee
+policy (``front_loaded``, or ``proportional``: fee by t_j at most floor(F*P_j/S)). These
+keys are written from docs/ENGINE.md, not from ``feasibility/objectives.py``.
+
 Written from the problem statement, deliberately *not* from ``feasibility/shapes.py``,
 ``scoring.py`` or ``simulate.py``: it shares only the date/data models. The DFS prunes
 only on facts that hold for every extension (sum bounds, token count, segment cap
@@ -168,8 +174,21 @@ class Instance:
             out.append(bal)
         return out
 
-    def phi(self, balances: list[int]) -> tuple[int, ...] | None:
-        """Suffix-min fee placement; None when the vector is infeasible (rules 5, 6, 10)."""
+    def windows(self, balances: list[int]) -> list[int]:
+        """Lowest balance in each cadence window t_j <= d < t_{j+1} (j = 1..M)."""
+        low = [10**18] * (self.M + 1)
+        for idx, j in enumerate(self.win):
+            if j >= 1:
+                low[j] = min(low[j], balances[idx])
+        return low[1:]
+
+    def phi(
+        self, balances: list[int], vec: tuple[int, ...] | None = None
+    ) -> tuple[int, ...] | None:
+        """Suffix-min fee placement; None when the vector is infeasible (rules 5, 6, 10).
+
+        With ``vec`` the proportional cap applies: Φ_j <= floor(F * paid by t_j / S).
+        """
         if min(balances, default=0) < 0:
             return None
         tail = [10**18] * (self.M + 2)
@@ -181,7 +200,15 @@ class Instance:
             tail[j] = min(tail[j], tail[j + 1])
         if self.M == 0 or tail[self.M] < self.F:
             return None
-        return tuple(min(self.F, tail[j]) for j in range(1, self.M + 1))
+        if vec is None:
+            return tuple(min(self.F, tail[j]) for j in range(1, self.M + 1))
+        out = []
+        paid = 0
+        for j in range(1, self.M + 1):
+            if j <= len(vec):
+                paid += vec[j - 1]
+            out.append(min(self.F, tail[j], self.F * paid // self.S))
+        return tuple(out)
 
     # Legal vectors, pruned by causality: window j's balances depend on p_1..p_j only.
     def vectors(
@@ -397,3 +424,51 @@ def phi_of(
     if not is_legal(vec, S, inst.k_cap, rules):
         return None
     return inst.phi(inst.replay(vec))
+
+
+@dataclass(frozen=True)
+class RankedResult:
+    """Best feasible legal vector under one objective and fee policy."""
+
+    feasible: bool
+    key: tuple | None  # fee_first: (Φ, -k); client_first: (cushion, -p_max, Φ, -k)
+    best: tuple[int, ...] | None  # first vector reaching ``key`` (k ascending, then lex)
+    phi: tuple[int, ...] | None
+    cushion: int | None
+    n_feasible: int
+
+
+def solve_ranked(
+    client: Client,
+    rules: CreditorRules,
+    first_payment_date: date,
+    S: int,
+    F: int,
+    objective: str = "fee_first",
+    fee_policy: str = "front_loaded",
+) -> RankedResult:
+    """Rank every feasible legal vector (no objective pruning) and return the best."""
+    if objective not in ("fee_first", "client_first"):
+        raise ValueError(objective)
+    if fee_policy not in ("front_loaded", "proportional"):
+        raise ValueError(fee_policy)
+    inst = Instance(client, rules, first_payment_date, S, F)
+    best_key: tuple | None = None
+    best: tuple[int, ...] | None = None
+    best_phi: tuple[int, ...] | None = None
+    best_cushion: int | None = None
+    n = 0
+    for vec in inst.vectors():
+        bal = inst.replay(vec)
+        phi = inst.phi(bal, vec if fee_policy == "proportional" else None)
+        if phi is None:
+            continue
+        n += 1
+        cushion = min(inst.windows(bal)) - F
+        if objective == "fee_first":
+            key: tuple = (phi, -len(vec))
+        else:
+            key = (cushion, -vec[-1], phi, -len(vec))
+        if best_key is None or key > best_key:
+            best_key, best, best_phi, best_cushion = key, vec, phi, cushion
+    return RankedResult(best_key is not None, best_key, best, best_phi, best_cushion, n)

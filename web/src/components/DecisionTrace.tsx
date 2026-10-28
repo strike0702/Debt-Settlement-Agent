@@ -3,9 +3,9 @@
  * first. A collapsed row gives the move in plain words ("Countered at 31%"),
  * its key number, and the reason in a few words (`decide.reason_short`). An
  * open row tells the turn as a short story — What they said / What we heard /
- * Can the client pay? / Decision / What we said — with the technical detail
- * (affordability curve, what the agent now knows, the reply template, the
- * safety checks, the policy code) one more click away. The newest turn is
+ * Can the client pay? / Client cushion (when one is set) / Decision / What we said —
+ * with the technical detail (affordability curve, what the agent now knows, the
+ * reply template, the safety checks, the policy code) one more click away. The newest turn is
  * open until the visitor opens or closes a row themselves.
  *
  * Reads `turn_trace` events only; every sentence comes from
@@ -33,6 +33,7 @@ import {
   type Afford,
   ackLine,
   affordLine,
+  cushionLine,
   checkSummary,
   heardLines,
   ignoredLines,
@@ -193,6 +194,16 @@ function Story({ trace }: { trace: TurnTraceEvent }) {
   }
   if (heard.length > 0) rows.push(["What we heard", heard.join(". ") + "."]);
   if (afford) rows.push(["Can the client pay?", <AffordText key="a" afford={afford} />]);
+  const cushion = cushionLine(trace);
+  if (cushion) {
+    rows.push([
+      "Client cushion",
+      <span key="c" className="inline-flex flex-wrap items-baseline gap-x-2">
+        <span data-testid="cushion-line">{cushion}</span>
+        <PrivateTag />
+      </span>,
+    ]);
+  }
   rows.push(["Decision", trace.decide.reason_text]);
   rows.push([
     "What we said",

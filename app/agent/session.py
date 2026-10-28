@@ -93,6 +93,8 @@ class CallSession:
         self.private_blocklist.add(("money", client.current_balance_cents))
         for entry in client.ledger:
             self.private_blocklist.add(("money", entry.amount_cents))
+        if self.scenario.min_cushion_cents > 0:  # firm client-protection policy
+            self.private_blocklist.add(("money", self.scenario.min_cushion_cents))
 
     def absorb_private_facts(self, summary: EvalSummary) -> None:
         """Add PRIVATE engine facts to the rendered-guard blocklist."""

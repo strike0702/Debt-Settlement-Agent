@@ -31,7 +31,10 @@ from tests.seed7 import slot
 
 GOLDEN = Path(__file__).resolve().parents[1] / "data" / "policy_arm_golden.json"
 # Keys the A/B arms added; everything else must match the original runner output.
-_NEW_KEYS = {"agent", "transcript", "llm_calls_per_turn", "turn_latency_ms", "timings"}
+_NEW_KEYS = {
+    "agent", "transcript", "llm_calls_per_turn", "turn_latency_ms", "timings",
+    "min_cushion_cents",  # Phase 59, report only
+}
 
 
 class ScriptedLLM(FakeLLM):

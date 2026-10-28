@@ -119,6 +119,7 @@ from app.schemas.events import (
     NlgTrace,
     SpokenSentence,
     TraceBeliefChange,
+    TraceCushion,
     TraceTerm,
     TurnTrace,
 )
@@ -1231,7 +1232,7 @@ class Orchestrator:
     ) -> TurnTrace:
         """Assemble the decision trace from ``_trace_ctx`` and the emitted move.
 
-        Contains PRIVATE data (``affordability``, guard ``offending``); the WS
+        Contains PRIVATE data (``affordability``, guard ``offending``, ``cushion``); the WS
         view filter strips it for the rep stream.
         """
         ctx = self._trace_ctx
@@ -1242,6 +1243,16 @@ class Orchestrator:
         if verified is not None and verified.ask_verified and verified.settlement_ask_pct:
             ask_bp = ask_pct_to_bp(verified.settlement_ask_pct)
         spoken_bp = action.facts.get("counter_pct") or action.facts.get("settlement_pct")
+        cushion: TraceCushion | None = None
+        drafted = self._turn_eval
+        if (
+            action.intent == Intent.CONFIRM_SCHEDULE
+            and drafted is not None
+            and drafted.cushion_kept is not None
+        ):
+            cushion = TraceCushion(
+                min_cushion_cents=drafted.min_cushion_cents, kept=drafted.cushion_kept
+            )
         return TurnTrace(
             turn=self.session.neg.turn_idx,
             creditor_text=ctx.get("creditor_text"),
@@ -1292,6 +1303,7 @@ class Orchestrator:
             ),
             spoken=[SpokenSentence(id=sid, text=text) for sid, text in pairs],
             timings={k: float(v) for k, v in timings.items() if isinstance(v, (int, float))},
+            cushion=cushion,
         )
 
     def _apply_belief(

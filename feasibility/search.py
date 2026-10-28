@@ -51,6 +51,13 @@ gets worse as the current level rises, so the level scan stops at the first fail
 The same holds for the remaining-sum test. Per-k bounds from the floors' prefix sums
 skip whole k. ``tests/engine/test_search.py`` checks this against
 ``tests/engine/reference.py`` (exact, independent) and against ``legacy.py``.
+
+Proportional fee policy (Phase 59): ``key4`` caps each Φ_j at ``floor(F*P_j/S)``. That
+cap *rises* with the prefix sums, so Φ is no longer monotone and an objective bound from
+lower prefix sums is not valid. Under ``proportional`` ``best`` prunes on feasibility
+only (still monotone) and scores every family vector, so it is exact over the family,
+not over every legal vector. Feasibility, L* and X* do not depend on the policy. The
+client-first search lives in ``objectives.py`` and reuses this class's helpers.
 """
 
 from __future__ import annotations
@@ -90,6 +97,7 @@ class Search:
         self.G = list(accumulate(self.f))  # G[i] = f_1 + .. + f_i
         self.pre_min = problem.pre_min
         self.capw = problem.window_caps
+        self.prop = problem.fee_policy == "proportional"
         # Lifting early levels only matters for plain staircases with >= 3 levels.
         self.box = (
             not rules.even_pays and not rules.is_ballooning_allowed and rules.max_segments >= 3
@@ -134,7 +142,11 @@ class Search:
     # --- objectives from prefix sums -------------------------------------------
 
     def key4(self, P: list[int], k: int, b: int) -> Key4 | None:
-        """(Φ, -k, min_slack, total_slack) of ``score_key`` from P_1..P_{k-1} (None: infeasible)."""
+        """(Φ, -k, min_slack, total_slack) of ``score_key`` from P_1..P_{k-1} (None: infeasible).
+
+        Under the proportional policy Φ is capped by ``floor(F*P_j/S)``; then the result
+        is exact for exact prefix sums but is *not* a bound when given lower bounds.
+        """
         tail = self._phi_tail(k, b)
         if tail is None:
             return None
@@ -148,6 +160,10 @@ class Search:
             if wj < run:
                 run = wj
             ph = F if run - b > F else run - b
+            if self.prop:
+                pc = F * P[j - 1] // self.S
+                if pc < ph:
+                    ph = pc
             head[j - 1] = ph
             sl = wj - ph
             if sl < ms:
@@ -357,19 +373,23 @@ class Search:
             if best[0] is None or full > best[0]:
                 best[0], best[1] = full, vec
 
+        bound_ok = not self.prop  # key4 of lower prefix sums is an upper bound
+
         def run(stage: Callable, floor_phi: tuple[int, ...] | None) -> None:
             for b4, k in ks:
-                if floor_phi is not None and b4[0] <= floor_phi:
+                if bound_ok and floor_phi is not None and b4[0] <= floor_phi:
                     continue
-                if best[0] is not None and b4 < best[0][:4]:
+                if bound_ok and best[0] is not None and b4 < best[0][:4]:
                     continue
 
                 def prune(lower: list[int], k: int = k) -> bool:
                     u = self.key4(lower, k, buffer)
-                    return (
-                        u is None
-                        or (floor_phi is not None and u[0] <= floor_phi)
-                        or (best[0] is not None and u < best[0][:4])
+                    return u is None or (
+                        bound_ok
+                        and (
+                            (floor_phi is not None and u[0] <= floor_phi)
+                            or (best[0] is not None and u < best[0][:4])
+                        )
                     )
 
                 for vec in stage(k, prune):
@@ -386,6 +406,24 @@ class Search:
         if best[1] is None:
             return None
         return best[1], label_shape(best[1], self.rules)
+
+    def any_feasible(self, buffer: int) -> bool:
+        """Is some legal vector feasible under ``buffer``? Stops at the first one.
+
+        Feasibility is monotone in prefix sums and the same under every objective and
+        fee policy, so pruning on it alone over the dominating family is exact.
+        """
+        def prune(lower: list[int], k: int) -> bool:
+            return self.key4(lower, k, buffer) is None
+
+        for k in range(1, self.k_max + 1):
+            if self.key4(self.G[1:k], k, buffer) is None:
+                continue
+            for stage in (self.pinned, self.boxed):
+                for vec in stage(k, lambda lower, k=k: prune(lower, k)):
+                    if self.key4(_prefix(vec), k, buffer) is not None:
+                        return True
+        return False
 
     # --- Part 2 -------------------------------------------------------------------
 

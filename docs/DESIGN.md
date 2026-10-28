@@ -120,7 +120,12 @@ question counts still apply (Phase 54), so a question the rep keeps talking
 over still reaches its handoff.
 A small set of bookkeeping effects (`offer_counter`, `record_confirm`,
 `set_phase`, …) applies on emit, so a fast "yes" during TTS wraps instead of
-re-confirming.
+re-confirming. A barge that heard none of the reply undoes the whole turn,
+eager effects included (Phase 56): the state from before it is restored, the
+browser is told to stop those sentences (`speech_dropped`), and the rep's line
+is joined to their next line, which goes through NLU once. This is the usual
+case when a pause splits one rep sentence into two speech clips. A late
+`sentence_done` for a dropped sentence is ignored.
 
 **Consequences.** Belief and the audit log match what was actually said. Text
 mode uses the same path and auto-acks. The ordering is subtle, so it is pinned

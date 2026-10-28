@@ -2,7 +2,9 @@
 
 ``CallSession`` holds scenario, belief, negotiation bookkeeping, spoken
 history, and the pending ``Action`` whose effects apply only after speech
-ack. It does not run NLU/policy/NLG — that is ``orchestrator.Orchestrator``.
+ack. ``TurnRollback`` is the state from before a rep turn, kept with its
+pending speech so a barge that heard nothing can undo the whole turn. It does
+not run NLU/policy/NLG — that is ``orchestrator.Orchestrator``.
 """
 
 from __future__ import annotations
@@ -30,6 +32,24 @@ class Turn:
 
 
 @dataclass
+class TurnRollback:
+    """State from before a turn: restored when the rep heard none of its reply.
+
+    ``belief_terms`` (a copy of ``BeliefState.terms``) and ``rep_text`` are
+    ``None`` for a turn with no rep line (the opening, a rep hang-up); then
+    only the negotiation state and the eager engine results are restored.
+    """
+
+    neg: NegotiationState
+    last_eval: EvalSummary | None
+    agreed_bp: int | None
+    history_len: int
+    belief_terms: dict[str, Any] | None = None
+    rep_text: str | None = None
+    last_ack: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class PendingSpeech:
     """Sentences waiting for ``sentence_done`` / barge-in acks.
 
@@ -42,6 +62,7 @@ class PendingSpeech:
     acked: set[str] = field(default_factory=set)
     pending_eval: EvalSummary | None = None
     pending_agreed_bp: int | None = None
+    rollback: TurnRollback | None = None
 
 
 @dataclass

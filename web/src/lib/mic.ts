@@ -38,9 +38,12 @@ export function micReducer(state: MicState, ev: MicEvent): MicState {
 export function micEventFor(ev: ServerEvent): MicEvent | null {
   if (ev.type === "transcript" && ev.role === "creditor") return { type: "rep_done" };
   if (ev.type === "say") return { type: "agent_say" };
-  if (ev.type === "phase" && ev.intent === null) {
-    // A handoff ends the call just as END does (a call ends as a deal or a handoff).
-    return ev.phase === "END" || ev.phase === "ESCALATE" ? { type: "call_over" } : { type: "agent_done" };
+  // A call ends as a deal or a handoff. Any sign of either ends it for the mic:
+  // the handoff event, or an END / ESCALATE phase whether or not it names the move.
+  if (ev.type === "escalate") return { type: "call_over" };
+  if (ev.type === "phase") {
+    if (ev.phase === "END" || ev.phase === "ESCALATE") return { type: "call_over" };
+    return ev.intent === null ? { type: "agent_done" } : null;
   }
   return null;
 }

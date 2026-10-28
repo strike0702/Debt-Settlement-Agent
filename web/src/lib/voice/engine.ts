@@ -11,7 +11,9 @@
  * Invariants worth knowing before editing:
  * - Every `say` gets exactly one `sentence_done` (spoken, failed, or no TTS),
  *   unless a barge-in drops it; then `barge_in.spoken_ids` names what was heard,
- *   including the sentence in flight.
+ *   including the sentence in flight. A server `speech_dropped` (the server
+ *   barged an unheard reply because the rep's next line arrived first) stops
+ *   those sentences at once, even mid-word, and they are never acked.
  * - `ttsGen` bumps on every cancel, so a stale `onend`/`onerror` never acks.
  * - Speech that starts while the agent talks (or within the echo guard) can
  *   barge, but its clip is "contaminated" and never sent to STT.
@@ -271,6 +273,9 @@ export class VoiceEngine {
       case "transcript":
         if (ev.role === "creditor") this.set({ interim: "" });
         return;
+      case "speech_dropped":
+        this.dropSpeech(ev.ids);
+        return;
       case "stt_error":
         this.set({ waiting: false, interim: "" });
         if (this.snap.sttMode === "server") {
@@ -309,6 +314,17 @@ export class VoiceEngine {
     this.io.sendJson({ type: "sentence_done", id });
     this.ackedIds.push(id);
     this.speakingIds.delete(id);
+  }
+
+  /** Server-dropped sentences: unqueue them and cut the one in flight; the newer turn plays next. */
+  private dropSpeech(ids: string[]): void {
+    const drop = new Set(ids);
+    this.queue = this.queue.filter((s) => !drop.has(s.id));
+    if (![...this.speakingIds].some((id) => drop.has(id))) return;
+    drop.forEach((id) => this.speakingIds.delete(id));
+    this.cancelTts();
+    this.turnSayAt = null;
+    this.drainQueue();
   }
 
   private cancelTts(): void {

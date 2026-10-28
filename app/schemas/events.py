@@ -3,7 +3,7 @@
 Server events are what ``app.voice.ws`` sends (``transcript``, ``say``,
 ``belief``, ``eval``, ``blocked``, ``escalate``, ``latency``, ``audit``,
 ``phase``, ``agreement``, ``stt_error``, ``error``, ``turn_done``,
-``turn_trace``, ``autoplay_done``); client events are what it accepts. The web
+``turn_trace``, ``autoplay_done``, ``speech_dropped``); client events are what it accepts. The web
 UI's TypeScript types are generated from the exported schema, so this file is
 the protocol's single source of truth. ``TurnTrace`` is also the type of
 ``Orchestrator``'s ``Utterance.trace``.
@@ -131,6 +131,17 @@ class SpokenSentence(_Model):
     text: str
 
 
+class TraceTermAlt(_Model):
+    """The payment term a COUNTER_TERMS move asked the rep for (public once said).
+
+    ``field`` is the belief field (``first_payment_date`` ISO date,
+    ``min_payment_cents`` cents, ``max_payments`` count).
+    """
+
+    field: Literal["first_payment_date", "min_payment_cents", "max_payments"]
+    value: int | str
+
+
 class TraceReader(_Model):
     """Who read the rep's line this turn. Operator only, like the trace.
 
@@ -208,6 +219,8 @@ class TurnTrace(_Model):
     decide: Decide
     # Our counter or confirmed bp when this move speaks one (public once said).
     counter_bp: int | None
+    # Set on COUNTER_TERMS: the term we asked for (the trace row's key number).
+    term_alt: TraceTermAlt | None = None
     # Phase 59: soft client cushion on the plan-drafting turn (PRIVATE, operator only).
     cushion: TraceCushion | None = None
     nlg: NlgTrace
@@ -355,6 +368,13 @@ class TurnDoneEvent(_Model):
     type: Literal["turn_done"]
 
 
+class SpeechDroppedEvent(_Model):
+    """The server dropped these unheard ``say`` sentences: stop them now, never ack them."""
+
+    type: Literal["speech_dropped"]
+    ids: list[str]
+
+
 class TurnTraceEvent(TurnTrace):
     type: Literal["turn_trace"]
 
@@ -385,7 +405,8 @@ ServerEvent = Annotated[
     | ErrorEvent
     | TurnDoneEvent
     | TurnTraceEvent
-    | AutoplayDoneEvent,
+    | AutoplayDoneEvent
+    | SpeechDroppedEvent,
     Field(discriminator="type"),
 ]
 SERVER_EVENT_ADAPTER: TypeAdapter[Any] = TypeAdapter(ServerEvent)
@@ -405,6 +426,7 @@ SERVER_EVENT_TYPES: tuple[str, ...] = (
     "turn_done",
     "turn_trace",
     "autoplay_done",
+    "speech_dropped",
 )
 
 

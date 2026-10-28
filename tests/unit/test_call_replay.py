@@ -388,13 +388,14 @@ def test_one_payment_plan_is_spoken_singular() -> None:
         next_phase=Phase.CONFIRM,
     )
     line = " ".join(render_action(action, _REF))
-    assert "1 payment totaling $500" in line and "1 payments" not in line
+    # One payment is the whole total, so it reads "1 payment of $500".
+    assert "1 payment of $500" in line and "1 payments" not in line
     bank_like = action.model_copy(
         update={
             "template_override": "We could set {num_payments} payments totalling {offer_total}."
         }
     )
-    assert " ".join(render_action(bank_like, _REF)) == "We could set 1 payment totalling $500."
+    assert " ".join(render_action(bank_like, _REF)) == "We could set 1 payment of $500."
 
 
 def test_paraphrased_structure_stays_unverified_and_is_read_back() -> None:

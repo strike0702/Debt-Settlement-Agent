@@ -239,3 +239,23 @@ def test_start_date_alt_reason_does_not_blame_an_assumed_date(rep_stated: bool) 
     short = reason_short(action.intent, action.reason)
     assert short == "Asked for a start date that fits the client's plan."
     assert "their" not in short.lower()
+
+
+@pytest.mark.parametrize("rep_stated", [True, False])
+@pytest.mark.parametrize(
+    ("field", "value", "spoken"),
+    [("min_payment_cents", 10000, "$100"), ("max_payments", 5, "5 payments")],
+)
+def test_min_and_max_term_alt_reasons_never_blame_the_rep(
+    field: str, value: int, spoken: str, rep_stated: bool
+) -> None:
+    """One sentence fits a term the rep stated and one we assumed: no "their"."""
+    from app.agent.policy import _counter_terms_action
+
+    action = _counter_terms_action(field=field, value=value, effects=[], rep_stated=rep_stated)
+    text = reason_text(action, _REF)
+    assert spoken in text
+    assert text.startswith("We ask whether")
+    assert "their" not in text.lower() and "unaffordable" not in text
+    short = reason_short(action.intent, action.reason)
+    assert short is not None and "their" not in short.lower()

@@ -10,8 +10,11 @@ and that neither ever reaches the rep socket (which carries no trace).
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from app.agent.orchestrator import Utterance
 from app.domain.actions import Action, Intent, Phase
@@ -250,3 +253,21 @@ def test_rep_stream_never_carries_the_handoff_reason_code(tmp_path: Path) -> Non
     decide = [f for f in frames if f["type"] == "audit" and f["event"] == "decide"]
     assert decide and all("reason" not in f["payload"] for f in decide)
     assert "infeasible" not in json.dumps(frames)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "expected"),
+    [
+        ("first_payment_date", date(2026, 3, 31), "2026-03-31"),
+        ("min_payment_cents", 10000, 10000),
+        ("max_payments", 5, 5),
+    ],
+)
+def test_term_alt_names_the_term_we_asked_for(field: str, value: object, expected: object) -> None:
+    """COUNTER_TERMS traces carry our proposed term (the trace row's key number)."""
+    from app.agent.orchestrator import _term_alt_of
+    from app.agent.policy import _counter_terms_action
+
+    action = _counter_terms_action(field=field, value=value, effects=[], rep_stated=True)
+    alt = _term_alt_of(action)
+    assert alt is not None and alt.field == field and alt.value == expected

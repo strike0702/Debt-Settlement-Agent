@@ -7,13 +7,14 @@
  */
 import { act, fireEvent, render, renderHook, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { micFromEvents } from "@/App";
 import { CaseEditor } from "@/components/CaseEditor";
 import { Conversation } from "@/components/Conversation";
 import { DecisionTrace } from "@/components/DecisionTrace";
 import { StatePanel } from "@/components/StatePanel";
 import { useTheme } from "@/hooks/useTheme";
 import { readUrlState, urlWith, useUrlState } from "@/hooks/useUrlState";
-import { type CallState, reduceCall } from "@/lib/callState";
+import { type CallState, isCallOver, reduceCall } from "@/lib/callState";
 import type { Lens } from "@/lib/lens";
 import { micEventFor } from "@/lib/mic";
 import { callOutcome, endedLine } from "@/lib/outcome";
@@ -100,6 +101,29 @@ describe("handoff outcome", () => {
     expect(micEventFor({ type: "phase", phase: "ESCALATE", intent: null, turn: 6 })).toEqual({ type: "call_over" });
     expect(micEventFor({ type: "phase", phase: "END", intent: null, turn: 6 })).toEqual({ type: "call_over" });
     expect(micEventFor({ type: "phase", phase: "NEGOTIATE", intent: null, turn: 6 })).toEqual({ type: "agent_done" });
+  });
+
+  it("turns the mic off on any handoff ending, whether or not the phase names the move", () => {
+    expect(micEventFor({ type: "phase", phase: "ESCALATE", intent: "ESCALATE", turn: 6 })).toEqual({ type: "call_over" });
+    expect(micEventFor({ type: "phase", phase: "END", intent: "CLOSE", turn: 6 })).toEqual({ type: "call_over" });
+    expect(micEventFor({ type: "escalate", reason: "rep_ended", escalate_reason: null })).toEqual({ type: "call_over" });
+    // A mid-call phase that names the move is not a mic transition.
+    expect(micEventFor({ type: "phase", phase: "NEGOTIATE", intent: "COUNTER", turn: 3 })).toBeNull();
+    // Replayed: the mic is off after a handoff, with no trailing intent-free phase.
+    const events = [
+      { type: "say", id: "s1", text: "Hi." },
+      { type: "transcript", role: "creditor", text: "Goodbye.", spoken: true, sentence_id: null, blocked: false },
+      { type: "phase", phase: "ESCALATE", intent: "ESCALATE", turn: 2 },
+      { type: "escalate", reason: "rep_ended", escalate_reason: null },
+      { type: "say", id: "s2", text: "A specialist will follow up." },
+    ] as ServerEvent[];
+    expect(micFromEvents(events)).toBe("off");
+  });
+
+  it("counts a handoff event as the end of the call", () => {
+    const live = { ...fullCall("operator"), phase: "NEGOTIATE" as const, escalation: null };
+    expect(isCallOver(live)).toBe(false);
+    expect(isCallOver({ ...live, escalation: { type: "escalate", reason: "rep_ended", escalate_reason: null } })).toBe(true);
   });
 });
 

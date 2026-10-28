@@ -73,6 +73,7 @@ import { formatCushion } from "@/lib/cushion";
 import { type Lens, viewFor } from "@/lib/lens";
 import { micEventFor, micReducer, type MicState } from "@/lib/mic";
 import { endedLine } from "@/lib/outcome";
+import { callErrorText } from "@/lib/callError";
 import { toRepView } from "@/lib/repView";
 
 // Recharts lives in these two; loading them after first paint keeps the shell fast.
@@ -393,8 +394,6 @@ function LiveApp() {
   if (!storageOk) note("storage", "This browser is not saving custom test cases, so they will be gone after a reload.");
   if (custom && !callRunning) note("custom", "This is your own test case. The simulated rep only knows the built-in cases, so press Start call and play the rep yourself.");
   if (state.autoplay) note("outcome", OUTCOME[state.autoplay.outcome] ?? "The simulated call finished.");
-  const lastError = state.errors.at(-1);
-  if (lastError) note("error", lastError);
 
   return (
     <AppShell
@@ -490,6 +489,13 @@ function LiveApp() {
           onDismissNotice={() => engine.dismissNotice()}
           sttMode={voice.snapshot.sttMode}
           onSttMode={voice.setSttMode}
+          error={
+            state.error && {
+              text: callErrorText(state.error),
+              detail: lens === "operator" ? state.error.message : null,
+              seq: state.error.seq,
+            }
+          }
         />
       }
       trace={cols.trace}

@@ -8,6 +8,7 @@
  * It does not filter private data; `toRepView` in `repView.ts` does that
  * before events get here.
  */
+import type { CallError } from "@/lib/callError";
 import type {
   AgreementEvent,
   AuditEvent,
@@ -57,7 +58,10 @@ export interface CallState {
   autoplay: AutoplayDoneEvent | null;
   /** TTS onsets that arrived before their turn's trace. */
   ttsOnset: Record<number, number>;
-  errors: string[];
+  /** Newest server `error` / `stt_error` of this call; cleared by the next agent reply. */
+  error: CallError | null;
+  /** Errors seen in this call so far (gives each `error` its `seq`). */
+  errorCount: number;
   /** Rep line received, agent reply not yet out. */
   thinking: boolean;
   /** Id of the agent sentence most recently sent for TTS. */
@@ -79,7 +83,8 @@ export const initialCallState: CallState = {
   escalation: null,
   autoplay: null,
   ttsOnset: {},
-  errors: [],
+  error: null,
+  errorCount: 0,
   thinking: false,
   speakingId: null,
 };
@@ -113,10 +118,12 @@ export function reduceCall(state: CallState, ev: CallEvent): CallState {
         ...state,
         messages: [...state.messages, msg],
         thinking: ev.role === "creditor" ? true : state.thinking,
+        // The agent answered (both views get its transcript), so the last error is over.
+        error: ev.role === "agent" ? null : state.error,
       };
     }
     case "say":
-      return { ...state, thinking: false, speakingId: ev.id };
+      return { ...state, thinking: false, speakingId: ev.id, error: null };
     case "belief":
       return { ...state, belief: ev.terms };
     case "eval":
@@ -159,8 +166,16 @@ export function reduceCall(state: CallState, ev: CallEvent): CallState {
       return { ...state, autoplay: ev, thinking: false };
     case "stt_error":
     case "error":
-      return { ...state, thinking: false, errors: [...state.errors, ev.message] };
+      return {
+        ...state,
+        thinking: false,
+        error: { kind: ev.type, message: ev.message, seq: state.errorCount + 1 },
+        errorCount: state.errorCount + 1,
+      };
     case "turn_done":
+      return state;
+    case "speech_dropped":
+      // Voice-only: the engine stops those sentences; the transcript keeps the lines.
       return state;
   }
 }
@@ -201,6 +216,7 @@ export function ladderPoints(traces: readonly TurnTraceEvent[]): LadderPoint[] {
     .map((t) => ({ turn: t.turn, ask: t.ask_bp, counter: t.counter_bp }));
 }
 
+/** A call is over once it ends as a deal (END) or a handoff (ESCALATE phase or event). */
 export function isCallOver(state: CallState): boolean {
-  return state.phase === "END" || state.phase === "ESCALATE";
+  return state.phase === "END" || state.phase === "ESCALATE" || state.escalation != null;
 }

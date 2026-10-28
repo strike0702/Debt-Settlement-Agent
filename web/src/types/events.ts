@@ -24,7 +24,8 @@ export type ServerEvent =
   | ErrorEvent
   | TurnDoneEvent
   | TurnTraceEvent
-  | AutoplayDoneEvent;
+  | AutoplayDoneEvent
+  | SpeechDroppedEvent;
 export type Intent =
   | "OPENING"
   | "ASK"
@@ -182,6 +183,7 @@ export interface TurnTraceEvent {
   reader?: TraceReader | null;
   spoken: SpokenSentence[];
   stance: ("offer" | "counter" | "accept" | "reject" | "stall" | "info" | "question" | "other") | null;
+  term_alt?: TraceTermAlt | null;
   terms: TraceTerm[];
   timings: {
     [k: string]: number | null;
@@ -307,6 +309,16 @@ export interface SpokenSentence {
   text: string;
 }
 /**
+ * The payment term a COUNTER_TERMS move asked the rep for (public once said).
+ *
+ * ``field`` is the belief field (``first_payment_date`` ISO date,
+ * ``min_payment_cents`` cents, ``max_payments`` count).
+ */
+export interface TraceTermAlt {
+  field: "first_payment_date" | "min_payment_cents" | "max_payments";
+  value: number | string;
+}
+/**
  * A term NLU extracted and ``post_verify`` kept; ``quote`` is a span of the rep line.
  */
 export interface TraceTerm {
@@ -322,6 +334,13 @@ export interface AutoplayDoneEvent {
   phase: Phase;
   turns: number;
   type: "autoplay_done";
+}
+/**
+ * The server dropped these unheard ``say`` sentences: stop them now, never ack them.
+ */
+export interface SpeechDroppedEvent {
+  ids: string[];
+  type: "speech_dropped";
 }
 /**
  * Start a call. ``autoplay`` lets the sim creditor drive it (curated ids only).

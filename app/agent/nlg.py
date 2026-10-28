@@ -211,7 +211,7 @@ def ack_template(ids: tuple[str, ...], turn: int, *, singular: bool = False) -> 
         total = _ACK_TOTAL_BODIES[turn % len(_ACK_TOTAL_BODIES)]
         body = f"{total}, {body}" if body else total
     if singular:
-        body = body.replace("{ack_max_payments} payments", "{ack_max_payments} payment")
+        body = singular_count_template(body, {"ack_max_payments"})
     return f"{_ACK_OPENERS[turn % len(_ACK_OPENERS)]}, {body}."
 
 
@@ -243,20 +243,40 @@ def _allowed_ids(action: Action) -> set[str]:
     return set(action.facts.keys()) | set(action.text_slots.keys())
 
 
-def _singular_counts(template: str, action: Action) -> str:
-    """"{n} payments" → "{n} payment" for every count fact equal to 1.
+# Count placeholders spoken before "payments": the singular rule below and the
+# bank build's acceptance check (``scripts/build_template_bank.py``) use them.
+PAYMENT_COUNT_IDS: frozenset[str] = frozenset(
+    {"num_payments", "alt_max_payments", "ack_max_payments"}
+)
 
-    Bank and default bodies all say "{num_payments} payments totaling ...";
-    this keeps a one-payment plan from being spoken as "1 payments".
+
+def singular_count_template(template: str, count_ids: set[str] | frozenset[str]) -> str:
+    """The template as spoken when each id in ``count_ids`` is 1.
+
+    "{n} payments totaling {x}" → "{n} payment of {x}" (one payment is the
+    whole total); any other "{n} payments|installments" → singular. A plural
+    the rule cannot reach ("{n} monthly payments") is left alone, so the bank
+    build rejects such lines.
     """
-    for key, fact in action.facts.items():
-        if fact.kind == "count" and fact.value == 1:
-            template = re.sub(
-                r"\{" + re.escape(key) + r"\} (payment|installment)s\b",
-                lambda m, k=key: "{" + k + "} " + m.group(1),
-                template,
-            )
+    for key in count_ids:
+        ph = r"\{" + re.escape(key) + r"\}"
+        template = re.sub(
+            ph + r" (payment|installment)s total(?:l)?ing\b",
+            lambda m, k=key: "{" + k + "} " + m.group(1) + " of",
+            template,
+        )
+        template = re.sub(
+            ph + r" (payment|installment)s\b",
+            lambda m, k=key: "{" + k + "} " + m.group(1),
+            template,
+        )
     return template
+
+
+def _singular_counts(template: str, action: Action) -> str:
+    """Apply ``singular_count_template`` for every count fact equal to 1 (bank, default, LLM)."""
+    ones = {k for k, f in action.facts.items() if f.kind == "count" and f.value == 1}
+    return singular_count_template(template, ones) if ones else template
 
 
 def _fill_template(template: str, action: Action, ref: date) -> str:

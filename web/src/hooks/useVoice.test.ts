@@ -247,6 +247,28 @@ describe("barge-in and echo guard", () => {
     expect(hook.result.current.mic).toBe("thinking");
   });
 
+  it("speech that starts right after the agent stops is captured from its first word", async () => {
+    const h = harness();
+    const hook = mount(h);
+    await micOn(hook);
+    const u = say(hook, h, "s1", "What minimum payment do you need?");
+    act(() => u.onstart?.());
+    act(() => vi.advanceTimersByTime(BARGE_ECHO_GUARD_MS + 500));
+    const pauses = h.vad.pause.mock.calls.length;
+    act(() => u.onend?.());
+    // Capture is re-armed the moment the agent stops, before the rep speaks...
+    expect(h.vad.pause.mock.calls.length).toBe(pauses + 1);
+    act(() => h.vad.cb!.onSpeechStart());
+    expect(hook.result.current.snapshot.interim).toBe(LABEL.listening);
+    // ...and never reset mid-utterance, so vad-web's clip (with its pre-speech pad) is sent whole.
+    act(() => vi.advanceTimersByTime(1500));
+    expect(h.vad.pause.mock.calls.length).toBe(pauses + 1);
+    const clip = new Float32Array(16000).fill(0.1);
+    act(() => h.vad.cb!.onSpeechEnd(clip));
+    expect(h.wavs).toHaveLength(1);
+    expect(h.wavs[0]!.byteLength).toBe(encodeWav(clip, 16000).byteLength);
+  });
+
   it("a typed reply mid-TTS barges first so the move's bookkeeping lands", () => {
     const h = harness();
     const hook = mount(h);
@@ -254,6 +276,40 @@ describe("barge-in and echo guard", () => {
     act(() => hook.result.current.engine.beforeRepText());
     expect(types(h)).toEqual(["barge_in"]);
     expect(hook.result.current.snapshot.waiting).toBe(true);
+  });
+});
+
+describe("server-dropped speech", () => {
+  it("cancels the dropped sentence in flight and the queued one, never acks them, and plays only the newer turn", () => {
+    const h = harness();
+    const hook = mount(h);
+    server(hook, { type: "say", id: "hold1", text: "We are staying at 52% of the balance, which is $650." });
+    server(hook, { type: "say", id: "hold2", text: "Can you come down from your number?" });
+    act(() => vi.advanceTimersByTime(20));
+    const inFlight = h.spoken.at(-1)!;
+    act(() => inFlight.onstart?.());
+    act(() => vi.advanceTimersByTime(260)); // 260 ms in, as in the live call
+    const cancels = (h.deps.synth!.cancel as Mock).mock.calls.length;
+    server(hook, { type: "speech_dropped", ids: ["hold1", "hold2"] });
+    expect((h.deps.synth!.cancel as Mock).mock.calls.length).toBe(cancels + 1);
+    expect(hook.result.current.snapshot.speaking).toBe(false);
+    act(() => inFlight.onend?.()); // the cancelled utterance's late end
+    act(() => vi.advanceTimersByTime(1000));
+    expect(h.spoken.map((u) => u.text)).toEqual([inFlight.text]);
+    const step = say(hook, h, "step1", "Could you consider 63% of the balance?");
+    act(() => step.onend?.());
+    expect(acks(h)).toEqual(["step1"]);
+    expect(types(h)).not.toContain("barge_in");
+  });
+
+  it("ignores ids it is not playing (the client already barged them)", () => {
+    const h = harness();
+    const hook = mount(h);
+    const u = say(hook, h, "s1");
+    server(hook, { type: "speech_dropped", ids: ["old"] });
+    expect(hook.result.current.snapshot.speaking).toBe(true);
+    act(() => u.onend?.());
+    expect(acks(h)).toEqual(["s1"]);
   });
 });
 
@@ -313,6 +369,15 @@ describe("browser STT during TTS", () => {
     expect(second.started).toBe(1);
     act(() => second.final("Forty percent."));
     expect(h.repTexts).toEqual(["Forty percent."]);
+  });
+
+  it("transcribes a final while the agent is silent, with no barge", async () => {
+    const h = harness();
+    const hook = mount(h, "browser");
+    await micOn(hook);
+    act(() => FakeRec.all.at(-1)!.final("One hundred twenty dollars."));
+    expect(h.repTexts).toEqual(["One hundred twenty dollars."]);
+    expect(types(h)).not.toContain("barge_in");
   });
 });
 

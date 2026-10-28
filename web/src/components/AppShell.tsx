@@ -17,13 +17,14 @@
  * without touching layout.
  */
 import { Lock, Moon, Pencil, Play, Plus, RotateCcw, Sun, Trash2 } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { cn } from "@/lib/cn";
 import { expectedLabel } from "@/lib/labels";
 import type { Lens } from "@/lib/lens";
+import { revealInRow } from "@/lib/scrollRow";
 import type { Theme } from "@/hooks/useTheme";
 import type { ScenarioMeta } from "@/types/protocol";
 
@@ -138,7 +139,7 @@ export function AppShell(p: AppShellProps) {
             )}
           </div>
         </div>
-        <ul className="-mx-4 flex snap-x scroll-px-4 list-none gap-3 overflow-x-auto px-4 pb-1 wide:mx-0 wide:grid wide:grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] wide:overflow-visible wide:px-0">
+        <ul className="-mx-4 flex snap-x scroll-px-4 list-none gap-3 overflow-x-auto px-4 pb-1 motion-safe:scroll-smooth wide:mx-0 wide:grid wide:grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] wide:overflow-visible wide:px-0">
           {p.scenarios.map((s) => (
             <ScenarioCard
               key={s.id}
@@ -184,8 +185,15 @@ function ScenarioCard({
   onRemove?: () => void;
 }) {
   const hasActions = Boolean(onEdit || onRemove);
+  // On a phone the cards are one sideways row: a card selected from the URL,
+  // back / forward or a new test case may be off screen, so bring it in.
+  const ref = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    const li = ref.current;
+    if (selected && li?.parentElement) revealInRow(li.parentElement, li);
+  }, [selected]);
   return (
-    <li className="relative flex w-60 shrink-0 snap-start wide:w-auto">
+    <li ref={ref} className="relative flex w-60 shrink-0 snap-start wide:w-auto">
       <button
         type="button"
         aria-pressed={selected}

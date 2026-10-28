@@ -4,7 +4,8 @@ Client events: ``start``, ``end``, binary WAV, ``text``, ``sentence_done``,
 ``barge_in``, ``timing``. Server events (every ``type`` this module sends):
 ``transcript``, ``say``, ``belief``, ``eval``, ``blocked``, ``escalate``,
 ``latency``, ``audit``, ``phase``, ``agreement``, ``stt_error``, ``error``,
-``turn_done``, ``turn_trace`` (one per agent turn, operator only; it gains
+``turn_done``, ``speech_dropped`` (unheard sentences a barge dropped; the
+client cancels them), ``turn_trace`` (one per agent turn, operator only; it gains
 ``needs_info`` when the engine did not run, ``decide.reason_short``, and on
 rep turns ``reader`` (which model, code path or script read the line) and
 ``notes`` (acks, corrections, held-back amounts, dropped questions), both
@@ -12,7 +13,9 @@ built from the turn's audit rows by ``turn_reader`` / ``turn_notes``),
 ``autoplay_done``. Their
 Pydantic models live in ``app.schemas.events``. Speaks through
 ``Orchestrator``; STT via ``app.voice.stt``, run inside
-``llm_call_scope(call_id)`` so the STT call is audited.
+``llm_call_scope(call_id)`` so the STT call is audited. A transcript the STT
+screen drops as a hallucination is audited as ``stt_dropped`` (reason and
+text, no audio) and answered like silence: ``turn_done`` only.
 
 Every frame passes ``app.voice.views.redact_for_view``: ``view=operator`` (the
 default) sees everything, ``view=rep`` never sees the decision trace, fees,
@@ -73,7 +76,7 @@ from app.llm.client import LLMUnavailable, queue_wait_scope
 from app.schemas.events import VIEWS, View
 from app.store.audit import AuditLog
 from app.voice.metrics_buf import LATENCY_BUFFER
-from app.voice.stt import transcribe
+from app.voice.stt import transcribe_screened
 from app.voice.views import redact_for_view
 
 router = APIRouter()
@@ -815,6 +818,7 @@ class _CallConnection:
             audit=self.audit,
             auto_ack=False,
         )
+        self.orch.on_speech_dropped = self._on_speech_dropped
         self.audit.append(
             self.call_id,
             "orchestrator",
@@ -897,7 +901,7 @@ class _CallConnection:
         assert self.orch is not None
         try:
             with llm_call_scope(self.call_id), queue_wait_scope() as stt_queue:
-                text, stt_ms = await transcribe(self.llm, wav)
+                heard = await transcribe_screened(self.llm, wav)
         except LLMUnavailable as e:
             self.audit.append(self.call_id, "stt", "stt_error", {"message": str(e)})
             async with self._send_lock:
@@ -905,8 +909,18 @@ class _CallConnection:
                 # Client set waiting=true on WAV send — unblock the UI.
                 await self._audit_tail_and_done()
             return
+        text, stt_ms = heard.text, heard.stt_ms
+        if heard.dropped is not None:
+            # Whisper hallucination (noise or our own TTS echo): same as silence.
+            self.audit.append(
+                self.call_id,
+                "stt",
+                "stt_dropped",
+                {"reason": heard.dropped, "text": heard.raw_text[:120]},
+            )
         if not text.strip():
-            await self._send_one({"type": "turn_done"})
+            async with self._send_lock:
+                await self._audit_tail_and_done()
             return
         # Show the rep line immediately; agent reply follows after NLU/NLG.
         async with self._send_lock:
@@ -984,6 +998,10 @@ class _CallConnection:
         async with self._send_lock:
             await _send(self.ws, _phase_payload(self.orch.session))
             await self._audit_tail_and_done()
+
+    async def _on_speech_dropped(self, ids: list[str]) -> None:
+        """Tell the client to cancel sentences a barge dropped (it may still be playing them)."""
+        await self._send_one({"type": "speech_dropped", "ids": ids})
 
     async def _on_timing(self, data: dict[str, Any]) -> None:
         vad_ms = data.get("vad_end_to_first_audio_ms")

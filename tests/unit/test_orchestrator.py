@@ -52,7 +52,10 @@ def _orch(tmp_path: Path, *, auto_ack: bool = True) -> tuple[Orchestrator, CallS
 
 @pytest.mark.asyncio
 async def test_barge_in_keeps_eager_counter(tmp_path: Path) -> None:
-    """offer_counter is eager; empty barge does not undo it; reject climbs ladder."""
+    """offer_counter is eager; a barge that heard it keeps it; reject climbs ladder.
+
+    (A barge that heard nothing rolls the turn back: ``test_unheard_barge.py``.)
+    """
     orch, session, audit = _orch(tmp_path, auto_ack=False)
     await orch.start()
     # Ack opening so phase advances.
@@ -93,8 +96,8 @@ async def test_barge_in_keeps_eager_counter(tmp_path: Path) -> None:
     assert isinstance(bp1, int)
     assert session.neg.counters_offered == [bp1]
 
-    # Barge-in: drop pending speech; offer_counter stays (idempotent).
-    await orch.on_barge_in([])
+    # Barge-in after the counter was heard: offer_counter stays (idempotent).
+    await orch.on_barge_in([counter1.sentences[0][0]])
     assert session.pending is None
     assert session.neg.counters_offered == [bp1]
 
@@ -335,6 +338,9 @@ async def test_confirm_bookkeeping_eager_before_ack(tmp_path: Path) -> None:
     assert session.agreed_bp == counter_bp
     assert session.last_eval is not None
 
+    # The console barges with the sentence in flight before a typed reply, so
+    # the confirm counts as heard and its eager bookkeeping stays.
+    await orch.on_barge_in([confirm.sentences[0][0]])
     wrap = await orch.on_creditor_text(
         "yes",
         oracle=TurnAnalysis(stance="accept"),

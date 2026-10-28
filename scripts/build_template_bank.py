@@ -11,9 +11,11 @@
 3. Split each reply into one candidate per line. Keep a candidate only if
    ``template_guard`` passes with that key's ids and ``bank_required`` ids,
    the text has no commitment / boundary phrase (``rendered_guard`` on the
-   placeholder-free text), and it does not misread a fact (``_MISREAD_RE``:
-   the offer total spoken as a per-payment amount). Duplicates are dropped;
-   at most ``--per-key`` are kept.
+   placeholder-free text), it does not misread a fact (``_MISREAD_RE``:
+   the offer total spoken as a per-payment amount), and with every payment
+   count at 1 it still reads right (``nlg.singular_count_template`` must leave
+   no plural after a count, so no line can say "1 monthly payments").
+   Duplicates are dropped; at most ``--per-key`` are kept.
 
 ``--acts`` builds only the H3 act keys and merges them into the
 existing bank: ``ACK`` for every ``ACK_TEMPLATES`` id set (prompt
@@ -54,8 +56,10 @@ from app.agent.guards import rendered_guard, template_guard  # noqa: E402
 from app.agent.nlg import (  # noqa: E402
     ACK_BANK_INTENT,
     ACK_TEMPLATES,
+    PAYMENT_COUNT_IDS,
     TEMPLATE_ONLY_INTENTS,
     answer_bank_intent,
+    singular_count_template,
 )
 from app.agent.nlg_bank import BankKey, action_placeholder_ids, bank_key  # noqa: E402
 from app.config import get_settings  # noqa: E402
@@ -96,9 +100,21 @@ _MISREAD_RE = re.compile(
 )
 
 
+def singular_ok(text: str, placeholders: tuple[str, ...]) -> bool:
+    """Whether the line reads right with every payment count at 1 (no "1 payments")."""
+    counts = PAYMENT_COUNT_IDS.intersection(placeholders)
+    one = singular_count_template(text, counts)
+    return not any(
+        re.search(r"\{" + re.escape(c) + r"\}(?:\s+\w+){0,2}\s+(?:payments|installments)\b", one)
+        for c in counts
+    )
+
+
 def template_ok(text: str, placeholders: tuple[str, ...]) -> bool:
     """Bank acceptance: template_guard, no commitment/boundary wording, no misread."""
     if not text or "\n" in text or _MISREAD_RE.search(text):
+        return False
+    if not singular_ok(text, placeholders):
         return False
     if not template_guard(text, set(placeholders), bank_required(placeholders)).ok:
         return False

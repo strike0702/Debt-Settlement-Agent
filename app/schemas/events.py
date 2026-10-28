@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import date
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -93,6 +94,24 @@ class TraceCushion(_Model):
 
     min_cushion_cents: int
     kept: bool
+
+
+class TraceInfeasible(_Model):
+    """PRIVATE: why the rep's ask has no payment plan (``feasibility.explain``).
+
+    Set on a rep turn whose ask is above the affordability curve. ``shortfall_cents``
+    is what the client's savings lack by ``binding_date`` (None for ``horizon``);
+    ``max_segments`` is the creditor's level limit, set only for ``segments``. Client
+    finances: operator only. The rep stream carries no ``turn_trace``, and
+    ``app.voice.views`` strips this field again by name.
+    """
+
+    reason: Literal["horizon", "floors", "segments", "cash_short", "fee_short"]
+    bp: int
+    binding_date: date | None
+    shortfall_cents: int | None
+    closest_k: int | None
+    max_segments: int | None = None
 
 
 class Decide(_Model):
@@ -223,6 +242,8 @@ class TurnTrace(_Model):
     term_alt: TraceTermAlt | None = None
     # Phase 59: soft client cushion on the plan-drafting turn (PRIVATE, operator only).
     cushion: TraceCushion | None = None
+    # Phase 60: why the rep's ask has no plan (PRIVATE, operator only).
+    infeasible_reason: TraceInfeasible | None = None
     nlg: NlgTrace
     spoken: list[SpokenSentence]
     timings: dict[str, float | None]

@@ -9,8 +9,11 @@ fees, the client's savings balances, rescue amounts, ``blocked.offending`` and
 private audit rows. It also drops the policy's reason code (the
 ``escalate.reason`` of a handoff and the ``reason`` of ``policy/decide`` rows),
 since codes such as ``above_accept_line`` or ``out_of_guardrail`` tell the rep
-why the agent stopped; the rep keeps the spoken ``escalate_reason``. Returns
-``None`` when a frame must not be sent at all.
+why the agent stopped; the rep keeps the spoken ``escalate_reason``. The
+why-infeasible explanation (``infeasible_reason``, Phase 60: the client's
+shortfall and the date it binds) is removed by name from any rep frame that
+carries it, on top of the dropped ``turn_trace``. Returns ``None`` when a frame
+must not be sent at all.
 
 Policy, NLG and the audit log are unchanged; this only filters what leaves the
 socket. Tested by running whole calls on the rep view and scanning every frame
@@ -78,6 +81,8 @@ _REP_AUDIT_EVENTS: dict[str, frozenset[str]] = {
     "stt": frozenset({"stt_error"}),
 }
 _REP_ROW_KEYS = ("date", "creditor_payment_cents")
+# Operator-only keys removed from every rep frame, whatever its type.
+_OPERATOR_ONLY_KEYS = ("infeasible_reason",)
 
 
 def is_private_audit(actor: str, event: str) -> bool:
@@ -108,7 +113,7 @@ def redact_for_view(payload: dict[str, Any], view: View) -> dict[str, Any] | Non
 
     if kind == "turn_trace":
         return None
-    out = dict(payload)
+    out = {k: v for k, v in payload.items() if k not in _OPERATOR_ONLY_KEYS}
     if kind == "eval":
         for key in ("max_bp", "program_fee_cents", "additional_funds"):
             out.pop(key, None)

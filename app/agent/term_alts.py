@@ -3,32 +3,99 @@
 When no payment plan fits the client's savings at the rep's ask, the agent
 offers one term change at a time instead of a lower price, in a fixed order:
 a later first payment date, then a lower minimum payment, then more payments
-(``find_next_term_alt``). Each ``find_alt_*`` scans candidate values through
-the feasibility engine: the closest value at which the ask fits, else the one
-with the highest ceiling, else ``None``. Alternatives already offered (``terms_countered`` keys
-from ``app.agent.policy``) are skipped. Called by the orchestrator while it
-builds the engine context for ``decide``; no LLM, no state changes.
+(``find_next_term_alt``). Each ``find_alt_*`` walks the engine's candidate grid
+(``feasibility.whatif.candidates``) and asks ``feasibility.whatif.what_if`` about
+each value: the closest value at which the ask fits, else the one with the
+highest ceiling, else ``None``. The engine reuses the base simulation for
+minimum-payment and payment-count changes and rebuilds it only for a new date;
+the ranking below is policy and stays here. Alternatives already offered
+(``terms_countered`` keys from ``app.agent.policy``) are skipped. Called by the
+orchestrator while it builds the engine context for ``decide``; no LLM, no
+state changes.
 """
 
 from __future__ import annotations
 
-from dataclasses import replace as dc_replace
 from datetime import date
 from typing import Any
 
-from app.adapter.engine_adapter import (
-    affordability,
-)
+from app.adapter.engine_adapter import scenario_problem
 from app.agent.policy import (
     field_already_countered,
     terms_counter_key,
 )
 from app.domain.scenario import CallScenario
-from feasibility.models import (
-    CreditorRules,
-    add_months,
-    end_of_month,
-)
+from feasibility.models import CreditorRules
+from feasibility.problem import Problem
+from feasibility.whatif import Field as TermField
+from feasibility.whatif import TermChange, WhatIf, candidates, changed_problem, what_if
+
+Rank = tuple[int, int, int]
+
+
+def _ask_ok(w: WhatIf, ask_bp: int | None) -> bool:
+    # On the 1% scan grid, like the affordability curve: an off-grid ask never fits.
+    return ask_bp is None or (ask_bp % 100 == 0 and 100 <= ask_bp <= 10000 and w.fits(ask_bp))
+
+
+def _rank(ask_ok: bool, dist: int, max_bp: int) -> Rank:
+    # Ask-feasible: closest value. Otherwise the highest ceiling, then closest.
+    return (0, dist, -max_bp) if ask_ok else (1, -max_bp, dist)
+
+
+def _alt_first_payment_date(
+    problem: Problem, *, ask_bp: int | None, requested: date, already: set[str]
+) -> date | None:
+    best: date | None = None
+    best_rank: Rank | None = None
+    for change in candidates(problem, "first_payment_date"):
+        cand = change.value
+        assert isinstance(cand, date)
+        if cand.isoformat() in already:
+            continue
+        w = what_if(problem, change)
+        if w.max_bp is None:
+            continue
+        rank = _rank(_ask_ok(w, ask_bp), abs((cand - requested).days), w.max_bp)
+        if best_rank is None or rank < best_rank:
+            best, best_rank = cand, rank
+    return best
+
+
+def _alt_numeric(
+    problem: Problem,
+    field: TermField,
+    *,
+    ask_bp: int | None,
+    current: int,
+    baseline_max_bp: int | None,
+) -> int | None:
+    """Shared min-payment / max-payments walk: candidates go away from ``current``."""
+    best: int | None = None
+    best_rank: Rank | None = None
+    for change in candidates(problem, field):
+        cand = int(change.value)  # type: ignore[arg-type]
+        w = what_if(problem, change)
+        if w.max_bp is None:
+            continue
+        ask_ok = _ask_ok(w, ask_bp)
+        improved = baseline_max_bp is None or w.max_bp > baseline_max_bp
+        if not (ask_ok or improved):
+            continue
+        rank = _rank(ask_ok, abs(cand - current), w.max_bp)
+        if best_rank is None or rank < best_rank:
+            best, best_rank = cand, rank
+            # The grid walks away from current, so the first ask-ok value is closest.
+            if ask_ok:
+                return best
+    return best
+
+
+def _at_current(problem: Problem, field: TermField, current: int) -> Problem:
+    """``problem`` with ``field`` at ``current`` (the caller's belief value)."""
+    if getattr(problem.rules, field) == current:
+        return problem
+    return changed_problem(problem, TermChange(field, current))
 
 
 def find_alt_first_payment_date(
@@ -47,45 +114,8 @@ def find_alt_first_payment_date(
     while a later month clears most of the ask. Never re-offers an ISO
     date in ``already``.
     """
-    client = scenario.client
-    start = end_of_month(max(client.as_of_date, client.first_draft_date))
-    end = client.last_draft_date
-    if start > end:
-        return None
-
-    candidates: list[date] = []
-    cur = start
-    # Cap scans (~24 months) so a bad fixture cannot hang the turn.
-    for _ in range(24):
-        if cur > end:
-            break
-        candidates.append(cur)
-        nxt = end_of_month(add_months(cur, 1))
-        if nxt <= cur:
-            break
-        cur = nxt
-
-    best: date | None = None
-    best_rank: tuple[int, int, int] | None = None
-    for cand in candidates:
-        iso = cand.isoformat()
-        if iso in already:
-            continue
-        aff = affordability(scenario, rules, cand)
-        if aff.max_bp is None:
-            continue
-        ask_ok = ask_bp is None or ask_bp in aff.feasible_bps
-        dist = abs((cand - requested).days)
-        # Ask-feasible: closest date. Otherwise a later month with a much
-        # higher ceiling must beat the current month's token curve.
-        if ask_ok:
-            rank = (0, dist, -aff.max_bp)
-        else:
-            rank = (1, -aff.max_bp, dist)
-        if best is None or best_rank is None or rank < best_rank:
-            best = cand
-            best_rank = rank
-    return best
+    problem = scenario_problem(scenario, rules, requested)
+    return _alt_first_payment_date(problem, ask_bp=ask_bp, requested=requested, already=already)
 
 
 def find_alt_min_payment_cents(
@@ -108,36 +138,11 @@ def find_alt_min_payment_cents(
     unreachable), only candidates that make the ask feasible or raise
     ``max_bp`` above the baseline count — avoids re-offering a useless cut.
     """
-    floor = 1000
-    if current <= floor:
-        return None
-
-    best: int | None = None
-    # ask_ok → (0, distance, -max_bp); else → (1, -max_bp, distance)
-    best_rank: tuple[int, int, int] | None = None
-    cand = current - 1000
-    scanned = 0
-    while cand >= floor and scanned < 20:
-        trial = dc_replace(rules, min_payment_cents=cand)
-        aff = affordability(scenario, trial, fpd)
-        if aff.max_bp is not None:
-            ask_ok = ask_bp is None or ask_bp in aff.feasible_bps
-            improved = baseline_max_bp is None or aff.max_bp > baseline_max_bp
-            if ask_ok or improved:
-                dist = current - cand
-                if ask_ok:
-                    rank = (0, dist, -aff.max_bp)
-                else:
-                    rank = (1, -aff.max_bp, dist)
-                if best is None or best_rank is None or rank < best_rank:
-                    best = cand
-                    best_rank = rank
-                    # Closest ask-ok wins; scanning high→low so first is enough.
-                    if ask_ok:
-                        return best
-        cand -= 1000
-        scanned += 1
-    return best
+    problem = _at_current(scenario_problem(scenario, rules, fpd), "min_payment_cents", current)
+    return _alt_numeric(
+        problem, "min_payment_cents", ask_bp=ask_bp, current=current,
+        baseline_max_bp=baseline_max_bp,
+    )
 
 
 def find_alt_max_payments(
@@ -159,45 +164,11 @@ def find_alt_max_payments(
     When ``baseline_max_bp`` is set, only candidates that make the ask
     feasible or raise ``max_bp`` above the baseline count.
     """
-    ceiling = 60
-    if current >= ceiling:
-        return None
-
-    best: int | None = None
-    # ask_ok → (0, distance, -max_bp); else → (1, -max_bp, distance)
-    best_rank: tuple[int, int, int] | None = None
-    cand = current + 1
-    scanned = 0
-    while cand <= ceiling and scanned < 20:
-        # Keep "no token limit" semantics when token pays tracked max_payments.
-        new_token = (
-            cand if rules.max_token_pays == rules.max_payments else rules.max_token_pays
-        )
-        trial = dc_replace(
-            rules,
-            max_payments=cand,
-            max_terms=cand,
-            max_token_pays=new_token,
-        )
-        aff = affordability(scenario, trial, fpd)
-        if aff.max_bp is not None:
-            ask_ok = ask_bp is None or ask_bp in aff.feasible_bps
-            improved = baseline_max_bp is None or aff.max_bp > baseline_max_bp
-            if ask_ok or improved:
-                dist = cand - current
-                if ask_ok:
-                    rank = (0, dist, -aff.max_bp)
-                else:
-                    rank = (1, -aff.max_bp, dist)
-                if best is None or best_rank is None or rank < best_rank:
-                    best = cand
-                    best_rank = rank
-                    # Lowest ask-ok wins; scanning low→high so first is enough.
-                    if ask_ok:
-                        return best
-        cand += 1
-        scanned += 1
-    return best
+    problem = _at_current(scenario_problem(scenario, rules, fpd), "max_payments", current)
+    return _alt_numeric(
+        problem, "max_payments", ask_bp=ask_bp, current=current,
+        baseline_max_bp=baseline_max_bp,
+    )
 
 
 def find_next_term_alt(
@@ -214,29 +185,26 @@ def find_next_term_alt(
     """Next staggered non-price alt: FPD → lower min → higher max_payments.
 
     FPD is one try per field. Min / max may progress to a better value when
-    a prior alt only unlocked a ceiling still below the ask.
+    a prior alt only unlocked a ceiling still below the ask. One engine
+    ``Problem`` at ``fpd`` serves all three searches.
     """
+    problem = scenario_problem(scenario, rules, fpd)
     if not field_already_countered(terms_countered, "first_payment_date"):
         already_iso = {
             k.split(":", 1)[1]
             for k in terms_countered
             if k.startswith("first_payment_date:")
         }
-        alt = find_alt_first_payment_date(
-            scenario,
-            rules,
-            ask_bp=ask_bp,
-            requested=fpd,
-            already=already_iso,
+        alt = _alt_first_payment_date(
+            problem, ask_bp=ask_bp, requested=fpd, already=already_iso
         )
         if alt is not None and alt != fpd:
             return ("first_payment_date", alt)
 
-    alt_min = find_alt_min_payment_cents(
-        scenario,
-        rules,
+    alt_min = _alt_numeric(
+        _at_current(problem, "min_payment_cents", min_payment_cents),
+        "min_payment_cents",
         ask_bp=ask_bp,
-        fpd=fpd,
         current=min_payment_cents,
         baseline_max_bp=baseline_max_bp,
     )
@@ -245,11 +213,10 @@ def find_next_term_alt(
         if key not in terms_countered:
             return ("min_payment_cents", alt_min)
 
-    alt_max = find_alt_max_payments(
-        scenario,
-        rules,
+    alt_max = _alt_numeric(
+        _at_current(problem, "max_payments", max_payments),
+        "max_payments",
         ask_bp=ask_bp,
-        fpd=fpd,
         current=max_payments,
         baseline_max_bp=baseline_max_bp,
     )

@@ -1,8 +1,9 @@
 /**
  * Minimum client cushion (Phase 59 follow-up): the money field shows only in the
  * Debt negotiator view before a call, is pre-filled with the scenario's firm default,
- * sends an edited value in `start.min_cushion_cents` (this call only), blocks a start
- * on an invalid value, and the decision trace says whether the plan kept it.
+ * accepts a value on Enter or blur (the label beside it shows the accepted amount),
+ * sends exactly that in `start.min_cushion_cents` (this call only), keeps the last
+ * accepted value on an invalid entry, and the decision trace says whether the plan kept it.
  */
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -95,26 +96,64 @@ describe("Minimum client cushion field", () => {
     expect(field()).toBeNull();
   });
 
-  it("sends an edited value in start for this call (autoplay too)", async () => {
+  const label = () => screen.getByTestId("cushion-accepted");
+
+  it("shows the firm default as the accepted value, politely announced", async () => {
+    render(<App />);
+    await screen.findByDisplayValue("100");
+    expect(label()).toHaveTextContent("Firm default: $100.00");
+    expect(label()).toHaveAttribute("aria-live", "polite");
+    expect(label().querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("accepts on Enter and sends exactly the accepted value (autoplay too)", async () => {
     render(<App />);
     await screen.findByDisplayValue("100");
     fireEvent.change(field()!, { target: { value: "250.50" } });
+    // Typing alone does not change the label (no live flicker).
+    expect(label()).toHaveTextContent("Firm default: $100.00");
+    fireEvent.keyDown(field()!, { key: "Enter" });
+    expect(label()).toHaveTextContent("$250.50 for this call");
     fireEvent.click(screen.getByRole("button", { name: /Watch a call/ }));
     const ws = FakeSocket.all.at(-1)!;
     act(() => ws.open());
     expect(startMsg(ws)).toMatchObject({ type: "start", autoplay: true, min_cushion_cents: 25050 });
   });
 
-  it("blocks a start on an invalid amount and says why", async () => {
+  it("accepts on blur", async () => {
     render(<App />);
     await screen.findByDisplayValue("100");
+    fireEvent.change(field()!, { target: { value: "75" } });
+    fireEvent.blur(field()!);
+    expect(label()).toHaveTextContent("$75.00 for this call");
+    // Back to the firm default reads as the default and is not sent.
+    fireEvent.change(field()!, { target: { value: "100" } });
+    fireEvent.blur(field()!);
+    expect(label()).toHaveTextContent("Firm default: $100.00");
+    fireEvent.click(screen.getByRole("button", { name: /Start call/ }));
+    const ws = FakeSocket.all.at(-1)!;
+    act(() => ws.open());
+    expect(startMsg(ws)).toEqual({ type: "start", scenario_id: "easy_deal" });
+  });
+
+  it("keeps the last accepted value on an invalid entry and shows the error", async () => {
+    render(<App />);
+    await screen.findByDisplayValue("100");
+    fireEvent.change(field()!, { target: { value: "250" } });
+    fireEvent.keyDown(field()!, { key: "Enter" });
     fireEvent.change(field()!, { target: { value: "6000" } });
+    fireEvent.keyDown(field()!, { key: "Enter" });
+    fireEvent.blur(field()!);
+    expect(label()).toHaveTextContent("$250.00 for this call");
     const tip = screen.getByRole("tooltip");
     expect(tip).toHaveTextContent("Use $5,000 or less.");
     expect(tip.className).not.toMatch(/\bhidden\b/); // an error stays open
     expect(field()).toHaveAccessibleDescription("Use $5,000 or less.");
-    expect(screen.getByRole("button", { name: /Start call/ })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Watch a call/ })).toBeDisabled();
+    // Start still goes out with the accepted value the label shows.
+    fireEvent.click(screen.getByRole("button", { name: /Start call/ }));
+    const ws = FakeSocket.all.at(-1)!;
+    act(() => ws.open());
+    expect(startMsg(ws)).toMatchObject({ min_cushion_cents: 25000 });
   });
 
   it("draws no focus ring or outline (the caret shows focus)", async () => {
@@ -139,7 +178,7 @@ describe("Minimum client cushion field", () => {
     expect(tip.className).toMatch(/\bhidden\b/);
     expect(tip.className).toMatch(/group-hover:block/);
     expect(tip.className).toMatch(/group-focus-within:block/);
-    // No help text sits in the layout under the field.
+    // No help text sits in the layout under the field (the label is beside it).
     expect(tip.className).toMatch(/\babsolute\b/);
     expect(screen.getByTestId("cushion-field").querySelector("p")).toBeNull();
   });

@@ -20,8 +20,10 @@
  *
  * Minimum client cushion: the Debt negotiator view shows `CushionField` before a
  * call, pre-filled with the scenario's firm default (`brief.firm.min_cushion_cents`,
- * or a custom case's `firm.min_cushion_cents`). An edited value is sent as
- * `start.min_cushion_cents` for that call only; it is never stored. The Creditor rep
+ * or a custom case's `firm.min_cushion_cents`). The typed text is accepted on Enter or
+ * blur when it parses; the accepted value (shown in the field's label) is what is sent
+ * as `start.min_cushion_cents` for that call only, and only when it differs from the
+ * firm default. It is never stored. The Creditor rep
  * view never shows it.
  *
  * Custom test cases: "Add a test case" opens `CaseEditor`; saved
@@ -67,7 +69,7 @@ import {
   type ScenarioSource,
   serverId,
 } from "@/lib/customCases";
-import { formatCushion, parseCushion } from "@/lib/cushion";
+import { formatCushion } from "@/lib/cushion";
 import { type Lens, viewFor } from "@/lib/lens";
 import { micEventFor, micReducer, type MicState } from "@/lib/mic";
 import { endedLine } from "@/lib/outcome";
@@ -287,16 +289,14 @@ function LiveApp() {
   const brief = useScenarioBrief(source, lens, source !== null);
 
   // ------------------------------------------------ minimum client cushion (this call only)
-  const [cushionEdit, setCushionEdit] = useState<{ id: string; text: string } | null>(null);
+  // `text` is what the operator typed; `accepted` is the last valid value committed on
+  // Enter or blur. Only `accepted` is ever sent.
+  const [cushionEdit, setCushionEdit] = useState<{ id: string; text: string; accepted: number } | null>(null);
   const firmCushion = custom ? customCushion(custom.payload) : (brief?.firm.min_cushion_cents ?? 0);
   const edited = cushionEdit?.id === selected;
   const cushionText = edited ? cushionEdit.text : formatCushion(firmCushion);
-  const cushionParsed = parseCushion(cushionText);
-  const cushionInvalid = lens === "operator" && "error" in cushionParsed;
-  const cushionOverride =
-    lens === "operator" && edited && "cents" in cushionParsed && cushionParsed.cents !== firmCushion
-      ? cushionParsed.cents
-      : undefined;
+  const cushionAccepted = edited ? cushionEdit.accepted : firmCushion;
+  const cushionOverride = lens === "operator" && cushionAccepted !== firmCushion ? cushionAccepted : undefined;
 
   const { start } = call;
   const startCall = useCallback(
@@ -405,7 +405,7 @@ function LiveApp() {
         if (!inCall || over) setSelected(id);
       }}
       onWatch={() => startCall(true)}
-      watchDisabled={!scenario || call.status === "connecting" || custom !== null || cushionInvalid}
+      watchDisabled={!scenario || call.status === "connecting" || custom !== null}
       watchDisabledReason={custom ? CUSTOM_WATCH_REASON : undefined}
       watchLabel={call.autoplay && call.events.length > 0 ? "Watch again" : "Watch a call"}
       playing={call.autoplay && call.events.length > 0}
@@ -434,7 +434,13 @@ function LiveApp() {
       actions={
         <>
           {lens === "operator" && !callRunning && (
-            <CushionField text={cushionText} onText={(text) => setCushionEdit({ id: selected, text })} />
+            <CushionField
+              text={cushionText}
+              accepted={cushionAccepted}
+              firmDefault={firmCushion}
+              onText={(text) => setCushionEdit({ id: selected, text, accepted: cushionAccepted })}
+              onAccept={(cents) => setCushionEdit({ id: selected, text: cushionText, accepted: cents })}
+            />
           )}
           {call.lastCallId && (
             <a
@@ -450,7 +456,7 @@ function LiveApp() {
               <PhoneOff className="h-4 w-4" aria-hidden /> End call
             </Button>
           ) : (
-            <Button onClick={() => startCall(false)} disabled={!scenario || cushionInvalid}>
+            <Button onClick={() => startCall(false)} disabled={!scenario}>
               <PhoneCall className="h-4 w-4" aria-hidden /> Start call
             </Button>
           )}

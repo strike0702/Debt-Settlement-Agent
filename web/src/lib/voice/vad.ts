@@ -14,11 +14,7 @@ const VAD_ESM = `https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@${VAD_WEB_VERSI
 const VAD_ASSETS = `https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@${VAD_WEB_VERSION}/dist/`;
 const ONNX_WASM = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ONNX_RUNTIME_VERSION}/dist/`;
 
-/**
- * The detector's own settings: the sensitivity while the agent is silent, so
- * short answers ("No", "$35") still register. frameSamples = 1536 at 16 kHz
- * ≈ 96 ms per frame.
- */
+/** frameSamples = 1536 at 16 kHz ≈ 96 ms per frame. */
 export const VAD_OPTIONS = {
   // The 0.5 default is too deaf for quiet laptop mics.
   positiveSpeechThreshold: 0.35,
@@ -32,39 +28,11 @@ export const VAD_OPTIONS = {
   minSpeechFrames: 3,
 } as const;
 
-/** Sensitivity while the agent is silent (the detector's own thresholds). */
-export const LISTEN_SENSITIVITY = {
-  positiveSpeechThreshold: VAD_OPTIONS.positiveSpeechThreshold,
-  minSpeechFrames: VAD_OPTIONS.minSpeechFrames,
-} as const;
-
-/**
- * Evidence needed to barge while the agent is speaking. Chrome's echo
- * cancellation does not remove speechSynthesis output, so the agent's own
- * voice reaches the mic at moderate speech probability; a rep talking over it
- * scores higher and longer. The engine counts frames from `onFrameProcessed`:
- * a frame at or above `positiveSpeechThreshold` adds one, a frame below
- * `negativeSpeechThreshold` resets the run, frames in between hold it.
- * `minSpeechFrames` × 96 ms ≈ 480 ms of strong speech barges.
- */
-export const BARGE_SENSITIVITY = {
-  positiveSpeechThreshold: 0.8,
-  negativeSpeechThreshold: 0.5,
-  minSpeechFrames: 5,
-} as const;
-
 export const MIC_CONSTRAINTS: MediaStreamConstraints = {
   audio: { channelCount: 1, echoCancellation: true, autoGainControl: true, noiseSuppression: true },
 };
 
-/** vad-web's per-frame speech probabilities. */
-export interface SpeechProbabilities {
-  isSpeech: number;
-  notSpeech: number;
-}
-
 export interface VadCallbacks {
-  onFrameProcessed: (probs: SpeechProbabilities) => void;
   onSpeechStart: () => void;
   onVADMisfire: () => void;
   onSpeechEnd: (audio: Float32Array) => void;

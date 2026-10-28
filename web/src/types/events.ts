@@ -174,6 +174,7 @@ export interface TurnTraceEvent {
   belief_changes: TraceBeliefChange[];
   counter_bp: number | null;
   creditor_text: string | null;
+  cushion?: TraceCushion | null;
   decide: Decide;
   dropped: DroppedTerm[];
   needs_info?: string[] | null;
@@ -209,6 +210,16 @@ export interface TraceBeliefChange {
   old_value: number | string | number[][] | null;
   quote?: string | null;
   turn: number;
+}
+/**
+ * PRIVATE: the firm's minimum client cushion and whether the drafted plan kept it.
+ *
+ * Set only on the turn that drafts a plan (CONFIRM) when a cushion is set. Operator
+ * only: the rep stream carries no ``turn_trace``.
+ */
+export interface TraceCushion {
+  kept: boolean;
+  min_cushion_cents: number;
 }
 /**
  * Policy move: raw ``reason`` code, its ``REASON_TEXT`` key and sentence.
@@ -337,6 +348,7 @@ export interface SpeechDroppedEvent {
 export interface StartEvent {
   autoplay?: boolean;
   autoplay_pause_ms?: number | null;
+  min_cushion_cents?: number | null;
   scenario?: string | null;
   scenario_id?: string | null;
   scenario_payload?: {

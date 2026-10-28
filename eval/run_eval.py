@@ -38,7 +38,9 @@ records models, call share, seed, git sha, settings. Each scenario's LLM calls
 non-zero when ``eval/thresholds.yaml`` fails. Per-call results also carry the
 rep's haggle style, ``ladder_branches`` (from the audit) and ``sim_rewrite``
 (LLM rewrite attempts and draft fallbacks by reason); both are summarised,
-informational only. Does not import voice/UI code.
+informational only. ``min_cushion_cents`` (Phase 59, PRIVATE, report only) is the
+client's cushion at the agreed price for the drafted plan and for both engine
+objectives (docs/ENGINE.md). Does not import voice/UI code.
 """
 
 from __future__ import annotations
@@ -53,7 +55,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from app.adapter.engine_adapter import evaluate
+from app.adapter.engine_adapter import engine_mode, evaluate
 from app.adapter.validator import validate
 from app.agent.guards import rendered_guard
 from app.agent.numbers import extract_tokens
@@ -75,6 +77,8 @@ from eval.metrics import (
     load_thresholds,
     write_summaries,
 )
+from feasibility.objectives import schedule_cushion
+from feasibility.problem import build_problem
 from sim.creditor import CreditorPolicy, PhrasingMode
 from sim.scenarios import Scenario, TrueRules, generate, to_creditor_rules
 
@@ -113,6 +117,8 @@ def _private_values(scenario: Scenario) -> set[tuple[str, int | date]]:
     }
     for entry in client.ledger:
         out.add(("money", entry.amount_cents))
+    if scenario.call.min_cushion_cents > 0:  # firm client-protection policy
+        out.add(("money", scenario.call.min_cushion_cents))
     return out
 
 
@@ -254,6 +260,45 @@ def _agreement_valid(
         tr.first_payment_date,
     )
     return violations == []
+
+
+def _cushions(
+    scenario: Scenario, session: CallSession, truth_rules: TrueRules | None
+) -> dict[str, int] | None:
+    """PRIVATE, report only: client cushion at the agreed price, per engine objective.
+
+    Cushion is the lowest window balance with the whole program fee held back
+    (docs/ENGINE.md). ``agent`` is the drafted schedule; ``fee_first`` /
+    ``client_first`` re-run the engine at the agreed bp under the true rules.
+    None when there is no drafted, feasible agreement.
+    """
+    if session.agreement is None or session.agreed_bp is None:
+        return None
+    if session.last_eval is None or session.last_eval.rows is None:
+        return None
+    tr = truth_rules or scenario.true_rules
+    rules = to_creditor_rules(
+        tr,
+        program_fee_pct=scenario.call.program_fee_pct,
+        bank_fee_cents=scenario.call.bank_fee_cents,
+    )
+    call = scenario.call
+    _, policy = engine_mode()
+    problem = build_problem(
+        call.client, rules, tr.first_payment_date,
+        creditor_balance_cents=call.creditor_balance_cents,
+        original_balance_cents=call.original_balance_cents,
+        fee_policy=policy,
+    )
+    drafted = [r.creditor_payment_cents for r in session.last_eval.rows if r.creditor_payment_cents]
+    out = {"agent": schedule_cushion(problem, drafted)}
+    for objective in ("fee_first", "client_first"):
+        res = evaluate(call, rules, session.agreed_bp, tr.first_payment_date, objective=objective)
+        if res.rows is None:
+            return None
+        pays = [r.creditor_payment_cents for r in res.rows if r.creditor_payment_cents]
+        out[objective] = schedule_cushion(problem, pays)
+    return out
 
 
 def _surplus(scenario: Scenario, agreed_bp: int | None) -> float | None:
@@ -510,6 +555,7 @@ async def run_one_scenario(
         "unverified_figures_spoken": unverified,
         "sensitive_leaks": leaks,
         "surplus_captured": _surplus(scenario, session.agreed_bp),
+        "min_cushion_cents": _cushions(scenario, session, truth),
         "counters_spoken": intents.count(Intent.COUNTER.value),
         "max_counters": settings.max_counters,
         "identical_consecutive_agent_moves": identical,

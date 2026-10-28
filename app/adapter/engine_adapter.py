@@ -1,11 +1,24 @@
-"""Bridge between belief/scenario and the vendored feasibility engine.
+"""Bridge between belief/scenario and the feasibility engine (owned v2).
 
 Builds ``CreditorRules`` from usable belief fields (raises ``NeedsInfo`` when
 required terms are missing), runs ``evaluate`` / ``affordability``, and tags
 returned amounts as PUBLIC or PRIVATE ``Fact``s. Settlement percentages are
-integer **basis points** (bp): 100 bp = 1%, 4500 bp = 45%, 10000 bp = 100%.
-Convert with ``bp_to_decimal(bp)`` → ``Decimal(bp) / 10000`` for the engine.
+integer **basis points** (bp): 100 bp = 1%, 4500 bp = 45%, 10000 bp = 100%,
+passed to the engine as ``Offer.settlement_bp``. The firm's fractional
+``program_fee_pct`` is converted to ``CreditorRules.program_fee_bp`` exactly once,
+in ``build_rules`` (values that are not whole bp are rejected).
 Never use float for money math; cents and bp stay ints end-to-end.
+
+Which legal plan the engine returns follows ``ENGINE_OBJECTIVE`` and
+``ENGINE_FEE_POLICY`` (``app.config``; defaults ``fee_first`` / ``front_loaded``,
+docs/ENGINE.md), unless a caller passes them. Both are part of the affordability
+cache key. ``feasibility.engine.evaluate_offer`` (the take-home wrapper) is not used
+here: it is always ``fee_first`` + ``front_loaded``.
+
+``scenario.min_cushion_cents`` (firm default, or the call's override) is the engine's
+soft client cushion: ``evaluate`` reports ``cushion_kept`` and tags the cushion as a
+PRIVATE fact (blocklisted, never in NLG). The affordability scan ignores it: the
+cushion never changes which prices are affordable.
 """
 
 from __future__ import annotations
@@ -15,14 +28,17 @@ from datetime import date
 from functools import lru_cache
 from typing import Any, Protocol
 
+from app.config import get_settings
 from app.domain.belief import BeliefState, TermStatus
 from app.domain.facts import Fact, FactSet
 from app.domain.fields import FIELD_REGISTRY, REQUIRED_FIELDS
 from app.domain.scenario import CallScenario
 from app.domain.units import bp_to_decimal
-from feasibility.engine import AdditionalFunds, Result, ScheduleRow, evaluate_offer
-from feasibility.models import CreditorRules, Offer
-from feasibility.util import round_half_up
+from feasibility.engine import AdditionalFunds, Result, ScheduleRow, is_feasible
+from feasibility.engine import evaluate as engine_evaluate
+from feasibility.models import CreditorRules
+from feasibility.problem import build_problem
+from feasibility.util import fraction_to_bp, round_half_up
 
 
 class FirmFees(Protocol):
@@ -52,6 +68,9 @@ class EvalSummary:
     facts: FactSet
     offer_total_cents: int
     program_fee_cents: int
+    # Soft client cushion used for this run (0 = none) and whether the plan kept it.
+    min_cushion_cents: int = 0
+    cushion_kept: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -77,7 +96,8 @@ def build_rules(belief: BeliefState, firm: FirmFees) -> CreditorRules:
 
     Only KNOWN/ASSUMED fields are usable. Raises NeedsInfo if any *required*
     field (max_payments, min_payment_cents, payment_structure) is not usable.
-    Firm fees are never asked of the rep — they come from firm.json.
+    Firm fees are never asked of the rep — they come from firm.json. Raises
+    ``ValueError`` if ``firm.program_fee_pct`` is not a whole basis point.
     """
     missing = [
         name
@@ -126,7 +146,18 @@ def build_rules(belief: BeliefState, firm: FirmFees) -> CreditorRules:
         is_ballooning_allowed=balloon,
         max_segments=max_segments,
         bank_fee_cents=int(firm.bank_fee_cents),
-        program_fee_pct=float(firm.program_fee_pct),
+        program_fee_bp=fraction_to_bp(firm.program_fee_pct),
+    )
+
+
+def engine_mode(
+    objective: str | None = None, fee_policy: str | None = None
+) -> tuple[str, str]:
+    """(objective, fee policy): the given values, else the ``ENGINE_*`` settings."""
+    settings = get_settings()
+    return (
+        objective or settings.engine_objective,
+        fee_policy or settings.engine_fee_policy,
     )
 
 
@@ -146,25 +177,43 @@ def evaluate(
     first_payment_date: date,
     *,
     assumed: list[str] | None = None,
+    objective: str | None = None,
+    fee_policy: str | None = None,
 ) -> EvalSummary:
     """Run the engine at one settlement percentage (`bp` basis points).
 
-    Builds an Offer, calls ``evaluate_offer``, and wraps the result with a
-    FactSet whose visibility marks each fact speakable or client-private.
+    Builds a ``Problem`` under the engine mode (``engine_mode``), evaluates it, and
+    wraps the result with a FactSet whose visibility marks each fact speakable or
+    client-private.
     """
-    settlement = bp_to_decimal(bp)  # e.g. 4500 -> Decimal("0.45")
-    offer = Offer(
-        creditor=scenario.creditor,
+    objective, fee_policy = engine_mode(objective, fee_policy)
+    problem = build_problem(
+        scenario.client,
+        rules,
+        first_payment_date,
         creditor_balance_cents=scenario.creditor_balance_cents,
         original_balance_cents=scenario.original_balance_cents,
-        settlement_pct=float(settlement),
-        first_payment_date=first_payment_date,
+        fee_policy=fee_policy,
+        min_cushion_cents=scenario.min_cushion_cents,
     )
-    result = evaluate_offer(scenario.client, offer, rules)
-    # Recompute totals with Decimal half-up so Fact values match engine money rules.
-    offer_total = round_half_up(settlement, scenario.creditor_balance_cents)
-    program_fee = round_half_up(rules.program_fee_pct, scenario.original_balance_cents)
+    result = engine_evaluate(problem, bp, objective)
+    # Same Decimal half-up as the engine, so Fact values match its money rules.
+    offer_total = round_half_up(bp_to_decimal(bp), scenario.creditor_balance_cents)
+    program_fee = round_half_up(
+        bp_to_decimal(rules.program_fee_bp), scenario.original_balance_cents
+    )
     facts = _facts_from_result(result, offer_total, first_payment_date)
+    if scenario.min_cushion_cents > 0:
+        # Client-protection policy: PRIVATE, so it is blocklisted and never reaches NLG.
+        facts.add(
+            Fact(
+                id="min_cushion",
+                kind="money",
+                value=scenario.min_cushion_cents,
+                visibility="PRIVATE",
+                source="engine",
+            )
+        )
     return EvalSummary(
         feasible=result.feasible,
         shape=result.pay_shape_used,
@@ -174,6 +223,8 @@ def evaluate(
         facts=facts,
         offer_total_cents=offer_total,
         program_fee_cents=program_fee,
+        min_cushion_cents=scenario.min_cushion_cents,
+        cushion_kept=result.cushion_kept,
     )
 
 
@@ -306,13 +357,8 @@ def _facts_from_result(
 
 
 def _rules_tuple(rules: CreditorRules) -> tuple[Any, ...]:
-    """Hashable CreditorRules for lru_cache keys.
-
-    ``program_fee_pct`` is stored as integer basis points (not float) so
-    tiny float drift cannot miss or falsely hit the affordability cache.
-    """
+    """Hashable CreditorRules for lru_cache keys (all ints/bools; fee in bp)."""
     tiers = tuple((int(a), int(b)) for a, b in rules.min_payment_tiers)
-    fee_bp = int(round(float(rules.program_fee_pct) * 10_000))
     return (
         rules.max_terms,
         rules.max_payments,
@@ -323,7 +369,7 @@ def _rules_tuple(rules: CreditorRules) -> tuple[Any, ...]:
         rules.is_ballooning_allowed,
         rules.max_segments,
         rules.bank_fee_cents,
-        fee_bp,
+        rules.program_fee_bp,
     )
 
 
@@ -354,14 +400,22 @@ def affordability(
     scenario: CallScenario,
     rules: CreditorRules,
     fpd: date,
+    *,
+    objective: str | None = None,
+    fee_policy: str | None = None,
 ) -> Affordability:
-    """Scan every 100 bp from 100..10000; cache by (scenario, rules, fpd).
+    """Scan every 100 bp from 100..10000; cache by (scenario, rules, fpd, engine mode).
 
-    Callers on the async path should wrap with ``asyncio.to_thread``.
-    Do not assume the feasible set is a single contiguous band.
+    Builds one engine ``Problem`` (cadence, floors, base simulation) per scan and
+    reuses it for all 100 points. Callers on the async path should wrap with ``asyncio.to_thread``.
+    Do not assume the feasible set is a single contiguous band. Feasibility does not
+    depend on the objective or fee policy (docs/ENGINE.md), so each point is a
+    feasibility check (``engine.is_feasible``), not a ranked evaluate. Both are still
+    in the key, so a cached scan always matches the mode that produced it.
     """
+    objective, fee_policy = engine_mode(objective, fee_policy)
     return _affordability_cached(
-        _scenario_key(scenario), _rules_tuple(rules), fpd.isoformat()
+        _scenario_key(scenario), _rules_tuple(rules), fpd.isoformat(), objective, fee_policy
     )
 
 
@@ -370,16 +424,25 @@ def _affordability_cached(
     scenario_key: tuple[Any, ...],
     rules_tuple: tuple[Any, ...],
     fpd_iso: str,
+    objective: str,
+    fee_policy: str,
 ) -> Affordability:
     # Rebuild objects from the hashable key, then evaluate each grid point.
     scenario = _scenario_from_key(scenario_key)
     rules = _rules_from_tuple(rules_tuple)
     fpd = date.fromisoformat(fpd_iso)
+    problem = build_problem(
+        scenario.client,
+        rules,
+        fpd,
+        creditor_balance_cents=scenario.creditor_balance_cents,
+        original_balance_cents=scenario.original_balance_cents,
+        fee_policy=fee_policy,
+    )
     curve: list[bool] = []
     feasible_bps: list[int] = []
     for bp in range(100, 10001, 100):  # 1%, 2%, ..., 100%
-        summary = evaluate(scenario, rules, bp, fpd)
-        ok = summary.feasible
+        ok = is_feasible(problem, bp)  # same answer as engine_evaluate(...).feasible
         curve.append(ok)
         if ok:
             feasible_bps.append(bp)
@@ -402,7 +465,7 @@ def _rules_from_tuple(t: tuple[Any, ...]) -> CreditorRules:
         is_ballooning_allowed=bool(t[6]),
         max_segments=int(t[7]),
         bank_fee_cents=int(t[8]),
-        program_fee_pct=float(t[9]) / 10_000.0,
+        program_fee_bp=int(t[9]),
     )
 
 

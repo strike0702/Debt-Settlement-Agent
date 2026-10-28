@@ -21,7 +21,9 @@ Every frame passes ``app.voice.views.redact_for_view``: ``view=operator`` (the
 default) sees everything, ``view=rep`` never sees the decision trace, fees,
 balances, rescue data or private audit rows. ``start`` with
 ``"autoplay": true`` runs ``app.autoplay`` (sim creditor, no LLM) over the same
-events; client text / audio is refused while it runs. An NLU or STT
+events; client text / audio is refused while it runs. ``start.min_cushion_cents``
+overrides the firm's minimum client cushion for that call only (validated, not
+stored; PRIVATE: it shows up only in the operator trace and a private audit row). An NLU or STT
 ``LLMUnavailable`` answers ``error`` + ``turn_done`` and keeps the socket open.
 
 Whatever the socket's view, every ``turn_trace`` / ``audit`` / ``eval`` /
@@ -44,6 +46,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections import OrderedDict, deque
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -64,6 +67,7 @@ from app.domain.fields import REQUIRED_FIELDS
 from app.domain.scenario import (
     CallScenario,
     load_scenario,
+    parse_min_cushion,
     resolve_scenario_dir,
     scenario_from_payload,
 )
@@ -585,6 +589,22 @@ def _load_start_scenario(data: dict[str, Any]) -> tuple[CallScenario, str | None
         raise _StartError(str(e)) from e
 
 
+def _with_call_cushion(scenario: CallScenario, data: dict[str, Any]) -> CallScenario:
+    """Apply the ``start`` event's ``min_cushion_cents`` (this call only; not stored).
+
+    Absent or null keeps the scenario's firm default. Invalid values raise
+    ``_StartError`` so the operator sees why the call did not start.
+    """
+    raw = data.get("min_cushion_cents")
+    if raw is None:
+        return scenario
+    try:
+        cushion = parse_min_cushion(raw)
+    except ValueError as e:
+        raise _StartError(str(e)) from e
+    return replace(scenario, min_cushion_cents=cushion)
+
+
 class _StartError(Exception):
     """``start`` payload could not be turned into a scenario."""
 
@@ -772,10 +792,21 @@ class _CallConnection:
             return
         try:
             scenario, scenario_id, rebased_as_of = _load_start_scenario(data)
+            scenario = _with_call_cushion(scenario, data)
         except _StartError as e:
             await self._send_one({"type": "error", "message": str(e)})
             return
         _reset_operator_detail(self.call_id)
+        # Private audit row (not allow-listed for the rep): the cushion this call uses.
+        self.audit.append(
+            self.call_id,
+            "orchestrator",
+            "min_cushion",
+            {
+                "min_cushion_cents": scenario.min_cushion_cents,
+                "source": "call" if data.get("min_cushion_cents") is not None else "firm",
+            },
+        )
         if autoplay:
             await self._start_autoplay(data, scenario, str(scenario_id), rebased_as_of)
             return

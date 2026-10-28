@@ -2,8 +2,7 @@
  * Voice behaviour contracts, ported from tests/unit/test_app_js_contracts.py
  * (which grepped the old app.js) to behaviour tests on `useVoice` with fake
  * browser deps: TTS acks, benign cancel errors, utterance retention and
- * stale handlers, barge-in with spoken ids, the echo guard and echo tail, the
- * stronger barge evidence while the agent speaks, contaminated clips,
+ * stale handlers, barge-in with spoken ids, the echo guard, contaminated clips,
  * listening cues, browser STT pausing during TTS, the pinned VAD settings, the
  * onstart timing stamp, the local backchannel, and preferred voices.
  */
@@ -16,7 +15,6 @@ import {
   BACKCHANNEL_PHRASES,
   BARGE_ECHO_GUARD_MS,
   BROWSER_STT_SETTLE_MS,
-  ECHO_TAIL_MS,
   LABEL,
   type RecLike,
   type UtterLike,
@@ -24,14 +22,7 @@ import {
   type VoiceIO,
 } from "@/lib/voice/engine";
 import { isBenignTtsError, pickVoice, PREFERRED_VOICES, speakableText } from "@/lib/voice/speech";
-import {
-  BARGE_SENSITIVITY,
-  LISTEN_SENSITIVITY,
-  ONNX_RUNTIME_VERSION,
-  VAD_OPTIONS,
-  VAD_WEB_VERSION,
-  type VadCallbacks,
-} from "@/lib/voice/vad";
+import { ONNX_RUNTIME_VERSION, VAD_OPTIONS, VAD_WEB_VERSION, type VadCallbacks } from "@/lib/voice/vad";
 import { encodeWav } from "@/lib/voice/wav";
 import type { ClientEvent, ServerEvent } from "@/types/protocol";
 
@@ -142,13 +133,6 @@ async function micOn(hook: Hook) {
   });
 }
 const audio = new Float32Array(1600);
-/** Feed `n` VAD frames at speech probability `p` (≈96 ms each on the fake clock). */
-function frames(h: Harness, p: number, n: number) {
-  for (let i = 0; i < n; i += 1) {
-    act(() => h.vad.cb!.onFrameProcessed({ isSpeech: p, notSpeech: 1 - p }));
-    act(() => vi.advanceTimersByTime(96));
-  }
-}
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -244,9 +228,7 @@ describe("barge-in and echo guard", () => {
     act(() => vi.advanceTimersByTime(20 + BARGE_ECHO_GUARD_MS + 10)); // s2 playing
     const pauses = h.vad.pause.mock.calls.length;
     const starts = h.vad.start.mock.calls.length;
-    act(() => h.vad.cb!.onSpeechStart());
-    expect(types(h)).not.toContain("barge_in");
-    await act(async () => frames(h, 0.95, BARGE_SENSITIVITY.minSpeechFrames));
+    await act(async () => h.vad.cb!.onSpeechStart());
     expect(h.sent).toContainEqual({ type: "barge_in", spoken_ids: ["s1", "s2"] });
     expect(hook.result.current.snapshot.speaking).toBe(false);
     // The mixed clip is abandoned at the detector: pause() + start() drops vad-web's
@@ -265,75 +247,26 @@ describe("barge-in and echo guard", () => {
     expect(hook.result.current.mic).toBe("thinking");
   });
 
-  it("echo over the agent (moderate or brief speech) never barges or reaches STT", async () => {
+  it("speech that starts right after the agent stops is captured from its first word", async () => {
     const h = harness();
     const hook = mount(h);
     await micOn(hook);
-    say(hook, h, "s1", "A long sentence about the payment plan.");
-    act(() => vi.advanceTimersByTime(BARGE_ECHO_GUARD_MS + 10));
-    act(() => h.vad.cb!.onSpeechStart());
-    // Above the listening threshold but below the barge threshold: typical TTS bleed.
-    frames(h, 0.6, 30);
-    // Strong, but each run is cut short by a dip.
-    for (let k = 0; k < 3; k += 1) {
-      frames(h, 0.95, BARGE_SENSITIVITY.minSpeechFrames - 1);
-      frames(h, 0.3, 1);
-    }
-    expect(types(h)).not.toContain("barge_in");
-    expect(hook.result.current.snapshot.speaking).toBe(true);
-    act(() => h.vad.cb!.onSpeechEnd(audio));
-    expect(h.wavs).toHaveLength(0);
-  });
-
-  it("strong speech counts only after the onset guard, then barges", async () => {
-    const h = harness();
-    const hook = mount(h);
-    await micOn(hook);
-    say(hook, h, "s1");
-    act(() => h.vad.cb!.onSpeechStart());
-    // Inside the guard these frames do not count toward a barge.
-    frames(h, 0.95, Math.floor(BARGE_ECHO_GUARD_MS / 96) - 1);
-    expect(types(h)).not.toContain("barge_in");
-    act(() => vi.advanceTimersByTime(200));
-    frames(h, 0.95, BARGE_SENSITIVITY.minSpeechFrames);
-    expect(h.sent).toContainEqual({ type: "barge_in", spoken_ids: ["s1"] });
-  });
-
-  it("speech starting in the echo tail after the agent stops is dropped; after it, a short answer goes to STT", async () => {
-    const h = harness();
-    const hook = mount(h);
-    await micOn(hook);
-    const u = say(hook, h, "s1", "Okay, up to 3 payments.");
+    const u = say(hook, h, "s1", "What minimum payment do you need?");
+    act(() => u.onstart?.());
     act(() => vi.advanceTimersByTime(BARGE_ECHO_GUARD_MS + 500));
+    const pauses = h.vad.pause.mock.calls.length;
     act(() => u.onend?.());
-    expect(hook.result.current.snapshot.speaking).toBe(false);
-    act(() => vi.advanceTimersByTime(ECHO_TAIL_MS - 100));
+    // Capture is re-armed the moment the agent stops, before the rep speaks...
+    expect(h.vad.pause.mock.calls.length).toBe(pauses + 1);
     act(() => h.vad.cb!.onSpeechStart());
-    act(() => h.vad.cb!.onSpeechEnd(audio));
-    expect(h.wavs).toHaveLength(0);
-    expect(types(h)).not.toContain("barge_in");
-    // Listening re-arms when the tail ends; a short, quiet answer needs no barge evidence.
-    await act(async () => vi.advanceTimersByTime(200));
     expect(hook.result.current.snapshot.interim).toBe(LABEL.listening);
-    act(() => h.vad.cb!.onSpeechStart());
-    act(() => h.vad.cb!.onSpeechEnd(audio));
+    // ...and never reset mid-utterance, so vad-web's clip (with its pre-speech pad) is sent whole.
+    act(() => vi.advanceTimersByTime(1500));
+    expect(h.vad.pause.mock.calls.length).toBe(pauses + 1);
+    const clip = new Float32Array(16000).fill(0.1);
+    act(() => h.vad.cb!.onSpeechEnd(clip));
     expect(h.wavs).toHaveLength(1);
-  });
-
-  it("the backchannel leaves an echo tail too", async () => {
-    const h = harness();
-    const hook = mount(h);
-    await micOn(hook);
-    act(() => h.vad.cb!.onSpeechStart());
-    act(() => h.vad.cb!.onSpeechEnd(audio)); // a real answer → waiting
-    act(() => vi.advanceTimersByTime(BACKCHANNEL_AFTER_MS));
-    const filler = h.spoken.at(-1)!;
-    act(() => vi.advanceTimersByTime(BACKCHANNEL_GUARD_MS + 10));
-    act(() => filler.onend?.());
-    act(() => vi.advanceTimersByTime(ECHO_TAIL_MS - 100));
-    act(() => h.vad.cb!.onSpeechStart());
-    act(() => h.vad.cb!.onSpeechEnd(audio));
-    expect(h.wavs).toHaveLength(1);
+    expect(h.wavs[0]!.byteLength).toBe(encodeWav(clip, 16000).byteLength);
   });
 
   it("a typed reply mid-TTS barges first so the move's bookkeeping lands", () => {
@@ -437,6 +370,15 @@ describe("browser STT during TTS", () => {
     act(() => second.final("Forty percent."));
     expect(h.repTexts).toEqual(["Forty percent."]);
   });
+
+  it("transcribes a final while the agent is silent, with no barge", async () => {
+    const h = harness();
+    const hook = mount(h, "browser");
+    await micOn(hook);
+    act(() => FakeRec.all.at(-1)!.final("One hundred twenty dollars."));
+    expect(h.repTexts).toEqual(["One hundred twenty dollars."]);
+    expect(types(h)).not.toContain("barge_in");
+  });
 });
 
 describe("voice latency client", () => {
@@ -450,14 +392,6 @@ describe("voice latency client", () => {
       preSpeechPadFrames: 10,
       minSpeechFrames: 3,
     });
-  });
-
-  it("needs stronger, longer speech to barge while the agent talks than to listen when it is silent", () => {
-    expect(LISTEN_SENSITIVITY).toEqual({ positiveSpeechThreshold: 0.35, minSpeechFrames: 3 });
-    expect(BARGE_SENSITIVITY.positiveSpeechThreshold).toBeGreaterThan(LISTEN_SENSITIVITY.positiveSpeechThreshold);
-    expect(BARGE_SENSITIVITY.minSpeechFrames).toBeGreaterThan(LISTEN_SENSITIVITY.minSpeechFrames);
-    expect(ECHO_TAIL_MS).toBeGreaterThanOrEqual(600);
-    expect(ECHO_TAIL_MS).toBeLessThanOrEqual(800);
   });
 
   it("sends vad_end_to_first_audio_ms once, from onstart, not when the reply is queued", async () => {

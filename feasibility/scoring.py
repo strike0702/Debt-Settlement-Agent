@@ -1,4 +1,13 @@
-"""Suffix-min fee placement, lexicographic scoring, Tier B cliff flattening."""
+"""Fee placement, candidate scoring and the Tier B cliff flattening post-pass.
+
+``place_fee`` is the closed-form fee-first placement: cumulative fee by ``t_j`` is
+``min(F, suffix-min of window minima)``, optionally capped by ``proportional_cap`` (the
+Phase 59 ``proportional`` fee policy; ``objectives.py``). ``score_key`` ranks feasible candidates
+(Φ vector lexicographically, then fewer payments, slack, cliff, shape, payments).
+``evaluate_candidate`` simulates one vector (full replay, or the prefix-cap shortcut
+when given the ``base`` run) and places the fee. Candidate *generation* lives in
+``shapes.py``; Part 2 rescue amounts live in ``rescue.py``. Called by ``engine.py``.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +22,7 @@ from feasibility.constants import (
 )
 from feasibility.models import Client, CreditorRules
 from feasibility.shapes import Candidate, is_statically_valid
-from feasibility.simulate import SimulationResult, simulate
+from feasibility.simulate import SimulationResult, apply_payments, simulate
 
 
 @dataclass(frozen=True)
@@ -30,10 +39,12 @@ def place_fee(
     pre_min: int,
     F: int,
     buffer: int = 0,
+    cap: list[int] | None = None,
 ) -> FeePlacement:
     """Pointwise-maximal feasible cumulative fee via suffix minima.
 
-    Phi[j] = min(F, suffix_min(w[j..M]) - buffer).
+    Phi[j] = min(F, suffix_min(w[j..M]) - buffer), further capped by ``cap[j]`` when
+    given (1-indexed, non-decreasing: the proportional policy's ``floor(F*P_j/S)``).
     Feasible iff pre_min >= buffer, min(w) >= buffer, and w[M] - buffer >= F.
     """
     M = len(w) - 1  # w is 1-indexed
@@ -50,6 +61,8 @@ def place_fee(
     fee = [0] * (M + 1)
     for j in range(1, M + 1):
         Phi[j] = min(F, suffix[j] - buffer)
+        if cap is not None and cap[j] < Phi[j]:
+            Phi[j] = cap[j]
         if Phi[j] < 0:
             Phi[j] = 0
         fee[j] = Phi[j] - Phi[j - 1]
@@ -62,12 +75,29 @@ def place_fee(
     return FeePlacement(Phi=Phi, fee=fee, feasible=feasible)
 
 
+def proportional_cap(payments: tuple[int, ...] | list[int], M: int, F: int) -> list[int]:
+    """1-indexed ``floor(F * P_j / S)`` for j = 1..M (``P_j = S`` from the last payment on).
+
+    The proportional fee policy's cap on the cumulative fee; non-decreasing, ``F`` at M.
+    """
+    S = sum(payments)
+    cap = [0] * (M + 1)
+    run = 0
+    for j in range(1, M + 1):
+        if j <= len(payments):
+            run += payments[j - 1]
+        cap[j] = F * run // S if S > 0 else F
+    return cap
+
+
 def median_low(payments: tuple[int, ...]) -> int:
+    """Lower median of the payments."""
     k = len(payments)
     return sorted(payments)[(k - 1) // 2]
 
 
 def cliff_ratio(payments: tuple[int, ...]) -> Fraction:
+    """Last payment over the lower median (median floored at 1 cent)."""
     med = max(1, median_low(payments))
     return Fraction(payments[-1], med)
 
@@ -107,11 +137,21 @@ def evaluate_candidate(
     bank_fee_cents: int,
     F: int,
     buffer: int,
+    base: SimulationResult | None = None,
+    fee_cap: list[int] | None = None,
 ) -> tuple[FeePlacement, SimulationResult] | None:
-    """Simulate + place fee. Returns None if infeasible under buffer."""
-    payments = list(zip(cadence[: cand.k], cand.payments))
-    sim = simulate(client, payments, cadence, bank_fee_cents)
-    placement = place_fee(sim.w, sim.pre_min, F, buffer)
+    """Simulate + place fee. Returns None if infeasible under buffer.
+
+    With ``base`` (the no-payment run for this cadence) the simulation uses the
+    prefix-cap identity instead of a full replay; the result is identical.
+    ``fee_cap`` is passed to ``place_fee`` (proportional policy, ``proportional_cap``).
+    """
+    if base is not None:
+        sim = apply_payments(base, cadence, cand.payments, bank_fee_cents)
+    else:
+        payments = list(zip(cadence[: cand.k], cand.payments))
+        sim = simulate(client, payments, cadence, bank_fee_cents)
+    placement = place_fee(sim.w, sim.pre_min, F, buffer, fee_cap)
     if not placement.feasible:
         return None
     # Also require all raw balances >= buffer (place_fee checks window mins /
@@ -134,6 +174,7 @@ def flatten_cliff(
     rules: CreditorRules,
     placement: FeePlacement,
     sim: SimulationResult,
+    base: SimulationResult | None = None,
 ) -> tuple[Candidate, FeePlacement, SimulationResult]:
     """Tier B: transfer delta from p_k to p_{k-1} without changing Phi*."""
     if not ENABLE_CLIFF_FLATTENING:
@@ -151,7 +192,8 @@ def flatten_cliff(
         MAX_CLIFF_RATIO.denominator
     )
 
-    d_slack = sim.w[k - 1] - placement.Phi[k - 1]
+    # Room in window k-1 above the buffer (the re-check below demands the buffer too).
+    d_slack = sim.w[k - 1] - placement.Phi[k - 1] - buffer
     d_order = (p[k - 1] - p[k - 2] - 1) // 2
     d_need = p[k - 1] - target
     delta = max(0, min(d_slack, d_order, d_need))
@@ -170,7 +212,7 @@ def flatten_cliff(
         return cand, placement, sim
 
     new_cand = Candidate(k=k, payments=new_payments, label=new_label)
-    result = evaluate_candidate(client, new_cand, cadence, bank_fee_cents, F, buffer)
+    result = evaluate_candidate(client, new_cand, cadence, bank_fee_cents, F, buffer, base)
     if result is None:
         return cand, placement, sim
     new_placement, new_sim = result

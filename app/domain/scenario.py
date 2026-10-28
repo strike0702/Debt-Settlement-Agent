@@ -13,6 +13,11 @@ Custom test cases (pasted JSON from the web console's editor) go through
 ``scenario_payload_errors`` (every problem with its field path, for inline
 errors) before ``scenario_from_payload`` builds them; ``rep_account_from_payload``
 is their rep-safe "Your account" (reads only ``offer`` and ``rep_card``).
+
+``firm.min_cushion_cents`` (optional, default 0, at most ``MAX_MIN_CUSHION_CENTS``) is
+the firm's minimum client cushion: a soft preference that the engine keeps every
+balance at or above it when some plan at the price can (docs/ENGINE.md). It is
+client-protection policy, PRIVATE: operator brief only, never the rep or NLG.
 """
 
 from __future__ import annotations
@@ -29,6 +34,23 @@ from typing import Any
 from feasibility.models import Client, LedgerEntry, add_months, load_client
 
 SCENARIOS_ROOT = Path("fixtures/scenarios")
+MAX_MIN_CUSHION_CENTS = 500_000  # $5,000: sane upper bound for the firm cushion
+
+
+def parse_min_cushion(value: Any) -> int:
+    """Validate a minimum client cushion in cents: an int in [0, ``MAX_MIN_CUSHION_CENTS``].
+
+    ``None`` means 0 (no cushion). Raises ``ValueError`` with a plain message otherwise.
+    """
+    if value is None:
+        return 0
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("min_cushion_cents must be whole cents, e.g. 10000 for $100.00")
+    if not 0 <= value <= MAX_MIN_CUSHION_CENTS:
+        raise ValueError(
+            f"min_cushion_cents must be between 0 and {MAX_MIN_CUSHION_CENTS} cents ($5,000)"
+        )
+    return value
 
 
 @dataclass(frozen=True)
@@ -47,6 +69,8 @@ class CallScenario:
     original_balance_cents: int
     program_fee_pct: float
     bank_fee_cents: int
+    # Firm's minimum client cushion (soft; PRIVATE). 0 = none. A call may override it.
+    min_cushion_cents: int = 0
 
 
 @dataclass(frozen=True)
@@ -126,6 +150,7 @@ def scenario_from_parts(
         original_balance_cents=int(offer_raw["original_balance_cents"]),
         program_fee_pct=float(firm_raw["program_fee_pct"]),
         bank_fee_cents=int(firm_raw["bank_fee_cents"]),
+        min_cushion_cents=parse_min_cushion(firm_raw.get("min_cushion_cents")),
     )
 
 
@@ -340,6 +365,14 @@ def scenario_payload_errors(payload: Any) -> list[dict[str, str]]:
                 "Write the fee as a fraction between 0 and 1, e.g. 0.18 for 18%.",
             )
         cents(firm, "firm", "bank_fee_cents")
+        if firm.get("min_cushion_cents") is not None:
+            try:
+                parse_min_cushion(firm["min_cushion_cents"])
+            except ValueError:
+                err(
+                    "firm.min_cushion_cents",
+                    "Optional. Write whole cents from 0 to 500000 ($5,000), e.g. 10000 for $100.",
+                )
 
     client = section("client")
     if client is not None:
@@ -623,6 +656,7 @@ def details_from_scenario(
             "program_fee_bp": fee_bp,
             "program_fee_cents": program_fee_cents,
             "bank_fee_cents": sc.bank_fee_cents,
+            "min_cushion_cents": sc.min_cushion_cents,
         },
     }
 

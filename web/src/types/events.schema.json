@@ -1186,6 +1186,18 @@
           "default": null,
           "title": "Autoplay Pause Ms"
         },
+        "min_cushion_cents": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Cushion Cents"
+        },
         "scenario": {
           "anyOf": [
             {
@@ -1446,6 +1458,26 @@
         "turn"
       ],
       "title": "TraceBeliefChange",
+      "type": "object"
+    },
+    "TraceCushion": {
+      "additionalProperties": false,
+      "description": "PRIVATE: the firm's minimum client cushion and whether the drafted plan kept it.\n\nSet only on the turn that drafts a plan (CONFIRM) when a cushion is set. Operator\nonly: the rep stream carries no ``turn_trace``.",
+      "properties": {
+        "kept": {
+          "title": "Kept",
+          "type": "boolean"
+        },
+        "min_cushion_cents": {
+          "title": "Min Cushion Cents",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "min_cushion_cents",
+        "kept"
+      ],
+      "title": "TraceCushion",
       "type": "object"
     },
     "TraceNote": {
@@ -1891,6 +1923,17 @@
             }
           ],
           "title": "Creditor Text"
+        },
+        "cushion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TraceCushion"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "decide": {
           "$ref": "#/$defs/Decide"

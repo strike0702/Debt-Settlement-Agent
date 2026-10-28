@@ -438,6 +438,13 @@ docs/eval/README.md.
    frozen report). Golden test keeps working without it.
 4. Re-run the oracle eval and the engine benchmark on main; freeze them under
    `docs/eval/engine_v2_<date>/`.
+5. Tidy items logged by Phases 57b–60: make `rescue._latest_date` public (used by
+   `explain.py`); remove `shapes.generate_candidates` and point its tests at
+   `search.Search.pinned`; DESIGN ADR 7 settings table gains `ENGINE_OBJECTIVE`,
+   `ENGINE_FEE_POLICY` and the firm `min_cushion_cents`; `web/README.md` voice bullet says
+   1.7 s for the backchannel (`BACKCHANNEL_AFTER_MS`); `docs/history/PROGRESS.md` status rows
+   for 55–60. Link `docs/history/DECISIONS.md` (D1–D13) from `docs/ENGINE.md` instead of
+   repeating it. Do not touch voice code or `docs/VOICE_PLAN.md` (Phase 62 runs in parallel).
 
 Acceptance: `tests/unit/test_docs.py` link check, pytest, ruff, oracle eval PASS. Commit:
 `phase 61: engine v2 docs and frozen evidence`.

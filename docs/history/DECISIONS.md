@@ -205,6 +205,22 @@ moves, against the core rule.
 **Phase 56 handling.** Merged without its browser voice tuning (reverted); the server-side
 Whisper filter, stale-speech fix, unheard-turn rollback and fragment merge stay.
 
+## D13. The engine explains a miss and answers what-if (Phase 60, 2026-10-28)
+
+**Built.** `feasibility/explain.py` returns why a price does not fit: reason (`floors`,
+`segments`, `cash_short`, `fee_short`, `horizon`), the binding date, the exact shortfall and
+the closest payment count. `feasibility/whatif.py` answers "would this term change make it
+fit" on a shared `Problem`, so the agent's term suggestions no longer rebuild and rescan.
+
+**Checks.** The shortfall is exact: added as a credit on the binding date it makes the
+oracle feasible, one cent less does not (400+ small cases). The agent's term suggestions are
+unchanged on all 165 recorded calls (0 differences), and faster (p50 3.2 → 2.1 ms per turn,
+cold 13 → 1.6 ms). The explanation is private: operator trace only, added to the leak
+blocklist, never an NLG fact, never on the rep stream.
+
+**Not done by choice.** The engine can test structure and segment changes, but the agent's
+policy does not propose them yet.
+
 ## Process choices
 
 - Each phase runs in its own git worktree with a paste-ready prompt; phases that touch the

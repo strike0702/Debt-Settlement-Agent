@@ -5,7 +5,6 @@ branch and bound on the ``Problem``'s prefix caps (Phase 57b; the take-home winn
 whenever the take-home family reaches Φ*), then the winner is simulated, its fee placed
 (``scoring``), a cliff flattened, and schedule rows assembled. Part 2 (nothing
 feasible): exact minimal lump sum and monthly increment (``rescue.exact_*``).
-``evaluate_candidates`` is the old score-a-given-family path, kept for ``legacy.py``.
 ``evaluate(problem, bp, objective)`` also takes ``client_first`` (Phase 59,
 ``objectives.py``) and places fees under ``problem.fee_policy``. ``evaluate_offer`` is
 the take-home compatible wrapper, always ``fee_first`` + ``front_loaded`` (builds a
@@ -31,8 +30,6 @@ from feasibility.problem import Problem, build_problem
 from feasibility.rescue import (
     IncrementResult,
     LumpResult,
-    compute_increment,
-    compute_lump,
     exact_increment,
     exact_lump,
 )
@@ -41,7 +38,6 @@ from feasibility.scoring import (
     evaluate_candidate,
     flatten_cliff,
     proportional_cap,
-    score_key,
 )
 from feasibility.search import Search
 from feasibility.shapes import Candidate
@@ -169,55 +165,6 @@ def _assemble_schedule(
     return rows
 
 
-def _search_feasible(
-    client: Client,
-    candidates: list[Candidate],
-    cadence: list[date],
-    bank_fee_cents: int,
-    F: int,
-    buffer: int,
-    S: int,
-    k_max: int,
-    floors: list[int],
-    rules: CreditorRules,
-    base: SimulationResult | None = None,
-) -> tuple[Candidate, FeePlacement, SimulationResult] | None:
-    """Return (cand, placement, sim) for the best feasible candidate, or None."""
-    M = len(cadence)
-    best = None
-    best_key = None
-    for cand in candidates:
-        result = evaluate_candidate(client, cand, cadence, bank_fee_cents, F, buffer, base)
-        if result is None:
-            continue
-        placement, sim = result
-        key = score_key(cand, placement, sim, M)
-        if best_key is None or key > best_key:
-            best_key = key
-            best = (cand, placement, sim)
-
-    if best is None:
-        return None
-
-    cand, placement, sim = best
-    cand, placement, sim = flatten_cliff(
-        client,
-        cand,
-        cadence,
-        bank_fee_cents,
-        F,
-        buffer,
-        S,
-        k_max,
-        floors,
-        rules,
-        placement,
-        sim,
-        base,
-    )
-    return cand, placement, sim
-
-
 def evaluate_offer(client: Client, offer: Offer, rules: CreditorRules) -> Result:
     """Evaluate a single offer (take-home API): build a ``Problem``, then ``evaluate``."""
     problem = build_problem(
@@ -314,47 +261,3 @@ def _infeasible(lump: LumpResult, incr: IncrementResult) -> Result:
             ),
         ),
     )
-
-
-def evaluate_candidates(problem: Problem, S: int, candidates: list[Candidate]) -> Result:
-    """Score a given candidate family for offer total ``S`` (Part 1, else Part 2).
-
-    The enumerate-and-score path, relative to the family passed in. Only
-    ``legacy.legacy_evaluate`` uses it now (the frozen take-home family, for the gap
-    report); ``evaluate`` searches the full legal set instead.
-    """
-    client = problem.client
-    rules = problem.rules
-    cadence = problem.cadence
-    base = problem.base
-    F = problem.program_fee_cents
-    k_max = problem.k_max
-    floors = problem.floors
-
-    buffer = problem.min_cushion_cents
-
-    # Tier C: try with soft buffer, fall back to 0.
-    found = _search_feasible(
-        client, candidates, cadence, rules.bank_fee_cents, F, buffer, S, k_max, floors, rules,
-        base,
-    )
-    if found is None and buffer > 0:
-        found = _search_feasible(
-            client, candidates, cadence, rules.bank_fee_cents, F, 0, S, k_max, floors, rules,
-            base,
-        )
-
-    if found is not None:
-        cand, placement, sim = found
-        rows = _assemble_schedule(cand, cadence, placement, sim, rules.bank_fee_cents)
-        return Result(
-            feasible=True,
-            pay_shape_used=cand.label,
-            schedule=rows,
-            additional_funds=None,
-        )
-
-    # Part 2 — only issued from a buffer=0 evaluation (we already are here).
-    lump = compute_lump(client, candidates, cadence, rules.bank_fee_cents, F, S, base)
-    incr = compute_increment(client, candidates, cadence, rules.bank_fee_cents, F, base)
-    return _infeasible(lump, incr)

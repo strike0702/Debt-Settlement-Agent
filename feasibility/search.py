@@ -6,8 +6,7 @@ without scoring every candidate: the best feasible vector under the fee-first
 and the smallest uniform draft increment ``X*`` (Part 2). ``engine.evaluate`` calls
 it; ``rescue.exact_lump`` / ``rescue.exact_increment`` format the Part 2 answers.
 It does not simulate ledgers (``simulate.py``), place fees for the schedule
-(``scoring.place_fee``) or build rows (``engine.py``). ``legacy.py`` keeps the old
-enumerate-everything path for comparisons.
+(``scoring.place_fee``) or build rows (``engine.py``).
 
 Why prefix sums are enough. By the prefix-cap identity (``problem.py``) window j of a
 length-k vector sees ``base_w[j] - P_min(j,k) - bf*min(j,k)``. So feasibility, Φ
@@ -50,7 +49,7 @@ floors); the bound on the objective from those is valid for every extension and 
 gets worse as the current level rises, so the level scan stops at the first failure.
 The same holds for the remaining-sum test. Per-k bounds from the floors' prefix sums
 skip whole k. ``tests/engine/test_search.py`` checks this against
-``tests/engine/reference.py`` (exact, independent) and against ``legacy.py``.
+``tests/engine/reference.py`` (exact, independent) and ``tests/engine/oracle.py``.
 
 Proportional fee policy (Phase 59): ``key4`` caps each Φ_j at ``floor(F*P_j/S)``. That
 cap *rises* with the prefix sums, so Φ is no longer monotone and an objective bound from

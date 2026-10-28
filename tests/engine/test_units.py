@@ -17,16 +17,38 @@ from feasibility.models import (
     offer_total_cents,
     program_fee_cents,
 )
+from feasibility.problem import build_problem
 from feasibility.scoring import place_fee
+from feasibility.search import Search
 from feasibility.shapes import (
+    Candidate,
     compute_floors,
     even_vector,
-    generate_candidates,
+    label_shape,
 )
 from feasibility.simulate import simulate
 from feasibility.util import round_half_up
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "engine"
+
+
+def pinned_family(S: int, k_max: int, rules: CreditorRules) -> list[Candidate]:
+    """``Search.pinned`` for k = 1..k_max, unpruned, on a client with a long enough horizon."""
+    client = Client(
+        draft_amount_cents=0, draft_day=1, first_draft_date=date(2027, 1, 1),
+        last_draft_date=date(2028, 12, 1), as_of_date=date(2026, 12, 1),
+        current_balance_cents=0,
+    )
+    problem = build_problem(
+        client, rules, date(2027, 1, 31), creditor_balance_cents=S, original_balance_cents=S
+    )
+    assert problem.k_max == k_max
+    search = Search(problem, S)
+    return [
+        Candidate(k=k, payments=vec, label=label_shape(vec, rules))
+        for k in range(1, k_max + 1)
+        for vec in search.pinned(k, lambda _: False)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -165,8 +187,8 @@ def test_staircase_respects_max_segments():
         bank_fee_cents=0,
         program_fee_bp=0,
     )
-    floors = compute_floors(rules, 6)
-    cands = generate_candidates(12000, 6, floors, rules)
+    cands = pinned_family(12000, 6, rules)
+    assert cands
     for c in cands:
         assert c.label == "staircase"
         assert len(set(c.payments)) <= 2
@@ -186,8 +208,7 @@ def test_balloon_exempt_from_segments():
         bank_fee_cents=0,
         program_fee_bp=0,
     )
-    floors = compute_floors(rules, 4)
-    cands = generate_candidates(20000, 4, floors, rules)
+    cands = pinned_family(20000, 4, rules)
     balloons = [c for c in cands if c.label == "balloon"]
     assert balloons
     assert any(len(set(c.payments)) > 1 for c in balloons)
@@ -358,9 +379,9 @@ def test_max_segments_one_with_tier():
         bank_fee_cents=0,
         program_fee_bp=0,
     )
-    floors = compute_floors(rules, 8)
     # For k>=4, floors jump at 4 → cannot be single-valued unless all at >=5000.
-    cands = generate_candidates(40000, 8, floors, rules)
+    cands = pinned_family(40000, 8, rules)
+    assert cands
     for c in cands:
         assert len(set(c.payments)) <= 1
         if c.k >= 4:

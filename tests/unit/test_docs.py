@@ -15,7 +15,15 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-LINKED_DOCS = ["README.md", "docs/DESIGN.md", "docs/eval/README.md", "docs/assets/README.md"]
+LINKED_DOCS = [
+    "README.md",
+    "docs/DESIGN.md",
+    "docs/ENGINE.md",
+    "docs/eval/README.md",
+    "docs/assets/README.md",
+    "docs/eval/engine_v2_20261028/summary.md",
+    "docs/eval/engine_v2_20261028/bench.md",
+]
 MEDIA_LIMIT_BYTES = 5 * 1024 * 1024
 
 _LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)\)")

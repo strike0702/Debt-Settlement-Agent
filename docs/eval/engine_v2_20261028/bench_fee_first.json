@@ -1,0 +1,115 @@
+{
+  "mode": {
+    "objective": "fee_first",
+    "fee_policy": "front_loaded",
+    "scan": "evaluate"
+  },
+  "fixed_median_ms": {
+    "demo_even": 1.94,
+    "demo_staircase4": 3.7,
+    "balloon_structure": 3.09,
+    "counter_ladder": 2.11,
+    "easy_deal": 2.06,
+    "haggling_rep": 2.37,
+    "late_start_date": 0.36,
+    "no_space": 3.08,
+    "rescue_escalate": 3.1
+  },
+  "fixed_max_ms": {
+    "demo_even": 2.11,
+    "demo_staircase4": 4.0,
+    "balloon_structure": 3.18,
+    "counter_ladder": 2.33,
+    "easy_deal": 2.23,
+    "haggling_rep": 2.51,
+    "late_start_date": 0.43,
+    "no_space": 3.22,
+    "rescue_escalate": 3.27
+  },
+  "single_evaluate_fixed": {
+    "n": 14400,
+    "p50_ms": 0.02,
+    "p95_ms": 0.04,
+    "max_ms": 0.18,
+    "over_150ms": 0
+  },
+  "engine_fixtures": {
+    "n": 5,
+    "p50_ms": 2.76,
+    "p95_ms": 5.87,
+    "max_ms": 5.87,
+    "over_150ms": 0
+  },
+  "golden_random": {
+    "n": 600,
+    "p50_ms": 3.12,
+    "p95_ms": 17.3,
+    "max_ms": 78.32,
+    "over_150ms": 0
+  },
+  "golden_random_slowest": [
+    [
+      "r55_0098",
+      51.6
+    ],
+    [
+      "r55_0076",
+      56.4
+    ],
+    [
+      "r55_0317",
+      71.0
+    ],
+    [
+      "r55_0132",
+      74.5
+    ],
+    [
+      "r55_0224",
+      78.3
+    ]
+  ],
+  "single_evaluate_fixtures_golden": {
+    "n": 60500,
+    "p50_ms": 0.03,
+    "p95_ms": 0.16,
+    "max_ms": 3.35,
+    "over_150ms": 0
+  },
+  "adversarial": {
+    "n": 300,
+    "p50_ms": 15.23,
+    "p95_ms": 64.39,
+    "max_ms": 126.02,
+    "over_150ms": 0
+  },
+  "adversarial_slowest": [
+    [
+      "a57_00155",
+      89.7
+    ],
+    [
+      "a57_00169",
+      91.5
+    ],
+    [
+      "a57_00226",
+      98.4
+    ],
+    [
+      "a57_00131",
+      108.1
+    ],
+    [
+      "a57_00127",
+      126.0
+    ]
+  ],
+  "single_evaluate_adversarial": {
+    "n": 30000,
+    "p50_ms": 0.13,
+    "p95_ms": 0.74,
+    "max_ms": 3.28,
+    "over_150ms": 0
+  }
+}

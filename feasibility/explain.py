@@ -38,7 +38,7 @@ from typing import Literal
 
 from feasibility.objectives import FEE_FIRST, check_objective
 from feasibility.problem import Problem
-from feasibility.rescue import _latest_date
+from feasibility.rescue import latest_date
 from feasibility.search import Search
 
 Reason = Literal["horizon", "floors", "segments", "cash_short", "fee_short"]
@@ -75,7 +75,7 @@ def explain(problem: Problem, bp: int, objective: str = FEE_FIRST) -> Infeasibil
     L, vec = found
     sim = problem.simulate_vector(vec)
     F = problem.program_fee_cents
-    when = _latest_date(problem.client, sim, problem.cadence, F)
+    when = latest_date(problem.client, sim, problem.cadence, F)
     overdraft = max(0, -min(sim.balances.values(), default=0))
     reason: Reason = "cash_short" if overdraft >= L else "fee_short"
     if _more_segments_fit(problem, S):

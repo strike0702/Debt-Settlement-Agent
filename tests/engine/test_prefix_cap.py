@@ -1,7 +1,8 @@
 """Prefix-cap identity: per-candidate simulation == base simulation minus prefix debits.
 
-For every candidate the engine generates on every golden-corpus input (all 1305
-offers, including each scenario at all 100 bp), the shortcut
+For every vector of the search's family (``Search.pinned`` and ``Search.boxed``, no
+pruning) on every golden-corpus input (all 1305 offers, including each scenario at all
+100 bp), the shortcut
 ``simulate.apply_payments(base, ...)`` must equal a full ``simulate`` replay:
 same balances on every date, same window minima, same pre-window minimum. It also
 checks the identity explicitly: ``balance(d) = base(d) - P_min(j,k) - bf*min(j,k)``.
@@ -16,7 +17,7 @@ from datetime import date
 import pytest
 
 from feasibility.problem import Problem, build_problem
-from feasibility.shapes import generate_candidates
+from feasibility.search import Search
 from feasibility.simulate import simulate
 from tests.engine import gen_cases
 from tests.engine.golden.build_golden import GOLDEN, expand
@@ -36,6 +37,15 @@ def _problem(case: dict) -> tuple[Problem, int]:
     return problem, problem.offer_total(offer.settlement_bp)
 
 
+def family_vectors(search: Search) -> list[tuple[int, ...]]:
+    """Every vector of both search stages for k = 1..k_max, without pruning."""
+    out: list[tuple[int, ...]] = []
+    for k in range(1, search.k_max + 1):
+        out += search.pinned(k, lambda _: False)
+        out += search.boxed(k, lambda _: False)
+    return out
+
+
 def _window_index(cadence: list[date], d: date) -> int:
     return sum(1 for t in cadence if t <= d)
 
@@ -49,18 +59,18 @@ def test_prefix_cap_identity(record: dict) -> None:
             continue
         cadence = problem.cadence
         bf = problem.rules.bank_fee_cents
-        for cand in generate_candidates(S, problem.k_max, problem.floors, problem.rules):
-            full = simulate(problem.client, list(zip(cadence, cand.payments)), cadence, bf)
-            fast = problem.simulate_vector(cand.payments)
-            assert fast == full, (case["id"], cand)
+        for vec in family_vectors(Search(problem, S)):
+            full = simulate(problem.client, list(zip(cadence, vec)), cadence, bf)
+            fast = problem.simulate_vector(vec)
+            assert fast == full, (case["id"], vec)
             prefix = [0]
-            for p in cand.payments:
+            for p in vec:
                 prefix.append(prefix[-1] + p)
             for d, bal in full.balances.items():
-                j = min(_window_index(cadence, d), cand.k)
+                j = min(_window_index(cadence, d), len(vec))
                 assert bal == problem.base.balances[d] - prefix[j] - bf * j
             for j in range(1, problem.M + 1):
-                jk = min(j, cand.k)
+                jk = min(j, len(vec))
                 assert full.w[j] == problem.base_w[j] - prefix[jk] - bf * jk
             assert full.pre_min == problem.pre_min
             checked += 1

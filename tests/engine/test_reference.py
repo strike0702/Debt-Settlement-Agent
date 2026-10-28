@@ -1,4 +1,4 @@
-"""Exact reference solver checks: oracle agreement, dominance, pruning, a known legacy miss.
+"""Exact reference solver checks: oracle agreement, dominance, pruning, a known take-home miss.
 
 - ``reference.solve`` equals ``oracle.solve`` (feasibility, Φ*, lump, increment) on
   seeded small cases (500 fast; the Phase 55 sets of 5,000 + 10,000 under ``slow``).
@@ -6,9 +6,10 @@
   (brute-force enumeration, ``oracle.is_legal``) has a family vector of the same length
   with pointwise smaller or equal prefix sums, and every family vector is legal.
 - Pruning never changes the answer (full-size adversarial cases, family scored whole).
-- A shrunk Phase 57 witness: the legacy family is infeasible, the reference schedule is
-  legal, validator-clean and feasible on an independent replay.
-The full hunt lives in ``scripts/engine_gap_report.py --mode full``.
+- A shrunk Phase 57 witness (the take-home family called it infeasible): the reference
+  schedule is legal, validator-clean and feasible on an independent replay, and the
+  engine finds a schedule too.
+The Phase 57 hunt is frozen in ``docs/eval/engine_gap_20261025_full/``.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ import pytest
 
 from feasibility.models import CreditorRules
 from feasibility.problem import build_problem
+from feasibility.search import Search
 from tests.engine import gen_cases, hunt, oracle, reference
 
 
@@ -94,13 +96,13 @@ def test_family_dominates_every_legal_vector() -> None:
 def test_pruning_does_not_change_the_answer() -> None:
     keys = ("ref_feasible", "ref_phi", "ref_lump", "ref_increment")
     for case in gen_cases.adversarial_cases(5, 25):
-        a = hunt.compare_case(case)
-        b = hunt.compare_case(case, prune=False)
+        a = hunt.check_reference(case)
+        b = hunt.check_reference(case, prune=False)
         assert [a.get(x) for x in keys] == [b.get(x) for x in keys], case["id"]
         assert a["bugs"] == [] and b["bugs"] == []
 
 
-def test_known_legacy_false_infeasible() -> None:
+def test_known_take_home_false_infeasible() -> None:
     """Shrunk witness ``s57_01877`` from the Phase 57 report (3 segments, two tiers)."""
     rules = {
         "max_terms": 5, "max_payments": 5, "min_payment_cents": 6, "max_token_pays": 5,
@@ -109,12 +111,17 @@ def test_known_legacy_false_infeasible() -> None:
     }
     vec = (7, 10, 10, 92, 92)
     S, k = sum(vec), len(vec)
-    _, misses = hunt.structural_misses(CreditorRules(**rules, program_fee_bp=0), S, k)
-    assert vec in misses
     case = hunt.structural_witness_case("w", rules, vec, t1=date(2027, 7, 15), F=0)
-    rec = hunt.compare_case(case)
-    assert rec["kinds"] == ["false_infeasible"] and rec["bugs"] == []
-    assert rec["ref_vec"] == list(vec) and rec["lifted"] == [1]
+    # The take-home family is the search's pinned stage: none of its vectors fits.
+    _, _, _, problem = hunt._problem(case)
+    search = Search(problem, S)
+    pinned = [v for j in range(1, k + 1) for v in search.pinned(j, lambda _: False)]
+    assert pinned and all(search.key4(list(accumulate(v)), len(v), 0) is None for v in pinned)
+    rec = hunt.check_reference(case)
+    assert rec["ref_feasible"] and rec["bugs"] == []
+    assert rec["ref_vec"] == list(vec)
+    eng = hunt.compare_engine(case)
+    assert eng["feasible"] and eng["kinds"] == [] and eng["bugs"] == []
 
 
 def test_adversarial_generator_is_seeded_and_planted() -> None:
@@ -122,4 +129,4 @@ def test_adversarial_generator_is_seeded_and_planted() -> None:
     assert a == gen_cases.adversarial_cases(3, 20)
     for case in a:
         assert case["creditor_balance_cents"] == 2 * sum(case["planted"])
-        assert hunt.compare_case(case)["bugs"] == []
+        assert hunt.check_reference(case)["bugs"] == []

@@ -26,8 +26,8 @@ when no balloon is possible, and causality: balances in window j depend only on
 p_1..p_j). Interpretation notes: the token rule is a count ("at most T payments equal
 the base minimum"); a vector is exempt from ``max_segments`` only when ballooning is
 allowed *and* its last payment is strictly above the one before (the repo's reading,
-shared with ``app/adapter/validator.py``). Used by ``tests/engine/test_oracle.py``
-and ``scripts/engine_gap_report.py``; never by ``app/``.
+shared with ``app/adapter/validator.py``). Used by ``tests/engine/`` (oracle, search,
+objectives, explain tests; until Phase 61 also the gap report); never by ``app/``.
 """
 
 from __future__ import annotations

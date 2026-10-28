@@ -288,7 +288,7 @@ def planted_case(
 
 
 def adversarial_case(rng: Random, case_id: str) -> Case:
-    """A full-size case aimed at the legacy generator's pinned early staircase levels.
+    """A full-size case aimed at the take-home generator's pinned early staircase levels.
 
     Staircase-heavy (80 %, ``max_segments`` 3–4), run lengths whose last two runs often
     share a factor (2 and 4, 3 and 6, ...), tiers and token limits placed inside runs, and

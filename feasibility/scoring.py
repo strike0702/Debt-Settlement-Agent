@@ -5,8 +5,8 @@
 Phase 59 ``proportional`` fee policy; ``objectives.py``). ``score_key`` ranks feasible candidates
 (Φ vector lexicographically, then fewer payments, slack, cliff, shape, payments).
 ``evaluate_candidate`` simulates one vector (full replay, or the prefix-cap shortcut
-when given the ``base`` run) and places the fee. Candidate *generation* lives in
-``shapes.py``; Part 2 rescue amounts live in ``rescue.py``. Called by ``engine.py``.
+when given the ``base`` run) and places the fee. Vector *generation* lives in
+``search.py``; Part 2 rescue amounts live in ``rescue.py``. Called by ``engine.py``.
 """
 
 from __future__ import annotations

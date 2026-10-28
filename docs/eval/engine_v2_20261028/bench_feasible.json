@@ -1,0 +1,94 @@
+{
+  "mode": {
+    "objective": "fee_first",
+    "fee_policy": "front_loaded",
+    "scan": "feasible"
+  },
+  "fixed_median_ms": {
+    "demo_even": 0.46,
+    "demo_staircase4": 0.61,
+    "balloon_structure": 0.64,
+    "counter_ladder": 0.57,
+    "easy_deal": 0.6,
+    "haggling_rep": 0.69,
+    "late_start_date": 0.12,
+    "no_space": 0.49,
+    "rescue_escalate": 0.3
+  },
+  "fixed_max_ms": {
+    "demo_even": 0.51,
+    "demo_staircase4": 0.66,
+    "balloon_structure": 0.66,
+    "counter_ladder": 0.74,
+    "easy_deal": 0.7,
+    "haggling_rep": 0.78,
+    "late_start_date": 0.13,
+    "no_space": 0.54,
+    "rescue_escalate": 0.32
+  },
+  "engine_fixtures": {
+    "n": 5,
+    "p50_ms": 0.47,
+    "p95_ms": 0.71,
+    "max_ms": 0.71,
+    "over_150ms": 0
+  },
+  "golden_random": {
+    "n": 600,
+    "p50_ms": 0.51,
+    "p95_ms": 1.45,
+    "max_ms": 4.83,
+    "over_150ms": 0
+  },
+  "golden_random_slowest": [
+    [
+      "r55_0020",
+      3.7
+    ],
+    [
+      "r55_0575",
+      4.0
+    ],
+    [
+      "r55_0352",
+      4.2
+    ],
+    [
+      "r55_0322",
+      4.4
+    ],
+    [
+      "r55_0132",
+      4.8
+    ]
+  ],
+  "adversarial": {
+    "n": 300,
+    "p50_ms": 1.25,
+    "p95_ms": 5.22,
+    "max_ms": 9.63,
+    "over_150ms": 0
+  },
+  "adversarial_slowest": [
+    [
+      "a57_00153",
+      7.8
+    ],
+    [
+      "a57_00043",
+      8.1
+    ],
+    [
+      "a57_00299",
+      8.8
+    ],
+    [
+      "a57_00062",
+      9.6
+    ],
+    [
+      "a57_00059",
+      9.6
+    ]
+  ]
+}

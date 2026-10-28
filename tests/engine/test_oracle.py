@@ -1,13 +1,13 @@
-"""Brute-force oracle checks: its pruning is sound, and legacy agrees with it on legality.
+"""Brute-force oracle checks: its pruning is sound, and the engine agrees with it on legality.
 
 - On tiny cases the pruned ``oracle.solve`` equals an unpruned enumeration of every
   non-decreasing vector (feasibility, Φ*, Part 2 lump and increment).
 - ``oracle.is_legal`` agrees with the independent validator's static rules on random
   vectors (legal and illegal).
-- On seeded small cases every legacy-feasible answer is oracle-feasible, its vector is
+- On seeded small cases every engine-feasible answer is oracle-feasible, its vector is
   legal, its fee timing equals the oracle's suffix-min Φ for that vector and is never
   above Φ*; every oracle schedule passes ``app/adapter/validator.py``.
-The 5000-case comparison lives in ``scripts/engine_gap_report.py``.
+Engine-vs-oracle optimality (Φ*, L*, X*) is in ``test_search.py``.
 """
 
 from __future__ import annotations
@@ -26,8 +26,7 @@ from app.adapter.validator import (
     RULE_TOKEN_COUNT,
     validate,
 )
-from feasibility.engine import ScheduleRow
-from feasibility.legacy import legacy_evaluate
+from feasibility.engine import ScheduleRow, evaluate
 from feasibility.problem import build_problem
 from tests.engine import gen_cases, oracle
 
@@ -152,8 +151,8 @@ def test_is_legal_matches_validator_static_rules() -> None:
 
 
 @pytest.mark.parametrize("seed", [101, 102, 103])
-def test_legacy_agrees_with_oracle_on_legality(seed: int) -> None:
-    legacy_feasible = 0
+def test_engine_agrees_with_oracle_on_legality(seed: int) -> None:
+    engine_feasible = 0
     for case in gen_cases.random_cases(seed, 150, small=True, prefix="o"):
         client, rules, problem, S = _setup(case)
         F = problem.program_fee_cents
@@ -161,22 +160,22 @@ def test_legacy_agrees_with_oracle_on_legality(seed: int) -> None:
         if orc.feasible:
             assert orc.rows is not None
             assert validate(orc.rows, client, S, F, rules, problem.first_payment_date) == []
-        leg = legacy_evaluate(problem, case["settlement_bp"])
-        if not leg.feasible:
+        res = evaluate(problem, case["settlement_bp"])
+        if not res.feasible:
             continue
-        legacy_feasible += 1
+        engine_feasible += 1
         assert orc.feasible, case["id"]
-        assert leg.schedule is not None and orc.phi is not None
-        vec = tuple(r.creditor_payment_cents for r in leg.schedule if r.creditor_payment_cents)
+        assert res.schedule is not None and orc.phi is not None
+        vec = tuple(r.creditor_payment_cents for r in res.schedule if r.creditor_payment_cents)
         assert oracle.is_legal(vec, S, problem.k_max, rules), case["id"]
-        fees = {r.date: r.program_fee_cents for r in leg.schedule}
+        fees = {r.date: r.program_fee_cents for r in res.schedule}
         run, phi = 0, []
         for t in problem.cadence:
             run += fees.get(t, 0)
             phi.append(run)
         assert oracle.phi_of(client, rules, problem.first_payment_date, S, F, vec) == tuple(phi)
         assert tuple(phi) <= orc.phi
-    assert legacy_feasible > 20
+    assert engine_feasible > 20
 
 
 def test_validator_accepts_every_feasible_oracle_vector() -> None:

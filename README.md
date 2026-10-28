@@ -48,7 +48,7 @@ By default the demo's replies come from a bank of templates built and guard-chec
 | `app/agent/nlu/` | Asks the model to read the line (`llm_call.py`), then `post_verify` (`verify.py`) checks quotes, numbers and phrase rules (`cues.py`) in code; amount questions are in `amounts.py`. |
 | `app/agent/nlg.py`, `app/agent/guards.py` | Turns an `Action` into a template, fills it from facts, and runs the two guards. |
 | `app/adapter/engine_adapter.py` | The only bridge to the engine: builds creditor rules from belief and scans 1%–100% for affordability. `app/adapter/validator.py` re-checks every drafted schedule independently. |
-| `feasibility/engine.py` | `evaluate_offer`: the settlement math (brought in from an earlier project). |
+| `feasibility/engine.py` | The settlement engine: `evaluate(problem, bp)` returns a payment schedule or the extra money needed; the exact search is in `search.py`. See [`docs/ENGINE.md`](docs/ENGINE.md). |
 | `app/llm/client.py` | Every model call goes through here by role (`nlu`, `nlg`, `sim`, `stt`), with fail-over and audit. Providers per role are in `config/providers.yaml`. |
 | `app/voice/ws.py` | The WebSocket protocol for the console; `app/voice/views.py` filters what the creditor view may see. |
 | `sim/creditor.py` | The simulated creditor representative used by "Watch a call" and the evals. It does not import the agent. |
@@ -58,6 +58,10 @@ By default the demo's replies come from a bank of templates built and guard-chec
 ## How negotiation decisions are made
 
 The agent works for the client. It accepts only at or below 75% of the client's private maximum (the *accept line*), never offers more than that, and never says either number aloud. It always counters the representative's first number. If the representative comes down, the agent moves up by half as much; if they do not move, it holds once, then takes two equal steps to the lower of their number and the accept line. A "final" number above the line, a call that goes in circles, or any dead end (no affordable schedule, six counteroffers spent with the rep still above the line) hands the call to a person with a spoken reason and a logged reason code. A call ends only as a drafted deal marked `pending_client_approval` or as a hand-off. The full rules, settings and reason codes are in [ADR 7](docs/DESIGN.md#adr-7-how-negotiation-decisions-are-made).
+
+## The settlement engine
+
+`feasibility/` answers "can the client fund X% of this balance, and on what schedule?" under the creditor's rules: payment floors and tiers, a limit on payments at the bare minimum, even or staircase or balloon plans, a bank fee per payment, and the firm's program fee, with the client's balance never below zero. It started as a take-home exercise of mine and is now owned and rebuilt here (engine v2). One ledger simulation per client turns every rule about money into a cap on the plan's running total, so a small family of plans that dominates every legal plan, searched by branch and bound, gives the exact answer. Before changing it I measured the old engine against a brute-force oracle and an exact full-size reference. It was right on every scenario and on 20,000 random cases, but on tiered staircase rules it could [walk away from a legal deal or ask $161.78 of extra money when none was needed](docs/eval/engine_gap_20261025_full/notes.md). The new engine has 0 misses against both checks, every schedule passes an independent validator, and the agent's 100-call eval is unchanged. It ranks plans fee-first by default (`client_first` is a setting), honours a per-firm minimum cushion, explains an infeasible price ("At 52% the client's savings run short by $140 on March 31, 2027", operator view only), and scans all 100 prices in [0.46 ms on the demo](docs/eval/engine_v2_20261028/bench.md). Full write-up: [`docs/ENGINE.md`](docs/ENGINE.md); the design record is [ADR 8](docs/DESIGN.md#adr-8-engine-v2-exact-search-objectives-explanations).
 
 ## Results
 
@@ -154,7 +158,7 @@ uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```text
 app/          Orchestrator, policy, NLU/NLG, guards, voice WebSocket
 web/          React call console (Vite, TypeScript), served by FastAPI at /
-feasibility/  Settlement math (from an earlier project of mine; part of this repo)
+feasibility/  Settlement engine v2 (exact search; started as an earlier project of mine)
 eval/         Eval runner, metrics, NLU corpus scorer, A/B arms and report
 sim/          Creditor simulator (does not import the agent)
 tests/        Unit, end-to-end, engine and NLU corpus tests

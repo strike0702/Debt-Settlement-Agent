@@ -49,23 +49,3 @@ def test_shared_problem_matches_per_offer(record: dict) -> None:
     )
     got = [compact(evaluate(problem, bp).to_dict()) for bp in record["bps"]]
     assert got == record["outs"]
-
-
-@pytest.mark.parametrize("record", RECORDS, ids=lambda r: r["id"])
-def test_frozen_legacy_generator_matches_golden(record: dict) -> None:
-    """``feasibility.legacy`` must keep reproducing the pre-v2 outputs (gap-report baseline)."""
-    from feasibility.legacy import legacy_evaluate
-
-    expected = record["outs"] if "bps" in record else [record["out"]]
-    got = []
-    for case in expand(record):
-        client, offer, rules = gen_cases.case_to_objects(case)
-        problem = build_problem(
-            client,
-            rules,
-            offer.first_payment_date,
-            creditor_balance_cents=offer.creditor_balance_cents,
-            original_balance_cents=offer.original_balance_cents,
-        )
-        got.append(compact(legacy_evaluate(problem, offer.settlement_bp).to_dict()))
-    assert got == expected

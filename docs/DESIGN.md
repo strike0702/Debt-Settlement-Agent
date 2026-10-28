@@ -3,8 +3,8 @@
 The agent negotiates a debt settlement over voice or text. Each turn, a
 language model reads the representative's line into structured terms (NLU);
 code checks that reading against the words actually said; a deterministic
-policy picks the next move; the vendored feasibility engine computes every
-number; and the model phrases the move as a template with placeholders that
+policy picks the next move; the feasibility engine ([`ENGINE.md`](ENGINE.md))
+computes every number; and the model phrases the move as a template with placeholders that
 code fills from public facts (NLG). Two guards check every sentence before it
 is spoken, and everything is written to an append-only audit log. The records
 below explain why it is built this way. Each ADR is context, decision,
@@ -19,6 +19,7 @@ consequences; numbers link to the committed evidence in [`docs/eval/`](eval/).
 | [5](#adr-5-feasibility-is-non-monotonic-so-scan-the-curve) | Feasibility is non-monotonic, so scan the curve |
 | [6](#adr-6-claude-reads-the-rep-on-the-demo-under-a-daily-cap) | Claude reads the rep on the demo, under a daily cap |
 | [7](#adr-7-how-negotiation-decisions-are-made) | How negotiation decisions are made |
+| [8](#adr-8-engine-v2-exact-search-objectives-explanations) | Engine v2: exact search, objectives, explanations |
 | [Voice turn](#one-voice-turn-annotated) | One voice turn, annotated with measured stage timings |
 
 ## ADR 1. Code owns the policy; no ReAct agent in the product
@@ -138,15 +139,30 @@ percentage. But a lower offer can fail where a higher one passes, because each
 payment must clear the creditor's minimum: a pattern like `0000111100001111`.
 
 **Decision.** The adapter evaluates the whole grid, `1%…100%` in 100 steps,
-and caches it (`affordability()`, `lru_cache` on scenario, rules and start
-date). Policy reads `max_bp` and the feasible set; counters snap onto feasible
-grid points.
+and caches it (`affordability()`, `lru_cache` on scenario, rules, start date and
+engine mode). Policy reads `max_bp` and the feasible set; counters snap onto
+feasible grid points. Since Phase 59 each point is `engine.is_feasible`, which stops
+at the first feasible plan: whether a price fits does not depend on how plans are
+ranked or how the fee is timed ([`ENGINE.md`](ENGINE.md#4-objectives-and-fee-policy)).
 
-**Consequences.** Correct by construction for any curve shape, at a cost of
-a median 8.3 ms per uncached scan on the demo fixture and under 1 ms on a
-cache hit (`docs/history/PROGRESS.md`, Environment facts). The policy eval's 0 stuck calls
-and the invariant sweep (counters never above the private max) rely on it. The
-grid is 1-point granular; finer offers would need a denser scan.
+**Consequences.** Correct by construction for any curve shape. The scan costs a
+median 0.46 ms on the demo fixture (8.3 ms when first measured with the take-home engine) and at
+most 4.8 ms on 600 random full-size cases
+([benchmark](eval/engine_v2_20261028/bench.md)); a cache hit is under 1 ms. The
+policy eval's 0 stuck calls and the invariant sweep (counters never above the
+private max) rely on it. The grid is 1-point granular; finer offers would need a
+denser scan.
+
+**What engine v2 found about the curve (Phases 57–61).** The take-home engine
+searched only part of the legal plans, so a hole in the curve could have been an
+artefact. The full-size hunt found such false holes only on rules built to expose
+them (2 of 20,000 adversarial cases called infeasible with a legal plan available,
+none on the scenarios or 20,000 random cases), and the exact search removed them
+([gap report](eval/engine_gap_20261025_full/notes.md)). With the exact engine the
+holes that remain are real: 57 of 537 random full-size curves with a feasible point
+are still non-monotone, and every scenario curve fails at its lowest prices on the
+payment floors ([`ENGINE.md`](ENGINE.md#8-the-affordability-curve)). So the full scan
+stays, and now each point is also proven.
 
 ## ADR 6. Claude reads the rep on the demo, under a daily cap
 
@@ -252,6 +268,9 @@ engine is unchanged. The tunable settings (in `.env`):
 | `MAX_SAME_QUESTION` | `2` | The agent hands off instead of asking the same question a third time. |
 | `MAX_NO_PROGRESS_TURNS` | `4` | The agent hands off after four replies in a row that add nothing new. |
 | `MAX_TURNS` | `24` | The hard limit on call length, also a hand-off. |
+| `ENGINE_OBJECTIVE` | `fee_first` | How the engine ranks legal plans: `fee_first` (the program fee as early as possible, then fewer payments) or `client_first` (most money left in the client's account, then the smallest largest payment). See [ADR 8](#adr-8-engine-v2-exact-search-objectives-explanations). |
+| `ENGINE_FEE_POLICY` | `front_loaded` | When the program fee may be taken: `front_loaded` (as early as the balance allows) or `proportional` (never ahead of the share of the settlement already paid). |
+| `min_cushion_cents` (firm, `firm.json`) | `0` | The firm's minimum client cushion, $0 to $5,000: the plan keeps every balance at or above it when some plan at that price can. The operator can change it for one call in the Debt negotiator view; it never changes which prices are affordable. PRIVATE. |
 
 On every turn, `decide()` checks the same list in a fixed order: the turn
 limit, hostility, requests for private information, demands for a
@@ -304,6 +323,54 @@ in three fewer turns (surplus 0.883 → 0.873), and no outcome changed
 ([Phase 50 eval](eval/policy_eval_20261009_50/summary.md)). Deals above 75% of the ceiling, which the old policy could
 reach, are now handed to a person. The scenario labels follow the same line:
 a deal is "possible" only when the rep's floor is at or below it.
+
+## ADR 8. Engine v2: exact search, objectives, explanations
+
+**Context.** The engine came from a take-home exercise and was vendored
+read-only. It had three weaknesses (decision D1 in the
+[decision record](history/DECISIONS.md)). Its candidate family was structured,
+not exhaustive, so it could call a price infeasible when a legal plan existed and
+the agent would walk away from a deal it could make. Its ranking served only the
+firm's fee timing. And an infeasible price came back as a bare `false`, so the
+agent's term suggestions brute-forced up to 24 × 100 engine runs and the trace
+could not say why a price did not fit.
+
+**Decision.** Own the engine (`feasibility/`, linted and tested like the rest of
+the repo) and measure before changing it: a brute-force oracle over every legal
+plan on small cases, an exact full-size reference, a frozen golden corpus of the
+take-home's outputs, and a gap report. Then, in order:
+
+- *Exact search.* One ledger simulation per client turns every money rule into a
+  cap on the plan's running total (the prefix-cap identity). Feasibility, fee
+  timing and both rescue amounts only improve when running totals are lower, so a
+  small family of plans that dominates every legal plan, searched by branch and
+  bound, is exact. The take-home family was kept as the first stage, so outputs
+  change only where it was not exact.
+- *Objectives.* `fee_first` (the take-home ranking, the default) and
+  `client_first`, plus an optional `proportional` fee policy and a per-firm soft
+  client cushion. Keys written down before code; client-first measured, then not
+  made the default because more payments cost clients more in bank fees (D8).
+- *Explanations.* `explain` gives the reason, date and exact shortfall for an
+  infeasible price; `what_if` answers term changes on the shared `Problem`, and the
+  agent's term suggestions use it.
+
+The full write-up, with the dominance argument and the exactness table, is
+[`ENGINE.md`](ENGINE.md).
+
+**Consequences.** The take-home family was exact on every scenario and on 20,000
+random full-size cases, and missed only on tiered staircases with three or more
+payment amounts and tight cash: 25 misses in 20,000 adversarial cases, up to a
+$161.78 lump asked when none was needed
+([gap report](eval/engine_gap_20261025_full/notes.md)). The engine now has 0
+misses against the reference and the oracle, every schedule passes the
+independent validator, and the golden corpus is byte-identical. No agent call
+changed: the 100-call policy eval is identical to before
+([Phase 61 run](eval/engine_v2_20261028/summary.md)). Scans got faster, not slower
+(0.46 ms on the demo; golden worst case 10.8 s → 78 ms ranked,
+[benchmark](eval/engine_v2_20261028/bench.md)). The shortfall reaches the operator
+trace only; it is PRIVATE and blocklisted from speech. Open: the proportional fee is
+exact over the search's family only, client-first has a slow adversarial tail, and
+completeness of the take-home family without tiers stays a conjecture.
 
 ## One voice turn, annotated
 

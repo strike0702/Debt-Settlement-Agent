@@ -5,11 +5,10 @@ overdraft, or the fee shortfall on the last window) and the increment is the lar
 ``ceil(shortfall / drafts landed by then)``. ``exact_lump`` / ``exact_increment``
 (Phase 57b, what ``engine.evaluate`` uses) take the minimum over every legal vector via
 ``search.Search`` (exact: both are monotone in prefix sums, so the dominating family is
-enough and no binary search is needed). ``compute_lump`` / ``compute_increment`` take
-the minimum over a given candidate list; only ``legacy.py`` still uses them. Both share
-the latest-date rule (first break date of the (L, k, payments)-smallest vector), the
-guardrail caps from ``constants.py`` and the reason texts. Returns plain results that
-the engine wraps as ``FundsOption``.
+enough and no binary search is needed). ``latest_date`` is the lump-date rule (first
+break date of the (L, k, payments)-smallest vector), shared with ``explain.py``. The
+guardrail caps come from ``constants.py``. Returns plain results that the engine wraps
+as ``FundsOption``.
 """
 
 from __future__ import annotations
@@ -25,21 +24,8 @@ from feasibility.constants import (
 from feasibility.models import Client
 from feasibility.problem import Problem
 from feasibility.search import Search
-from feasibility.shapes import Candidate
-from feasibility.simulate import SimulationResult, apply_payments, simulate
-from feasibility.util import ceil_div, round_half_up
-
-
-def _simulate(
-    client: Client,
-    cand: Candidate,
-    cadence: list[date],
-    bank_fee_cents: int,
-    base: SimulationResult | None,
-) -> SimulationResult:
-    if base is not None:
-        return apply_payments(base, cadence, cand.payments, bank_fee_cents)
-    return simulate(client, list(zip(cadence[: cand.k], cand.payments)), cadence, bank_fee_cents)
+from feasibility.simulate import SimulationResult
+from feasibility.util import round_half_up
 
 
 @dataclass(frozen=True)
@@ -75,42 +61,7 @@ def _structural_unfixable_reason() -> str:
     )
 
 
-def compute_lump(
-    client: Client,
-    candidates: list[Candidate],
-    cadence: list[date],
-    bank_fee_cents: int,
-    F: int,
-    S: int,
-    base: SimulationResult | None = None,
-) -> LumpResult:
-    """Global min lump L* and latest-safe placement date."""
-    if not candidates or not cadence:
-        return LumpResult(
-            amount_cents=0,
-            date=None,
-            within_guardrail=False,
-            reason=_structural_unfixable_reason(),
-        )
-
-    best: tuple[int, int, tuple[int, ...], SimulationResult] | None = None
-
-    for cand in candidates:
-        sim = _simulate(client, cand, cadence, bank_fee_cents, base)
-        max_overdraft = max(((-b) for b in sim.balances.values()), default=0)
-        fee_short = F - sim.w[len(cadence)]
-        L = max(0, max_overdraft, fee_short)
-
-        cand_key = (L, cand.k, cand.payments)
-        if best is None or cand_key < (best[0], best[1], best[2]):
-            best = (L, cand.k, cand.payments, sim)
-
-    assert best is not None
-    L_star, _, _, sim = best
-    return _lump_result(L_star, _latest_date(client, sim, cadence, F), S)
-
-
-def _latest_date(client: Client, sim: SimulationResult, cadence: list[date], F: int) -> date:
+def latest_date(client: Client, sim: SimulationResult, cadence: list[date], F: int) -> date:
     """First date the chosen vector breaks (overdraft, or fee short on/after ``t_M``)."""
     t_M = cadence[-1]
     violations: list[date] = []
@@ -154,70 +105,8 @@ def exact_lump(problem: Problem, search: Search) -> LumpResult:
         )
     L_star, vec = found
     sim = problem.simulate_vector(vec)
-    t_late = _latest_date(problem.client, sim, problem.cadence, problem.program_fee_cents)
+    t_late = latest_date(problem.client, sim, problem.cadence, problem.program_fee_cents)
     return _lump_result(L_star, t_late, search.S)
-
-
-def compute_increment(
-    client: Client,
-    candidates: list[Candidate],
-    cadence: list[date],
-    bank_fee_cents: int,
-    F: int,
-    base: SimulationResult | None = None,
-) -> IncrementResult:
-    """Global min uniform monthly draft increment X*."""
-    future_drafts = [
-        e for e in client.ledger if e.type == "credit" and e.date > client.as_of_date
-    ]
-    N = len(future_drafts)
-    draft_dates = sorted(e.date for e in future_drafts)
-
-    def d_count(v: date) -> int:
-        return sum(1 for dd in draft_dates if dd <= v)
-
-    if not candidates or not cadence:
-        return IncrementResult(
-            amount_cents=0,
-            num_drafts=N,
-            within_guardrail=False,
-            reason=_structural_unfixable_reason(),
-        )
-
-    t_M = cadence[-1]
-    best_X: int | None = None
-    any_fixable = False
-    saw_pre_draft_shortfall = False
-
-    for cand in candidates:
-        sim = _simulate(client, cand, cadence, bank_fee_cents, base)
-        required = 0
-        unfixable = False
-        for v, b in sim.balances.items():
-            if b < 0:
-                dv = d_count(v)
-                if dv == 0:
-                    unfixable = True
-                    saw_pre_draft_shortfall = True
-                    break
-                required = max(required, ceil_div(-b, dv))
-            # Fee collectibility on the tail window — independent of overdraft
-            # (when B < 0 and v >= t_M, need ceil((F-B)/d), not just ceil((-B)/d)).
-            if v >= t_M and b < F:
-                dv = d_count(v)
-                if dv == 0:
-                    unfixable = True
-                    saw_pre_draft_shortfall = True
-                    break
-                required = max(required, ceil_div(F - b, dv))
-        if unfixable:
-            continue
-        any_fixable = True
-        if best_X is None or required < best_X:
-            best_X = required
-
-    return _increment_result(best_X if any_fixable else None, N, saw_pre_draft_shortfall,
-                             client.draft_amount_cents)
 
 
 def _increment_result(
@@ -262,7 +151,7 @@ def exact_increment(problem: Problem, search: Search) -> IncrementResult:
     """X* over every legal vector (``search.min_increment``), same texts and guardrail.
 
     A legal vector is unfixable only when a shortfall lands before any draft, so when
-    every one is unfixable the cause is the pre-draft one (as in ``compute_increment``).
+    every one is unfixable the cause is the pre-draft one.
     """
     client = problem.client
     N = sum(1 for e in client.ledger if e.type == "credit" and e.date > client.as_of_date)

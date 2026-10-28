@@ -5,10 +5,11 @@ schedule legal under the take-home's binding rules 1–9 feasible; the lexicogra
 best cumulative-fee vector Φ*; when infeasible, the smallest lump ``L`` and smallest
 uniform draft increment ``X``) but at full size (k up to 24, S in the hundreds of
 thousands of cents, up to 4 levels), where the oracle's DFS over every cent cannot run.
-It is *not* the engine's generator and shares nothing with ``feasibility/shapes.py`` or
-``feasibility/legacy.py``: no level is pinned to its floor. It uses the ``Problem``'s
-base run through the prefix-cap identity (``feasibility/problem.py``), and the gap
-report replays each witness independently (``oracle.Instance``) and validates it.
+It is written independently of the engine's search (``feasibility/search.py``) and of
+the take-home generator it replaced: no level is pinned to its floor. It uses the
+``Problem``'s base run through the prefix-cap identity (``feasibility/problem.py``), and
+``tests/engine/hunt.py`` replays each witness independently (``oracle.Instance``) and
+validates it.
 
 Exactness argument. Fix k. By the prefix-cap identity every window minimum is
 ``base_w[j] - P_min(j,k) - bf*min(j,k)``, so feasibility, Φ (suffix-min of the window
@@ -51,8 +52,9 @@ worse as the current level rises, so the scan stops there. Per-k bounds from the
 floors-only prefix sums skip whole k the same way. Ties go to the vector found first;
 only the value (Φ*, L*, X*) is claimed exact.
 
-Used by ``tests/engine/test_reference.py`` (agreement with the oracle on small cases)
-and ``scripts/engine_gap_report.py --mode full``; never by ``app/``.
+Used by ``tests/engine/test_reference.py`` (agreement with the oracle on small cases),
+``test_search.py`` / ``test_objectives.py`` (engine agreement at full size) and, until
+Phase 61, the gap report (frozen in ``docs/eval/engine_gap_*``); never by ``app/``.
 """
 
 from __future__ import annotations

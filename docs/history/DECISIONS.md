@@ -173,6 +173,38 @@ agent proposed April 30, the latest month-end before the last draft. Known weakn
 fixed by decision: the agent does not tell the rep why the date fails, and it only tries
 month-end dates (skips May 15).
 
+## D11. Cushion field shows its state with a border (2026-10-28)
+
+Review of the operator field went through three rounds: help text under the field →
+tooltip (hover and keyboard focus); an "accepted" text label → removed as too much text;
+final: no focus ring, border green when the value is accepted (Enter or blur), grey while
+editing, red when invalid, with a visually hidden status for screen readers since colour
+alone carries the state.
+
+## D12. Voice: overhaul instead of tuning (2026-10-28)
+
+**Evidence.** After three rounds of fixes (echo guard, Whisper hallucination filter, stricter
+barge rule) live voice was worse: browser STT heard nothing, server STT trimmed the first
+words ("One hundred twenty dollars" → "20$"), and replies took about 3.5 s.
+
+**Diagnosis.** The browser's own speech (`speechSynthesis`) is not an echo-cancellation
+reference in Chrome, so the agent heard itself; every guard against that echo also ate real
+speech. Batch Whisper per clip and silence-only turn detection add latency and errors.
+
+**Chosen** (`docs/VOICE_PLAN.md`): Pipecat inside the FastAPI app, WebRTC audio (so echo
+cancellation works), Deepgram Flux (streaming STT with model-based end-of-turn) and Aura-2
+(streaming TTS), free Cloudflare TURN for the hosted demo. The orchestrator stays the only
+decision maker; "what the rep heard" comes from audio actually played. A measurement harness
+and a spike come first (Phase 62), with a go/no-go.
+
+**Alternatives rejected.** Staying free (Groq Whisper + browser speech, rebuilt client):
+cannot reach production latency or reliable echo cancellation. Our own WebSocket pipeline:
+more code and risk for the same result. Speech-to-speech models: would let a model decide
+moves, against the core rule.
+
+**Phase 56 handling.** Merged without its browser voice tuning (reverted); the server-side
+Whisper filter, stale-speech fix, unheard-turn rollback and fragment merge stay.
+
 ## Process choices
 
 - Each phase runs in its own git worktree with a paste-ready prompt; phases that touch the

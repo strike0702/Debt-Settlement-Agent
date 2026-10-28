@@ -7,6 +7,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "@/App";
+import { HINT } from "@/components/CushionField";
 import { DecisionTrace } from "@/components/DecisionTrace";
 import { easyDeal } from "@/fixtures";
 import { formatCushion, parseCushion } from "@/lib/cushion";
@@ -108,9 +109,39 @@ describe("Minimum client cushion field", () => {
     render(<App />);
     await screen.findByDisplayValue("100");
     fireEvent.change(field()!, { target: { value: "6000" } });
-    expect(screen.getByText("Use $5,000 or less.")).toBeInTheDocument();
+    const tip = screen.getByRole("tooltip");
+    expect(tip).toHaveTextContent("Use $5,000 or less.");
+    expect(tip.className).not.toMatch(/\bhidden\b/); // an error stays open
+    expect(field()).toHaveAccessibleDescription("Use $5,000 or less.");
     expect(screen.getByRole("button", { name: /Start call/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Watch a call/ })).toBeDisabled();
+  });
+
+  it("draws no focus ring or outline (the caret shows focus)", async () => {
+    render(<App />);
+    await screen.findByDisplayValue("100");
+    const input = field()!;
+    input.focus();
+    expect(input.style.outline).toBe("none");
+    expect(input.className).not.toMatch(/ring|outline/);
+    expect(input.parentElement!.className).not.toMatch(/ring|focus/);
+  });
+
+  it("puts the help text in a tooltip that also describes the input", async () => {
+    render(<App />);
+    await screen.findByDisplayValue("100");
+    const input = field()!;
+    const tip = screen.getByRole("tooltip", { hidden: true });
+    expect(tip).toHaveTextContent(HINT);
+    expect(input).toHaveAttribute("aria-describedby", tip.id);
+    expect(input).toHaveAccessibleDescription(HINT);
+    // Hidden until hover or keyboard focus (CSS group-hover / group-focus-within).
+    expect(tip.className).toMatch(/\bhidden\b/);
+    expect(tip.className).toMatch(/group-hover:block/);
+    expect(tip.className).toMatch(/group-focus-within:block/);
+    // No help text sits in the layout under the field.
+    expect(tip.className).toMatch(/\babsolute\b/);
+    expect(screen.getByTestId("cushion-field").querySelector("p")).toBeNull();
   });
 
   it("is never shown in the Creditor rep view", async () => {

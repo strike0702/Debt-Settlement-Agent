@@ -393,6 +393,12 @@ CLAUDE.md, docs/ENGINE_PLAN.md (Explain and what-if), PROGRESS 59 handoff and Ph
 (trace design), `app/agent/term_alts.py`, `orchestrator._engine_context`, `app/voice/views.py`,
 `app/schemas/events.py`, `web/src/components/DecisionTrace.tsx`, `web/src/lib/traceStory.ts`.
 
+Since this prompt was written: 57b made the search exact (`feasibility/search.py`), 59 added
+objectives (default `fee_first`), the fee policy and the per-firm, per-call client cushion
+(`min_cushion_cents`, soft; `Result.cushion_kept`), and 56 added `TurnTrace.term_alt` (the term
+a COUNTER_TERMS move asked for), visible errors, and the rollback of unheard turns. Build on
+those; reuse `Search` for the explanation, and keep every new trace field operator-only.
+
 1. `feasibility/explain.py`: `explain(problem, bp, objective) -> Infeasibility | None` (reason
    code, binding date, shortfall cents, closest k). Tests: one per reason code; oracle check
    that the shortfall is exact (adding it as a lump on that date makes the oracle feasible

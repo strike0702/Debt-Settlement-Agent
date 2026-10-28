@@ -1,9 +1,10 @@
 /**
  * Minimum client cushion (Phase 59 follow-up): the money field shows only in the
  * Debt negotiator view before a call, is pre-filled with the scenario's firm default,
- * accepts a value on Enter or blur (the label beside it shows the accepted amount),
- * sends exactly that in `start.min_cushion_cents` (this call only), keeps the last
- * accepted value on an invalid entry, and the decision trace says whether the plan kept it.
+ * accepts a value on Enter or blur, shows its state with the border (green accepted,
+ * grey editing, red invalid; a hidden polite status says the same), sends exactly the
+ * accepted value in `start.min_cushion_cents` (this call only), keeps the last accepted
+ * value on an invalid entry, and the decision trace says whether the plan kept it.
  */
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -96,64 +97,90 @@ describe("Minimum client cushion field", () => {
     expect(field()).toBeNull();
   });
 
-  const label = () => screen.getByTestId("cushion-accepted");
+  const box = () => screen.getByTestId("cushion-box");
+  const status = () => screen.getByTestId("cushion-status");
 
-  it("shows the firm default as the accepted value, politely announced", async () => {
+  it("starts green with the firm default applied, and says so to screen readers", async () => {
     render(<App />);
     await screen.findByDisplayValue("100");
-    expect(label()).toHaveTextContent("Firm default: $100.00");
-    expect(label()).toHaveAttribute("aria-live", "polite");
-    expect(label().querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(box()).toHaveAttribute("data-state", "accepted");
+    expect(box().className).toMatch(/\bborder-good\b/);
+    expect(status()).toHaveTextContent("Cushion set to $100.00 for this call");
+    expect(status()).toHaveAttribute("aria-live", "polite");
+    expect(status().className).toMatch(/\bsr-only\b/);
+    // No visible confirmation text.
+    expect(screen.queryByTestId("cushion-accepted")).toBeNull();
+    expect(screen.queryByText(/for this call/, { ignore: ".sr-only" })).toBeNull();
   });
 
-  it("accepts on Enter and sends exactly the accepted value (autoplay too)", async () => {
+  it("goes grey while editing and green again on Enter; start sends the accepted value", async () => {
     render(<App />);
     await screen.findByDisplayValue("100");
     fireEvent.change(field()!, { target: { value: "250.50" } });
-    // Typing alone does not change the label (no live flicker).
-    expect(label()).toHaveTextContent("Firm default: $100.00");
+    expect(box()).toHaveAttribute("data-state", "editing");
+    expect(box().className).toMatch(/\bborder-border\b/);
+    expect(status()).toHaveTextContent("");
     fireEvent.keyDown(field()!, { key: "Enter" });
-    expect(label()).toHaveTextContent("$250.50 for this call");
+    expect(box()).toHaveAttribute("data-state", "accepted");
+    expect(status()).toHaveTextContent("Cushion set to $250.50 for this call");
     fireEvent.click(screen.getByRole("button", { name: /Watch a call/ }));
     const ws = FakeSocket.all.at(-1)!;
     act(() => ws.open());
     expect(startMsg(ws)).toMatchObject({ type: "start", autoplay: true, min_cushion_cents: 25050 });
   });
 
-  it("accepts on blur", async () => {
+  it("is accepted on blur, and the firm default is not sent", async () => {
     render(<App />);
     await screen.findByDisplayValue("100");
     fireEvent.change(field()!, { target: { value: "75" } });
     fireEvent.blur(field()!);
-    expect(label()).toHaveTextContent("$75.00 for this call");
-    // Back to the firm default reads as the default and is not sent.
+    expect(box()).toHaveAttribute("data-state", "accepted");
+    expect(status()).toHaveTextContent("Cushion set to $75.00 for this call");
     fireEvent.change(field()!, { target: { value: "100" } });
+    expect(box()).toHaveAttribute("data-state", "editing");
     fireEvent.blur(field()!);
-    expect(label()).toHaveTextContent("Firm default: $100.00");
+    expect(box()).toHaveAttribute("data-state", "accepted");
     fireEvent.click(screen.getByRole("button", { name: /Start call/ }));
     const ws = FakeSocket.all.at(-1)!;
     act(() => ws.open());
     expect(startMsg(ws)).toEqual({ type: "start", scenario_id: "easy_deal" });
   });
 
-  it("keeps the last accepted value on an invalid entry and shows the error", async () => {
+  it("goes red on an invalid entry, keeps the last accepted value, then recovers", async () => {
     render(<App />);
     await screen.findByDisplayValue("100");
     fireEvent.change(field()!, { target: { value: "250" } });
     fireEvent.keyDown(field()!, { key: "Enter" });
     fireEvent.change(field()!, { target: { value: "6000" } });
+    expect(box()).toHaveAttribute("data-state", "invalid");
+    expect(box().className).toMatch(/\bborder-bad\b/);
+    expect(field()).toHaveAttribute("aria-invalid", "true");
+    expect(status()).toHaveTextContent("Invalid amount");
     fireEvent.keyDown(field()!, { key: "Enter" });
     fireEvent.blur(field()!);
-    expect(label()).toHaveTextContent("$250.00 for this call");
+    expect(box()).toHaveAttribute("data-state", "invalid"); // nothing accepted
     const tip = screen.getByRole("tooltip");
     expect(tip).toHaveTextContent("Use $5,000 or less.");
     expect(tip.className).not.toMatch(/\bhidden\b/); // an error stays open
     expect(field()).toHaveAccessibleDescription("Use $5,000 or less.");
-    // Start still goes out with the accepted value the label shows.
+    // Start still goes out with the last accepted value.
     fireEvent.click(screen.getByRole("button", { name: /Start call/ }));
     const ws = FakeSocket.all.at(-1)!;
     act(() => ws.open());
     expect(startMsg(ws)).toMatchObject({ min_cushion_cents: 25000 });
+  });
+
+  it("recovers from red: grey while fixing, green once accepted", async () => {
+    render(<App />);
+    await screen.findByDisplayValue("100");
+    fireEvent.change(field()!, { target: { value: "abc" } });
+    expect(box()).toHaveAttribute("data-state", "invalid");
+    fireEvent.change(field()!, { target: { value: "120" } });
+    expect(box()).toHaveAttribute("data-state", "editing");
+    expect(field()).not.toHaveAttribute("aria-invalid");
+    fireEvent.keyDown(field()!, { key: "Enter" });
+    expect(box()).toHaveAttribute("data-state", "accepted");
+    expect(status()).toHaveTextContent("Cushion set to $120.00 for this call");
   });
 
   it("draws no focus ring or outline (the caret shows focus)", async () => {
@@ -178,7 +205,7 @@ describe("Minimum client cushion field", () => {
     expect(tip.className).toMatch(/\bhidden\b/);
     expect(tip.className).toMatch(/group-hover:block/);
     expect(tip.className).toMatch(/group-focus-within:block/);
-    // No help text sits in the layout under the field (the label is beside it).
+    // No help text sits in the layout under the field.
     expect(tip.className).toMatch(/\babsolute\b/);
     expect(screen.getByTestId("cushion-field").querySelector("p")).toBeNull();
   });

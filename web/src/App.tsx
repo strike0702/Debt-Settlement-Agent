@@ -21,7 +21,7 @@
  * Minimum client cushion: the Debt negotiator view shows `CushionField` before a
  * call, pre-filled with the scenario's firm default (`brief.firm.min_cushion_cents`,
  * or a custom case's `firm.min_cushion_cents`). The typed text is accepted on Enter or
- * blur when it parses; the accepted value (shown in the field's label) is what is sent
+ * blur when it parses (the field's border turns green); the accepted value is what is sent
  * as `start.min_cushion_cents` for that call only, and only when it differs from the
  * firm default. It is never stored. The Creditor rep
  * view never shows it.
@@ -435,9 +435,9 @@ function LiveApp() {
         <>
           {lens === "operator" && !callRunning && (
             <CushionField
+              key={selected}
               text={cushionText}
               accepted={cushionAccepted}
-              firmDefault={firmCushion}
               onText={(text) => setCushionEdit({ id: selected, text, accepted: cushionAccepted })}
               onAccept={(cents) => setCushionEdit({ id: selected, text: cushionText, accepted: cents })}
             />

@@ -1096,6 +1096,22 @@ class Orchestrator:
         if unheard_ids and self.on_speech_dropped is not None:
             await self.on_speech_dropped(unheard_ids)
 
+    async def withdraw_unheard_turn(self) -> bool:
+        """Undo the pending turn when none of it was heard, and forget its rep line.
+
+        For the Pipecat voice path's eager end of turn: a turn started on a
+        transcript the rep then kept adding to is rolled back like an unheard
+        barge, but its text is not merged into the next line (the committed
+        transcript already contains it). False when there was nothing to undo.
+        """
+        pending = self.session.pending
+        if pending is None or pending.acked:
+            return False
+        await self.on_barge_in([])
+        self._unheard_text = None
+        self._audit("orchestrator", "turn_withdrawn", {"ids": list(pending.sentence_ids)})
+        return True
+
     def _roll_back(self, rb: TurnRollback) -> None:
         """Undo a turn the rep heard none of; its rep line waits to merge with the next."""
         session = self.session

@@ -1,0 +1,31 @@
+{
+ "target": "pipecat",
+ "audio": "inject",
+ "date": "2026-10-29 14:32",
+ "summary": {
+  "reply_turns": 13,
+  "replied": 13,
+  "first_audio_p50_ms": 3508.4,
+  "first_audio_p95_ms": 5173.2,
+  "any_audio_p50_ms": 3508.4,
+  "eot_p50_ms": 846.7,
+  "eager_eot_p50_ms": 441.6,
+  "final_p50_ms": 846.9,
+  "wer_mean": 0.013,
+  "number_recall": 1.0,
+  "numbers": "12/12",
+  "first_word_lost": 0,
+  "lines_scored": 15,
+  "split_turns": 0,
+  "phantom_finals": 0,
+  "false_barges": 0,
+  "backchannels_barged": "0/3",
+  "interrupts_over_agent": "2/2",
+  "interrupts_barged": "2/2",
+  "barge_stop_p50_ms": 1390.2,
+  "barge_stop_max_ms": 1593.8
+ },
+ "phantoms": [],
+ "false_barges": [],
+ "notes": []
+}

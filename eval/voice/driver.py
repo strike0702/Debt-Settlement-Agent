@@ -8,6 +8,9 @@ Targets:
 - ``spike``: the throwaway Pipecat + Deepgram page in ``scripts/voice_spike``
   (WebRTC audio both ways); its server is started from that folder's own
   environment, and its pipeline events come from ``GET /events``.
+- ``pipecat``: the app itself with ``VOICE_STACK=pipecat`` (Phase 63) and its
+  minimal page ``/voice/test``: a real call (orchestrator, NLU, NLG) with Flux +
+  Aura-2 over WebRTC; pipeline events come from ``GET /voice/events?call_id=``.
 
 Audio sources (``--audio``): ``inject`` replaces ``getUserMedia`` with a WebAudio
 stream the driver plays each rep WAV into, timed against the agent's speech
@@ -45,7 +48,8 @@ FIXTURES = ROOT / "fixtures/voice"
 PROBE_JS = (Path(__file__).parent / "probe.js").read_text()
 SPIKE_DIR = ROOT / "scripts/voice_spike"
 
-Target = Literal["legacy-server", "legacy-browser", "spike"]
+Target = Literal["legacy-server", "legacy-browser", "spike", "pipecat"]
+WEBRTC_TARGETS = ("spike", "pipecat")
 Audio = Literal["inject", "speakers"]
 
 # Local fillers the legacy client says while waiting; not the reply.
@@ -95,9 +99,12 @@ async def serve(
                 proc.kill()
 
 
-def legacy_server(port: int, log: Path, db: Path) -> contextlib.AbstractAsyncContextManager[str]:
+def legacy_server(
+    port: int, log: Path, db: Path, *, voice_stack: str = "legacy"
+) -> contextlib.AbstractAsyncContextManager[str]:
     """main's app on the demo profile, free NLU chain only (no paid Claude, no cache)."""
     env = {
+        "VOICE_STACK": voice_stack,
         "LLM_PROFILE": "demo",
         "NLU_MODE": "llm",
         "NLG_MODE": "bank",
@@ -190,7 +197,7 @@ class Session:
         return float(dur)
 
     async def speaking(self, target: Target) -> bool:
-        if target == "spike":
+        if target in WEBRTC_TARGETS:
             return bool(await self.page.eval("__vhSpeaking()"))
         return bool(await self.page.eval("speechSynthesis.speaking || speechSynthesis.pending"))
 
@@ -235,7 +242,7 @@ async def _wait_idle(s: Session, target: Target, *, since: float, timeout: float
 
 
 async def _spoke_since(s: Session, target: Target, since: float) -> bool:
-    kinds = {"agent_audio_on"} if target == "spike" else {"tts_start"}
+    kinds = {"agent_audio_on"} if target in WEBRTC_TARGETS else {"tts_start"}
     return any(
         e["kind"] in kinds and e["t"] >= since and e.get("text") not in LEGACY_FILLERS
         for e in s.run.page
@@ -354,6 +361,38 @@ async def run_spike(
     return run
 
 
+async def run_pipecat(
+    call: CallScript, *, base: str, audio: Audio, chrome_args: list[str]
+) -> CallRun:
+    run = CallRun(call.id, "pipecat", audio)
+    cfg = {"inject": audio == "inject"}
+    init = f"window.__VH_CFG = {json.dumps(cfg)};\n{PROBE_JS}\n{SPIKE_HELPERS}"
+    call_id = f"vh-{call.id}-{int(now_ms())}"
+    async with (
+        Chrome(extra_args=chrome_args, via_open=audio == "speakers") as chrome,
+        httpx.AsyncClient() as http,
+    ):
+        page = await chrome.page()
+        url = f"{base}/voice/test?scenario_id={call.scenario_id}&call_id={call_id}"
+        await open_page(page, url, init_script=init)
+        s = Session(page, run, audio)
+        await page.eval("window.voiceConnect()", gesture=True)
+        ok = await s.wait_until(
+            lambda: _async_true(
+                any(e["kind"] == "pc_state" and e["state"] == "connected" for e in run.page)
+            ),
+            30,
+        )
+        if not ok:
+            raise RuntimeError("pipecat WebRTC did not connect")
+        await drive_call(s, call, "pipecat")
+        await page.eval("window.voiceDisconnect()")
+        await asyncio.sleep(1.5)
+        run.server = (await http.get(f"{base}/voice/events", params={"call_id": call_id})).json()
+        await page.close()
+    return run
+
+
 async def _async_true(v: bool) -> bool:
     return v
 
@@ -370,6 +409,8 @@ def normalize(run: CallRun) -> list[dict[str, Any]]:
             out.append({"t": e["t"], "kind": k, "id": e["id"]})
     if run.target.startswith("legacy"):
         out += _normalize_legacy(run)
+    elif run.target == "pipecat":
+        out += _normalize_pipecat(run)
     else:
         out += _normalize_spike(run)
     return sorted(out, key=lambda e: e["t"])
@@ -447,5 +488,34 @@ def _normalize_spike(run: CallRun) -> list[dict[str, Any]]:
     # Agent audio that ends within 1.5 s of an interruption is the barge stop.
     for e in list(out):
         if e["kind"] == "audio_off" and any(0 <= e["t"] - t <= 1500 for t in interrupted):
+            out.append({"t": e["t"], "kind": "stop"})
+    return out
+
+
+def _normalize_pipecat(run: CallRun) -> list[dict[str, Any]]:
+    """Like the spike, but barges are the pipeline's own decisions (``barge`` events)."""
+    out = []
+    for e in run.page:
+        if e["kind"] == "agent_audio_on":
+            out.append({"t": e["t"], "kind": "audio_on"})
+        elif e["kind"] == "agent_audio_off":
+            out.append({"t": e["t"], "kind": "audio_off"})
+    barges = [e["t"] for e in run.server if e["kind"] == "barge" and e.get("reason") != "dropped"]
+    kinds = {
+        "end_of_turn": "eot",
+        "final": "final",
+        "tts_byte": "tts_byte",
+        "eager_end_of_turn": "eager_eot",
+    }
+    for e in run.server:
+        k, t = e["kind"], e["t"]
+        if k in kinds:
+            out.append({"t": t, "kind": kinds[k], "text": e.get("text", "")})
+        elif k == "reply":
+            out.append({"t": t, "kind": "reply"})
+        elif k == "barge" and t in barges:
+            out.append({"t": t, "kind": "barge"})
+    for e in list(out):
+        if e["kind"] == "audio_off" and any(0 <= e["t"] - t <= 1500 for t in barges):
             out.append({"t": e["t"], "kind": "stop"})
     return out

@@ -1,0 +1,314 @@
+"""Phase 63 Pipecat voice path: heard tracking, rollback, eager turns, barge rule, budget, bridge.
+
+Fake call / fake orchestrator / no Deepgram: the real orchestrator runs on the
+oracle NLU and template NLG where the rollback matters.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from datetime import UTC, datetime
+from decimal import Decimal
+from pathlib import Path
+from typing import Any
+
+import pytest
+from fastapi.testclient import TestClient
+from pipecat.frames.frames import (
+    BotStartedSpeakingFrame,
+    InterimTranscriptionFrame,
+    InterruptionFrame,
+    TranscriptionFrame,
+)
+from pipecat.processors.frame_processor import FrameDirection
+from pipecat.tests.utils import run_test
+
+from app.agent.orchestrator import Orchestrator, Utterance
+from app.config import Settings
+from app.llm.client import FakeLLM
+from app.main import create_app
+from app.store.audit import AuditLog
+from app.voice import ws as call_ws
+from app.voice.pipeline import processors
+from app.voice.pipeline.budget import VoiceBudget
+from app.voice.pipeline.heard import HeardTracker
+from app.voice.pipeline.processors import OrchestratorProcessor, SilenceFill
+from app.voice.pipeline.rules import is_backchannel, is_barge
+from app.voice.pipeline.turns import VoiceTurns
+from tests.unit.test_unheard_barge import _ASK, _ladder, _orch, _to_first_counter
+
+
+class FakeCall:
+    """VoiceCall over a real orchestrator, recording what reached the UI."""
+
+    def __init__(self, orch: Any) -> None:
+        self.orch = orch
+        self.shown: list[str] = []
+        self.emitted: list[Utterance] = []
+        self.rows: list[tuple[str, dict[str, Any]]] = []
+
+    async def show_creditor(self, text: str) -> None:
+        self.shown.append(text)
+
+    async def emit(self, utt: Utterance) -> None:
+        self.emitted.append(utt)
+
+    async def ack(self, ids: list[str]) -> None:
+        await self.orch.on_sentence_done(ids)
+
+    async def barge(self, spoken: list[str]) -> None:
+        await self.orch.on_barge_in(spoken)
+
+    async def nlu_unavailable(self, e: Exception) -> None:
+        raise AssertionError(e)
+
+    def audit(self, event_type: str, payload: dict[str, Any]) -> None:
+        self.rows.append((event_type, payload))
+
+
+async def _speak_and_interrupt(orch: Orchestrator, utt: Utterance, played: int) -> None:
+    """Queue ``utt`` as the pipeline would, play ``played`` sentences, then barge."""
+    tracker, turns = HeardTracker(), VoiceTurns(FakeCall(orch), eager=False)
+    for sid, _ in utt.sentences:
+        tracker.queued(sid)
+    for sid, _ in utt.sentences[:played]:
+        assert tracker.played(sid)
+        await turns.on_played(sid)
+    await turns.on_barge(tracker.interrupt().heard)
+
+
+# ---------------------------------------------------------------- heard / rollback
+
+
+async def test_barge_before_any_audio_rolls_the_turn_back(tmp_path: Path) -> None:
+    orch, dropped = _orch(tmp_path)
+    await _to_first_counter(orch)
+    before = _ladder(orch)
+    hold = await orch.on_creditor_text("Seventy percent.", oracle=_ASK)
+    await _speak_and_interrupt(orch, hold, played=0)
+    assert _ladder(orch) == before
+    assert dropped == [[sid for sid, _ in hold.sentences]]
+
+
+async def test_barge_after_sentence_one_keeps_sentence_one_heard(tmp_path: Path) -> None:
+    orch, dropped = _orch(tmp_path)
+    anchor = await _to_first_counter(orch)
+    hold = await orch.on_creditor_text("Seventy percent.", oracle=_ASK)
+    assert len(hold.sentences) >= 2
+    await _speak_and_interrupt(orch, hold, played=1)
+    assert orch.session.neg.hold_stage == 1 and orch.session.neg.counters_offered == [anchor]
+    assert dropped == [[sid for sid, _ in hold.sentences[1:]]]
+    spoken = {t.sentence_id: t.spoken for t in orch.session.history if t.sentence_id}
+    assert spoken[hold.sentences[0][0]] is True
+    assert spoken[hold.sentences[1][0]] is False
+
+
+async def test_barge_after_everything_played_drops_nothing(tmp_path: Path) -> None:
+    orch, dropped = _orch(tmp_path)
+    await _to_first_counter(orch)
+    hold = await orch.on_creditor_text("Seventy percent.", oracle=_ASK)
+    await _speak_and_interrupt(orch, hold, played=len(hold.sentences))
+    assert orch.session.pending is None and dropped == []
+    assert orch.session.neg.hold_stage == 1
+
+
+async def test_withdrawn_eager_turn_rolls_back_without_merging_its_text(tmp_path: Path) -> None:
+    orch, _ = _orch(tmp_path)
+    await _to_first_counter(orch)
+    before = _ladder(orch)
+    await orch.on_creditor_text("Seventy percent.", oracle=_ASK)
+    assert await orch.withdraw_unheard_turn() is True
+    assert _ladder(orch) == before
+    u = await orch.on_creditor_text("Seventy percent, final.", oracle=_ASK)
+    assert u.action.reason == "hold"
+    texts = [e["payload"]["text"] for e in orch.audit.for_call(orch.session.call_id)
+             if e["type"] == "utterance"]  # fmt: skip
+    assert texts[-1] == "Seventy percent, final."
+
+
+# ---------------------------------------------------------------- eager turns
+
+
+class CountingOrch:
+    """Fake orchestrator: one Utterance per turn, records withdrawals."""
+
+    def __init__(self) -> None:
+        self.turns: list[str] = []
+        self.withdrawn = 0
+
+    async def on_creditor_text(self, text: str) -> Utterance:
+        await asyncio.sleep(0)
+        self.turns.append(text)
+        return Utterance(sentences=[(f"s{len(self.turns)}", "Ok.")], action=None)  # type: ignore[arg-type]
+
+    async def withdraw_unheard_turn(self) -> bool:
+        self.withdrawn += 1
+        return True
+
+
+async def test_eager_turn_is_reused_when_the_final_says_the_same_words() -> None:
+    call = FakeCall(CountingOrch())
+    turns = VoiceTurns(call, eager=True)
+    turns.on_eager("Yes that works")
+    await turns.on_final("Yes, that works.")
+    assert call.orch.turns == ["Yes that works"] and call.orch.withdrawn == 0
+    assert len(call.emitted) == 1
+
+
+async def test_resumed_eager_turn_is_withdrawn_and_the_final_runs() -> None:
+    call = FakeCall(CountingOrch())
+    turns = VoiceTurns(call, eager=True)
+    turns.on_eager("Yes that works")
+    turns.on_resumed()
+    await turns.on_final("Yes that works for six payments.")
+    assert call.orch.turns == ["Yes that works", "Yes that works for six payments."]
+    assert call.orch.withdrawn == 1
+    assert [u.sentences[0][0] for u in call.emitted] == ["s2"]
+
+
+# ---------------------------------------------------------------- barge rule / processor
+
+
+def test_barge_rule() -> None:
+    assert is_backchannel("Mm-hmm.") and is_backchannel("Okay, right.")
+    assert not is_backchannel("Correct.")
+    assert not is_barge("Okay.") and not is_barge("No.")
+    assert is_barge("No, that's wrong.")
+
+
+class FakeTurns:
+    def __init__(self) -> None:
+        self.call = FakeCall(None)
+        self.finals: list[str] = []
+        self.barges: list[list[str]] = []
+
+    async def on_final(self, text: str) -> None:
+        self.finals.append(text)
+
+    async def on_barge(self, heard: list[str]) -> None:
+        self.barges.append(heard)
+
+
+async def test_processor_barges_only_on_real_speech_while_the_agent_talks() -> None:
+    turns, tracker = FakeTurns(), HeardTracker()
+    tracker.queued("a1")
+    tracker.queued("a2")
+    tracker.played("a1")
+    proc = OrchestratorProcessor(turns, tracker)  # type: ignore[arg-type]
+    down, _ = await run_test(
+        proc,
+        frames_to_send=[
+            BotStartedSpeakingFrame(),
+            TranscriptionFrame("Okay.", "rep", "t"),  # backchannel: ignored
+            InterimTranscriptionFrame("mm okay", "rep", "t"),  # no barge
+            InterimTranscriptionFrame("No wait, that is wrong", "rep", "t"),  # barge
+            TranscriptionFrame("No wait, that is wrong.", "rep", "t"),
+        ],
+        expected_down_frames=[BotStartedSpeakingFrame, InterruptionFrame],
+    )
+    await asyncio.sleep(0.05)
+    assert turns.barges == [["a1"]]
+    assert turns.finals == ["No wait, that is wrong."]
+    assert ("backchannel_ignored", {"text": "Okay."}) in turns.call.rows
+
+
+async def test_one_word_turn_while_the_agent_is_silent_is_a_turn() -> None:
+    turns = FakeTurns()
+    proc = OrchestratorProcessor(turns, HeardTracker())  # type: ignore[arg-type]
+    await run_test(proc, frames_to_send=[TranscriptionFrame("Correct.", "rep", "t")])
+    await asyncio.sleep(0.05)
+    assert turns.finals == ["Correct."] and turns.barges == []
+
+
+async def test_silence_fill_sends_zeros_through_input_gaps(monkeypatch: Any) -> None:
+    fill = SilenceFill()
+    sent: list[Any] = []
+
+    async def capture(frame: Any, direction: Any = FrameDirection.DOWNSTREAM) -> None:
+        sent.append(frame)
+
+    monkeypatch.setattr(fill, "push_frame", capture)
+    fill._rate, fill._last = 16000, 0.0
+    with pytest.raises(TimeoutError):
+        await asyncio.wait_for(fill._fill(), timeout=0.1)
+    assert sent and all(f.audio == b"\x00\x00" * 320 for f in sent)
+    assert processors.GAP_S < 0.1
+
+
+# ---------------------------------------------------------------- budget
+
+
+def test_voice_budget_refuses_new_sessions_at_the_cap(tmp_path: Path) -> None:
+    day = datetime(2026, 10, 29, 12, tzinfo=UTC)
+    budget = VoiceBudget(tmp_path / "b.db", limit_micros=10_000, clock=lambda: day)
+    assert budget.admit()
+    budget.add(9_999, stt_seconds=Decimal("60"), tts_chars=100)
+    assert budget.admit()
+    budget.add(1, stt_seconds=Decimal("1.5"), tts_chars=0)
+    assert not budget.admit()
+    next_day = VoiceBudget(
+        tmp_path / "b.db", limit_micros=10_000, clock=lambda: datetime(2026, 10, 30, tzinfo=UTC)
+    )
+    assert next_day.admit()
+
+
+# ---------------------------------------------------------------- socket bridge
+
+
+class FakeVoice:
+    def __init__(self) -> None:
+        self.spoken: list[list[str]] = []
+        self.dropped: list[list[str]] = []
+
+    async def speak(self, utt: Utterance) -> None:
+        self.spoken.append([sid for sid, _ in utt.sentences])
+
+    async def speak_sentences(self, sentences: list[tuple[str, str]]) -> None:
+        self.spoken.append([sid for sid, _ in sentences])
+
+    async def drop(self, ids: list[str]) -> None:
+        self.dropped.append(ids)
+
+    async def stop(self) -> None:
+        return None
+
+
+def _recv_until(ws: Any, kind: str) -> list[dict[str, Any]]:
+    got: list[dict[str, Any]] = []
+    while not got or got[-1].get("type") != kind:
+        got.append(ws.receive_json())
+    return got
+
+
+def test_socket_bridge_speaks_replies_and_refuses_voice_over_budget(tmp_path: Path) -> None:
+    settings = Settings(
+        nlu_mode="oracle", nlg_mode="template", llm_profile="offline", db_path=":memory:",
+        voice_stack="pipecat", deepgram_api_key="test-key", api_key_pool={},
+        voice_daily_budget_usd=Decimal("0"),
+    )  # fmt: skip
+    audit = AuditLog(tmp_path / "ws.db")
+    app = create_app(settings=settings, llm=FakeLLM(), audit=audit)
+    with TestClient(app) as client, client.websocket_connect("/ws/call/vb") as ws:
+        ws.send_json({"type": "start", "scenario": "fixtures/demo"})
+        opening = [f["id"] for f in _recv_until(ws, "turn_done") if f["type"] == "say"]
+
+        # Budget 0: the offer is refused, with the same message on the call's socket.
+        r = client.post("/voice/offer?call_id=vb", json={"sdp": "", "type": "offer"})
+        assert r.status_code == 429
+        assert _recv_until(ws, "error")[-1]["message"] == r.json()["error"]
+
+        conn = call_ws.live_call("vb")
+        voice = FakeVoice()
+        async def attach() -> None:
+            conn.attach_voice(voice)  # the opening is still unheard: spoken on attach
+
+        client.portal.call(attach)
+        ws.send_json({"type": "sentence_done", "id": opening[0]})  # browser ack: ignored
+        ws.send_json({"type": "text", "text": "Max six payments.", "oracle": {"stance": "info"}})
+        reply = [f["id"] for f in _recv_until(ws, "turn_done") if f["type"] == "say"]
+    assert voice.spoken[0] == opening
+    assert voice.spoken[-1] == reply
+    types = [e["type"] for e in audit.for_call("vb")]
+    assert "voice_refused" in types
+    assert not any(e["type"] == "sentence_done" for e in audit.for_call("vb"))
+    audit.close()

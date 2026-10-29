@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice test page</title>
+<style>body{font:15px system-ui;margin:2rem;max-width:40rem}button{font:inherit;padding:.4rem 1rem}#log{white-space:pre-wrap;font:12px ui-monospace,monospace;color:#555}</style>
+</head>
+<body>
+<h1>Voice test page</h1>
+<p>Harness page for the Pipecat voice path (Phase 63). Starts a call on the
+WebSocket, then joins voice over WebRTC. Query: <code>?scenario_id=…&amp;call_id=…</code>.</p>
+<button onclick="voiceConnect()">Start call with voice</button>
+<button onclick="voiceDisconnect()">Hang up</button>
+<audio id="remote" autoplay></audio>
+<div id="log"></div>
+<script>
+// Not the product UI (Phase 64). The harness probe (eval/voice/probe.js) wraps
+// RTCPeerConnection and getUserMedia before this runs. No key ever reaches this page.
+const q = new URLSearchParams(location.search);
+const callId = q.get("call_id") || "voice-" + Math.random().toString(36).slice(2, 10);
+const scenarioId = q.get("scenario_id") || "";
+let pc = null, ws = null;
+const say = (m) => { document.getElementById("log").textContent += m + "\n"; };
+
+function startCall() {
+  return new Promise((resolve, reject) => {
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    ws = new WebSocket(`${proto}://${location.host}/ws/call/${callId}?view=operator`);
+    ws.onopen = () => ws.send(JSON.stringify({ type: "start", scenario_id: scenarioId }));
+    ws.onmessage = (ev) => {
+      const m = JSON.parse(ev.data);
+      if (m.type === "transcript") say(`${m.role}: ${m.text}`);
+      if (m.type === "error") { say("error: " + m.message); reject(new Error(m.message)); }
+      if (m.type === "turn_done") resolve();
+    };
+    ws.onerror = () => reject(new Error("socket error"));
+  });
+}
+
+window.voiceConnect = async () => {
+  await startCall();
+  const mic = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  });
+  pc = new RTCPeerConnection();
+  pc.addTransceiver(mic.getAudioTracks()[0], { direction: "sendrecv" });
+  pc.ontrack = (ev) => {
+    const el = document.getElementById("remote");
+    el.srcObject = ev.streams[0] || new MediaStream([ev.track]);
+    void el.play();
+  };
+  pc.onconnectionstatechange = () => say("pc " + pc.connectionState);
+  await pc.setLocalDescription(await pc.createOffer());
+  await new Promise((res) => {
+    if (pc.iceGatheringState === "complete") return res();
+    pc.addEventListener("icegatheringstatechange", () => pc.iceGatheringState === "complete" && res());
+    setTimeout(res, 2000);
+  });
+  const r = await fetch(`/voice/offer?call_id=${encodeURIComponent(callId)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type }),
+  });
+  const answer = await r.json();
+  if (!r.ok) { say("voice refused: " + answer.error); return; }
+  await pc.setRemoteDescription({ sdp: answer.sdp, type: answer.type });
+};
+window.voiceDisconnect = () => { pc?.close(); pc = null; ws?.close(); ws = null; say("closed"); };
+window.voiceCallId = callId;
+</script>
+</body>
+</html>

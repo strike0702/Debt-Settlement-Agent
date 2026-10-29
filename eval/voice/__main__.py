@@ -66,6 +66,16 @@ async def run(
                             call, base=base, stt=stt, audio=audio, chrome_args=chrome_args
                         )  # type: ignore[arg-type]
                     )
+    elif target == "pipecat":
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "audit.db"
+            async with driver.legacy_server(port, log, db, voice_stack="pipecat") as base:
+                for call in calls:
+                    runs.append(
+                        await driver.run_pipecat(
+                            call, base=base, audio=audio, chrome_args=chrome_args
+                        )  # type: ignore[arg-type]
+                    )
     else:
         async with driver.spike_server(port, log) as base:
             for call in calls:
@@ -159,7 +169,8 @@ def render_md(doc: dict[str, Any], rows: list[metrics.TurnRow]) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Voice measurement harness")
-    ap.add_argument("--target", choices=["legacy-server", "legacy-browser", "spike"], required=True)
+    targets = ["legacy-server", "legacy-browser", "spike", "pipecat"]
+    ap.add_argument("--target", choices=targets, required=True)
     ap.add_argument("--audio", choices=["inject", "speakers"], default="inject")
     ap.add_argument("--calls", default="all", help="comma-separated call ids, or all")
     ap.add_argument("--repeat", type=int, default=1, help="play the call list this many times")

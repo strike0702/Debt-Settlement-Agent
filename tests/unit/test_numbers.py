@@ -102,3 +102,42 @@ def test_invalid_named_date_skipped() -> None:
 def test_invalid_iso_date_skipped() -> None:
     toks = extract_tokens("due 2026-13-01", ref=date(2026, 1, 1))
     assert not any(t.kind == "date" for t in toks)
+
+
+# ----- spoken numbers from speech-to-text (Phase 65, live voice test 2026-10-29) -----
+
+
+@pytest.mark.parametrize(
+    ("text", "kind", "value"),
+    [
+        # The three live Flux transcripts, then neighbours.
+        ("One twenty dollars.", "money", 12000),
+        ("A hundred and twenty dollars.", "money", 12000),
+        ("Hundred and twenty dollars.", "money", 12000),
+        ("Two fifty dollars.", "money", 25000),
+        ("One fifty dollars a month", "money", 15000),
+        ("one twenty five dollars", "money", 12500),
+        ("a hundred dollars", "money", 10000),
+        ("one hundred and five dollars", "money", 10500),
+        ("one thousand two hundred dollars", "money", 120000),
+        ("a thousand and fifty dollars", "money", 105000),
+        ("seventy five percent", "pct", 7500),
+        ("seventy-five percent", "pct", 7500),
+        ("forty five percent of the balance", "pct", 4500),
+    ],
+)
+def test_spoken_number_phrases(text: str, kind: str, value: int) -> None:
+    tokens = extract_tokens(text, ref=date(2026, 3, 1))
+    assert [(t.kind, t.value) for t in tokens] == [(kind, value)]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("one or two", [("count", 1), ("count", 2)]),  # "or" is not "and"
+        ("a few payments", []),  # "a" counts only before a scale word
+        ("twenty and thirty", [("count", 20), ("count", 30)]),  # "and" only after a scale
+    ],
+)
+def test_spoken_number_neighbours_unchanged(text: str, expected: list[tuple[str, int]]) -> None:
+    assert [(t.kind, t.value) for t in extract_tokens(text, ref=date(2026, 3, 1))] == expected

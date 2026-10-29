@@ -1,0 +1,612 @@
+2026-10-29 22:38:34.963 | INFO     | pipecat:<module>:54 - ᓚᘏᗢ Pipecat 1.14.0 (Python 3.12.13 (main, Jun 11 2026, 03:55:21) [Clang 22.1.3 ]) ᓚᘏᗢ
+2026-10-29 22:38:35.105 | DEBUG    | pipecat.transports.smallwebrtc.connection:<module>:80 - [SCTP] USERDATA_MAX_LENGTH set to 1100
+INFO:     Started server process [16722]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:51552 (Press CTRL+C to quit)
+INFO:     127.0.0.1:51561 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51568 - "GET /voice/test?scenario_id=easy_deal&call_id=vh-numbers_easy-1793293715407 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51568 - "GET /favicon.ico HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:51574 - "WebSocket /ws/call/vh-numbers_easy-1793293715407?view=operator" [accepted]
+INFO:     connection open
+2026-10-29 22:38:36.573 | DEBUG    | pipecat.transports.smallwebrtc.connection:_initialize:332 - Initializing new peer connection
+2026-10-29 22:38:36.584 | DEBUG    | pipecat.transports.smallwebrtc.connection:_create_answer:429 - Creating answer
+2026-10-29 22:38:36.584 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_track:411 - Track audio received
+2026-10-29 22:38:36.585 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_icegatheringstatechange:407 - ICE gathering state is gathering
+2026-10-29 22:38:36.586 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_icegatheringstatechange:407 - ICE gathering state is complete
+2026-10-29 22:38:36.586 | DEBUG    | pipecat.transports.smallwebrtc.connection:_create_answer:432 - Setting the answer after the local description is created
+2026-10-29 22:38:36.586 | DEBUG    | pipecat.transports.smallwebrtc.request_handler:handle_web_request:218 - webrtc_connection_callback executed successfully for peer: SmallWebRTCConnection#0-f7057aa8f2ef485d95dfd0a51df1271e
+INFO:     127.0.0.1:51575 - "POST /voice/offer?call_id=vh-numbers_easy-1793293715407 HTTP/1.1" 200 OK
+2026-10-29 22:38:36.588 | DEBUG    | pipecat.audio.vad.silero:__init__:169 - Loading Silero VAD model...
+2026-10-29 22:38:36.634 | DEBUG    | pipecat.audio.vad.silero:__init__:194 - Loaded Silero VAD
+2026-10-29 22:38:36.634 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking Pipeline#0::Source -> SmallWebRTCInputTransport#0
+2026-10-29 22:38:36.634 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking SmallWebRTCInputTransport#0 -> SilenceFill#0
+2026-10-29 22:38:36.634 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking SilenceFill#0 -> RepVad#0
+2026-10-29 22:38:36.634 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking RepVad#0 -> DeepgramFluxSTTService#0
+2026-10-29 22:38:36.634 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking DeepgramFluxSTTService#0 -> OrchestratorProcessor#0
+2026-10-29 22:38:36.634 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking OrchestratorProcessor#0 -> DeepgramTTSService#0
+2026-10-29 22:38:36.634 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking DeepgramTTSService#0 -> Tap#1
+2026-10-29 22:38:36.634 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking Tap#1 -> OutputGate#0
+2026-10-29 22:38:36.634 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking OutputGate#0 -> SmallWebRTCOutputTransport#0
+2026-10-29 22:38:36.634 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking SmallWebRTCOutputTransport#0 -> Tap#0
+2026-10-29 22:38:36.634 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking Tap#0 -> Pipeline#0::Sink
+2026-10-29 22:38:36.635 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking PipelineTask#0::Source -> RTVIProcessor#0
+2026-10-29 22:38:36.635 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking RTVIProcessor#0 -> Pipeline#0
+2026-10-29 22:38:36.635 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking Pipeline#0 -> PipelineTask#0::Sink
+/Users/shbagchi/projects/dsa-p65/app/voice/pipeline/session.py:202: DeprecationWarning: `WorkerRunner.run(worker)` is deprecated since 1.3.0 and will be removed in 2.0.0. Use `WorkerRunner.add_workers()` before `run()` instead.
+  await PipelineRunner(handle_sigint=False).run(self.task)
+2026-10-29 22:38:36.636 | DEBUG    | pipecat.workers.runner:run:273 - WorkerRunner 'runner-0e871282': started running
+2026-10-29 22:38:36.636 | DEBUG    | pipecat.workers.runner:add_workers:230 - WorkerRunner 'runner-0e871282': added worker 'PipelineTask#0'
+2026-10-29 22:38:36.636 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_iceconnectionstatechange:401 - ICE connection state is checking, connection is connecting
+2026-10-29 22:38:36.636 | DEBUG    | pipecat.transports.smallwebrtc.connection:_monitoring_connecting_state:607 - Monitoring connecting state
+2026-10-29 22:38:36.636 | DEBUG    | pipecat.transports.smallwebrtc.connection:_handle_new_connection_state:683 - Connection state changed to: connecting
+2026-10-29 22:38:36.636 | DEBUG    | pipecat.workers.runner:_start_worker:459 - WorkerRunner 'runner-0e871282': starting worker 'PipelineTask#0'
+2026-10-29 22:38:36.639 | INFO     | pipecat.transports.smallwebrtc.transport:connect:544 - Connecting to Small WebRTC
+2026-10-29 22:38:36.642 | DEBUG    | pipecat.services.deepgram.tts:_connect_websocket:254 - Connecting to Deepgram WebSocket
+2026-10-29 22:38:36.645 | DEBUG    | pipecat.pipeline.worker:_wait_for_pipeline_start:1309 - PipelineTask#0: Starting. Waiting for StartFrame#0 to reach the end of the pipeline...
+2026-10-29 22:38:36.663 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_iceconnectionstatechange:401 - ICE connection state is completed, connection is connecting
+2026-10-29 22:38:36.666 | DEBUG    | pipecat.transports.smallwebrtc.connection:_cancel_monitoring_connecting_state:627 - Cancelling the connecting timeout task
+2026-10-29 22:38:36.666 | DEBUG    | pipecat.transports.smallwebrtc.connection:_handle_new_connection_state:683 - Connection state changed to: connected
+2026-10-29 22:38:36.666 | DEBUG    | pipecat.transports.smallwebrtc.transport:on_connected:270 - Peer connection established.
+2026-10-29 22:38:36.666 | WARNING  | pipecat.transports.smallwebrtc.connection:video_input_track:746 - No video transceiver is available
+2026-10-29 22:38:36.666 | WARNING  | pipecat.transports.smallwebrtc.connection:screen_video_input_track:768 - No screen video transceiver is available
+2026-10-29 22:38:36.666 | DEBUG    | pipecat.transports.smallwebrtc.connection:replace_audio_track:522 - Replacing audio track audio
+2026-10-29 22:38:37.701 | DEBUG    | pipecat.services.deepgram.tts:_connect_websocket:277 - DeepgramTTSService#0: Websocket connection initialized: {"headers": {'dg-project-id': 'e04d5f6a-e977-4b0f-a172-8f90bcb788e4', 'dg-request-id': '01a188a2-9045-7dc3-9f74-5ed6c134c947'}}
+2026-10-29 22:38:37.724 | DEBUG    | pipecat.services.deepgram.flux.stt:_connect_websocket:343 - DeepgramFluxSTTService#0: Websocket connection initialized: {"headers": {'dg-project-id': 'e04d5f6a-e977-4b0f-a172-8f90bcb788e4', 'dg-request-id': '01a188a2-904a-7b80-8958-437a5a49959c'}}
+2026-10-29 22:38:37.726 | INFO     | pipecat.services.deepgram.flux.stt_base:_handle_connection_established:749 - DeepgramFluxSTTService#0: Connected to Flux - ready to stream audio (request_id='01a188a2-904a-7b80-8958-437a5a49959c')
+2026-10-29 22:38:37.727 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you. ]
+2026-10-29 22:38:37.731 | DEBUG    | pipecat.registry.registry:register:132 - Worker 'PipelineTask#0' ready (local)
+2026-10-29 22:38:37.731 | DEBUG    | pipecat.workers.runner:_send_registry:511 - WorkerRunner 'runner-0e871282': broadcasting registry: ['PipelineTask#0']
+2026-10-29 22:38:37.731 | DEBUG    | pipecat.workers.base_worker:_maybe_activate:1284 - Worker 'PipelineTask#0': activated
+2026-10-29 22:38:37.731 | DEBUG    | pipecat.pipeline.worker:_wait_for_pipeline_start:1326 - PipelineTask#0: StartFrame#0 reached the end of the pipeline, pipeline is now ready.
+2026-10-29 22:38:37.733 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:38:37.733 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:38:38.128 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.400s
+2026-10-29 22:38:38.130 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:38:38.131 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:38:38.133 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:38:38.133 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:38:38.133 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:38:38.133 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:38:38.173 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.538s (0.138s leading silence)
+2026-10-29 22:38:38.174 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:38:38.677 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:38:38.678 | DEBUG    | pipecat.transports.smallwebrtc.connection:_idle_watcher:224 - Disabling receiver for audio track after 2.00s idle
+2026-10-29 22:38:38.678 | DEBUG    | pipecat.transports.smallwebrtc.connection:discard_old_frames:193 - Discarding old frames
+2026-10-29 22:38:40.659 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 27e352f5-ee02-40aa-ae79-57130a477059
+2026-10-29 22:38:40.660 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [You are speaking with an automated agent authorized to discuss settlement options. ]
+2026-10-29 22:38:40.688 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:38:40.689 | DEBUG    | pipecat.transports.smallwebrtc.connection:_idle_watcher:224 - Disabling receiver for audio track after 2.00s idle
+2026-10-29 22:38:40.689 | DEBUG    | pipecat.transports.smallwebrtc.connection:discard_old_frames:193 - Discarding old frames
+2026-10-29 22:38:41.006 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.346s
+2026-10-29 22:38:41.067 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.455s (0.109s leading silence)
+2026-10-29 22:38:41.069 | DEBUG    | pipecat.audio.vad.vad_analyzer:set_params:157 - Setting VAD params to: confidence=0.7 start_secs=0.2 stop_secs=0.2 min_volume=0.6
+2026-10-29 22:38:43.156 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 51a6fffd-3209-4b88-8037-17fc89a8887d
+2026-10-29 22:38:43.160 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [What payment terms can you work with for a settlement? ]
+2026-10-29 22:38:43.299 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:38:43.505 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.345s
+2026-10-29 22:38:43.569 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:38:43.569 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:38:43.569 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:38:43.655 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.645s (0.300s leading silence)
+2026-10-29 22:38:43.689 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:38:43.726 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:38:43.726 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:38:43.726 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:38:44.768 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 91f9b84e-3b7e-4d24-a4a0-39b1b57c22b2
+2026-10-29 22:38:45.309 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:38:46.666 | WARNING  | pipecat.transports.smallwebrtc.connection:timeout_handler:648 - Data channel not established within 10s after connection. Clearing message queue and disabling future queueing.
+2026-10-29 22:38:47.320 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:38:48.487 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:38:48.487 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:38:48.487 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:38:49.332 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:38:51.287 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:38:51.287 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:38:51.344 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:38:54.699 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:39:00.751 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:39:01.674 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:02.256 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [One moment. ]
+2026-10-29 22:39:02.635 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.380s
+2026-10-29 22:39:02.640 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:39:02.730 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.502s (0.122s leading silence)
+2026-10-29 22:39:03.041 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 282fb00d-2d76-4a31-b8a6-5ebd63077c40
+2026-10-29 22:39:03.447 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:39:03.447 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:39:03.615 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [Just to confirm, that's even for the payment structure? ]
+2026-10-29 22:39:03.686 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:03.980 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.365s
+2026-10-29 22:39:03.982 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:39:04.047 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.498s (0.133s leading silence)
+2026-10-29 22:39:05.555 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 428377e8-eaaf-4661-8958-a3df9ed95556
+2026-10-29 22:39:05.697 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:07.456 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:39:07.457 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:39:07.707 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:10.346 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:39:10.468 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:39:10.473 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [Okay, even payments. ]
+2026-10-29 22:39:10.844 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.370s
+2026-10-29 22:39:10.847 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:39:10.901 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.456s (0.086s leading silence)
+2026-10-29 22:39:11.683 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 562cc8cf-5872-4c97-bafb-352f9a0027c3
+2026-10-29 22:39:11.684 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [What settlement percentage of the balance are you looking for? ]
+2026-10-29 22:39:12.045 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.361s
+2026-10-29 22:39:12.137 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:12.239 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.718s (0.357s leading silence)
+2026-10-29 22:39:12.716 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:39:12.716 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:39:12.717 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:39:13.460 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 6ff9a7fb-3ee6-4c53-b51b-bc2ee0207e8c
+2026-10-29 22:39:14.148 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:15.836 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:39:15.837 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:39:16.159 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:18.789 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:39:22.445 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:39:23.948 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [Let me check. ]
+2026-10-29 22:39:24.015 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:24.306 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.357s
+2026-10-29 22:39:24.309 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:39:24.591 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.579s (0.222s leading silence)
+2026-10-29 22:39:24.878 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context fa6c5bc7-0f03-4768-949d-307a6009f608
+2026-10-29 22:39:24.878 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [How about 31% of the balance, which comes to $387.50? ]
+2026-10-29 22:39:25.242 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.364s
+2026-10-29 22:39:25.292 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.467s (0.103s leading silence)
+2026-10-29 22:39:25.416 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:39:25.416 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:39:25.417 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:39:27.066 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:39:27.746 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:39:27.760 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#0 unable to append audio to context: no context ID provided
+2026-10-29 22:39:27.787 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#0 unable to append audio to context: no context ID provided
+2026-10-29 22:39:27.796 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#0 unable to append audio to context: no context ID provided
+2026-10-29 22:39:27.813 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#0 unable to append audio to context: no context ID provided
+2026-10-29 22:39:27.843 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#0 unable to append audio to context: no context ID provided
+2026-10-29 22:39:27.878 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#0 unable to append audio to context: no context ID provided
+2026-10-29 22:39:27.881 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#0 unable to append audio to context: no context ID provided
+2026-10-29 22:39:27.881 | DEBUG    | pipecat.services.tts_service:remove_audio_context:991 - DeepgramTTSService#0 unable to remove audio context: no context ID provided
+2026-10-29 22:39:31.421 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:39:32.244 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:32.928 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [Okay, just a second. ]
+2026-10-29 22:39:33.301 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.373s
+2026-10-29 22:39:33.320 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:39:33.374 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.498s (0.125s leading silence)
+2026-10-29 22:39:34.134 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 091b5195-3a01-4026-96c7-a204b6e2e0a0
+2026-10-29 22:39:34.135 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [How about 29% of the balance, which comes to $362.50? ]
+2026-10-29 22:39:34.256 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:34.491 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.357s
+2026-10-29 22:39:34.548 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.450s (0.093s leading silence)
+2026-10-29 22:39:34.987 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:39:34.987 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:39:34.988 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:39:36.268 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:37.007 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 5e60658b-96b4-4be5-b8d7-4f7f903d5839
+2026-10-29 22:39:38.279 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:40.289 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:40.548 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:39:40.548 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:39:42.300 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:43.903 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:39:46.100 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:39:47.070 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:47.603 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [Let me see. ]
+2026-10-29 22:39:47.948 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.346s
+2026-10-29 22:39:47.951 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:39:48.020 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.467s (0.121s leading silence)
+2026-10-29 22:39:48.534 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context e4fd133c-2b79-4d28-95f0-3e02319dc190
+2026-10-29 22:39:48.535 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [Okay, so November 15 for the initial payment date, correct? ]
+2026-10-29 22:39:48.898 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.363s
+2026-10-29 22:39:48.928 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:39:48.928 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:39:48.928 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:39:48.990 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.553s (0.190s leading silence)
+2026-10-29 22:39:49.082 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:50.711 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 42f78136-6ba4-4fbd-993f-b6b208daca5f
+2026-10-29 22:39:51.093 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:52.968 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:39:52.968 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:39:53.103 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:55.867 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:39:56.804 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:39:58.245 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:39:58.307 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [One moment. ]
+2026-10-29 22:39:58.675 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.369s
+2026-10-29 22:39:58.678 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:39:58.734 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.473s (0.104s leading silence)
+2026-10-29 22:39:59.254 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context ed4e5ebc-5217-404b-8e7b-9e7f3b0a80b8
+2026-10-29 22:39:59.255 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [Great, 29% works. ]
+2026-10-29 22:39:59.597 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:39:59.597 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:39:59.627 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.373s
+2026-10-29 22:39:59.631 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:39:59.759 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.643s (0.270s leading silence)
+2026-10-29 22:40:00.256 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:00.549 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context f5302953-d3f8-4fd1-9f33-9d3b350bc850
+2026-10-29 22:40:00.550 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [How about 1 payment of $362.50 starting November 15? ]
+2026-10-29 22:40:00.904 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.354s
+2026-10-29 22:40:01.074 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.670s (0.316s leading silence)
+2026-10-29 22:40:01.547 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:40:01.547 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:40:01.548 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:40:02.267 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:03.512 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context f0e89359-8ee5-4e7d-b9d2-afb720d93ed0
+2026-10-29 22:40:03.513 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [Does that fit your schedule? ]
+2026-10-29 22:40:03.863 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.350s
+2026-10-29 22:40:03.916 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.434s (0.084s leading silence)
+2026-10-29 22:40:04.277 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:04.459 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 0b114e8b-b6d1-44cd-81eb-52d620c6820b
+2026-10-29 22:40:06.288 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:07.347 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:40:07.348 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:40:07.348 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:40:08.299 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:08.666 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:40:08.666 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:40:10.309 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:11.902 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:40:12.927 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:40:14.277 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:14.430 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [Let me check. ]
+2026-10-29 22:40:14.813 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.383s
+2026-10-29 22:40:14.816 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:40:14.884 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.501s (0.118s leading silence)
+2026-10-29 22:40:15.385 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 51505c8b-a8d9-474e-8bd1-32b3252e2804
+2026-10-29 22:40:15.807 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:40:15.808 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:40:15.831 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [Thank you. ]
+2026-10-29 22:40:16.195 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.364s
+2026-10-29 22:40:16.214 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:40:16.250 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.460s (0.096s leading silence)
+2026-10-29 22:40:16.287 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:16.486 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 732474c4-4f57-4433-8dd4-463bcd9ebfa6
+2026-10-29 22:40:16.487 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [We will present this to the client and follow up after their review. ]
+2026-10-29 22:40:16.688 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:40:16.688 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:40:16.851 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.364s
+2026-10-29 22:40:16.852 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:40:17.020 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.696s (0.332s leading silence)
+2026-10-29 22:40:18.298 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:18.662 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context a999435c-5882-487b-a21a-a4555847a1d0
+2026-10-29 22:40:18.664 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#0: Generating TTS [Have a good day. ]
+2026-10-29 22:40:19.010 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#0 TTFB: 0.347s
+2026-10-29 22:40:19.086 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#0 TTFA: 0.462s (0.115s leading silence)
+2026-10-29 22:40:19.465 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#0 cleaning up TTS context 78fcb808-de9f-448b-8b50-42a4e9c14f51
+2026-10-29 22:40:20.308 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:20.646 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:40:20.646 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:40:20.647 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:40:21.647 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:40:21.647 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:40:22.318 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:24.329 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:24.604 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:453 - Media stream error while reading the audio; clearing track.
+2026-10-29 22:40:24.604 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_ended:416 - Track audio ended
+2026-10-29 22:40:24.605 | DEBUG    | pipecat.pipeline.worker:_cancel:1170 - Cancelling pipeline worker PipelineTask#0
+2026-10-29 22:40:24.605 | DEBUG    | pipecat.pipeline.worker:_wait_for_pipeline_end:1346 - PipelineTask#0: Closing. Waiting for CancelFrame#0(reason: None) to reach the end of the pipeline...
+2026-10-29 22:40:24.606 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_iceconnectionstatechange:401 - ICE connection state is closed, connection is closed
+2026-10-29 22:40:24.606 | DEBUG    | pipecat.transports.smallwebrtc.connection:_handle_new_connection_state:683 - Connection state changed to: closed
+2026-10-29 22:40:24.606 | INFO     | pipecat.transports.smallwebrtc.request_handler:handle_disconnected:212 - Discarding peer connection for pc_id: SmallWebRTCConnection#0-f7057aa8f2ef485d95dfd0a51df1271e
+2026-10-29 22:40:24.606 | DEBUG    | pipecat.transports.smallwebrtc.transport:on_closed:280 - Client connection closed.
+2026-10-29 22:40:24.608 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_send_close_stream:506 - Sending CloseStream message to Deepgram Flux
+2026-10-29 22:40:24.608 | DEBUG    | pipecat.services.deepgram.flux.stt:_disconnect_websocket:366 - DeepgramFluxSTTService#0: Disconnecting from Deepgram Flux Websocket
+2026-10-29 22:40:24.894 | DEBUG    | pipecat.services.deepgram.tts:_disconnect_websocket:294 - DeepgramTTSService#0: Disconnecting from Deepgram WebSocket
+2026-10-29 22:40:25.235 | DEBUG    | pipecat.pipeline.worker:wait_for_cancel:1337 - PipelineTask#0: CancelFrame#0(reason: None) reached the end of the pipeline.
+2026-10-29 22:40:25.235 | DEBUG    | pipecat.utils.base_object:cleanup:179 - PipelineTask#0: waiting on event handlers to finish ['on_pipeline_finished']...
+2026-10-29 22:40:25.236 | DEBUG    | pipecat.pipeline.worker:run:909 - Pipeline worker PipelineTask#0 is finishing...
+2026-10-29 22:40:25.236 | DEBUG    | pipecat.pipeline.worker:run:914 - Pipeline worker PipelineTask#0 has finished
+2026-10-29 22:40:25.237 | DEBUG    | pipecat.workers.runner:run:316 - WorkerRunner 'runner-0e871282': finished running
+INFO:     127.0.0.1:51621 - "GET /voice/events?call_id=vh-numbers_easy-1793293715407 HTTP/1.1" 200 OK
+2026-10-29 22:40:26.717 | DEBUG    | pipecat.transports.smallwebrtc.connection:_idle_watcher:224 - Disabling receiver for audio track after 2.38s idle
+2026-10-29 22:40:26.717 | DEBUG    | pipecat.transports.smallwebrtc.connection:discard_old_frames:193 - Discarding old frames
+INFO:     127.0.0.1:51625 - "GET /voice/test?scenario_id=haggling_rep&call_id=vh-numbers_haggle-1793293826220 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51625 - "GET /favicon.ico HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:51634 - "WebSocket /ws/call/vh-numbers_haggle-1793293826220?view=operator" [accepted]
+INFO:     connection open
+2026-10-29 22:40:27.478 | DEBUG    | pipecat.transports.smallwebrtc.connection:_initialize:332 - Initializing new peer connection
+2026-10-29 22:40:27.479 | DEBUG    | pipecat.transports.smallwebrtc.connection:_create_answer:429 - Creating answer
+2026-10-29 22:40:27.479 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_track:411 - Track audio received
+2026-10-29 22:40:27.480 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_icegatheringstatechange:407 - ICE gathering state is gathering
+2026-10-29 22:40:27.481 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_icegatheringstatechange:407 - ICE gathering state is complete
+2026-10-29 22:40:27.481 | DEBUG    | pipecat.transports.smallwebrtc.connection:_create_answer:432 - Setting the answer after the local description is created
+2026-10-29 22:40:27.481 | DEBUG    | pipecat.transports.smallwebrtc.request_handler:handle_web_request:218 - webrtc_connection_callback executed successfully for peer: SmallWebRTCConnection#1-ffd87ec72fe54703812ee1e0b2f63ffa
+INFO:     127.0.0.1:51635 - "POST /voice/offer?call_id=vh-numbers_haggle-1793293826220 HTTP/1.1" 200 OK
+2026-10-29 22:40:27.482 | DEBUG    | pipecat.audio.vad.silero:__init__:169 - Loading Silero VAD model...
+2026-10-29 22:40:27.499 | DEBUG    | pipecat.audio.vad.silero:__init__:194 - Loaded Silero VAD
+2026-10-29 22:40:27.499 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking Pipeline#2::Source -> SmallWebRTCInputTransport#1
+2026-10-29 22:40:27.499 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking SmallWebRTCInputTransport#1 -> SilenceFill#1
+2026-10-29 22:40:27.499 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking SilenceFill#1 -> RepVad#1
+2026-10-29 22:40:27.499 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking RepVad#1 -> DeepgramFluxSTTService#1
+2026-10-29 22:40:27.499 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking DeepgramFluxSTTService#1 -> OrchestratorProcessor#1
+2026-10-29 22:40:27.499 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking OrchestratorProcessor#1 -> DeepgramTTSService#1
+2026-10-29 22:40:27.499 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking DeepgramTTSService#1 -> Tap#3
+2026-10-29 22:40:27.499 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking Tap#3 -> OutputGate#1
+2026-10-29 22:40:27.499 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking OutputGate#1 -> SmallWebRTCOutputTransport#1
+2026-10-29 22:40:27.499 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking SmallWebRTCOutputTransport#1 -> Tap#2
+2026-10-29 22:40:27.499 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking Tap#2 -> Pipeline#2::Sink
+2026-10-29 22:40:27.500 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking PipelineTask#1::Source -> RTVIProcessor#1
+2026-10-29 22:40:27.500 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking RTVIProcessor#1 -> Pipeline#2
+2026-10-29 22:40:27.500 | DEBUG    | pipecat.processors.frame_processor:link:696 - Linking Pipeline#2 -> PipelineTask#1::Sink
+2026-10-29 22:40:27.500 | DEBUG    | pipecat.workers.runner:run:273 - WorkerRunner 'runner-1dc3b01b': started running
+2026-10-29 22:40:27.500 | DEBUG    | pipecat.workers.runner:add_workers:230 - WorkerRunner 'runner-1dc3b01b': added worker 'PipelineTask#1'
+2026-10-29 22:40:27.500 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_iceconnectionstatechange:401 - ICE connection state is checking, connection is connecting
+2026-10-29 22:40:27.500 | DEBUG    | pipecat.transports.smallwebrtc.connection:_monitoring_connecting_state:607 - Monitoring connecting state
+2026-10-29 22:40:27.500 | DEBUG    | pipecat.transports.smallwebrtc.connection:_handle_new_connection_state:683 - Connection state changed to: connecting
+2026-10-29 22:40:27.500 | DEBUG    | pipecat.workers.runner:_start_worker:459 - WorkerRunner 'runner-1dc3b01b': starting worker 'PipelineTask#1'
+2026-10-29 22:40:27.501 | INFO     | pipecat.transports.smallwebrtc.transport:connect:544 - Connecting to Small WebRTC
+2026-10-29 22:40:27.505 | DEBUG    | pipecat.services.deepgram.tts:_connect_websocket:254 - Connecting to Deepgram WebSocket
+2026-10-29 22:40:27.507 | DEBUG    | pipecat.pipeline.worker:_wait_for_pipeline_start:1309 - PipelineTask#1: Starting. Waiting for StartFrame#1 to reach the end of the pipeline...
+2026-10-29 22:40:27.522 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_iceconnectionstatechange:401 - ICE connection state is completed, connection is connecting
+2026-10-29 22:40:27.523 | DEBUG    | pipecat.transports.smallwebrtc.connection:_cancel_monitoring_connecting_state:627 - Cancelling the connecting timeout task
+2026-10-29 22:40:27.523 | DEBUG    | pipecat.transports.smallwebrtc.connection:_handle_new_connection_state:683 - Connection state changed to: connected
+2026-10-29 22:40:27.523 | DEBUG    | pipecat.transports.smallwebrtc.transport:on_connected:270 - Peer connection established.
+2026-10-29 22:40:27.523 | WARNING  | pipecat.transports.smallwebrtc.connection:video_input_track:746 - No video transceiver is available
+2026-10-29 22:40:27.523 | WARNING  | pipecat.transports.smallwebrtc.connection:screen_video_input_track:768 - No screen video transceiver is available
+2026-10-29 22:40:27.523 | DEBUG    | pipecat.transports.smallwebrtc.connection:replace_audio_track:522 - Replacing audio track audio
+2026-10-29 22:40:28.498 | DEBUG    | pipecat.services.deepgram.tts:_connect_websocket:277 - DeepgramTTSService#1: Websocket connection initialized: {"headers": {'dg-project-id': 'e04d5f6a-e977-4b0f-a172-8f90bcb788e4', 'dg-request-id': '01a188a4-4128-79f3-94d0-8e0234d5d06e'}}
+2026-10-29 22:40:28.504 | DEBUG    | pipecat.services.deepgram.flux.stt:_connect_websocket:343 - DeepgramFluxSTTService#1: Websocket connection initialized: {"headers": {'dg-project-id': 'e04d5f6a-e977-4b0f-a172-8f90bcb788e4', 'dg-request-id': '01a188a4-4135-7693-b6e1-b667b14e62ce'}}
+2026-10-29 22:40:28.506 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you. ]
+2026-10-29 22:40:28.507 | INFO     | pipecat.services.deepgram.flux.stt_base:_handle_connection_established:749 - DeepgramFluxSTTService#1: Connected to Flux - ready to stream audio (request_id='01a188a4-4135-7693-b6e1-b667b14e62ce')
+2026-10-29 22:40:28.509 | DEBUG    | pipecat.registry.registry:register:132 - Worker 'PipelineTask#1' ready (local)
+2026-10-29 22:40:28.509 | DEBUG    | pipecat.workers.runner:_send_registry:511 - WorkerRunner 'runner-1dc3b01b': broadcasting registry: ['PipelineTask#1']
+2026-10-29 22:40:28.509 | DEBUG    | pipecat.workers.base_worker:_maybe_activate:1284 - Worker 'PipelineTask#1': activated
+2026-10-29 22:40:28.509 | DEBUG    | pipecat.pipeline.worker:_wait_for_pipeline_start:1326 - PipelineTask#1: StartFrame#1 reached the end of the pipeline, pipeline is now ready.
+2026-10-29 22:40:28.511 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:40:28.511 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:40:28.891 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.385s
+2026-10-29 22:40:28.894 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:40:28.910 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:40:28.914 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:40:28.914 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:40:28.914 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:40:28.914 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:40:29.196 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.701s (0.316s leading silence)
+2026-10-29 22:40:29.205 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:40:29.530 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:29.532 | DEBUG    | pipecat.transports.smallwebrtc.connection:_idle_watcher:224 - Disabling receiver for audio track after 2.00s idle
+2026-10-29 22:40:29.532 | DEBUG    | pipecat.transports.smallwebrtc.connection:discard_old_frames:193 - Discarding old frames
+2026-10-29 22:40:31.543 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:31.543 | DEBUG    | pipecat.transports.smallwebrtc.connection:_idle_watcher:224 - Disabling receiver for audio track after 2.00s idle
+2026-10-29 22:40:31.544 | DEBUG    | pipecat.transports.smallwebrtc.connection:discard_old_frames:193 - Discarding old frames
+2026-10-29 22:40:31.683 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context e9e9e42f-fa97-419d-91a1-53212d532624
+2026-10-29 22:40:31.684 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [You are speaking with an automated agent authorized to discuss settlement options. ]
+2026-10-29 22:40:32.040 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.356s
+2026-10-29 22:40:32.076 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.426s (0.070s leading silence)
+2026-10-29 22:40:33.286 | DEBUG    | pipecat.audio.vad.vad_analyzer:set_params:157 - Setting VAD params to: confidence=0.7 start_secs=0.2 stop_secs=0.2 min_volume=0.6
+2026-10-29 22:40:34.179 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context 88ed78f8-0ac4-4262-b720-2dcd6326c26f
+2026-10-29 22:40:34.180 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [What payment terms can you work with for a settlement? ]
+2026-10-29 22:40:34.280 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:40:34.538 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.358s
+2026-10-29 22:40:34.562 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:40:34.694 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.683s (0.325s leading silence)
+2026-10-29 22:40:34.844 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:40:34.845 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:40:34.845 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:40:34.926 | DEBUG    | pipecat.transports.smallwebrtc.connection:send_app_message:800 - Data channel not ready, queuing message
+2026-10-29 22:40:35.005 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:40:35.005 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:40:35.006 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:40:35.727 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:35.786 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context 39c1ab61-dd39-4ea0-b14a-c53510266f03
+2026-10-29 22:40:37.525 | WARNING  | pipecat.transports.smallwebrtc.connection:timeout_handler:648 - Data channel not established within 10s after connection. Clearing message queue and disabling future queueing.
+2026-10-29 22:40:37.737 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:39.645 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:40:39.645 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:40:39.646 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:40:39.749 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:41.761 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:42.365 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:40:42.366 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:40:43.773 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:46.053 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:40:50.927 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:40:51.749 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:52.430 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [One moment. ]
+2026-10-29 22:40:52.802 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.372s
+2026-10-29 22:40:52.820 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:40:52.853 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.474s (0.102s leading silence)
+2026-10-29 22:40:53.349 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context 5c66f45c-717e-4d3e-bd85-9c0f68cb3216
+2026-10-29 22:40:53.350 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [So the payment structure is even, is that right? ]
+2026-10-29 22:40:53.633 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:40:53.633 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:40:53.700 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.350s
+2026-10-29 22:40:53.703 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:40:53.760 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:53.772 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.464s (0.114s leading silence)
+2026-10-29 22:40:55.167 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context 56b08e15-c06b-403b-bf0e-e73dfdde3b2c
+2026-10-29 22:40:55.770 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:56.895 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:40:56.895 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:40:57.786 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:40:59.960 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:41:00.090 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:41:00.094 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [Okay, even payments. ]
+2026-10-29 22:41:00.435 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.341s
+2026-10-29 22:41:00.455 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:41:00.767 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.774s (0.433s leading silence)
+2026-10-29 22:41:01.194 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context fd760f5a-0fe6-4426-a31d-184e7d7c5cdc
+2026-10-29 22:41:01.194 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [What settlement percentage of the balance are you looking for? ]
+2026-10-29 22:41:01.555 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.361s
+2026-10-29 22:41:01.632 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.475s (0.114s leading silence)
+2026-10-29 22:41:01.653 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:02.164 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:41:02.164 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:41:02.165 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:41:02.834 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context b6a67c61-c170-42a2-ad14-ec412ae445f1
+2026-10-29 22:41:03.664 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:04.965 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:41:04.966 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:41:05.675 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:08.078 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:41:10.374 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:41:11.392 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:11.858 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [Would 49% of the balance, or $980, be acceptable? ]
+2026-10-29 22:41:12.247 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.389s
+2026-10-29 22:41:12.266 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:41:12.325 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.503s (0.114s leading silence)
+2026-10-29 22:41:13.403 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:14.589 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context f62ae093-3a2c-43e4-b0e5-0e847efa5df8
+2026-10-29 22:41:14.758 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:41:15.006 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:41:15.884 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:41:16.602 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:41:17.292 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:41:18.709 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:18.795 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [Let me check. ]
+2026-10-29 22:41:19.172 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.377s
+2026-10-29 22:41:19.175 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:41:19.481 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.666s (0.289s leading silence)
+2026-10-29 22:41:19.759 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context 632c365d-2a4d-4766-8b36-b551abe67667
+2026-10-29 22:41:20.102 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [We can meet you partway at 59% of the balance, which is $1,180. ]
+2026-10-29 22:41:20.274 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:41:20.275 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:41:20.456 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.354s
+2026-10-29 22:41:20.458 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:41:20.640 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.707s (0.353s leading silence)
+2026-10-29 22:41:20.720 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:22.731 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:23.583 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context 6bc689f7-a2f1-4062-b2b6-c79a4b1b4941
+2026-10-29 22:41:23.584 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [Would that work? ]
+2026-10-29 22:41:23.925 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.341s
+2026-10-29 22:41:24.000 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.484s (0.143s leading silence)
+2026-10-29 22:41:24.259 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context 2d8fc274-41a8-47d3-a943-eb70cacf6858
+2026-10-29 22:41:24.742 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:26.753 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:27.254 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:41:27.254 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:41:27.255 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:41:27.975 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:41:27.975 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:41:28.764 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:31.358 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:41:35.164 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:41:35.984 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:36.667 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [Okay, just a second. ]
+2026-10-29 22:41:37.026 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.359s
+2026-10-29 22:41:37.048 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:41:37.326 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.592s (0.233s leading silence)
+2026-10-29 22:41:37.887 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context 49f3a1ef-a3c7-4d8f-a92c-0982da569be1
+2026-10-29 22:41:37.888 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [Understood, 65% works. ]
+2026-10-29 22:41:37.994 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:38.251 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.362s
+2026-10-29 22:41:38.353 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.592s (0.230s leading silence)
+2026-10-29 22:41:38.914 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:41:38.914 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:41:38.914 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:41:39.554 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context 25b01576-a2ee-48c0-ac00-064bd861282d
+2026-10-29 22:41:39.556 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [Consider 6 installments totaling $1,300 starting October 31. ]
+2026-10-29 22:41:39.911 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.355s
+2026-10-29 22:41:40.005 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:40.073 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.667s (0.312s leading silence)
+2026-10-29 22:41:41.794 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:41:41.794 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:41:41.795 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:41:42.454 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context 5e6114d4-8f3b-4ef5-b8f2-fdf2e71be661
+2026-10-29 22:41:42.455 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [Does that fit your schedule? ]
+2026-10-29 22:41:42.679 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:41:42.808 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.353s
+2026-10-29 22:41:42.872 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.434s (0.081s leading silence)
+2026-10-29 22:41:42.998 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:41:43.443 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context 87396607-eef9-4a1e-bb1e-18dd93c1733e
+2026-10-29 22:41:44.277 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:46.288 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:47.395 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:41:47.395 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:41:47.395 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:41:48.299 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:48.754 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:41:48.755 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:41:50.312 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:51.804 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:41:54.370 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:41:55.828 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:55.872 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [Let me see. ]
+2026-10-29 22:41:56.240 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.368s
+2026-10-29 22:41:56.243 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:41:56.290 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.477s (0.109s leading silence)
+2026-10-29 22:41:56.803 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context 57127cd4-d1c9-4ef7-a098-06d2090bc60c
+2026-10-29 22:41:57.205 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:41:57.205 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:41:57.841 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:41:58.901 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [On October 31 the creditor payment is $216.66. ]
+2026-10-29 22:41:59.242 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.341s
+2026-10-29 22:41:59.548 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.652s (0.311s leading silence)
+2026-10-29 22:41:59.549 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:42:00.678 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:42:00.932 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:42:00.941 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:00.959 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:00.978 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:01.005 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:01.014 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:01.035 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:01.051 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:01.067 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:01.094 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:01.104 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:01.126 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:01.145 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:01.166 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:01.175 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:01.202 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:02.278 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:42:02.779 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:42:03.207 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [Okay, so December 1 for the initial payment date, correct? ]
+2026-10-29 22:42:03.578 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.371s
+2026-10-29 22:42:03.580 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:42:03.654 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.519s (0.148s leading silence)
+2026-10-29 22:42:04.199 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_start_of_turn:821 - User started speaking
+2026-10-29 22:42:04.449 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:42:04.457 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:04.480 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:04.489 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:04.514 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:04.529 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:04.555 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:04.569 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:04.579 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:04.606 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:04.625 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:04.636 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:04.660 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:04.680 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:04.695 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:04.713 | DEBUG    | pipecat.services.tts_service:append_to_audio_context:963 - DeepgramTTSService#1 unable to append audio to context: no context ID provided
+2026-10-29 22:42:05.124 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_handle_end_of_turn:893 - User stopped speaking
+2026-10-29 22:42:06.564 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:42:06.625 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [One moment. ]
+2026-10-29 22:42:07.000 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.374s
+2026-10-29 22:42:07.003 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:42:07.072 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.491s (0.117s leading silence)
+2026-10-29 22:42:07.567 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context e1bbe05a-550d-4d0b-81b7-06396297dda6
+2026-10-29 22:42:07.955 | DEBUG    | pipecat.transports.base_output:_handle_frame:922 - Bot stopped speaking based on TTSStoppedFrame
+2026-10-29 22:42:07.955 | DEBUG    | pipecat.transports.base_output:_bot_stopped_speaking:856 - Bot stopped speaking
+2026-10-29 22:42:08.577 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:42:08.770 | DEBUG    | pipecat.services.tts_service:_synthesize_text:1690 - DeepgramTTSService#1: Generating TTS [Okay, so December 1 for the initial payment date, correct? ]
+2026-10-29 22:42:09.124 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:stop_ttfb_metrics:175 - DeepgramTTSService#1 TTFB: 0.354s
+2026-10-29 22:42:09.398 | DEBUG    | pipecat.transports.base_output:_bot_started_speaking:751 - Bot started speaking
+2026-10-29 22:42:09.425 | DEBUG    | pipecat.processors.metrics.frame_processor_metrics:process_ttfa_metrics:228 - DeepgramTTSService#1 TTFA: 0.626s (0.272s leading silence)
+2026-10-29 22:42:10.588 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:446 - Timeout: No audio frame received within the specified time.
+2026-10-29 22:42:10.610 | DEBUG    | pipecat.services.tts_service:_finish_tts_context:1392 - DeepgramTTSService#1 cleaning up TTS context b8909708-66f0-4742-9548-b46443e797b5
+2026-10-29 22:42:10.902 | DEBUG    | pipecat.pipeline.worker:_cancel:1170 - Cancelling pipeline worker PipelineTask#1
+2026-10-29 22:42:10.902 | WARNING  | pipecat.transports.smallwebrtc.transport:read_audio_frame:453 - Media stream error while reading the audio; clearing track.
+2026-10-29 22:42:10.902 | DEBUG    | pipecat.pipeline.worker:_wait_for_pipeline_end:1346 - PipelineTask#1: Closing. Waiting for CancelFrame#1(reason: None) to reach the end of the pipeline...
+2026-10-29 22:42:10.903 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_ended:416 - Track audio ended
+2026-10-29 22:42:10.904 | DEBUG    | pipecat.transports.smallwebrtc.connection:on_iceconnectionstatechange:401 - ICE connection state is closed, connection is closed
+2026-10-29 22:42:10.904 | DEBUG    | pipecat.transports.smallwebrtc.connection:_handle_new_connection_state:683 - Connection state changed to: closed
+2026-10-29 22:42:10.904 | INFO     | pipecat.transports.smallwebrtc.request_handler:handle_disconnected:212 - Discarding peer connection for pc_id: SmallWebRTCConnection#1-ffd87ec72fe54703812ee1e0b2f63ffa
+2026-10-29 22:42:10.904 | DEBUG    | pipecat.transports.smallwebrtc.transport:on_closed:280 - Client connection closed.
+2026-10-29 22:42:10.905 | DEBUG    | pipecat.services.deepgram.flux.stt_base:_send_close_stream:506 - Sending CloseStream message to Deepgram Flux
+2026-10-29 22:42:10.905 | DEBUG    | pipecat.services.deepgram.flux.stt:_disconnect_websocket:366 - DeepgramFluxSTTService#1: Disconnecting from Deepgram Flux Websocket
+2026-10-29 22:42:11.192 | DEBUG    | pipecat.services.deepgram.tts:_disconnect_websocket:294 - DeepgramTTSService#1: Disconnecting from Deepgram WebSocket
+2026-10-29 22:42:11.487 | DEBUG    | pipecat.pipeline.worker:wait_for_cancel:1337 - PipelineTask#1: CancelFrame#1(reason: None) reached the end of the pipeline.
+2026-10-29 22:42:11.487 | DEBUG    | pipecat.utils.base_object:cleanup:179 - PipelineTask#1: waiting on event handlers to finish ['on_pipeline_finished']...
+2026-10-29 22:42:11.488 | DEBUG    | pipecat.pipeline.worker:run:909 - Pipeline worker PipelineTask#1 is finishing...
+2026-10-29 22:42:11.489 | DEBUG    | pipecat.pipeline.worker:run:914 - Pipeline worker PipelineTask#1 has finished
+2026-10-29 22:42:11.489 | DEBUG    | pipecat.workers.runner:run:316 - WorkerRunner 'runner-1dc3b01b': finished running
+INFO:     127.0.0.1:51741 - "GET /voice/events?call_id=vh-numbers_haggle-1793293826220 HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [16722]

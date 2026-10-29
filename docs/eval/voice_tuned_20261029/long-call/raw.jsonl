@@ -1,0 +1,678 @@
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383223.2002, "kind": "ws_out", "type": "start"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383226.6, "kind": "ws_in", "type": "say", "id": "f75f14b9-91fd-4a57-946d-d56a1c2f3ed6", "text": "Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383226.7002, "kind": "ws_in", "type": "transcript", "text": "Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383228.3, "kind": "ws_in", "type": "say", "id": "1fe6a677-2285-4d68-b667-07d93000a712", "text": "You are speaking with an automated agent authorized to discuss settlement options."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383228.3, "kind": "ws_in", "type": "transcript", "text": "You are speaking with an automated agent authorized to discuss settlement options.", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383228.3, "kind": "ws_in", "type": "say", "id": "9d391376-4519-421e-8499-dd0c2fac61dc", "text": "What payment terms can you work with for a settlement?"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383228.3, "kind": "ws_in", "type": "transcript", "text": "What payment terms can you work with for a settlement?", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383228.4001, "kind": "ws_in", "type": "belief"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383228.4001, "kind": "ws_in", "type": "phase", "turn": 0, "phase": "OPENING"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383228.4001, "kind": "ws_in", "type": "latency", "turn": 0, "stt_ms": null, "nlu_ms": 0, "engine_ms": 0, "policy_ms": 0, "nlg_ms": 0.27991714887320995, "queue_ms": 0, "server_total_ms": 0.28545898385345936}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383228.4001, "kind": "ws_in", "type": "turn_trace", "turn": 0, "timings": {"nlg_ms": 0.27991714887320995, "nlu_ms": 0, "engine_ms": 0, "policy_ms": 0, "queue_ms": 0, "server_total_ms": 0.28545898385345936}}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383228.5, "kind": "ws_in", "type": "audit", "id": 1}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383228.5, "kind": "ws_in", "type": "audit", "id": 2}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383228.5, "kind": "ws_in", "type": "audit", "id": 3}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383228.5, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383274.4001, "kind": "gum", "constraints": "{\"audio\":{\"echoCancellation\":true,\"noiseSuppression\":true,\"autoGainControl\":true}}"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383589.9001, "kind": "pc_state", "state": "connecting"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294383657.5, "kind": "pc_state", "state": "connected"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294385915.9001, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294386016.9001, "kind": "agent_audio_on", "rms": 0.06364896410441301}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294389144, "kind": "rep_start", "id": "b01_okay", "dur_ms": 490}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294389634, "kind": "rep_end", "id": "b01_okay"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294389636.6, "kind": "rep_end_cb", "id": "b01_okay"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294390352.4001, "kind": "ws_in", "type": "voice_state", "text": "Okay."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294391633.5, "kind": "ws_in", "type": "phase", "turn": 0, "phase": "OPENING"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294391640.5, "kind": "ws_in", "type": "audit", "id": 4}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294391640.6, "kind": "ws_in", "type": "audit", "id": 5}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294391640.6, "kind": "ws_in", "type": "audit", "id": 6}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294391640.6, "kind": "ws_in", "type": "audit", "id": 7}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294391640.6, "kind": "ws_in", "type": "audit", "id": 8}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294391640.6, "kind": "ws_in", "type": "audit", "id": 9}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294391640.6, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294391647.4001, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294391653.4001, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294396071.4001, "kind": "ws_in", "type": "phase", "turn": 0, "phase": "OPENING"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294396078.3, "kind": "ws_in", "type": "audit", "id": 10}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294396078.3, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294396082.8, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294396088, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294396016.8, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294396488, "kind": "agent_audio_on", "rms": 0.025737779280658454}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294398950.3, "kind": "ws_in", "type": "phase", "turn": 0, "phase": "DISCOVERY"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294398953.3, "kind": "ws_in", "type": "audit", "id": 11}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294398953.3, "kind": "ws_in", "type": "audit", "id": 12}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294398953.3, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294398955.4001, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294398776.6, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294450981.4001, "kind": "rep_start", "id": "b02_terms", "dur_ms": 5310}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294456291.4001, "kind": "rep_end", "id": "b02_terms"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294452350.3, "kind": "ws_in", "type": "voice_state", "text": "We can take"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294452550.2002, "kind": "ws_in", "type": "voice_state", "text": "We can take up to"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294452834.3, "kind": "ws_in", "type": "voice_state", "text": "We can take up to eight"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294453029.7002, "kind": "ws_in", "type": "voice_state", "text": "We can take up to eight monthly"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294453516, "kind": "ws_in", "type": "voice_state", "text": "We can take up to eight monthly payments"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294453993.3, "kind": "ws_in", "type": "voice_state", "text": "We can take up to eight monthly payments."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294454236.6, "kind": "ws_in", "type": "voice_state", "text": "We can take up to eight monthly payments, and"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294454469.9001, "kind": "ws_in", "type": "voice_state", "text": "We can take up to eight monthly payments, at least"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294454713.5, "kind": "ws_in", "type": "voice_state", "text": "We can take up to eight monthly payments, at least one"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294454950.4001, "kind": "ws_in", "type": "voice_state", "text": "We can take up to eight monthly payments, at least one hundred"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294455311.4001, "kind": "ws_in", "type": "voice_state", "text": "We can take up to eight monthly payments, at least one hundred dollars"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294455430.8, "kind": "ws_in", "type": "voice_state", "text": "We can take up to eight monthly payments, at least one hundred dollars each."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294456287.2002, "kind": "rep_end_cb", "id": "b02_terms"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294456392.2002, "kind": "ws_in", "type": "voice_state", "text": "We can take up to eight monthly payments, at least one hundred dollars each, all the same"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294456712.9001, "kind": "ws_in", "type": "voice_state", "text": "We can take up to eight monthly payments, at least one hundred dollars each, all the same amount"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294456795.2002, "kind": "ws_in", "type": "voice_state", "text": "We can take up to eight monthly payments, at least one hundred dollars each, all the same amount."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294457399.8, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294457417.3, "kind": "ws_in", "type": "transcript", "text": "We can take up to eight monthly payments, at least one hundred dollars each, all the same amount.", "role": "creditor"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460275.6, "kind": "ws_in", "type": "say", "id": "ba8d930a-524f-4e0d-a26f-ee8993f3b716", "text": "Okay, so even for the payment structure, correct?"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.1, "kind": "ws_in", "type": "transcript", "text": "Okay, so even for the payment structure, correct?", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.1, "kind": "ws_in", "type": "belief"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.1, "kind": "ws_in", "type": "phase", "turn": 1, "phase": "DISCOVERY"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.2002, "kind": "ws_in", "type": "latency", "turn": 1, "stt_ms": null, "nlu_ms": 1960.1981660816818, "engine_ms": 0.0753339845687151, "policy_ms": 0.13908417895436287, "nlg_ms": 0.7432079873979092, "queue_ms": 0.025166897103190422, "server_total_ms": 4602.90400008671}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.3, "kind": "ws_in", "type": "turn_trace", "turn": 1, "timings": {"nlu_ms": 1960.1981660816818, "engine_ms": 0.0753339845687151, "policy_ms": 0.13908417895436287, "nlg_ms": 0.7432079873979092, "queue_ms": 0.025166897103190422, "server_total_ms": 4602.90400008671}}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.3, "kind": "ws_in", "type": "audit", "id": 13}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.3, "kind": "ws_in", "type": "audit", "id": 14}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.3, "kind": "ws_in", "type": "audit", "id": 15}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.3, "kind": "ws_in", "type": "audit", "id": 16}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.3, "kind": "ws_in", "type": "audit", "id": 17}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.3, "kind": "ws_in", "type": "audit", "id": 18}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.3, "kind": "ws_in", "type": "audit", "id": 19}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.3, "kind": "ws_in", "type": "audit", "id": 20}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.3, "kind": "ws_in", "type": "audit", "id": 21}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.3, "kind": "ws_in", "type": "audit", "id": 22}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.3, "kind": "ws_in", "type": "audit", "id": 23}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.3, "kind": "ws_in", "type": "audit", "id": 24}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.4001, "kind": "ws_in", "type": "audit", "id": 25}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.4001, "kind": "ws_in", "type": "audit", "id": 26}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.4001, "kind": "ws_in", "type": "audit", "id": 27}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.4001, "kind": "ws_in", "type": "audit", "id": 28}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.4001, "kind": "ws_in", "type": "audit", "id": 29}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.4001, "kind": "ws_in", "type": "audit", "id": 30}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460279.4001, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294460937, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294461027.6, "kind": "agent_audio_on", "rms": 0.023725240587341653}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294463250.3, "kind": "ws_in", "type": "phase", "turn": 1, "phase": "DISCOVERY"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294463259.9001, "kind": "ws_in", "type": "audit", "id": 31}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294463259.9001, "kind": "ws_in", "type": "audit", "id": 32}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294463259.9001, "kind": "ws_in", "type": "audit", "id": 33}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294463259.9001, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294463267.5, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294463157.3, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294515294.5, "kind": "rep_start", "id": "b03_correct", "dur_ms": 700}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294515994.5, "kind": "rep_end", "id": "b03_correct"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294515994.1, "kind": "rep_end_cb", "id": "b03_correct"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516416, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516435.8, "kind": "ws_in", "type": "transcript", "text": "Correct.", "role": "creditor"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516435.9001, "kind": "ws_in", "type": "say", "id": "2ea3883c-1101-4abf-976a-8c30a36a060f", "text": "Okay, even payments."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516436, "kind": "ws_in", "type": "transcript", "text": "Okay, even payments.", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516436, "kind": "ws_in", "type": "say", "id": "9a1c1998-00eb-44ad-828d-289cee463c44", "text": "What settlement percentage of the balance are you looking for?"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516436, "kind": "ws_in", "type": "transcript", "text": "What settlement percentage of the balance are you looking for?", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516436, "kind": "ws_in", "type": "belief"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516436, "kind": "ws_in", "type": "phase", "turn": 2, "phase": "DISCOVERY"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516436, "kind": "ws_in", "type": "latency", "turn": 2, "stt_ms": null, "nlu_ms": 0.2828750293701887, "engine_ms": 3.4787501208484173, "policy_ms": 0.527041032910347, "nlg_ms": 0.5012089386582375, "queue_ms": 0, "server_total_ms": 6.318541942164302}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516436.1, "kind": "ws_in", "type": "turn_trace", "turn": 2, "timings": {"nlu_ms": 0.2828750293701887, "engine_ms": 3.4787501208484173, "policy_ms": 0.527041032910347, "nlg_ms": 0.5012089386582375, "queue_ms": 0, "server_total_ms": 6.318541942164302}}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516436.1, "kind": "ws_in", "type": "audit", "id": 34}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516436.1, "kind": "ws_in", "type": "audit", "id": 35}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516436.1, "kind": "ws_in", "type": "audit", "id": 36}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516436.1, "kind": "ws_in", "type": "audit", "id": 37}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516436.1, "kind": "ws_in", "type": "audit", "id": 38}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516436.1, "kind": "ws_in", "type": "audit", "id": 39}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516436.2002, "kind": "ws_in", "type": "audit", "id": 40}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516436.2002, "kind": "ws_in", "type": "audit", "id": 41}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294516436.2002, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294517189.6, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294517310.6, "kind": "agent_audio_on", "rms": 0.1325159630897202}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294517677.5, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294518007.4001, "kind": "agent_audio_on", "rms": 0.0609318570189347}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294518913, "kind": "ws_in", "type": "phase", "turn": 2, "phase": "DISCOVERY"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294518918.6, "kind": "ws_in", "type": "audit", "id": 42}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294518918.7002, "kind": "ws_in", "type": "audit", "id": 43}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294518918.7002, "kind": "ws_in", "type": "audit", "id": 44}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294518918.7002, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294518927.5, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294518937, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294521793.3, "kind": "ws_in", "type": "phase", "turn": 2, "phase": "DISCOVERY"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294521799.4001, "kind": "ws_in", "type": "audit", "id": 45}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294521799.4001, "kind": "ws_in", "type": "audit", "id": 46}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294521799.5, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294521807, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294521767.5, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294573921.7002, "kind": "rep_start", "id": "b04_seventy", "dur_ms": 2280}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294576201.7002, "kind": "rep_end", "id": "b04_seventy"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294574675.2002, "kind": "ws_in", "type": "voice_state", "text": "With"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294575154.2002, "kind": "ws_in", "type": "voice_state", "text": "We're looking for"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294575350.7002, "kind": "ws_in", "type": "voice_state", "text": "We're looking for some"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294575633.9001, "kind": "ws_in", "type": "voice_state", "text": "We're looking for seventy"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294575828.3, "kind": "ws_in", "type": "voice_state", "text": "We're looking for seventy percent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294576113.6, "kind": "ws_in", "type": "voice_state", "text": "We're looking for seventy percent of the"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294576196.9001, "kind": "rep_end_cb", "id": "b04_seventy"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294576352.8, "kind": "ws_in", "type": "voice_state", "text": "We're looking for seventy percent of the bowel"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294576638.7002, "kind": "ws_in", "type": "voice_state", "text": "We're looking for seventy percent of the balance"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294576711.6, "kind": "ws_in", "type": "voice_state", "text": "We're looking for seventy percent of the balance."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294577192.8, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294577225, "kind": "ws_in", "type": "transcript", "text": "We're looking for seventy percent of the balance.", "role": "creditor"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294578433.2002, "kind": "ws_in", "type": "say", "id": "070bb76f-fb09-4b70-b27b-886d8a85e116", "text": "We suggest 49% of the balance, totaling $980."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294578443.7002, "kind": "ws_in", "type": "transcript", "text": "We suggest 49% of the balance, totaling $980.", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294578443.8, "kind": "ws_in", "type": "belief"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294578443.8, "kind": "ws_in", "type": "phase", "turn": 3, "phase": "NEGOTIATE"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294578443.8, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294578443.8, "kind": "ws_in", "type": "latency", "turn": 3, "stt_ms": null, "nlu_ms": 1636.6396250668913, "engine_ms": 1.038790913298726, "policy_ms": 1.2139170430600643, "nlg_ms": 0.6995410658419132, "queue_ms": 0.004082918167114258, "server_total_ms": 1640.3651658911258}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294578443.9001, "kind": "ws_in", "type": "turn_trace", "turn": 3, "timings": {"nlu_ms": 1636.6396250668913, "engine_ms": 1.038790913298726, "policy_ms": 1.2139170430600643, "nlg_ms": 0.6995410658419132, "queue_ms": 0.004082918167114258, "server_total_ms": 1640.3651658911258}}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294578443.9001, "kind": "ws_in", "type": "audit", "id": 47}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294578443.9001, "kind": "ws_in", "type": "audit", "id": 48}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294578443.9001, "kind": "ws_in", "type": "audit", "id": 49}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294578443.9001, "kind": "ws_in", "type": "audit", "id": 50}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294578443.9001, "kind": "ws_in", "type": "audit", "id": 51}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294578443.9001, "kind": "ws_in", "type": "audit", "id": 52}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294578444, "kind": "ws_in", "type": "audit", "id": 53}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294578444, "kind": "ws_in", "type": "audit", "id": 54}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294578444, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294579065.6, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294579188, "kind": "agent_audio_on", "rms": 0.06846829879199859}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294580491.3, "kind": "rep_start", "id": "b05_interrupt", "dur_ms": 2940}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294583431.3, "kind": "rep_end", "id": "b05_interrupt"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294581311.4001, "kind": "ws_in", "type": "voice_state", "text": "When"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294581057.6, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294582039.3, "kind": "ws_in", "type": "voice_state", "text": "Wait. Wait."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294582078.7002, "kind": "ws_in", "type": "speech_dropped", "ids": ["070bb76f-fb09-4b70-b27b-886d8a85e116"]}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294582078.8, "kind": "ws_in", "type": "phase", "turn": 2, "phase": "DISCOVERY"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294582078.8, "kind": "ws_in", "type": "audit", "id": 55}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294582078.8, "kind": "ws_in", "type": "audit", "id": 56}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294582078.8, "kind": "ws_in", "type": "audit", "id": 57}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294582078.8, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294582078.8, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294582151.5, "kind": "ws_in", "type": "voice_state", "text": "Wait. Wait. We can"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294582269.4001, "kind": "ws_in", "type": "voice_state", "text": "Wait. Wait. We can't move"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294582354.4001, "kind": "ws_in", "type": "voice_state", "text": "Wait. Wait. We can't move on that"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294582391.5, "kind": "ws_in", "type": "voice_state", "text": "Wait. Wait. We can't move on that."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294582670.3, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294582711.3, "kind": "ws_in", "type": "transcript", "text": "Wait. Wait. We can't move on that.", "role": "creditor"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294583115.3, "kind": "ws_in", "type": "voice_state", "text": "still"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294583428.9001, "kind": "rep_end_cb", "id": "b05_interrupt"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294583591.7002, "kind": "ws_in", "type": "voice_state", "text": "still seventy"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294583831.3, "kind": "ws_in", "type": "voice_state", "text": "still seventy percent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294584159.5, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294584193.4001, "kind": "ws_in", "type": "transcript", "text": "still seventy percent.", "role": "creditor"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586827, "kind": "ws_in", "type": "say", "id": "b9d08a66-3186-4f43-8a91-870787844f30", "text": "We can meet you partway at 59% of the balance, which is $1,180."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.6, "kind": "ws_in", "type": "transcript", "text": "We can meet you partway at 59% of the balance, which is $1,180.", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.6, "kind": "ws_in", "type": "say", "id": "fa6c4e34-2854-4742-8218-14a44c7452f4", "text": "Would that work?"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.6, "kind": "ws_in", "type": "transcript", "text": "Would that work?", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.6, "kind": "ws_in", "type": "belief"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.6, "kind": "ws_in", "type": "phase", "turn": 3, "phase": "NEGOTIATE"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.6, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.6, "kind": "ws_in", "type": "latency", "turn": 3, "stt_ms": null, "nlu_ms": 2224.972458789125, "engine_ms": 0.4999998491257429, "policy_ms": 1.3262080028653145, "nlg_ms": 0.5236670840531588, "queue_ms": 0.011124182492494583, "server_total_ms": 4343.098500045016}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.8, "kind": "ws_in", "type": "turn_trace", "turn": 3, "timings": {"nlu_ms": 2224.972458789125, "engine_ms": 0.4999998491257429, "policy_ms": 1.3262080028653145, "nlg_ms": 0.5236670840531588, "queue_ms": 0.011124182492494583, "server_total_ms": 4343.098500045016}}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.8, "kind": "ws_in", "type": "audit", "id": 58}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.8, "kind": "ws_in", "type": "audit", "id": 59}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.8, "kind": "ws_in", "type": "audit", "id": 60}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.8, "kind": "ws_in", "type": "audit", "id": 61}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.8, "kind": "ws_in", "type": "audit", "id": 62}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.8, "kind": "ws_in", "type": "audit", "id": 63}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.9001, "kind": "ws_in", "type": "audit", "id": 64}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.9001, "kind": "ws_in", "type": "audit", "id": 65}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.9001, "kind": "ws_in", "type": "audit", "id": 66}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.9001, "kind": "ws_in", "type": "audit", "id": 67}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586833.9001, "kind": "ws_in", "type": "audit", "id": 68}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586855.2002, "kind": "ws_in", "type": "audit", "id": 69}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586855.2002, "kind": "ws_in", "type": "audit", "id": 70}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586855.2002, "kind": "ws_in", "type": "audit", "id": 71}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586855.2002, "kind": "ws_in", "type": "audit", "id": 72}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586855.3, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294586871.7002, "kind": "ws_in", "type": "speech_dropped", "ids": ["b9d08a66-3186-4f43-8a91-870787844f30", "fa6c4e34-2854-4742-8218-14a44c7452f4"]}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294587498, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294587607.7002, "kind": "agent_audio_on", "rms": 0.016236719091840036}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588880.5, "kind": "ws_in", "type": "say", "id": "4b025b46-dffc-4478-a222-d3b083e4d6c6", "text": "We suggest 49% of the balance, totaling $980."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887, "kind": "ws_in", "type": "transcript", "text": "We suggest 49% of the balance, totaling $980.", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887, "kind": "ws_in", "type": "belief"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887, "kind": "ws_in", "type": "phase", "turn": 3, "phase": "NEGOTIATE"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887.1, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887.2002, "kind": "ws_in", "type": "latency", "turn": 3, "stt_ms": null, "nlu_ms": 2046.8640001490712, "engine_ms": 0.3597498871386051, "policy_ms": 0.9222920052707195, "nlg_ms": 0.7050000131130219, "queue_ms": 0.00537489540874958, "server_total_ms": 2049.6198749169707}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887.2002, "kind": "ws_in", "type": "turn_trace", "turn": 3, "timings": {"nlu_ms": 2046.8640001490712, "engine_ms": 0.3597498871386051, "policy_ms": 0.9222920052707195, "nlg_ms": 0.7050000131130219, "queue_ms": 0.00537489540874958, "server_total_ms": 2049.6198749169707}}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887.2002, "kind": "ws_in", "type": "audit", "id": 73}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887.2002, "kind": "ws_in", "type": "audit", "id": 74}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887.2002, "kind": "ws_in", "type": "audit", "id": 75}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887.2002, "kind": "ws_in", "type": "audit", "id": 76}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887.3, "kind": "ws_in", "type": "audit", "id": 77}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887.3, "kind": "ws_in", "type": "audit", "id": 78}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887.3, "kind": "ws_in", "type": "audit", "id": 79}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887.3, "kind": "ws_in", "type": "audit", "id": 80}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887.3, "kind": "ws_in", "type": "audit", "id": 81}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887.7002, "kind": "ws_in", "type": "audit", "id": 82}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887.7002, "kind": "ws_in", "type": "audit", "id": 83}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887.7002, "kind": "ws_in", "type": "audit", "id": 84}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294588887.8, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294590707.7002, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294591067.2002, "kind": "agent_audio_on", "rms": 0.03243738437064229}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294593892.7002, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294593924.3, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294593827.6, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294594427.4001, "kind": "agent_audio_on", "rms": 0.047618057302262075}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294594972.1, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294595006.1, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294594877.3, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294595167.9001, "kind": "agent_audio_on", "rms": 0.01346732024593782}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294597678, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294597968.1, "kind": "agent_audio_on", "rms": 0.010901633310717794}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294600092.9001, "kind": "ws_in", "type": "phase", "turn": 3, "phase": "NEGOTIATE"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294600104.6, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294600104.6, "kind": "ws_in", "type": "audit", "id": 85}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294600104.6, "kind": "ws_in", "type": "audit", "id": 86}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294600104.6, "kind": "ws_in", "type": "audit", "id": 87}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294600104.7002, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294600120.2002, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294600067, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294659953.9001, "kind": "pc_state", "state": "disconnected"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294660169.4001, "kind": "pc_state", "state": "connected"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294670241.2002, "kind": "rep_start", "id": "b06_pause", "dur_ms": 3850}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294674091.2002, "kind": "rep_end", "id": "b06_pause"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294671109, "kind": "ws_in", "type": "voice_state", "text": "Six"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294671634.5, "kind": "ws_in", "type": "voice_state", "text": "Sissycock"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294671827.7002, "kind": "ws_in", "type": "voice_state", "text": "Sixty five percent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294672117.6, "kind": "ws_in", "type": "voice_state", "text": "Sixty five percent is"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294673436.7002, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294673483.2002, "kind": "ws_in", "type": "transcript", "text": "Sixty five percent is", "role": "creditor"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294674090.7002, "kind": "rep_end_cb", "id": "b06_pause"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294674203.7002, "kind": "ws_in", "type": "voice_state", "text": "the lowest weight"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294674430, "kind": "ws_in", "type": "voice_state", "text": "the lowest we can go"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294674590.6, "kind": "ws_in", "type": "voice_state", "text": "the lowest we can go."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294674992.8, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294675039.4001, "kind": "ws_in", "type": "transcript", "text": "the lowest we can go.", "role": "creditor"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676971, "kind": "ws_in", "type": "say", "id": "bfc99219-358f-4cac-abff-749d0f8dbe34", "text": "We can meet you partway at 57% of the balance, which is $1,140."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676978.4001, "kind": "ws_in", "type": "transcript", "text": "We can meet you partway at 57% of the balance, which is $1,140.", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676978.4001, "kind": "ws_in", "type": "say", "id": "b3422b12-d9e9-4859-8887-8a3b2061827c", "text": "Would that work?"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676978.4001, "kind": "ws_in", "type": "transcript", "text": "Would that work?", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676978.4001, "kind": "ws_in", "type": "belief"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676978.5, "kind": "ws_in", "type": "phase", "turn": 4, "phase": "NEGOTIATE"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676978.6, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676978.6, "kind": "ws_in", "type": "latency", "turn": 4, "stt_ms": null, "nlu_ms": 2048.901916947216, "engine_ms": 0.3637499175965786, "policy_ms": 0.952916918322444, "nlg_ms": 0.6074998527765274, "queue_ms": 0.014417106285691261, "server_total_ms": 3973.3280828222632}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676978.6, "kind": "ws_in", "type": "turn_trace", "turn": 4, "timings": {"nlu_ms": 2048.901916947216, "engine_ms": 0.3637499175965786, "policy_ms": 0.952916918322444, "nlg_ms": 0.6074998527765274, "queue_ms": 0.014417106285691261, "server_total_ms": 3973.3280828222632}}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676980.1, "kind": "ws_in", "type": "audit", "id": 88}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676980.1, "kind": "ws_in", "type": "audit", "id": 89}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676980.1, "kind": "ws_in", "type": "audit", "id": 90}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676980.2002, "kind": "ws_in", "type": "audit", "id": 91}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676980.2002, "kind": "ws_in", "type": "audit", "id": 92}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676980.2002, "kind": "ws_in", "type": "audit", "id": 93}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676995.5, "kind": "ws_in", "type": "audit", "id": 94}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676995.5, "kind": "ws_in", "type": "audit", "id": 95}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676995.5, "kind": "ws_in", "type": "audit", "id": 96}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676995.5, "kind": "ws_in", "type": "audit", "id": 97}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676995.5, "kind": "ws_in", "type": "audit", "id": 98}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676995.5, "kind": "ws_in", "type": "audit", "id": 99}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676995.5, "kind": "ws_in", "type": "audit", "id": 100}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676995.5, "kind": "ws_in", "type": "audit", "id": 101}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294676995.6, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294677008.5, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294677397.3, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294678080.7002, "kind": "agent_audio_on", "rms": 0.03581888883088887}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294679704.6, "kind": "rep_start", "id": "b07_right", "dur_ms": 420}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294680124.6, "kind": "rep_end", "id": "b07_right"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294680128, "kind": "rep_end_cb", "id": "b07_right"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294680546.8, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294681117.3, "kind": "agent_audio_on", "rms": 0.017616419464346767}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294683734, "kind": "ws_in", "type": "phase", "turn": 4, "phase": "NEGOTIATE"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294683742.2002, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294683742.3, "kind": "ws_in", "type": "audit", "id": 102}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294683742.3, "kind": "ws_in", "type": "audit", "id": 103}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294683742.3, "kind": "ws_in", "type": "audit", "id": 104}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294683742.3, "kind": "ws_in", "type": "audit", "id": 105}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294683742.3, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294683756.8, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294683781.5, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294684532.8, "kind": "ws_in", "type": "phase", "turn": 4, "phase": "NEGOTIATE"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294684542.2002, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294684542.3, "kind": "ws_in", "type": "audit", "id": 106}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294684542.3, "kind": "ws_in", "type": "audit", "id": 107}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294684542.3, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294684542.3, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294684497.2002, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294736666.6, "kind": "rep_start", "id": "b08_date", "dur_ms": 3000}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294739666.6, "kind": "rep_end", "id": "b08_date"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294737746.2002, "kind": "ws_in", "type": "voice_state", "text": "Can the first"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294737987.3, "kind": "ws_in", "type": "voice_state", "text": "Can the first payment"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294738235.9001, "kind": "ws_in", "type": "voice_state", "text": "Can the first payment be"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294738471, "kind": "ws_in", "type": "voice_state", "text": "Can the first payment be on the"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294738716.1, "kind": "ws_in", "type": "voice_state", "text": "Can the first payment be on December"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294738949.4001, "kind": "ws_in", "type": "voice_state", "text": "Can the first payment be on December first"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294739432.9001, "kind": "ws_in", "type": "voice_state", "text": "Can the first payment be on December first twenty"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294739664.4001, "kind": "rep_end_cb", "id": "b08_date"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294739668.3, "kind": "ws_in", "type": "voice_state", "text": "Can the first payment be on December first twenty twenty"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294740110.9001, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294740159.7002, "kind": "ws_in", "type": "transcript", "text": "Can the first payment be on December first twenty twenty six", "role": "creditor"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294743542.4001, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294743634.2002, "kind": "agent_audio_on", "rms": 0.03243723724952573}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744266.2002, "kind": "ws_in", "type": "say", "id": "aef45bc8-362b-4d56-b478-b9924d4d6e61", "text": "Let me make sure I have it: December 1 for the initial payment date?"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744272.7002, "kind": "ws_in", "type": "transcript", "text": "Let me make sure I have it: December 1 for the initial payment date?", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744272.8, "kind": "ws_in", "type": "belief"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744272.9001, "kind": "ws_in", "type": "phase", "turn": 5, "phase": "NEGOTIATE"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744272.9001, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744272.9001, "kind": "ws_in", "type": "latency", "turn": 5, "stt_ms": null, "nlu_ms": 2139.6381659433246, "engine_ms": 2.5546669494360685, "policy_ms": 0.16516703180968761, "nlg_ms": 0.8630829397588968, "queue_ms": 0.010249903425574303, "server_total_ms": 4514.738833997399}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744272.9001, "kind": "ws_in", "type": "turn_trace", "turn": 5, "timings": {"nlu_ms": 2139.6381659433246, "engine_ms": 2.5546669494360685, "policy_ms": 0.16516703180968761, "nlg_ms": 0.8630829397588968, "queue_ms": 0.010249903425574303, "server_total_ms": 4514.738833997399}}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744273, "kind": "ws_in", "type": "audit", "id": 108}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744273, "kind": "ws_in", "type": "audit", "id": 109}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744273, "kind": "ws_in", "type": "audit", "id": 110}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744273, "kind": "ws_in", "type": "audit", "id": 111}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744273, "kind": "ws_in", "type": "audit", "id": 112}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744273, "kind": "ws_in", "type": "audit", "id": 113}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744273.1, "kind": "ws_in", "type": "audit", "id": 114}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744273.1, "kind": "ws_in", "type": "audit", "id": 115}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744273.1, "kind": "ws_in", "type": "audit", "id": 116}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744273.1, "kind": "ws_in", "type": "audit", "id": 117}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744273.1, "kind": "ws_in", "type": "audit", "id": 118}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744273.1, "kind": "ws_in", "type": "audit", "id": 119}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744273.1, "kind": "ws_in", "type": "audit", "id": 120}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744273.1, "kind": "ws_in", "type": "audit", "id": 121}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744273.1, "kind": "ws_in", "type": "audit", "id": 122}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744287.4001, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744329.4001, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744207.4001, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744630.9001, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294744807.5, "kind": "agent_audio_on", "rms": 0.05064434505866061}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294746017.5, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294746497.4001, "kind": "agent_audio_on", "rms": 0.017934696056430686}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294748714.4001, "kind": "ws_in", "type": "phase", "turn": 5, "phase": "DISCOVERY"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294748728.1, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294748728.2002, "kind": "ws_in", "type": "audit", "id": 123}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294748728.2002, "kind": "ws_in", "type": "audit", "id": 124}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294748728.2002, "kind": "ws_in", "type": "audit", "id": 125}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294748728.2002, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294748744.9001, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294748627.4001, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294800806.7002, "kind": "rep_start", "id": "b09_yes", "dur_ms": 1470}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294802276.7002, "kind": "rep_end", "id": "b09_yes"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294801991.6, "kind": "ws_in", "type": "voice_state", "text": "Yes. That"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294802236.8, "kind": "ws_in", "type": "voice_state", "text": "Yes. That works"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294802277.6, "kind": "rep_end_cb", "id": "b09_yes"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294802472.6, "kind": "ws_in", "type": "voice_state", "text": "Yes. That works for"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294802544.7002, "kind": "ws_in", "type": "voice_state", "text": "Yes. That works for us."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294802775.4001, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294802809.6, "kind": "ws_in", "type": "transcript", "text": "Yes. That works for us.", "role": "creditor"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805013.5, "kind": "ws_in", "type": "say", "id": "4053473f-810e-4afa-b8da-6945c37c6794", "text": "Great, 57% works."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.4001, "kind": "ws_in", "type": "transcript", "text": "Great, 57% works.", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.4001, "kind": "ws_in", "type": "say", "id": "1a1b524c-6a01-4916-99d9-c6c94ca5d048", "text": "How about 4 payments totaling $1,140 starting December 1?"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.4001, "kind": "ws_in", "type": "transcript", "text": "How about 4 payments totaling $1,140 starting December 1?", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.4001, "kind": "ws_in", "type": "say", "id": "7234db11-a161-42f8-9278-d1b05d8454b6", "text": "Does that fit your schedule?"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.5, "kind": "ws_in", "type": "transcript", "text": "Does that fit your schedule?", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.5, "kind": "ws_in", "type": "belief"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.5, "kind": "ws_in", "type": "phase", "turn": 6, "phase": "CONFIRM"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.5, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.5, "kind": "ws_in", "type": "latency", "turn": 6, "stt_ms": null, "nlu_ms": 2252.7195001021028, "engine_ms": 0.5941670387983322, "policy_ms": 0.8228330407291651, "nlg_ms": 0.9714169427752495, "queue_ms": 0.006709014996886253, "server_total_ms": 2256.183042190969}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.6, "kind": "ws_in", "type": "turn_trace", "turn": 6, "timings": {"nlu_ms": 2252.7195001021028, "engine_ms": 0.5941670387983322, "policy_ms": 0.8228330407291651, "nlg_ms": 0.9714169427752495, "queue_ms": 0.006709014996886253, "server_total_ms": 2256.183042190969}}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.7002, "kind": "ws_in", "type": "audit", "id": 126}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.7002, "kind": "ws_in", "type": "audit", "id": 127}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.7002, "kind": "ws_in", "type": "audit", "id": 128}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.7002, "kind": "ws_in", "type": "audit", "id": 129}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.8, "kind": "ws_in", "type": "audit", "id": 130}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.8, "kind": "ws_in", "type": "audit", "id": 131}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.8, "kind": "ws_in", "type": "audit", "id": 132}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.9001, "kind": "ws_in", "type": "audit", "id": 133}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805021.9001, "kind": "ws_in", "type": "audit", "id": 134}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805022.1, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805662.4001, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294805793.6, "kind": "agent_audio_on", "rms": 0.19999879370157142}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294806028.4001, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294806507.9001, "kind": "agent_audio_on", "rms": 0.049926622304307014}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294807863.1, "kind": "ws_in", "type": "phase", "turn": 6, "phase": "CONFIRM"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294807869.9001, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294807869.9001, "kind": "ws_in", "type": "audit", "id": 135}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294807869.9001, "kind": "ws_in", "type": "audit", "id": 136}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294807869.9001, "kind": "ws_in", "type": "audit", "id": 137}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294807870, "kind": "ws_in", "type": "audit", "id": 138}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294807870, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294807884.8, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294807908.9001, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294813783.9001, "kind": "ws_in", "type": "phase", "turn": 6, "phase": "CONFIRM"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294813794, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294813794.1, "kind": "ws_in", "type": "audit", "id": 139}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294813794.1, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294813809.4001, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294813822.5, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294813756.7002, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294814038, "kind": "agent_audio_on", "rms": 0.015205004510464297}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294815385.4001, "kind": "ws_in", "type": "phase", "turn": 6, "phase": "CONFIRM"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294815399, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294815399.1, "kind": "ws_in", "type": "audit", "id": 140}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294815399.1, "kind": "ws_in", "type": "audit", "id": 141}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294815399.1, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294815412.9001, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294815328.8, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294867500.4001, "kind": "rep_start", "id": "b10_bye", "dur_ms": 1370}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294868870.4001, "kind": "rep_end", "id": "b10_bye"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294868634.5, "kind": "ws_in", "type": "voice_state", "text": "No. That's"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294868870.2002, "kind": "rep_end_cb", "id": "b10_bye"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294868906.5, "kind": "ws_in", "type": "voice_state", "text": "No. That's everything."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294869156, "kind": "ws_in", "type": "voice_state", "text": "No. That's everything. Thank"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294869350.4001, "kind": "ws_in", "type": "voice_state", "text": "No. That's everything. Thanks."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294869496.5, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294869523.5, "kind": "ws_in", "type": "transcript", "text": "No. That's everything. Thanks.", "role": "creditor"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871336.6, "kind": "ws_in", "type": "say", "id": "c0ff44dc-eef2-4a4d-b287-54603e549104", "text": "Thank you."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.3, "kind": "ws_in", "type": "transcript", "text": "Thank you.", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.3, "kind": "ws_in", "type": "say", "id": "e19edcd2-e1f4-4a02-b554-75aae0f44ed3", "text": "We will present this to the client and follow up after their review."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.4001, "kind": "ws_in", "type": "transcript", "text": "We will present this to the client and follow up after their review.", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.4001, "kind": "ws_in", "type": "say", "id": "76379c69-2138-46c1-823c-a05eabae47c5", "text": "Have a good day."}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.4001, "kind": "ws_in", "type": "transcript", "text": "Have a good day.", "role": "agent"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.4001, "kind": "ws_in", "type": "belief"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.4001, "kind": "ws_in", "type": "phase", "turn": 7, "phase": "CONFIRM"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.5, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.5, "kind": "ws_in", "type": "latency", "turn": 7, "stt_ms": null, "nlu_ms": 1859.6834999043494, "engine_ms": 0.4019578918814659, "policy_ms": 0.9035831317305565, "nlg_ms": 0.8442499674856663, "queue_ms": 0.0037080608308315277, "server_total_ms": 1862.5050419941545}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.5, "kind": "ws_in", "type": "turn_trace", "turn": 7, "timings": {"nlu_ms": 1859.6834999043494, "engine_ms": 0.4019578918814659, "policy_ms": 0.9035831317305565, "nlg_ms": 0.8442499674856663, "queue_ms": 0.0037080608308315277, "server_total_ms": 1862.5050419941545}}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.5, "kind": "ws_in", "type": "audit", "id": 142}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.6, "kind": "ws_in", "type": "audit", "id": 143}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.6, "kind": "ws_in", "type": "audit", "id": 144}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.6, "kind": "ws_in", "type": "audit", "id": 145}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.6, "kind": "ws_in", "type": "audit", "id": 146}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.6, "kind": "ws_in", "type": "audit", "id": 147}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.6, "kind": "ws_in", "type": "audit", "id": 148}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.7002, "kind": "ws_in", "type": "audit", "id": 149}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871344.7002, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294871991, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294872119.9001, "kind": "agent_audio_on", "rms": 0.09951312094173825}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294872514.3, "kind": "ws_in", "type": "phase", "turn": 7, "phase": "CONFIRM"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294872522.6, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294872522.6, "kind": "ws_in", "type": "audit", "id": 150}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294872522.7002, "kind": "ws_in", "type": "audit", "id": 151}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294872522.7002, "kind": "ws_in", "type": "audit", "id": 152}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294872522.7002, "kind": "ws_in", "type": "audit", "id": 153}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294872522.7002, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294872537.8, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294872588.5, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294872467.3, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294873038.4001, "kind": "agent_audio_on", "rms": 0.042452423224518795}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294876274.2002, "kind": "ws_in", "type": "phase", "turn": 7, "phase": "CONFIRM"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294876282, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294876282, "kind": "ws_in", "type": "audit", "id": 154}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294876282.1, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294876295, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294876320, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294876179, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294876488.2002, "kind": "agent_audio_on", "rms": 0.010316948381174557}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294877233.5, "kind": "ws_in", "type": "phase", "turn": 7, "phase": "END"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294877245.4001, "kind": "ws_in", "type": "eval"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294877245.6, "kind": "ws_in", "type": "agreement"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294877245.6, "kind": "ws_in", "type": "audit", "id": 155}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294877245.6, "kind": "ws_in", "type": "audit", "id": 156}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294877245.6, "kind": "ws_in", "type": "audit", "id": 157}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294877245.7002, "kind": "ws_in", "type": "audit", "id": 158}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294877245.7002, "kind": "ws_in", "type": "turn_done"}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294877245.7002, "kind": "ws_in", "type": "voice_state", "text": ""}
+{"call": "numbers_haggle#1", "src": "page", "t": 1793294877197.8, "kind": "agent_audio_off"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294383627.321, "kind": "session_start"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294383658.0742, "kind": "reply", "sids": ["f75f14b9-91fd-4a57-946d-d56a1c2f3ed6", "1fe6a677-2285-4d68-b667-07d93000a712", "9d391376-4519-421e-8499-dd0c2fac61dc"], "text": "Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.", "chars": 247}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294385482.567, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294385914.793, "kind": "trim", "ms": 300}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294385915.342, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294385948.7358, "kind": "reply_audio"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294388606.2368, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294390154.917, "kind": "start_of_turn", "text": "Okay."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294390236.267, "kind": "eager_end_of_turn", "text": "Okay."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294390473.917, "kind": "end_of_turn", "text": "Okay."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294390474.0168, "kind": "backchannel", "text": "Okay."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294391017.3728, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294391630.785, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294391630.848, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294391631.5908, "kind": "heard", "sid": "f75f14b9-91fd-4a57-946d-d56a1c2f3ed6"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294396069.0989, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294396069.142, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294396069.8152, "kind": "heard", "sid": "1fe6a677-2285-4d68-b667-07d93000a712"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294398949.4531, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294398949.628, "kind": "heard", "sid": "9d391376-4519-421e-8499-dd0c2fac61dc"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294452112.6458, "kind": "start_of_turn", "text": "We can"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294455670.4377, "kind": "eager_end_of_turn", "text": "We can take up to eight monthly payments, at least one hundred dollars each."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294456152.576, "kind": "turn_resumed"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294456874.895, "kind": "eager_end_of_turn", "text": "We can take up to eight monthly payments, at least one hundred dollars each, all the same amount."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294457397.696, "kind": "end_of_turn", "text": "We can take up to eight monthly payments, at least one hundred dollars each, all the same amount."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294457397.964, "kind": "final", "text": "We can take up to eight monthly payments, at least one hundred dollars each, all the same amount."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294460275.197, "kind": "reply", "sids": ["ba8d930a-524f-4e0d-a26f-ee8993f3b716"], "text": "Okay, so even for the payment structure, correct?", "chars": 49}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294460646.163, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294460933.1619, "kind": "trim", "ms": 300}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294460935.828, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294460968.176, "kind": "reply_audio"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294463248.6511, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294463248.8901, "kind": "heard", "sid": "ba8d930a-524f-4e0d-a26f-ee8993f3b716"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294516279.3281, "kind": "start_of_turn", "text": "Correct."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294516375.228, "kind": "eager_end_of_turn", "text": "Correct."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294516411.519, "kind": "end_of_turn", "text": "Correct."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294516411.9731, "kind": "final", "text": "Correct."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294516415.191, "kind": "reply", "sids": ["2ea3883c-1101-4abf-976a-8c30a36a060f", "9a1c1998-00eb-44ad-828d-289cee463c44"], "text": "Okay, even payments.", "chars": 82}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294516910.313, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294517188.5078, "kind": "trim", "ms": 190}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294517189.2988, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294517228.1038, "kind": "reply_audio"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294518094.303, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294518910.729, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294518910.781, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294518911.4932, "kind": "heard", "sid": "2ea3883c-1101-4abf-976a-8c30a36a060f"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294521790.4792, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294521790.9639, "kind": "heard", "sid": "9a1c1998-00eb-44ad-828d-289cee463c44"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294574872.4238, "kind": "start_of_turn", "text": "We're looking"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294576787.7542, "kind": "eager_end_of_turn", "text": "We're looking for seventy percent of the balance."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294577191.852, "kind": "end_of_turn", "text": "We're looking for seventy percent of the balance."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294577192.097, "kind": "final", "text": "We're looking for seventy percent of the balance."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294578432.837, "kind": "reply", "sids": ["070bb76f-fb09-4b70-b27b-886d8a85e116"], "text": "We suggest 49% of the balance, totaling $980.", "chars": 45}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294578766.628, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294579061.6362, "kind": "trim", "ms": 300}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294579064.492, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294579098.203, "kind": "reply_audio"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294580900.328, "kind": "pause"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294581554.5469, "kind": "start_of_turn", "text": "Wait."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294582033.634, "kind": "barge", "reason": "interim", "text": "Wait. Wait.", "heard": [], "dropped": ["070bb76f-fb09-4b70-b27b-886d8a85e116"]}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294582043.4019, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294582479.837, "kind": "eager_end_of_turn", "text": "Wait. Wait. We can't move on that."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294582669.197, "kind": "end_of_turn", "text": "Wait. Wait. We can't move on that."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294582669.534, "kind": "final", "text": "Wait. Wait. We can't move on that."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294583351.327, "kind": "start_of_turn", "text": "still seven"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294583949.556, "kind": "eager_end_of_turn", "text": "still seventy percent"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294584070.1902, "kind": "turn_resumed"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294584148.085, "kind": "eager_end_of_turn", "text": "still seventy percent."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294584158.9849, "kind": "end_of_turn", "text": "still seventy percent."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294584159.106, "kind": "final", "text": "still seventy percent."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294586826.606, "kind": "reply", "sids": ["b9d08a66-3186-4f43-8a91-870787844f30", "fa6c4e34-2854-4742-8218-14a44c7452f4"], "text": "We can meet you partway at 59% of the balance, which is $1,180.", "chars": 79}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294586827.317, "kind": "barge", "reason": "dropped", "text": "", "heard": [], "dropped": ["b9d08a66-3186-4f43-8a91-870787844f30", "fa6c4e34-2854-4742-8218-14a44c7452f4"]}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294587183.22, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294587494.0159, "kind": "trim", "ms": 300}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294587496.801, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294587529.0298, "kind": "reply_audio"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294588880.033, "kind": "reply", "sids": ["4b025b46-dffc-4478-a222-d3b083e4d6c6"], "text": "We suggest 49% of the balance, totaling $980.", "chars": 45}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294590553.246, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294591418.7122, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294593890.5288, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294593890.6318, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294594970.0322, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294594970.098, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294595008.9578, "kind": "reply_audio"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294600089.34, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294600089.833, "kind": "heard", "sid": "4b025b46-dffc-4478-a222-d3b083e4d6c6"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294671420.827, "kind": "start_of_turn", "text": "Sissy"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294672991.2432, "kind": "eager_end_of_turn", "text": "Sixty five percent is"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294673435.6511, "kind": "end_of_turn", "text": "Sixty five percent is"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294673435.9, "kind": "final", "text": "Sixty five percent is"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294673913.0098, "kind": "start_of_turn", "text": "The low"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294674634.287, "kind": "eager_end_of_turn", "text": "the lowest we can go."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294674992.073, "kind": "end_of_turn", "text": "the lowest we can go."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294674992.363, "kind": "final", "text": "the lowest we can go."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294676970.581, "kind": "reply", "sids": ["bfc99219-358f-4cac-abff-749d0f8dbe34", "b3422b12-d9e9-4859-8887-8a3b2061827c"], "text": "We can meet you partway at 57% of the balance, which is $1,140.", "chars": 79}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294677315.842, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294677394.2988, "kind": "trim", "ms": 120}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294677396.323, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294677429.2778, "kind": "reply_audio"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294680232.6409, "kind": "pause"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294680326.3071, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294680714.51, "kind": "start_of_turn", "text": "Right."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294680828.78, "kind": "eager_end_of_turn", "text": "Right."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294680854.014, "kind": "end_of_turn", "text": "Right."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294680854.28, "kind": "backchannel", "text": "Right."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294680855.0808, "kind": "resume", "reason": "backchannel"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294683730.8748, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294683730.9338, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294683731.425, "kind": "heard", "sid": "bfc99219-358f-4cac-abff-749d0f8dbe34"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294684530.2039, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294684530.721, "kind": "heard", "sid": "b3422b12-d9e9-4859-8887-8a3b2061827c"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294737509.097, "kind": "start_of_turn", "text": "Can I"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294739745.116, "kind": "eager_end_of_turn", "text": "Can the first payment be on December first twenty twenty"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294739872.8452, "kind": "turn_resumed"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294739994.869, "kind": "eager_end_of_turn", "text": "Can the first payment be on December first twenty twenty six"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294740109.107, "kind": "end_of_turn", "text": "Can the first payment be on December first twenty twenty six"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294740109.501, "kind": "final", "text": "Can the first payment be on December first twenty twenty six"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294743111.572, "kind": "filler", "text": "One moment."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294743458.793, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294743538.917, "kind": "trim", "ms": 120}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294743541.2769, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294744265.968, "kind": "reply", "sids": ["aef45bc8-362b-4d56-b478-b9924d4d6e61"], "text": "Let me make sure I have it: December 1 for the initial payment date?", "chars": 68}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294744329.2869, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294744628.149, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294744629.981, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294744668.711, "kind": "reply_audio"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294748710.639, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294748711.1711, "kind": "heard", "sid": "aef45bc8-362b-4d56-b478-b9924d4d6e61"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294801745.419, "kind": "start_of_turn", "text": "Yes,"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294802750.7642, "kind": "eager_end_of_turn", "text": "Yes. That works for us."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294802775.188, "kind": "end_of_turn", "text": "Yes. That works for us."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294802775.3, "kind": "final", "text": "Yes. That works for us."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294805013.182, "kind": "reply", "sids": ["4053473f-810e-4afa-b8da-6945c37c6794", "1a1b524c-6a01-4916-99d9-c6c94ca5d048", "7234db11-a161-42f8-9278-d1b05d8454b6"], "text": "Great, 57% works.", "chars": 102}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294805357.943, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294805658.0898, "kind": "trim", "ms": 250}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294805661.3828, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294805699.054, "kind": "reply_audio"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294806850.949, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294807860.009, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294807860.0571, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294807860.544, "kind": "heard", "sid": "4053473f-810e-4afa-b8da-6945c37c6794"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294809899.059, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294813780.66, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294813780.723, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294813781.276, "kind": "heard", "sid": "1a1b524c-6a01-4916-99d9-c6c94ca5d048"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294815381.5989, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294815382.066, "kind": "heard", "sid": "7234db11-a161-42f8-9278-d1b05d8454b6"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294868389.954, "kind": "start_of_turn", "text": "No."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294869467.1062, "kind": "eager_end_of_turn", "text": "No. That's everything. Thanks."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294869496.178, "kind": "end_of_turn", "text": "No. That's everything. Thanks."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294869496.323, "kind": "final", "text": "No. That's everything. Thanks."}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294871336.322, "kind": "reply", "sids": ["c0ff44dc-eef2-4a4d-b287-54603e549104", "e19edcd2-e1f4-4a02-b554-75aae0f44ed3", "76379c69-2138-46c1-823c-a05eabae47c5"], "text": "Thank you.", "chars": 94}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294871698.226, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294871987.725, "kind": "trim", "ms": 300}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294871990.195, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294872029.14, "kind": "reply_audio"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294872510.752, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294872511.205, "kind": "heard", "sid": "c0ff44dc-eef2-4a4d-b287-54603e549104"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294872587.832, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294872588.4658, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294874611.856, "kind": "tts_byte"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294876270.251, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294876270.314, "kind": "bot_started"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294876270.9792, "kind": "heard", "sid": "e19edcd2-e1f4-4a02-b554-75aae0f44ed3"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294877229.196, "kind": "bot_stopped"}
+{"call": "numbers_haggle#1", "src": "server", "t": 1793294877229.6992, "kind": "heard", "sid": "76379c69-2138-46c1-823c-a05eabae47c5"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793294383697.571, "kind": "server_rss", "kb": 166992}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793294389088.379, "kind": "line", "id": "b01_okay"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793294450893.577, "kind": "line", "id": "b02_terms"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793294515235.399, "kind": "line", "id": "b03_correct"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793294573851.187, "kind": "line", "id": "b04_seventy"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793294580420.27, "kind": "line", "id": "b05_interrupt"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793294652164.918, "kind": "blip", "seconds": 8.0}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793294670167.5588, "kind": "blip_end"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793294670167.5652, "kind": "line", "id": "b06_pause"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793294679647.9612, "kind": "line", "id": "b07_right"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793294736592.438, "kind": "line", "id": "b08_date"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793294800743.4841, "kind": "line", "id": "b09_yes"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793294867436.419, "kind": "line", "id": "b10_bye"}
+{"call": "numbers_haggle#1", "src": "driver", "t": 1793294880238.161, "kind": "server_rss", "kb": 128496}

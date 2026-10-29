@@ -29,6 +29,21 @@ const KNOWN: readonly [RegExp, string][] = [
   [/^Start the call before turning voice on/i, "The call has not started yet. Press Start call first."],
 ];
 
+// Voice failures (browser side and /voice/offer refusals): over once the link is live.
+const VOICE = /^(mic blocked|mic unavailable|voice connection failed|Voice is |Start the call before turning voice on)|already has a voice session/i;
+// Raised in this browser, not sent by the server.
+const CLIENT = /^(mic blocked|mic unavailable|voice connection failed)/i;
+
+/** A voice error, cleared once the voice link is live again. */
+export function isVoiceError(message: string): boolean {
+  return VOICE.test(message);
+}
+
+/** Label for the raw detail under the error line (operator view). */
+export function errorDetailLabel(message: string): string {
+  return CLIENT.test(message) ? "Browser detail" : "Server message";
+}
+
 export const GENERIC_ERROR = "Something went wrong on the server. Try again.";
 export const STT_ERROR = "The agent could not hear that line. Say it again, or type it.";
 

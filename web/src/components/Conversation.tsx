@@ -45,7 +45,7 @@ export interface ConversationProps {
   sttMode?: "server" | "browser";
   onSttMode?: (m: "server" | "browser") => void;
   /** Newest call error; `seq` changes with each new one. */
-  error?: { text: string; detail?: string | null; seq: number } | null;
+  error?: { text: string; detail?: string | null; detailLabel?: string; seq: number } | null;
   /** WebRTC voice: replaces the mic button and STT picker in the header. */
   voiceStatus?: ReactNode;
   /** WebRTC voice controls (mute, push to talk), shown while voice is on. */
@@ -182,7 +182,7 @@ export function Conversation({
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-bad" aria-hidden />
             <span>{error.text}</span>
           </span>
-          {error.detail && <span className="pl-6 text-xs break-words text-muted">Server message: {error.detail}</span>}
+          {error.detail && <span className="pl-6 text-xs break-words text-muted">{error.detailLabel ?? "Server message"}: {error.detail}</span>}
         </div>
       )}
 

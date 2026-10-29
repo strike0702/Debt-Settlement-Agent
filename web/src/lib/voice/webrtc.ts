@@ -56,6 +56,8 @@ export const MAX_RECONNECTS = 3;
 export const RECONNECT_DELAY_MS = 1500;
 /** Rep words this soon after the agent's audio stopped can still be its echo. */
 export const ECHO_TAIL_MS = 1500;
+/** After the call is over, wait at most this long for the server's `ended`. */
+export const FINISH_TIMEOUT_MS = 25000;
 
 export const MIC_BLOCKED = "mic blocked";
 export const MIC_UNAVAILABLE = "mic unavailable";
@@ -69,7 +71,10 @@ export interface PeerLike {
   localDescription: { sdp: string; type: string } | null;
   onconnectionstatechange: (() => void) | null;
   ontrack: ((ev: { streams: readonly MediaStream[]; track: MediaStreamTrack }) => void) | null;
-  addTransceiver(track: MediaStreamTrack, init: { direction: "sendrecv" }): unknown;
+  addTransceiver(
+    track: MediaStreamTrack,
+    init: { direction: "sendrecv" },
+  ): { sender: { replaceTrack(track: MediaStreamTrack | null): Promise<void> } };
   createOffer(): Promise<{ sdp?: string; type: string }>;
   setLocalDescription(d: { sdp?: string; type: string }): Promise<void>;
   setRemoteDescription(d: { sdp: string; type: string }): Promise<void>;
@@ -91,6 +96,8 @@ export interface RtcDeps {
   playRemote(stream: MediaStream | null, track: MediaStreamTrack): void;
   now(): number;
   log(msg: string, data?: unknown): void;
+  /** Subscribe to mic plug / unplug (`devicechange`); returns the unsubscribe. */
+  onDeviceChange?(fn: () => void): () => void;
 }
 
 export interface RtcIO {
@@ -177,6 +184,11 @@ export class WebRtcVoice {
   private echoDismissed = false;
   private agentTexts: string[] = [];
   private agentQuietAt = -Infinity;
+  /** The call is over; the link stays up until the last line has played. */
+  private finishing = false;
+  private finishTimer: ReturnType<typeof setTimeout> | null = null;
+  private sender: { replaceTrack(track: MediaStreamTrack | null): Promise<void> } | null = null;
+  private offDevices: (() => void) | null = null;
 
   constructor(
     private io: RtcIO,
@@ -238,8 +250,43 @@ export class WebRtcVoice {
       this.loggedSettings = true;
       this.deps.log("[voice] mic settings", this.track.getSettings?.());
     }
+    this.watchMic(gen);
     this.applyMic();
     await this.negotiate(gen);
+  }
+
+  /** Follow a mic change: the device was unplugged, or the default device changed. */
+  private watchMic(gen: number): void {
+    if (this.track) this.track.onended = () => void this.swapMic(gen);
+    this.offDevices ??= this.deps.onDeviceChange?.(() => {
+      const t = this.track;
+      if (t && (t.readyState === "ended" || t.getSettings?.().deviceId === "default")) void this.swapMic(this.gen);
+    }) ?? null;
+  }
+
+  /** New mic track on the same peer connection (no renegotiation). */
+  private async swapMic(gen: number): Promise<void> {
+    if (gen !== this.gen || this.snap.link === "off") return;
+    let stream: MediaStream;
+    try {
+      stream = await this.deps.getUserMedia(MIC_CONSTRAINTS);
+    } catch (err) {
+      if (gen === this.gen) this.fail(gen, micError(err));
+      return;
+    }
+    const track = stream.getAudioTracks()[0] ?? null;
+    if (gen !== this.gen || !track) {
+      stopTracks(stream);
+      return;
+    }
+    const old = this.stream;
+    this.stream = stream;
+    this.track = track;
+    this.applyMic();
+    this.watchMic(gen);
+    await this.sender?.replaceTrack(track).catch(() => undefined);
+    stopTracks(old);
+    this.deps.log("[voice] mic changed", track.getSettings?.());
   }
 
   private async negotiate(gen: number): Promise<void> {
@@ -247,7 +294,7 @@ export class WebRtcVoice {
     if (!track || gen !== this.gen) return;
     const pc = this.deps.makePeer();
     this.pc = pc;
-    pc.addTransceiver(track, { direction: "sendrecv" });
+    this.sender = pc.addTransceiver(track, { direction: "sendrecv" }).sender;
     pc.ontrack = (ev) => this.deps.playRemote(ev.streams[0] ?? null, ev.track);
     pc.onconnectionstatechange = () => this.onPeerState(pc, gen);
     let res: FetchResponse;
@@ -299,6 +346,10 @@ export class WebRtcVoice {
   private onPeerState(pc: PeerLike, gen: number): void {
     if (gen !== this.gen || this.pc !== pc) return;
     const st = pc.connectionState;
+    if (this.finishing && st !== "connected" && st !== "connecting" && st !== "new") {
+      this.hangUp(); // the server ended voice: no reconnect
+      return;
+    }
     if (st === "connected") {
       this.clearTimer();
       this.attempts = 0;
@@ -355,11 +406,30 @@ export class WebRtcVoice {
   hangUp(): void {
     this.gen += 1;
     this.clearTimer();
+    this.finishing = false;
+    if (this.finishTimer != null) clearTimeout(this.finishTimer);
+    this.finishTimer = null;
     this.closePeer();
+    this.sender = null;
+    this.offDevices?.();
+    this.offDevices = null;
+    if (this.track) this.track.onended = null;
     stopTracks(this.stream);
     this.stream = null;
     this.track = null;
     this.set({ link: "off", flow: "listening", partial: "", talking: false });
+  }
+
+  /**
+   * The call is over: close the mic but keep the link until the server says its
+   * last line has played (`voice_state: ended`), or `FINISH_TIMEOUT_MS`. Hanging
+   * up at once cut the closing line (live test 2026-10-29).
+   */
+  finish(): void {
+    if (this.snap.link === "off" || this.finishing) return;
+    this.finishing = true;
+    this.applyMic();
+    this.finishTimer = setTimeout(() => this.hangUp(), FINISH_TIMEOUT_MS);
   }
 
   /** New call: voice off, and the headphone hint may show again. */
@@ -395,7 +465,7 @@ export class WebRtcVoice {
 
   private applyMic(): void {
     // A disabled track sends silence; the server keeps Flux fed either way.
-    if (this.track) this.track.enabled = micOpen(this.snap);
+    if (this.track) this.track.enabled = micOpen(this.snap) && !this.finishing;
   }
 
   dismissEcho(): void {
@@ -429,7 +499,11 @@ export class WebRtcVoice {
     }
   }
 
-  private onVoiceState(state: Flow, text: string): void {
+  private onVoiceState(state: Flow | "ended", text: string): void {
+    if (state === "ended") {
+      this.hangUp();
+      return;
+    }
     const now = this.deps.now();
     const wasAgent = this.snap.flow === "agent_speaking";
     if (state === "rep_speaking") {

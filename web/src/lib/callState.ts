@@ -4,11 +4,12 @@
  * Pure and framework-free: the fixture replay and the live `useCall` hook both
  * feed events through `reduceCall`. Besides server events it takes one local
  * event, `tts_onset` (from `useVoice`: `say` received → speech audibly starts),
- * which becomes the `tts_onset_ms` stage of that turn's latency waterfall.
+ * which becomes the `tts_onset_ms` stage of that turn's latency waterfall, and
+ * `voice_live` (WebRTC voice link up again), which clears a voice error.
  * It does not filter private data; `toRepView` in `repView.ts` does that
  * before events get here.
  */
-import type { CallError } from "@/lib/callError";
+import { type CallError, isVoiceError } from "@/lib/callError";
 import type {
   AgreementEvent,
   AuditEvent,
@@ -32,7 +33,12 @@ export interface TtsOnsetEvent {
   ms: number;
 }
 
-export type CallEvent = ServerEvent | TtsOnsetEvent;
+/** Client-side: the WebRTC voice link is live (again). */
+export interface VoiceLiveEvent {
+  type: "voice_live";
+}
+
+export type CallEvent = ServerEvent | TtsOnsetEvent | VoiceLiveEvent;
 
 export interface ChatMessage {
   key: string;
@@ -180,6 +186,8 @@ export function reduceCall(state: CallState, ev: CallEvent): CallState {
     case "voice_state":
       // Pipecat voice only: the WebRTC client shows it; the transcript is unchanged.
       return state;
+    case "voice_live":
+      return state.error && isVoiceError(state.error.message) ? { ...state, error: null } : state;
   }
 }
 

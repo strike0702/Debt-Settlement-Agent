@@ -63,6 +63,8 @@ def loop_guard(action: Action, neg: NegotiationState, cfg: Settings) -> Action:
     # ``_decide_wrap`` re-enters ``decide``; count each spoken question once.
     if key is None or any(e.kind == "note_question" for e in action.effects):
         return action
+    if action.intent == Intent.READ_BACK and action.reason in neg.unconfirmed_fields:
+        return action  # read-back of an unclear number: not counted (user decision)
     if neg.question_counts.get(key, 0) >= cfg.max_same_question:
         kept = [e for e in action.effects if e.kind in ("record_ask", "clear_pending_terms_alt")]
         return _handoff(kept, "repeated_question")

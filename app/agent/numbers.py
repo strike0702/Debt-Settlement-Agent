@@ -9,6 +9,10 @@ spoken-unit formatting — that lives in ``app.domain.units``. Here we only:
 3. Normalize each hit to ``(kind, value)`` with money in integer cents and
    percentages in integer basis points.
 
+Number words cover the forms speech-to-text returns (Flux spells numbers
+out): "a hundred and twenty dollars", "one twenty dollars" (120), "seventy
+five percent". Input parsing only; spoken output never comes from here.
+
 ``NUMBER_WORDS`` / ``ONE_ALLOWLIST_PHRASES`` are also shared with
 ``template_guard``, which forbids number-words in unfilled templates.
 """
@@ -200,14 +204,28 @@ def words_to_number(text: str) -> int | None:
     """Convert common English number phrases to an int.
 
     Handles forms like ``two hundred fifty``, ``twenty-five``, and
-    ``twenty-five hundred``. Returns None if the phrase is not a number.
+    ``twenty-five hundred``, plus the spoken forms speech-to-text returns:
+    ``a hundred``, ``hundred and twenty`` ("and" only right after a scale word),
+    and ``one twenty`` / ``two fifty`` (a digit then 10–99 means hundreds: 120,
+    250; the additive reading 21 is never what a speaker means). Returns None
+    if the phrase is not a number.
     """
     raw = text.strip().lower().replace("-", " ")
     if not raw:
         return None
     parts = [p for p in raw.split() if p]
+    if parts and parts[0] == "a" and len(parts) > 1 and parts[1] in _SCALES:
+        parts = parts[1:]
+    parts = [
+        p
+        for k, p in enumerate(parts)
+        if not (p == "and" and 0 < k < len(parts) - 1 and parts[k - 1] in _SCALES)
+    ]
     if not parts:
         return None
+    hundreds = _colloquial_hundreds(parts)
+    if hundreds is not None:
+        return hundreds
 
     # Single-token ordinals / fractions / dozen / couple.
     if len(parts) == 1 and parts[0] in _ORDINALS:
@@ -247,6 +265,19 @@ def words_to_number(text: str) -> int | None:
     if not saw_numeric:
         return None
     return total + current
+
+
+def _colloquial_hundreds(parts: list[str]) -> int | None:
+    """``one twenty`` → 120, ``two fifty`` → 250, ``one twenty five`` → 125; else None."""
+    if len(parts) < 2 or parts[0] not in _ONES or not 1 <= _ONES[parts[0]] <= 9:
+        return None
+    rest = parts[1:]
+    unit = _ONES.get(rest[1], 0) if len(rest) == 2 else 0
+    if rest[0] in _TENS and (len(rest) == 1 or 1 <= unit <= 9):
+        return _ONES[parts[0]] * 100 + _TENS[rest[0]] + unit
+    if len(rest) == 1 and 10 <= _ONES.get(rest[0], 0) <= 19:
+        return _ONES[parts[0]] * 100 + _ONES[rest[0]]
+    return None
 
 
 def _mask_span(masked: list[bool], start: int, end: int) -> None:
@@ -389,7 +420,9 @@ def extract_tokens(text: str, *, ref: date | None = None) -> list[NumberToken]:
             continue
         # Expand hyphenated pieces into word list for classification.
         pieces = wm.group(0).lower().replace("-", " ").split()
-        if not pieces or pieces[0] not in NUMBER_WORDS:
+        if pieces == ["a"] and _next_word(text, word_matches, i, masked) in _SCALES:
+            pieces = ["a"]  # "a hundred": the article is part of the number
+        elif not pieces or pieces[0] not in NUMBER_WORDS:
             i += 1
             continue
 
@@ -404,7 +437,13 @@ def extract_tokens(text: str, *, ref: date | None = None) -> list[NumberToken]:
             if gap.strip() != "" or not _span_free(masked, nxt.start(), nxt.end()):
                 break
             nxt_pieces = nxt.group(0).lower().replace("-", " ").split()
-            if not nxt_pieces or any(p not in NUMBER_WORDS for p in nxt_pieces):
+            if (
+                nxt_pieces == ["and"]
+                and words[-1] in _SCALES
+                and _next_word(text, word_matches, j, masked) in NUMBER_WORDS
+            ):
+                pass  # "a hundred and twenty": "and" inside the number
+            elif not nxt_pieces or any(p not in NUMBER_WORDS for p in nxt_pieces):
                 break
             words.extend(nxt_pieces)
             end = nxt.end()
@@ -418,19 +457,35 @@ def extract_tokens(text: str, *, ref: date | None = None) -> list[NumberToken]:
 
         # Ordinal words → ordinal kind; else count (money inferred by guards via dollars).
         kind: TokenKind = "ordinal" if len(words) == 1 and words[0] in _ORDINALS else "count"
-        # Special: "... dollars" after number words → money (handled by caller context);
-        # detect trailing "dollars"/"dollar" as money conversion without consuming as number word.
+        # A trailing "dollars" / "percent" types the phrase (spoken money and
+        # percents arrive as words from speech-to-text) and joins its span.
         raw = text[wm.start() : end]
         money_tail = re.match(r"\s+dollars?\b", text[end:], re.IGNORECASE)
+        pct_tail = re.match(r"\s*(?:percent\b|%)", text[end:], re.IGNORECASE)
         if money_tail:
             end_ext = end + money_tail.end()
             add("money", value * 100, text[wm.start() : end_ext], wm.start(), end_ext)
+        elif pct_tail and kind == "count":
+            end_ext = end + pct_tail.end()
+            add("pct", value * 100, text[wm.start() : end_ext], wm.start(), end_ext)
         else:
             add(kind, value, raw, wm.start(), end)
         i = j
 
     tokens.sort(key=lambda t: t.start)
     return tokens
+
+
+def _next_word(
+    text: str, word_matches: list[re.Match[str]], k: int, masked: list[bool]
+) -> str | None:
+    """The lower-case word after ``word_matches[k]`` if only spaces separate them."""
+    if k + 1 >= len(word_matches):
+        return None
+    cur, nxt = word_matches[k], word_matches[k + 1]
+    if text[cur.end() : nxt.start()].strip() or not _span_free(masked, nxt.start(), nxt.end()):
+        return None
+    return nxt.group(0).lower()
 
 
 def normalize_token(token: NumberToken) -> tuple[str, int | date]:

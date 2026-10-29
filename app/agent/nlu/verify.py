@@ -18,6 +18,7 @@ from datetime import date
 from typing import Any
 
 from app.agent.nlu.cues import _repair_dispositions, repair_question, repair_revises_terms
+from app.agent.nlu.fast_paths import _field_for_ask_line
 from app.agent.nlu.models import DroppedTerm, VerifiedAnalysis, VerifiedTerm
 from app.agent.nlu.parse import coerce_tiers
 from app.agent.nlu.quotes import (
@@ -276,11 +277,14 @@ def post_verify(
     audit: AuditLog | None = None,
     call_id: str | None = None,
     last_agent_line: str = "",
+    pending_readback: str | None = None,
 ) -> VerifiedAnalysis:
     """Deterministic quote / number / prior-range checks.
 
     ``last_agent_line`` lets a bare structure word answer our structure question
     (``structure_word_ok``); without it the word needs a schedule noun nearby.
+    It and ``pending_readback`` also name the field the rep is answering, for
+    the read-back fallback below.
     """
     ref_d = ref or date.today()
     verified_terms: list[VerifiedTerm] = []
@@ -303,8 +307,42 @@ def post_verify(
             DroppedTerm(field=field, value=value, reason=event.removeprefix("nlu_"), quote=quote)
         )
 
+    # Read-back fallback (user decision 2026-10-29): a number the model read for
+    # the numeric field we just asked about (or are reading back) that the code
+    # reader cannot confirm in the rep's words is kept unverified (TENTATIVE →
+    # read back for a yes / no), not dropped and re-asked. The rep must have
+    # said some number; range checks still apply. Other fields keep the drop:
+    # a quote that is not in the line is a hallucination there.
+    asked = _field_for_ask_line(last_agent_line) or pending_readback
+    said_a_number = bool(extract_tokens(utterance, ref=ref_d))
+
+    def _unconfirmed(field: str, value: Any, quote: str | None, why: str) -> bool:
+        spec = FIELDS_BY_NAME.get(field)
+        if (
+            field != asked
+            or spec is None
+            or spec.kind not in ("cents", "int")
+            or not said_a_number
+            or not isinstance(value, int)
+            or isinstance(value, bool)
+            or value <= 0
+            or not _in_prior_range(field, value)
+            or any(t.field == field for t in verified_terms)
+        ):
+            return False
+        verified_terms.append(
+            VerifiedTerm(field=field, value=value, quote=quote or "", verified=False)
+        )
+        _log(
+            "value_unconfirmed_readback",
+            {"field": field, "value": value, "quote": quote, "why": why},
+        )
+        return True
+
     for term in analysis.terms:
         if not quote_in_utterance(term.quote, utterance):
+            if _unconfirmed(term.field, term.value, term.quote, "quote_not_found"):
+                continue
             _drop(
                 "nlu_rejected_quote",
                 term.field,
@@ -439,6 +477,11 @@ def post_verify(
             matched = _value_matches_utterance_span(
                 term.field, value, term.quote, utterance, ref=ref_d
             )
+        if not matched and spec is not None and spec.kind in ("cents", "int"):
+            _log(
+                "value_unconfirmed_readback",
+                {"field": term.field, "value": value, "quote": term.quote, "why": "no_match"},
+            )
         verified_terms.append(
             VerifiedTerm(
                 field=term.field,
@@ -501,6 +544,24 @@ def post_verify(
         ref=ref_d,
         drop=_drop,
     )
+
+    # An amount slot that failed its quote or number check, said in answer to
+    # our ask for a dollar field, is read back as that field's value.
+    a = analysis
+    for slot, cents, quote in (
+        ("settlement_ask_total_cents", a.settlement_ask_total_cents, a.ask_total_quote),
+        ("amount_ambiguous_cents", a.amount_ambiguous_cents, a.amount_ambiguous_quote),
+    ):
+        if (
+            asked is not None
+            and FIELDS_BY_NAME[asked].kind == "cents"
+            and cents is not None
+            and any(
+                d.field == slot and d.reason in ("rejected_amount_value", "rejected_quote")
+                for d in dropped
+            )
+        ):
+            _unconfirmed(asked, cents, quote, slot)
 
     has_terms = (
         bool(verified_terms)

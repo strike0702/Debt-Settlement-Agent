@@ -12,6 +12,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 from pipecat.frames.frames import (
@@ -19,6 +20,9 @@ from pipecat.frames.frames import (
     InterimTranscriptionFrame,
     InterruptionFrame,
     TranscriptionFrame,
+    TTSAudioRawFrame,
+    TTSSpeakFrame,
+    TTSStartedFrame,
 )
 from pipecat.processors.frame_processor import FrameDirection
 from pipecat.tests.utils import run_test
@@ -34,6 +38,7 @@ from app.voice.pipeline.budget import VoiceBudget
 from app.voice.pipeline.heard import HeardTracker
 from app.voice.pipeline.processors import OrchestratorProcessor, SilenceFill
 from app.voice.pipeline.rules import is_backchannel, is_barge
+from app.voice.pipeline.session import VoiceSession
 from app.voice.pipeline.turns import VoiceTurns
 from tests.unit.test_unheard_barge import _ASK, _ladder, _orch, _to_first_counter
 
@@ -144,6 +149,9 @@ class CountingOrch:
         await asyncio.sleep(0)
         self.turns.append(text)
         return Utterance(sentences=[(f"s{len(self.turns)}", "Ok.")], action=None)  # type: ignore[arg-type]
+
+    async def merge_into_nlu(self, text: str) -> Utterance | None:
+        return None  # its NLU already finished: nothing to merge into
 
     async def withdraw_unheard_turn(self) -> bool:
         self.withdrawn += 1
@@ -283,6 +291,9 @@ class FakeVoice:
     async def stop(self) -> None:
         return None
 
+    async def finish(self) -> None:
+        return None
+
 
 def _recv_until(ws: Any, kind: str) -> list[dict[str, Any]]:
     got: list[dict[str, Any]] = []
@@ -323,3 +334,189 @@ def test_socket_bridge_speaks_replies_and_refuses_voice_over_budget(tmp_path: Pa
     assert "voice_refused" in types
     assert not any(e["type"] == "sentence_done" for e in audit.for_call("vb"))
     audit.close()
+
+
+# ---------------------------------------------------------------- call end (Phase 65)
+
+
+async def test_finish_waits_for_the_last_line_to_play_then_ends(tmp_path: Path) -> None:
+    call = FakeCall(None)
+    settings = Settings(llm_profile="offline", db_path=":memory:", api_key_pool={})
+    session = VoiceSession(
+        "c1", call, settings=settings, budget=VoiceBudget(tmp_path / "b.db", limit_micros=1)
+    )
+    stopped: list[bool] = []
+
+    async def stop() -> None:
+        stopped.append(True)
+
+    session.stop = stop  # type: ignore[method-assign]
+    session.tracker.queued("s1")  # the handoff line, written to TTS, not played yet
+    task = asyncio.create_task(session.finish(timeout_s=5, tail_s=0))
+    await asyncio.sleep(0.2)
+    assert not stopped and ("ended", "") not in call.states
+    session.tracker.played("s1")
+    await asyncio.wait_for(task, 1)
+    assert stopped == [True] and call.states[-1] == ("ended", "")
+
+    # Audio that never finishes: ends at the timeout.
+    late = VoiceSession(
+        "c2", call, settings=settings, budget=VoiceBudget(tmp_path / "b.db", limit_micros=1)
+    )
+    late.stop = stop  # type: ignore[method-assign]
+    late.tracker.queued("s2")
+    await asyncio.wait_for(late.finish(timeout_s=0.1, tail_s=0), 1)
+    assert stopped == [True, True]
+
+
+# ---------------------------------------------------------------- Phase 65 tuning
+
+
+def _audio(ms: int, level: int = 3000) -> TTSAudioRawFrame:
+    """``ms`` of a 220 Hz tone at ``level`` (0: silence), 16 kHz mono."""
+    t = np.arange(16 * ms) / 16000
+    tone = (level * np.sin(2 * np.pi * 220 * t)).astype(np.int16)
+    return TTSAudioRawFrame(tone.tobytes(), 16000, 1)
+
+
+async def _gate(**kw: Any) -> tuple[processors.OutputGate, list[Any]]:
+    gate, out = processors.OutputGate(**kw), []
+
+    async def push(frame: Any, direction: Any = FrameDirection.DOWNSTREAM) -> None:
+        out.append(frame)
+
+    gate.push_frame = push  # type: ignore[method-assign]
+    gate._task = asyncio.create_task(gate._release())
+    return gate, out
+
+
+async def test_output_gate_paces_pauses_resumes_and_drops_on_interruption() -> None:
+    gate, out = await _gate()
+    gate.pause()
+    for _ in range(5):
+        await gate.process_frame(_audio(100), FrameDirection.DOWNSTREAM)
+    await asyncio.sleep(0.05)
+    assert out == []  # paused: nothing reaches the output
+    gate.resume()
+    await asyncio.sleep(0.05)
+    # Released only LEAD_S ahead of real time, not all at once.
+    assert 1 <= len(out) <= 3
+    await gate.process_frame(InterruptionFrame(), FrameDirection.DOWNSTREAM)
+    assert not gate.holding and isinstance(out[-1], InterruptionFrame)
+    gate._task.cancel()
+
+
+async def test_output_gate_trims_leading_silence_of_a_reply_only() -> None:
+    lines: list[tuple[str, dict[str, Any]]] = []
+    gate, out = await _gate(log=lambda kind, **d: lines.append((kind, d)))
+    await gate.process_frame(TTSStartedFrame(), FrameDirection.DOWNSTREAM)
+    # Deepgram sends other frames between audio chunks: they wait behind the audio.
+    await gate.process_frame(_audio(200, level=0), FrameDirection.DOWNSTREAM)
+    await gate.process_frame(processors.ReplyStartFrame(), FrameDirection.DOWNSTREAM)
+    silence_then_speech = _audio(50, level=0).audio + _audio(100).audio
+    await gate.process_frame(
+        TTSAudioRawFrame(silence_then_speech, 16000, 1), FrameDirection.DOWNSTREAM
+    )
+    await asyncio.sleep(0.02)
+    assert isinstance(out[-1], processors.ReplyStartFrame)
+    audio = [f for f in out if isinstance(f, TTSAudioRawFrame)]
+    # The 250 ms lead-in is gone (onset found to within one 10 ms window).
+    assert len(_audio(100).audio) <= len(audio[0].audio) <= len(_audio(110).audio)
+    assert [d["ms"] for kind, d in lines if kind == "trim"] in ([240], [250])
+    # A sentence queued behind playing audio keeps its pause.
+    await gate.process_frame(TTSStartedFrame(), FrameDirection.DOWNSTREAM)
+    await gate.process_frame(_audio(50, level=0), FrameDirection.DOWNSTREAM)
+    assert len(gate._held[-1].audio) == len(_audio(50).audio)
+    gate._task.cancel()
+
+
+async def test_vad_pause_resumes_on_a_backchannel_and_stops_on_a_barge() -> None:
+    turns, tracker = FakeTurns(), HeardTracker()
+    tracker.queued("a1")
+    proc = OrchestratorProcessor(turns, tracker)  # type: ignore[arg-type]
+    proc.gate = processors.OutputGate()
+    proc.filler_after_s = None
+    sent: list[Any] = []
+
+    async def push(frame: Any, direction: Any = FrameDirection.DOWNSTREAM) -> None:
+        sent.append(frame)
+
+    proc.push_frame = push  # type: ignore[method-assign]
+    await proc.on_rep_voice(True)  # "mm-hmm" starts over the agent
+    assert proc.gate.paused
+    await proc._final("Mm-hmm.")
+    assert not proc.gate.paused and turns.barges == [] and sent == []
+    await proc.on_rep_voice(False)
+    await proc.on_rep_voice(True)  # a real interruption
+    assert proc.gate.paused
+    await proc._final("No, hold on, that is wrong.")
+    await asyncio.sleep(0.01)
+    assert not proc.gate.paused and turns.barges == [[]]
+    assert any(isinstance(f, InterruptionFrame) for f in sent)
+    await proc.aclose()
+
+
+async def test_vad_pause_resumes_by_itself_when_no_words_come(monkeypatch: Any) -> None:
+    monkeypatch.setattr(processors, "RESUME_AFTER_S", 0.01)
+    tracker = HeardTracker()
+    tracker.queued("a1")
+    proc = OrchestratorProcessor(FakeTurns(), tracker)  # type: ignore[arg-type]
+    proc.gate = processors.OutputGate()
+    await proc.on_rep_voice(True)  # echo or a cough: no transcript follows
+    await proc.on_rep_voice(False)
+    await asyncio.sleep(0.05)
+    assert not proc.gate.paused
+    await proc.aclose()
+
+
+async def test_filler_only_when_the_reply_is_late() -> None:
+    proc = OrchestratorProcessor(FakeTurns(), HeardTracker())  # type: ignore[arg-type]
+    proc.filler_after_s = 0.05
+    sent: list[Any] = []
+
+    async def push(frame: Any, direction: Any = FrameDirection.DOWNSTREAM) -> None:
+        sent.append(frame)
+
+    proc.push_frame = push  # type: ignore[method-assign]
+    await proc._final("We need seventy percent.")
+    await proc.speak([("s1", "Okay.")])  # on time: no filler
+    await asyncio.sleep(0.1)
+    assert [f.text for f in sent if isinstance(f, TTSSpeakFrame)] == ["Okay."]
+    proc.tracker.played("s1")
+    await proc._final("Seventy, final answer.")
+    await asyncio.sleep(0.1)  # late
+    assert [f.text for f in sent if isinstance(f, TTSSpeakFrame)][-1] == processors.FILLERS[0]
+    await proc.aclose()
+
+
+class MergingOrch:
+    """The early turn is still in NLU when the final adds words."""
+
+    def __init__(self) -> None:
+        self.merged: list[str] = []
+        self.release = asyncio.Event()
+        self.result = Utterance.__new__(Utterance)
+
+    async def on_creditor_text(self, text: str) -> Utterance:
+        await self.release.wait()
+        return self.result
+
+    async def merge_into_nlu(self, text: str) -> Utterance | None:
+        self.merged.append(text)
+        self.release.set()
+        return self.result
+
+    async def withdraw_unheard_turn(self) -> bool:
+        raise AssertionError("a merged turn is not withdrawn")
+
+
+async def test_eager_turn_merges_the_words_the_rep_added() -> None:
+    orch = MergingOrch()
+    call = FakeCall(orch)
+    turns = VoiceTurns(call, eager=True)  # type: ignore[arg-type]
+    turns.on_eager("We can do eight payments")
+    turns.on_resumed()
+    await turns.on_final("We can do eight payments, at least a hundred dollars each.")
+    assert orch.merged == ["at least a hundred dollars each."]
+    assert call.emitted == [orch.result]
+    assert ("eager_merged", {"suffix": "at least a hundred dollars each."}) in call.rows

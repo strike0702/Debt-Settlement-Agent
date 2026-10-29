@@ -221,6 +221,27 @@ blocklist, never an NLG fact, never on the rep stream.
 **Not done by choice.** The engine can test structure and segment changes, but the agent's
 policy does not propose them yet.
 
+## D14. Voice fixes and turn-taking choices (Phase 65, 2026-10-29)
+
+**Unconfirmed numbers are read back (user decision).** In the live test "A hundred and
+twenty dollars." was not understood twice and the loop guard handed off. Now, when the model
+reads a number for the field we just asked about (or are reading back) and the code reader
+cannot confirm it in the rep's words, the value stays TENTATIVE and is read back for a yes /
+no, from `Fact.render()` of the model's value. That read-back does not count toward the
+repeated-question guard; a "no" clears it and asks again. Other fields keep the drop (a
+quote missing from the line is a hallucination there). Audit: `nlu value_unconfirmed_readback`.
+
+**Barge-in: pause on local VAD, then decide by words (user decision).** Asked with numbers:
+the agent stopped about 1.5 s after a real interruption (words needed first). Options were
+to accept that, stop on any voice (fast, but every "mm-hmm" and echo cuts the agent off),
+or pause on voice and let Flux's words decide. Chosen: pause. Silero VAD runs on the server
+only while the agent talks. A barge stops and drops the rest; a backchannel, or nothing
+within 0.6 s of quiet, resumes where it paused. Cost: a short hiccup on "mm-hmm".
+
+**Filler only when the reply is really late (measured).** A filler 1.5 s after the final
+made most LLM turns (reply 1.5 to 2.9 s after the final) wait behind it, and its silence
+invited the rep to speak over the late reply. It now starts 3.0 s after the final.
+
 ## Process choices
 
 - Each phase runs in its own git worktree with a paste-ready prompt; phases that touch the
@@ -234,6 +255,6 @@ policy does not propose them yet.
 
 - Completeness of the take-home family without tiers: conjecture only.
 - Adversarial tail over 150 ms (57b, 59); proportional fee inexact and slow (opt-in).
-- Voice thresholds need a run on real speakers.
+- Voice thresholds need a run on real speakers (Phase 65 measured injected audio only).
 - haggling_rep reads back "no special payment tiers" after the deal is sent (policy bug).
 - Sim creditor rejects a legal confirm whose count differs from its own plan.

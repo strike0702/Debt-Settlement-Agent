@@ -9,9 +9,12 @@ acked with ``on_sentence_done``; a barge passes the played ids to
 
 Eager end of turn: Flux's ``EagerEndOfTurn`` may start the turn early, without
 emitting it. When the committed transcript says the same words, that turn is
-emitted as is. When it differs, or Flux reported ``TurnResumed``, the early turn
-is withdrawn (``Orchestrator.withdraw_unheard_turn``: rolled back, nothing was
-spoken) and the committed text runs as a fresh turn. No policy here.
+emitted as is. When the committed transcript only adds words and the early
+turn is still in NLU, the added words are merged into it
+(``Orchestrator.merge_into_nlu``; NLU reruns on the whole line at once).
+Otherwise the early turn is withdrawn (``Orchestrator.withdraw_unheard_turn``:
+rolled back, nothing was spoken) and the committed text runs as a fresh turn.
+No policy here.
 """
 
 from __future__ import annotations
@@ -99,6 +102,17 @@ class VoiceTurns:
         if same:
             with contextlib.suppress(LLMUnavailable):
                 return await task
+        elif (suffix := _suffix(early_text, text)) and not task.done():
+            # The rep went on after the eager end of turn: rerun NLU on the whole
+            # line now rather than finish the stale turn and redo it.
+            with contextlib.suppress(LLMUnavailable):
+                merged = await orch.merge_into_nlu(suffix)
+                if merged is not None:
+                    self.call.audit("eager_merged", {"suffix": suffix[:200]})
+                    return merged
+            with contextlib.suppress(LLMUnavailable):
+                await task
+            await orch.withdraw_unheard_turn()
         else:
             with contextlib.suppress(LLMUnavailable):
                 await task
@@ -120,3 +134,12 @@ class VoiceTurns:
         if early is not None:
             early[1].cancel()
             await asyncio.gather(early[1], return_exceptions=True)
+
+
+def _suffix(early: str, final: str) -> str:
+    """The words ``final`` adds after ``early`` when it starts with them, else ''."""
+    parts = final.split()
+    n = len(early.split())
+    if n >= len(parts) or words(" ".join(parts[:n])) != words(early):
+        return ""
+    return " ".join(parts[n:])

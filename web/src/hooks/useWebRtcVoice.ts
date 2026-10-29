@@ -32,6 +32,10 @@ export function browserRtcDeps(): RtcDeps {
     },
     now: () => performance.now(),
     log: (msg, data) => console.info(msg, data),
+    onDeviceChange: (fn) => {
+      navigator.mediaDevices.addEventListener("devicechange", fn);
+      return () => navigator.mediaDevices.removeEventListener("devicechange", fn);
+    },
   };
 }
 

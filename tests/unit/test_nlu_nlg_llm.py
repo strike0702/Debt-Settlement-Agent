@@ -57,7 +57,8 @@ async def test_hallucinated_quote_dropped() -> None:
 
 
 @pytest.mark.asyncio
-async def test_about_two_fifty_verified_false() -> None:
+async def test_about_two_fifty_verified_and_hedged() -> None:
+    # "two-fifty" reads as 250 since Phase 65 (was 52); hedging is kept separately.
     fake = FakeLLM()
     fake.enqueue(
         "nlu",
@@ -83,7 +84,7 @@ async def test_about_two_fifty_verified_false() -> None:
     )
     assert len(out.terms) == 1
     assert out.terms[0].value == 25000
-    assert out.terms[0].verified is False
+    assert out.terms[0].verified is True
     assert out.terms[0].hedged is True
 
 

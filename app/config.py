@@ -169,9 +169,16 @@ class Settings(BaseSettings):
     # the audio stream, which app.voice.pipeline.processors.SilenceFill closes.
     voice_eot_threshold: float | None = Field(default=None, ge=0.5, le=0.9)
     voice_eot_timeout_ms: int | None = Field(default=None, ge=500, le=10000)
-    voice_eager_eot_threshold: float | None = Field(default=0.5, ge=0.3, le=0.9)
+    voice_eager_eot_threshold: float | None = Field(default=0.4, ge=0.3, le=0.9)
     # Start NLU on Flux's EagerEndOfTurn; the committed turn reuses it or redoes it.
     voice_eager_nlu: bool = True
+    # Barge step 1: local VAD pauses the agent when the rep talks over it (Flux's
+    # words then stop or resume it). Off: words alone decide, about 1.4 s late.
+    voice_vad_pause: bool = True
+    voice_vad_start_s: float = Field(default=0.1, ge=0.05, le=1.0)
+    # A reply not out this long after the rep's final gets a short filler first
+    # ("One moment."); None turns fillers off. See processors.FILLER_AFTER_S.
+    voice_filler_after_ms: int | None = Field(default=3000, ge=300, le=10000)
 
     firm_name: str = "Synthetic Debt Relief"
     opening_disclosure: str = (

@@ -1,0 +1,42 @@
+{
+ "target": "pipecat",
+ "audio": "inject",
+ "date": "2026-10-29 22:12",
+ "summary": {
+  "reply_turns": 13,
+  "replied": 10,
+  "first_audio_p50_ms": 3385.3,
+  "first_audio_p95_ms": 5016.7,
+  "any_audio_p50_ms": 3385.3,
+  "eot_p50_ms": 554.2,
+  "eager_eot_p50_ms": 405.6,
+  "final_p50_ms": 554.5,
+  "wer_mean": 0.28,
+  "number_recall": 0.833,
+  "numbers": "10/12",
+  "first_word_lost": 4,
+  "lines_scored": 15,
+  "split_turns": 1,
+  "phantom_finals": 1,
+  "false_barges": 0,
+  "backchannels_barged": "0/3",
+  "interrupts_over_agent": "2/2",
+  "interrupts_barged": "2/2",
+  "barge_stop_p50_ms": 1477.8,
+  "barge_stop_max_ms": 1752.6
+ },
+ "phantoms": [
+  {
+   "call": "numbers_haggle#1",
+   "t": 1793292161538.593,
+   "kind": "final",
+   "text": "effects."
+  }
+ ],
+ "false_barges": [],
+ "notes": [
+  "numbers_easy#1: a06_date: agent did not finish a turn before this line",
+  "numbers_easy#1: a07_yes: agent did not finish a turn before this line",
+  "numbers_easy#1: a08_bye: agent did not finish a turn before this line"
+ ]
+}

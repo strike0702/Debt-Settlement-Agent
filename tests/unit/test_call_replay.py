@@ -407,3 +407,43 @@ def test_paraphrased_structure_stays_unverified_and_is_read_back() -> None:
     )
     assert [(t.value, t.verified) for t in out.terms] == [("even", False)]
     assert out.dropped == []
+
+
+# ----- read-back fallback for unconfirmed numbers (Phase 65, user decision 2026-10-29) -----
+
+
+def _min_pay(quote: str, *, slot: bool = False) -> TurnAnalysis:
+    """The model's reading of a spoken amount: 12000 with a quote the reader cannot confirm."""
+    if slot:
+        return TurnAnalysis(
+            stance="info", amount_ambiguous_cents=12000, amount_ambiguous_quote=quote
+        )
+    return TurnAnalysis(stance="info", terms=[_t("min_payment_cents", 12000, quote)])
+
+
+@pytest.mark.parametrize("slot", [False, True])
+async def test_unconfirmed_amount_is_read_back_not_handed_off(tmp_path: Path, slot: bool) -> None:
+    audit = AuditLog(tmp_path / "rb.db")
+    session = CallSession(scenario=load_scenario("fixtures/scenarios/no_space"))
+    orch = Orchestrator(
+        session, llm=None, settings=offline_settings(), audit=audit, auto_ack=True
+    )
+    await orch.start()
+    await orch.on_creditor_text("4", oracle=_SCRIPT[0][1])
+    # Call 1 of the live test; the model's quote ("$120" / "one-twenty dollars")
+    # is not in the rep's words, so the code reader cannot confirm it.
+    script = [("One twenty dollars.", "$120"), ("A hundred and twenty dollars.", "one-twenty")]
+    for text, quote in script:
+        utt = await orch.on_creditor_text(text, oracle=_min_pay(quote, slot=slot))
+        assert utt.action.intent == Intent.READ_BACK
+        assert utt.action.reason == "min_payment_cents"
+        assert "$120" in " ".join(t for _, t in utt.sentences)
+        assert session.belief.get("min_payment_cents").status == TermStatus.TENTATIVE
+    rows = [r for r in audit.for_call(session.call_id) if r["type"] == "value_unconfirmed_readback"]
+    assert rows and rows[0]["payload"]["value"] == 12000
+    # A "no" clears it and asks again.
+    utt = await orch.on_creditor_text(
+        "no", oracle=TurnAnalysis(stance="reject", readback_response="deny")
+    )
+    assert utt.action.intent == Intent.ASK
+    assert session.belief.get("min_payment_cents").status == TermStatus.UNKNOWN

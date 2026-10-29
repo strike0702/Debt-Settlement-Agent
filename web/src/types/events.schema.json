@@ -2167,14 +2167,15 @@
     },
     "VoiceStateEvent": {
       "additionalProperties": false,
-      "description": "Pipecat voice path only: what the call is doing now, for the browser's call state.\n\n``rep_speaking`` carries Flux's live partial in ``text`` (empty at start of\nturn); ``thinking`` follows a final the agent will answer; ``agent_speaking``\nand ``listening`` follow the agent's audio starting and stopping.",
+      "description": "Pipecat voice path only: what the call is doing now, for the browser's call state.\n\n``rep_speaking`` carries Flux's live partial in ``text`` (empty at start of\nturn); ``thinking`` follows a final the agent will answer; ``agent_speaking``\nand ``listening`` follow the agent's audio starting and stopping. ``ended``\ncomes once, after the call's last line (handoff or close) finished playing:\nthe browser closes the voice link then, not when the call ends on screen.",
       "properties": {
         "state": {
           "enum": [
             "listening",
             "rep_speaking",
             "thinking",
-            "agent_speaking"
+            "agent_speaking",
+            "ended"
           ],
           "title": "State",
           "type": "string"

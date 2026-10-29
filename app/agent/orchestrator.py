@@ -113,6 +113,7 @@ from app.agent.term_alts import (  # noqa: F401
 from app.config import Settings, get_settings
 from app.domain.belief import BeliefChange, TermStatus
 from app.domain.facts import Fact
+from app.domain.fields import FIELDS_BY_NAME
 from app.llm.call_audit import llm_call_scope
 from app.llm.client import LLMUnavailable, QueueWait, queue_wait_scope
 from app.llm.prompts import NLG_CONTEXT_TURNS
@@ -833,16 +834,24 @@ class Orchestrator:
                 session.neg.no_progress_turns = 0
             else:
                 session.neg.no_progress_turns += 1
-            action = decide(
-                session.belief,
-                session.neg,
-                analysis,
-                afford,
-                settings=self.settings,
-                rescue_within_guardrail=rescue_ok,
-                term_alt=term_alt,
-                accepted_term_alt=accepted_term_alt,
+            session.neg.unconfirmed_fields = frozenset(
+                t.field
+                for t in verified.terms
+                if not t.verified and FIELDS_BY_NAME[t.field].kind in ("cents", "int")
             )
+            try:
+                action = decide(
+                    session.belief,
+                    session.neg,
+                    analysis,
+                    afford,
+                    settings=self.settings,
+                    rescue_within_guardrail=rescue_ok,
+                    term_alt=term_alt,
+                    accepted_term_alt=accepted_term_alt,
+                )
+            finally:
+                session.neg.unconfirmed_fields = frozenset()
             action = await self._enrich_action(action)
             if self.settings.nlg_h3 or self.settings.nlg_ack:
                 # Presentation only: the move, its facts and effects are unchanged.
@@ -1095,6 +1104,22 @@ class Orchestrator:
             )
         if unheard_ids and self.on_speech_dropped is not None:
             await self.on_speech_dropped(unheard_ids)
+
+    async def merge_into_nlu(self, text: str) -> Utterance | None:
+        """Add ``text`` to the turn whose NLU is running and return its ``Utterance``.
+
+        None when no NLU is running (the caller decides what to do). Voice uses
+        it when the rep kept talking after an eager end of turn: the NLU reruns
+        on the whole line instead of finishing a stale turn first.
+        """
+        async with self._meta:
+            if self._stage != "nlu" or self._result_fut is None:
+                return None
+            self._nlu_text = f"{self._nlu_text} {text}".strip()
+            self._nlu_gen += 1
+            self._audit("orchestrator", "nlu_cancel_merge", {"merged": self._nlu_text})
+            fut = self._result_fut
+        return await fut
 
     async def withdraw_unheard_turn(self) -> bool:
         """Undo the pending turn when none of it was heard, and forget its rep line.

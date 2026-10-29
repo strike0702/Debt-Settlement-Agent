@@ -262,6 +262,8 @@ class TurnRow:
     num_total: int = 0
     first_word_lost: bool | None = None
     barged: bool | None = None
+    # Pipecat VAD pause (Phase 65): the agent's audio was paused by this line.
+    paused: bool | None = None
     stop_ms: float | None = None
     stages: dict[str, Any] | None = None
 
@@ -326,6 +328,7 @@ def score_call(
         else:
             barge = _first(ev, "barge", t0, t1 + BARGE_WINDOW_MS)
             row.barged = barge is not None
+            row.paused = _first(ev, "pause", t0, t1 + BARGE_WINDOW_MS) is not None
             if ln.kind == "interrupt":
                 stop = _first(ev, "stop", t0, hi)
                 if stop is not None and row.barged:
@@ -410,6 +413,7 @@ def summarize(rows: Sequence[TurnRow], *, phantoms: int, false_barge_count: int)
         "phantom_finals": phantoms,
         "false_barges": false_barge_count,
         "backchannels_barged": f"{sum(1 for r in backs if r.barged)}/{len(backs)}",
+        "backchannels_paused": f"{sum(1 for r in backs if r.paused)}/{len(backs)}",
         "interrupts_over_agent": f"{len(talking_int)}/{len(interrupts)}",
         "interrupts_barged": f"{sum(1 for r in talking_int if r.barged)}/{len(talking_int)}",
         "barge_stop_p50_ms": _pct(stops, 50),

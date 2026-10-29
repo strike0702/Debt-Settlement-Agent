@@ -442,6 +442,10 @@ async def test_vad_pause_resumes_on_a_backchannel_and_stops_on_a_barge() -> None
         sent.append(frame)
 
     proc.push_frame = push  # type: ignore[method-assign]
+    await proc.on_rep_voice(True)  # queued for TTS, not playing yet: no pause
+    assert not proc.gate.paused
+    proc.bot_speaking = True
+    await proc.on_rep_voice(False)
     await proc.on_rep_voice(True)  # "mm-hmm" starts over the agent
     assert proc.gate.paused
     await proc._final("Mm-hmm.")
@@ -462,6 +466,7 @@ async def test_vad_pause_resumes_by_itself_when_no_words_come(monkeypatch: Any) 
     tracker.queued("a1")
     proc = OrchestratorProcessor(FakeTurns(), tracker)  # type: ignore[arg-type]
     proc.gate = processors.OutputGate()
+    proc.bot_speaking = True
     await proc.on_rep_voice(True)  # echo or a cough: no transcript follows
     await proc.on_rep_voice(False)
     await asyncio.sleep(0.05)
@@ -520,3 +525,13 @@ async def test_eager_turn_merges_the_words_the_rep_added() -> None:
     assert orch.merged == ["at least a hundred dollars each."]
     assert call.emitted == [orch.result]
     assert ("eager_merged", {"suffix": "at least a hundred dollars each."}) in call.rows
+
+
+def test_vad_pause_thresholds_come_from_settings() -> None:
+    from app.voice.pipeline.session import vad_params
+
+    s = Settings(voice_vad_confidence=0.8, voice_vad_min_volume=0.65, voice_vad_start_s=0.25)
+    p = vad_params(s)
+    assert (p.confidence, p.min_volume, p.start_secs) == (0.8, 0.65, 0.25)
+    d = vad_params(Settings())
+    assert (d.confidence, d.min_volume, d.start_secs) == (0.75, 0.7, 0.3)

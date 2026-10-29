@@ -68,6 +68,15 @@ def now_ms() -> float:
     return time.time() * 1000
 
 
+def vad_params(s: Settings) -> VADParams:
+    """The pause-only VAD's thresholds, from settings (``voice_vad_*``)."""
+    return VADParams(
+        confidence=s.voice_vad_confidence,
+        start_secs=s.voice_vad_start_s,
+        min_volume=s.voice_vad_min_volume,
+    )
+
+
 class VoiceSession:
     """The pipeline of one call, from WebRTC connect to disconnect or call end."""
 
@@ -147,7 +156,7 @@ class VoiceSession:
         )
         if s.voice_vad_pause:
             self.proc.gate = gate
-            vad = SileroVADAnalyzer(params=VADParams(start_secs=s.voice_vad_start_s))
+            vad = SileroVADAnalyzer(params=vad_params(s))
             hear.append(RepVad(vad, self.proc.on_rep_voice))
         pipeline = Pipeline(
             [

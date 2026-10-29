@@ -329,7 +329,9 @@ class OrchestratorProcessor(FrameProcessor):
         gate = self.gate
         if gate is None:
             return
-        if speaking and self.agent_talking and not gate.paused:
+        # Only while agent audio is actually playing: a reply still queued for
+        # TTS is not something the rep can talk over yet.
+        if speaking and self.bot_speaking and not self._barged and not gate.paused:
             gate.pause()
             self.log("pause")
             self._resume_later(PAUSE_MAX_S, "max")

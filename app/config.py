@@ -175,7 +175,13 @@ class Settings(BaseSettings):
     # Barge step 1: local VAD pauses the agent when the rep talks over it (Flux's
     # words then stop or resume it). Off: words alone decide, about 1.4 s late.
     voice_vad_pause: bool = True
-    voice_vad_start_s: float = Field(default=0.1, ge=0.05, le=1.0)
+    # Pause-only VAD (not Flux), tuned down after the user's voice test: noise and
+    # speaker echo paused the agent too often. Speech must score at least
+    # ``confidence`` (Silero), be at least ``min_volume`` loud (Pipecat's 0-1
+    # smoothed level; Pipecat default 0.6) and last ``start_s`` before a pause.
+    voice_vad_confidence: float = Field(default=0.75, ge=0.3, le=0.99)
+    voice_vad_min_volume: float = Field(default=0.7, ge=0.0, le=1.0)
+    voice_vad_start_s: float = Field(default=0.3, ge=0.05, le=1.0)
     # A reply not out this long after the rep's final gets a short filler first
     # ("One moment."); None turns fillers off. See processors.FILLER_AFTER_S.
     voice_filler_after_ms: int | None = Field(default=3000, ge=300, le=10000)

@@ -12,9 +12,12 @@
  * (plain copy; `detail` is the raw server text, Debt negotiator view only).
  * A new error puts the rep's last sent line back in an empty text box, so
  * "try sending it again" is one click.
+ * On the Pipecat stack App passes `voiceStatus` (header) and `voiceBar`
+ * (above the replies) from `VoiceControls` in place of the legacy mic button
+ * and STT picker; `interim` is then Flux's live partial.
  */
 import { AlertTriangle, Mic, MicOff, Send, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import type { ChatMessage } from "@/lib/callState";
@@ -43,6 +46,10 @@ export interface ConversationProps {
   onSttMode?: (m: "server" | "browser") => void;
   /** Newest call error; `seq` changes with each new one. */
   error?: { text: string; detail?: string | null; seq: number } | null;
+  /** WebRTC voice: replaces the mic button and STT picker in the header. */
+  voiceStatus?: ReactNode;
+  /** WebRTC voice controls (mute, push to talk), shown while voice is on. */
+  voiceBar?: ReactNode;
 }
 
 const MIC_DOT: Record<MicState, string> = {
@@ -67,6 +74,8 @@ export function Conversation({
   sttMode,
   onSttMode,
   error,
+  voiceStatus,
+  voiceBar,
 }: ConversationProps) {
   const [draft, setDraft] = useState("");
   const lastSent = useRef("");
@@ -96,36 +105,38 @@ export function Conversation({
       <CardHeader
         title="Conversation"
         aside={
-          <div className="flex items-center gap-2">
-            {sttMode && onSttMode && (
-              <label className="flex items-center gap-1 text-sm text-muted">
-                <span className="sr-only">Speech recognition</span>
-                <select
-                  className="rounded-md border border-border bg-surface px-1.5 py-1 text-sm text-fg"
-                  value={sttMode}
-                  onChange={(e) => onSttMode(e.target.value as "server" | "browser")}
-                  title="Where speech is transcribed"
-                >
-                  <option value="server">Server STT</option>
-                  <option value="browser">Browser STT</option>
-                </select>
-              </label>
-            )}
-            <span className="inline-flex items-center gap-2 text-sm whitespace-nowrap text-muted" aria-live="polite">
-              <span className={cn("h-2 w-2 rounded-full", MIC_DOT[mic])} aria-hidden />
-              {MIC_LABEL[mic]}
-            </span>
-            <Button
-              size="icon"
-              variant={mic === "off" ? "outline" : "primary"}
-              aria-label={mic === "off" ? "Turn mic on" : "Turn mic off"}
-              aria-pressed={mic !== "off"}
-              onClick={onMicToggle}
-              disabled={!onMicToggle}
-            >
-              {mic === "off" ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-            </Button>
-          </div>
+          voiceStatus ?? (
+            <div className="flex items-center gap-2">
+              {sttMode && onSttMode && (
+                <label className="flex items-center gap-1 text-sm text-muted">
+                  <span className="sr-only">Speech recognition</span>
+                  <select
+                    className="rounded-md border border-border bg-surface px-1.5 py-1 text-sm text-fg"
+                    value={sttMode}
+                    onChange={(e) => onSttMode(e.target.value as "server" | "browser")}
+                    title="Where speech is transcribed"
+                  >
+                    <option value="server">Server STT</option>
+                    <option value="browser">Browser STT</option>
+                  </select>
+                </label>
+              )}
+              <span className="inline-flex items-center gap-2 text-sm whitespace-nowrap text-muted" aria-live="polite">
+                <span className={cn("h-2 w-2 rounded-full", MIC_DOT[mic])} aria-hidden />
+                {MIC_LABEL[mic]}
+              </span>
+              <Button
+                size="icon"
+                variant={mic === "off" ? "outline" : "primary"}
+                aria-label={mic === "off" ? "Turn mic on" : "Turn mic off"}
+                aria-pressed={mic !== "off"}
+                onClick={onMicToggle}
+                disabled={!onMicToggle}
+              >
+                {mic === "off" ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </Button>
+            </div>
+          )
         }
       />
 
@@ -174,6 +185,8 @@ export function Conversation({
           {error.detail && <span className="pl-6 text-xs break-words text-muted">Server message: {error.detail}</span>}
         </div>
       )}
+
+      {voiceBar}
 
       {unique.length > 0 && (
         <div className="border-t border-border px-4 pt-3">

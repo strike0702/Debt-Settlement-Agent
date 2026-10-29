@@ -35,7 +35,7 @@ def test_schema_lists_every_event_type() -> None:
     expected = {
         "transcript", "say", "belief", "eval", "blocked", "escalate", "latency",
         "audit", "phase", "agreement", "stt_error", "error", "turn_done",
-        "turn_trace", "autoplay_done", "speech_dropped",
+        "turn_trace", "autoplay_done", "speech_dropped", "voice_state",
     }  # fmt: skip
     assert set(SERVER_EVENT_TYPES) == expected
     text = schema_text()

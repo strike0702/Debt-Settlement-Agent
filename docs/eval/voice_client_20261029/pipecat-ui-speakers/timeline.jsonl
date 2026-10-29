@@ -1,0 +1,63 @@
+{"call": "numbers_easy#1", "t": 1793266067698.373, "kind": "reply"}
+{"call": "numbers_easy#1", "t": 1793266069225.675, "kind": "tts_byte", "text": ""}
+{"call": "numbers_easy#1", "t": 1793266069753.0999, "kind": "audio_on"}
+{"call": "numbers_easy#1", "t": 1793266072286.5112, "kind": "rep_start", "id": "a01_mmhm"}
+{"call": "numbers_easy#1", "t": 1793266072457.513, "kind": "tts_byte", "text": ""}
+{"call": "numbers_easy#1", "t": 1793266072576.5112, "kind": "rep_end", "id": "a01_mmhm"}
+{"call": "numbers_easy#1", "t": 1793266074929.118, "kind": "tts_byte", "text": ""}
+{"call": "numbers_easy#1", "t": 1793266075520.3, "kind": "audio_off"}
+{"call": "numbers_easy#1", "t": 1793266076072.8, "kind": "audio_on"}
+{"call": "numbers_easy#1", "t": 1793266082760.9, "kind": "audio_off"}
+{"call": "numbers_easy#1", "t": 1793266084870.4487, "kind": "rep_start", "id": "a02_terms"}
+{"call": "numbers_easy#1", "t": 1793266091180.4487, "kind": "rep_end", "id": "a02_terms"}
+{"call": "numbers_easy#1", "t": 1793266095469.949, "kind": "eager_eot", "text": "box."}
+{"call": "numbers_easy#1", "t": 1793266095519.5452, "kind": "eot", "text": "box."}
+{"call": "numbers_easy#1", "t": 1793266095519.779, "kind": "final", "text": "box."}
+{"call": "numbers_easy#1", "t": 1793266097757.7861, "kind": "reply"}
+{"call": "numbers_easy#1", "t": 1793266098103.503, "kind": "tts_byte", "text": ""}
+{"call": "numbers_easy#1", "t": 1793266098630.0999, "kind": "audio_on"}
+{"call": "numbers_easy#1", "t": 1793266100951, "kind": "audio_off"}
+{"call": "numbers_easy#1", "t": 1793266103092.761, "kind": "rep_start", "id": "a03_correct"}
+{"call": "numbers_easy#1", "t": 1793266103742.761, "kind": "rep_end", "id": "a03_correct"}
+{"call": "numbers_easy#1", "t": 1793266129406.988, "kind": "rep_start", "id": "a04_pause"}
+{"call": "numbers_easy#1", "t": 1793266133536.988, "kind": "rep_end", "id": "a04_pause"}
+{"call": "numbers_easy#1", "t": 1793266148647.5388, "kind": "rep_start", "id": "a05_interrupt"}
+{"call": "numbers_easy#1", "t": 1793266152857.5388, "kind": "rep_end", "id": "a05_interrupt"}
+{"call": "numbers_easy#1", "t": 1793266178537.982, "kind": "rep_start", "id": "a06_date"}
+{"call": "numbers_easy#1", "t": 1793266180937.982, "kind": "rep_end", "id": "a06_date"}
+{"call": "numbers_easy#1", "t": 1793266206650.753, "kind": "rep_start", "id": "a07_yes"}
+{"call": "numbers_easy#1", "t": 1793266207800.753, "kind": "rep_end", "id": "a07_yes"}
+{"call": "numbers_easy#1", "t": 1793266233472.623, "kind": "rep_start", "id": "a08_bye"}
+{"call": "numbers_easy#1", "t": 1793266234952.623, "kind": "rep_end", "id": "a08_bye"}
+{"call": "numbers_easy#1", "t": 1793266261550.517, "kind": "reply"}
+{"call": "numbers_haggle#1", "t": 1793266265496.7869, "kind": "reply"}
+{"call": "numbers_haggle#1", "t": 1793266266823.524, "kind": "tts_byte", "text": ""}
+{"call": "numbers_haggle#1", "t": 1793266267054.0999, "kind": "audio_on"}
+{"call": "numbers_haggle#1", "t": 1793266269775.98, "kind": "tts_byte", "text": ""}
+{"call": "numbers_haggle#1", "t": 1793266270141.1982, "kind": "rep_start", "id": "b01_okay"}
+{"call": "numbers_haggle#1", "t": 1793266270631.1982, "kind": "rep_end", "id": "b01_okay"}
+{"call": "numbers_haggle#1", "t": 1793266272138.3281, "kind": "tts_byte", "text": ""}
+{"call": "numbers_haggle#1", "t": 1793266272585.9, "kind": "audio_off"}
+{"call": "numbers_haggle#1", "t": 1793266273074.2998, "kind": "audio_on"}
+{"call": "numbers_haggle#1", "t": 1793266276984, "kind": "audio_off"}
+{"call": "numbers_haggle#1", "t": 1793266277461.9, "kind": "audio_on"}
+{"call": "numbers_haggle#1", "t": 1793266279574.2998, "kind": "audio_off"}
+{"call": "numbers_haggle#1", "t": 1793266281687.171, "kind": "rep_start", "id": "b02_terms"}
+{"call": "numbers_haggle#1", "t": 1793266286997.171, "kind": "rep_end", "id": "b02_terms"}
+{"call": "numbers_haggle#1", "t": 1793266312662.6, "kind": "rep_start", "id": "b03_correct"}
+{"call": "numbers_haggle#1", "t": 1793266313362.6, "kind": "rep_end", "id": "b03_correct"}
+{"call": "numbers_haggle#1", "t": 1793266339029.342, "kind": "rep_start", "id": "b04_seventy"}
+{"call": "numbers_haggle#1", "t": 1793266341309.342, "kind": "rep_end", "id": "b04_seventy"}
+{"call": "numbers_haggle#1", "t": 1793266356374.6792, "kind": "rep_start", "id": "b05_interrupt"}
+{"call": "numbers_haggle#1", "t": 1793266359314.6792, "kind": "rep_end", "id": "b05_interrupt"}
+{"call": "numbers_haggle#1", "t": 1793266385030.159, "kind": "rep_start", "id": "b06_pause"}
+{"call": "numbers_haggle#1", "t": 1793266388880.159, "kind": "rep_end", "id": "b06_pause"}
+{"call": "numbers_haggle#1", "t": 1793266403973.6418, "kind": "rep_start", "id": "b07_right"}
+{"call": "numbers_haggle#1", "t": 1793266404393.6418, "kind": "rep_end", "id": "b07_right"}
+{"call": "numbers_haggle#1", "t": 1793266430074.218, "kind": "rep_start", "id": "b08_date"}
+{"call": "numbers_haggle#1", "t": 1793266433074.218, "kind": "rep_end", "id": "b08_date"}
+{"call": "numbers_haggle#1", "t": 1793266458744.68, "kind": "rep_start", "id": "b09_yes"}
+{"call": "numbers_haggle#1", "t": 1793266460214.68, "kind": "rep_end", "id": "b09_yes"}
+{"call": "numbers_haggle#1", "t": 1793266485924.114, "kind": "rep_start", "id": "b10_bye"}
+{"call": "numbers_haggle#1", "t": 1793266487294.114, "kind": "rep_end", "id": "b10_bye"}
+{"call": "numbers_haggle#1", "t": 1793266513889.5637, "kind": "reply"}

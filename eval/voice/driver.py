@@ -11,6 +11,8 @@ Targets:
 - ``pipecat``: the app itself with ``VOICE_STACK=pipecat`` (Phase 63) and its
   minimal page ``/voice/test``: a real call (orchestrator, NLU, NLG) with Flux +
   Aura-2 over WebRTC; pipeline events come from ``GET /voice/events?call_id=``.
+- ``pipecat-ui``: the same server, driven through the product UI's WebRTC
+  client (Phase 64): Start call, then Turn voice on.
 
 Audio sources (``--audio``): ``inject`` replaces ``getUserMedia`` with a WebAudio
 stream the driver plays each rep WAV into, timed against the agent's speech
@@ -48,8 +50,8 @@ FIXTURES = ROOT / "fixtures/voice"
 PROBE_JS = (Path(__file__).parent / "probe.js").read_text()
 SPIKE_DIR = ROOT / "scripts/voice_spike"
 
-Target = Literal["legacy-server", "legacy-browser", "spike", "pipecat"]
-WEBRTC_TARGETS = ("spike", "pipecat")
+Target = Literal["legacy-server", "legacy-browser", "spike", "pipecat", "pipecat-ui"]
+WEBRTC_TARGETS = ("spike", "pipecat", "pipecat-ui")
 Audio = Literal["inject", "speakers"]
 
 # Local fillers the legacy client says while waiting; not the reply.
@@ -393,6 +395,60 @@ async def run_pipecat(
     return run
 
 
+async def run_pipecat_ui(
+    call: CallScript, *, base: str, audio: Audio, chrome_args: list[str]
+) -> CallRun:
+    """The product UI's WebRTC client (Phase 64): Start call, then Turn voice on."""
+    run = CallRun(call.id, "pipecat-ui", audio)
+    cfg = {"inject": audio == "inject"}
+    init = f"window.__VH_CFG = {json.dumps(cfg)};\n{PROBE_JS}\n{SPIKE_HELPERS}"
+    async with (
+        Chrome(extra_args=chrome_args, via_open=audio == "speakers") as chrome,
+        httpx.AsyncClient() as http,
+    ):
+        page = await chrome.page()
+        await open_page(
+            page, f"{base}/?scenario={call.scenario_id}&view=operator", init_script=init
+        )
+        s = Session(page, run, audio)
+        started = False
+        for _ in range(60):
+            if await page.eval("__vh.click('Start call')", gesture=True):
+                started = await s.wait_until(
+                    lambda: _async_true(any(e["kind"] == "ws_in" for e in run.page)), 5
+                )
+                if started:
+                    break
+            await asyncio.sleep(0.25)
+        if not started:
+            raise RuntimeError("the call did not start")
+        for _ in range(40):
+            if await page.eval("__vh.click('Turn voice on')", gesture=True):
+                break
+            await asyncio.sleep(0.25)
+        else:
+            raise RuntimeError("no voice button (is VOICE_STACK=pipecat?)")
+        ok = await s.wait_until(
+            lambda: _async_true(
+                any(e["kind"] == "pc_state" and e["state"] == "connected" for e in run.page)
+            ),
+            30,
+        )
+        if not ok:
+            raise RuntimeError("pipecat WebRTC did not connect")
+        # The page names its call only in the signaling URL.
+        call_id = await page.eval(
+            "decodeURIComponent((performance.getEntriesByType('resource').map((e) => e.name)"
+            ".find((n) => n.includes('/voice/offer?call_id=')) || '').split('call_id=')[1] || '')"
+        )
+        await drive_call(s, call, "pipecat-ui")
+        await page.eval("__vh.click('End call')", gesture=True)
+        await asyncio.sleep(1.5)
+        run.server = (await http.get(f"{base}/voice/events", params={"call_id": call_id})).json()
+        await page.close()
+    return run
+
+
 async def _async_true(v: bool) -> bool:
     return v
 
@@ -409,7 +465,7 @@ def normalize(run: CallRun) -> list[dict[str, Any]]:
             out.append({"t": e["t"], "kind": k, "id": e["id"]})
     if run.target.startswith("legacy"):
         out += _normalize_legacy(run)
-    elif run.target == "pipecat":
+    elif run.target in ("pipecat", "pipecat-ui"):
         out += _normalize_pipecat(run)
     else:
         out += _normalize_spike(run)

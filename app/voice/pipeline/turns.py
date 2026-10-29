@@ -48,6 +48,9 @@ class VoiceCall(Protocol):
     def audit(self, event_type: str, payload: dict[str, Any]) -> None:
         """Append a ``voice`` row to the call's audit log."""
 
+    async def voice_state(self, state: str, text: str) -> None:
+        """Show the browser what the call is doing (``voice_state``; display only)."""
+
 
 class VoiceTurns:
     """Runs final / eager transcripts and heard / barge signals against one call."""

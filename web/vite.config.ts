@@ -35,6 +35,7 @@ export default defineConfig({
       "/scenarios": { target: API, changeOrigin: true },
       "/calls": { target: API, changeOrigin: true },
       "/metrics": { target: API, changeOrigin: true },
+      "/voice": { target: API, changeOrigin: true },
     },
   },
   test: {

@@ -102,11 +102,16 @@ def try_fast_field_answer(
     text = utterance.strip()
     if not text:
         return None
-    # Only bare / near-bare answers — leave "about two-fifty a month" to the LLM.
-    if len(text) > 40 or len(text.split()) > 4:
-        return None
     ref_d = ref or date.today()
     tokens = extract_tokens(text, ref=ref_d)
+    # Only bare / near-bare answers — leave "about two-fifty a month" to the LLM.
+    # Words inside a number span do not count: speech-to-text spells numbers
+    # out ("a hundred and twenty dollars" is one figure).
+    rest = text
+    for t in reversed(tokens):
+        rest = rest[: t.start] + " # " + rest[t.end :]
+    if len(rest) > 40 or len(rest.split()) > 4:
+        return None
 
     value: Any = None
     quote = text

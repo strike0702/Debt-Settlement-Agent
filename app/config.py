@@ -10,7 +10,7 @@ disclosure), and the engine's schedule objective and fee policy
 ``claude_daily_budget_usd`` (env ``CLAUDE_DAILY_BUDGET_USD``) caps the
 demo's paid Claude NLU per UTC day; see ``app.llm.budget``.
 
-``voice_stack`` (env ``VOICE_STACK``) picks the voice path: ``legacy`` (browser
+``voice_stack`` (env ``VOICE_STACK``, default ``pipecat``) picks the voice path: ``legacy`` (browser
 or WAV upload STT, browser TTS) or ``pipecat`` (``app.voice.pipeline``: WebRTC,
 Deepgram Flux STT and Aura-2 TTS, under ``voice_daily_budget_usd``).
 
@@ -154,7 +154,7 @@ class Settings(BaseSettings):
     engine_fee_policy: Literal["front_loaded", "proportional"] = "front_loaded"
 
     # --- Voice (Phase 63; app.voice.pipeline) ---
-    voice_stack: Literal["legacy", "pipecat"] = "legacy"
+    voice_stack: Literal["legacy", "pipecat"] = "pipecat"
     # Deepgram key for the Pipecat path only (server-side; never sent to the browser).
     deepgram_api_key: SecretStr | None = None
     # Daily cap (USD, UTC day) on Deepgram voice spend; new voice sessions are
@@ -169,9 +169,22 @@ class Settings(BaseSettings):
     # the audio stream, which app.voice.pipeline.processors.SilenceFill closes.
     voice_eot_threshold: float | None = Field(default=None, ge=0.5, le=0.9)
     voice_eot_timeout_ms: int | None = Field(default=None, ge=500, le=10000)
-    voice_eager_eot_threshold: float | None = Field(default=0.5, ge=0.3, le=0.9)
+    voice_eager_eot_threshold: float | None = Field(default=0.4, ge=0.3, le=0.9)
     # Start NLU on Flux's EagerEndOfTurn; the committed turn reuses it or redoes it.
     voice_eager_nlu: bool = True
+    # Barge step 1: local VAD pauses the agent when the rep talks over it (Flux's
+    # words then stop or resume it). Off: words alone decide, about 1.4 s late.
+    voice_vad_pause: bool = True
+    # Pause-only VAD (not Flux), tuned down after the user's voice test: noise and
+    # speaker echo paused the agent too often. Speech must score at least
+    # ``confidence`` (Silero), be at least ``min_volume`` loud (Pipecat's 0-1
+    # smoothed level; Pipecat default 0.6) and last ``start_s`` before a pause.
+    voice_vad_confidence: float = Field(default=0.75, ge=0.3, le=0.99)
+    voice_vad_min_volume: float = Field(default=0.7, ge=0.0, le=1.0)
+    voice_vad_start_s: float = Field(default=0.3, ge=0.05, le=1.0)
+    # A reply not out this long after the rep's final gets a short filler first
+    # ("One moment."); None turns fillers off. See processors.FILLER_AFTER_S.
+    voice_filler_after_ms: int | None = Field(default=3000, ge=300, le=10000)
 
     firm_name: str = "Synthetic Debt Relief"
     opening_disclosure: str = (

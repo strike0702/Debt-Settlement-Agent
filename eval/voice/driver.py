@@ -57,6 +57,21 @@ Audio = Literal["inject", "speakers"]
 # Local fillers the legacy client says while waiting; not the reply.
 LEGACY_FILLERS = {"One moment.", "Let me check.", "Mm-hm, let me see.", "Okay, just a second."}
 REPLY_GAP_S = 0.6  # rep waits this long after the agent goes quiet
+
+
+@dataclass
+class Soak:
+    """Long-call check (Phase 65): extra silence before each reply line, and a
+    stall of the server process (SIGSTOP / SIGCONT) before one line, which the
+    WebRTC client sees as a network blip it must recover from."""
+
+    gap_s: float = 0.0
+    blip_before: str | None = None
+    blip_s: float = 0.0
+
+
+SOAK = Soak()
+SERVER_PIDS: list[int] = []
 IDLE_S = 1.2  # agent quiet this long = its turn is over
 REPLY_TIMEOUT_S = 25.0
 SPEAK_TIMEOUT_S = 15.0
@@ -80,6 +95,7 @@ async def serve(
     log.parent.mkdir(parents=True, exist_ok=True)
     with log.open("w") as out:
         proc = subprocess.Popen(cmd, cwd=cwd, env={**os.environ, **env}, stdout=out, stderr=out)
+        SERVER_PIDS.append(proc.pid)
         base = f"http://127.0.0.1:{port}"
         try:
             async with httpx.AsyncClient() as http:
@@ -266,15 +282,32 @@ async def _wait_speaking_for(s: Session, target: Target, secs: float, timeout: f
     return await s.wait_until(long_enough, timeout)
 
 
+async def _stall(pid: int, secs: float) -> None:
+    """Freeze the server (no packets, no answers) for ``secs``, then let it run."""
+    import signal
+
+    os.kill(pid, signal.SIGSTOP)
+    try:
+        await asyncio.sleep(secs)
+    finally:
+        os.kill(pid, signal.SIGCONT)
+
+
 async def drive_call(s: Session, call: CallScript, target: Target) -> None:
     """Play every line of ``call`` at its moment."""
+    _mark_rss(s)
     # The opening: the agent speaks first.
     since = now_ms() - 60_000
     for line in call.lines:
         if line.kind == "reply":
             if not await _wait_idle(s, target, since=since, timeout=REPLY_TIMEOUT_S):
                 s.run.notes.append(f"{line.id}: agent did not finish a turn before this line")
-            await asyncio.sleep(REPLY_GAP_S)
+            await asyncio.sleep(REPLY_GAP_S + SOAK.gap_s)
+            if line.id == SOAK.blip_before and SERVER_PIDS:
+                s.mark("blip", seconds=SOAK.blip_s)
+                await _stall(SERVER_PIDS[-1], SOAK.blip_s)
+                await asyncio.sleep(10)  # the client's reconnect, if any
+                s.mark("blip_end")
             s.mark("line", id=line.id)
             await s.play(line)
             since = now_ms()
@@ -289,7 +322,18 @@ async def drive_call(s: Session, call: CallScript, target: Target) -> None:
         since = now_ms() if line.kind == "interrupt" else since
     await _wait_idle(s, target, since=since, timeout=REPLY_TIMEOUT_S)
     await asyncio.sleep(1.5)
+    _mark_rss(s)
     await s.poll()
+
+
+def _mark_rss(s: Session) -> None:
+    """The server's resident memory (KB) on the timeline, for the long-call check."""
+    if SERVER_PIDS:
+        out = subprocess.run(
+            ["ps", "-o", "rss=", "-p", str(SERVER_PIDS[-1])], capture_output=True, text=True
+        )
+        if out.stdout.strip():
+            s.mark("server_rss", kb=int(out.stdout.strip()))
 
 
 async def run_legacy(
@@ -571,7 +615,27 @@ def _normalize_pipecat(run: CallRun) -> list[dict[str, Any]]:
             out.append({"t": t, "kind": "reply"})
         elif k == "barge" and t in barges:
             out.append({"t": t, "kind": "barge"})
+    # Phase 65: a VAD pause stops the audio before the words make it a barge,
+    # so a barge's stop may start at the pause that led to it.
+    pauses = [e["t"] for e in run.server if e["kind"] == "pause"]
+    led = [p for p in pauses if any(0 <= b - p <= 3000 for b in barges)]
+    for p in pauses:
+        out.append({"t": p, "kind": "pause"})
+    # A filler's audio is not the reply's: relabel it, and take the reply's
+    # first audio from the server when it follows the filler without a gap.
+    fillers = [e["t"] for e in run.server if e["kind"] == "filler"]
+    replies = [e["t"] for e in run.server if e["kind"] == "reply_audio"]
+    on = [e["t"] for e in out if e["kind"] == "audio_on"]
+    for e in out:
+        if e["kind"] == "audio_on" and any(
+            0 <= e["t"] - f <= 1500 and not any(f <= r <= e["t"] + 50 for r in replies)
+            for f in fillers
+        ):
+            e["kind"] = "filler_on"
+    for r in replies:
+        if any(0 <= r - f <= 8000 for f in fillers) and not any(-50 <= t - r <= 400 for t in on):
+            out.append({"t": r, "kind": "audio_on"})
     for e in list(out):
-        if e["kind"] == "audio_off" and any(0 <= e["t"] - t <= 1500 for t in barges):
+        if e["kind"] == "audio_off" and any(0 <= e["t"] - t <= 1500 for t in barges + led):
             out.append({"t": e["t"], "kind": "stop"})
     return out

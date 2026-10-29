@@ -82,6 +82,7 @@ async def analyze(
             audit=audit,
             call_id=call_id,
             last_agent_line=last_agent_line,
+            pending_readback=pending_readback,
         )
 
     # Deterministic yes/no while a read-back is pending — skip the LLM.
@@ -178,6 +179,7 @@ async def analyze(
         audit=audit,
         call_id=call_id,
         last_agent_line=last_agent_line,
+        pending_readback=pending_readback,
     )
 
     # When a sim/oracle disposition is supplied under live NLU, keep verified

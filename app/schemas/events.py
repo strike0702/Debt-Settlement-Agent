@@ -401,11 +401,13 @@ class VoiceStateEvent(_Model):
 
     ``rep_speaking`` carries Flux's live partial in ``text`` (empty at start of
     turn); ``thinking`` follows a final the agent will answer; ``agent_speaking``
-    and ``listening`` follow the agent's audio starting and stopping.
+    and ``listening`` follow the agent's audio starting and stopping. ``ended``
+    comes once, after the call's last line (handoff or close) finished playing:
+    the browser closes the voice link then, not when the call ends on screen.
     """
 
     type: Literal["voice_state"]
-    state: Literal["listening", "rep_speaking", "thinking", "agent_speaking"]
+    state: Literal["listening", "rep_speaking", "thinking", "agent_speaking", "ended"]
     text: str = ""
 
 

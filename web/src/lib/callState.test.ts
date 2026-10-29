@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { errorDetailLabel } from "@/lib/callError";
 import { easyDeal } from "@/fixtures";
 import { foldCall, ladderPoints, withOperatorDetail } from "@/lib/callState";
 import { micReducer } from "@/lib/mic";
@@ -95,5 +96,19 @@ describe("withOperatorDetail", () => {
     expect(merged.agreement).toEqual(op.agreement);
     // The live stream keeps the conversation.
     expect(merged.messages).toEqual(rep.messages);
+  });
+});
+
+describe("voice errors (Phase 65)", () => {
+  it("clears a voice error once the link is live, and keeps others", () => {
+    const failed = foldCall([{ type: "error", message: "voice connection failed" }, { type: "voice_live" }]);
+    expect(failed.error).toBeNull();
+    const nlu = foldCall([{ type: "error", message: "NLU unavailable: x" }, { type: "voice_live" }]);
+    expect(nlu.error?.message).toBe("NLU unavailable: x");
+  });
+
+  it("labels browser-side details plainly", () => {
+    expect(errorDetailLabel("mic blocked: NotAllowedError")).toBe("Browser detail");
+    expect(errorDetailLabel("NLU unavailable: x")).toBe("Server message");
   });
 });

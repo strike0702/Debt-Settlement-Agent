@@ -81,7 +81,7 @@ import { formatCushion } from "@/lib/cushion";
 import { type Lens, viewFor } from "@/lib/lens";
 import { micEventFor, micReducer, type MicState } from "@/lib/mic";
 import { endedLine } from "@/lib/outcome";
-import { callErrorText } from "@/lib/callError";
+import { callErrorText, errorDetailLabel } from "@/lib/callError";
 import { toRepView } from "@/lib/repView";
 
 // Recharts lives in these two; loading them after first paint keeps the shell fast.
@@ -104,7 +104,7 @@ export function micFromEvents(events: readonly CallEvent[]): MicState {
   // Replay assumes the mic was switched on when the call started.
   let mic: MicState = events.length > 0 ? "listening" : "off";
   for (const ev of events) {
-    if (ev.type === "tts_onset") continue;
+    if (ev.type === "tts_onset" || ev.type === "voice_live") continue;
     const m = micEventFor(ev);
     if (m) mic = micReducer(mic, m);
   }
@@ -284,6 +284,11 @@ function LiveApp() {
   const { addLocal } = call;
   const rtc = useWebRtcVoice({ onError: (message) => addLocal({ type: "error", message }) });
   const rtcEngine = rtc.engine;
+  // A voice error is over once the link is live again (e.g. after a reconnect).
+  const rtcLive = rtc.snapshot.link === "live";
+  useEffect(() => {
+    if (rtcLive) addLocal({ type: "voice_live" });
+  }, [rtcLive, addLocal]);
 
   const send = (text: string, source = "typed") => {
     if (!live) return;
@@ -302,13 +307,16 @@ function LiveApp() {
     [subscribe, engine, rtcEngine, pipecat],
   );
 
-  // The mic goes off when the call is over or the socket is gone.
-  const over = isCallOver(state) || call.status === "closed" || state.autoplay !== null;
+  // The mic goes off when the call is over or the socket is gone. WebRTC voice
+  // stays up after a handoff or close until its last line has played.
+  const gone = call.status === "closed" || state.autoplay !== null;
+  const over = isCallOver(state) || gone;
   useEffect(() => {
     if (!over) return;
     void engine.stopMic(true);
-    rtcEngine.hangUp();
-  }, [over, engine, rtcEngine]);
+    if (gone) rtcEngine.hangUp();
+    else rtcEngine.finish();
+  }, [over, gone, engine, rtcEngine]);
 
   const brief = useScenarioBrief(source, lens, source !== null);
 
@@ -542,6 +550,7 @@ function LiveApp() {
             state.error && {
               text: callErrorText(state.error),
               detail: lens === "operator" ? state.error.message : null,
+              detailLabel: errorDetailLabel(state.error.message),
               seq: state.error.seq,
             }
           }

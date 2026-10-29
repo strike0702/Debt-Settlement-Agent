@@ -236,3 +236,25 @@ async def test_bare_amount_question_end_to_end(tmp_path: Path) -> None:
     text = " ".join(t for _, t in u.sentences)
     assert "$600" in text and "total" in text
     assert orch.session.neg.pending_amount_clarify["trigger"] == "bare_amount"
+
+
+# ----- spoken money from voice (Phase 65) -----
+
+
+@pytest.mark.parametrize(
+    "utterance",
+    ["One twenty dollars.", "A hundred and twenty dollars.", "Hundred and twenty dollars."],
+)
+def test_spoken_money_fast_path_and_verify(utterance: str) -> None:
+    from app.agent.nlu import try_fast_field_answer
+    from app.domain.fields import FIELDS_BY_NAME
+    from app.domain.nlu_types import ExtractedTerm
+
+    ask = FIELDS_BY_NAME["min_payment_cents"].ask_text
+    fast = try_fast_field_answer(utterance, ask, ref=_REF)
+    assert fast is not None and [(t.field, t.value) for t in fast.terms] == [
+        ("min_payment_cents", 12000)
+    ]
+    term = ExtractedTerm(field="min_payment_cents", value=12000, quote=utterance.rstrip("."))
+    out = post_verify(TurnAnalysis(stance="info", terms=[term]), utterance, ref=_REF)
+    assert [(t.field, t.value) for t in out.terms] == [("min_payment_cents", 12000)]

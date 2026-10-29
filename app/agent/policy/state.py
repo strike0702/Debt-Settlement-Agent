@@ -74,6 +74,10 @@ class NegotiationState:
     # rep turns in a row that added nothing (``rep_turn_progress``).
     question_counts: dict[str, int] = field(default_factory=dict)
     no_progress_turns: int = 0
+    # This turn only (set by the orchestrator before ``decide``): fields whose
+    # value the model read but the code could not confirm. Their read-back is
+    # the fallback for an unclear number, not a repeated question.
+    unconfirmed_fields: frozenset[str] = frozenset()
 
 
 def terms_counter_key(field: str, value: Any) -> str:

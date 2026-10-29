@@ -9,6 +9,10 @@ session's estimated cost, which is added to ``VoiceBudget``. Deepgram is
 called directly by Pipecat's services here, not through ``app.llm.client``;
 NLU and NLG still go through it.
 
+When the call ends (handoff or close), ``finish`` lets the last sentences
+play out, sends ``voice_state: ended`` and only then stops; the browser keeps
+the link open until that event (the closing line used to be cut).
+
 ``events`` is a short timeline (epoch ms) for the voice harness
 (``GET /voice/events``): Flux turn events, finals, replies, first TTS byte,
 bot start/stop, barges and heard sentences. Agent and rep words only; no
@@ -23,6 +27,8 @@ from collections import OrderedDict
 from decimal import Decimal
 from typing import Any
 
+from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
@@ -36,11 +42,21 @@ from app.config import Settings
 from app.llm.budget import micros_to_usd
 from app.voice.pipeline.budget import VoiceBudget, stt_cost_micros, tts_cost_micros
 from app.voice.pipeline.heard import HeardTracker
-from app.voice.pipeline.processors import OrchestratorProcessor, SilenceFill, Tap
+from app.voice.pipeline.processors import (
+    OrchestratorProcessor,
+    OutputGate,
+    RepVad,
+    SilenceFill,
+    Tap,
+)
 from app.voice.pipeline.turns import VoiceCall, VoiceTurns
 
 FLUX_MODEL = "flux-general-en"
 MAX_EVENTS = 4000
+# After the call's last line: wait at most this long for its audio to finish,
+# then this tail for the browser's jitter buffer, before ending voice.
+FINISH_TIMEOUT_S = 20.0
+FINISH_TAIL_S = 0.5
 
 # call_id → its live voice session (one per call).
 SESSIONS: dict[str, VoiceSession] = {}
@@ -50,6 +66,15 @@ LAST_EVENTS: OrderedDict[str, list[dict[str, Any]]] = OrderedDict()
 
 def now_ms() -> float:
     return time.time() * 1000
+
+
+def vad_params(s: Settings) -> VADParams:
+    """The pause-only VAD's thresholds, from settings (``voice_vad_*``)."""
+    return VADParams(
+        confidence=s.voice_vad_confidence,
+        start_secs=s.voice_vad_start_s,
+        min_volume=s.voice_vad_min_volume,
+    )
 
 
 class VoiceSession:
@@ -75,6 +100,7 @@ class VoiceSession:
         self.task: PipelineTask | None = None
         self.started = 0.0
         self.connected = asyncio.Event()
+        self._finishing = False
 
     def log(self, kind: str, **data: Any) -> None:
         if len(self.events) < MAX_EVENTS:
@@ -123,14 +149,25 @@ class VoiceSession:
             api_key=key, settings=DeepgramTTSService.Settings(voice=s.voice_tts_voice)
         )
         out_tap = Tap("out", log=self.log, on_played=self.proc.played)
+        gate = OutputGate(log=self.log)
+        hear: list[Any] = []
+        self.proc.filler_after_s = (
+            s.voice_filler_after_ms / 1000 if s.voice_filler_after_ms is not None else None
+        )
+        if s.voice_vad_pause:
+            self.proc.gate = gate
+            vad = SileroVADAnalyzer(params=vad_params(s))
+            hear.append(RepVad(vad, self.proc.on_rep_voice))
         pipeline = Pipeline(
             [
                 transport.input(),
                 SilenceFill(),
+                *hear,
                 stt,
                 self.proc,
                 tts,
                 Tap("tts", log=self.log),
+                gate,
                 transport.output(),
                 out_tap,
             ]
@@ -203,6 +240,26 @@ class VoiceSession:
             LAST_EVENTS.popitem(last=False)
         if SESSIONS.get(self.call_id) is self:
             del SESSIONS[self.call_id]
+
+    async def finish(
+        self, *, timeout_s: float = FINISH_TIMEOUT_S, tail_s: float = FINISH_TAIL_S
+    ) -> None:
+        """The call is over: let its last sentences play, send ``ended``, then stop.
+
+        Stopping at once cut the closing line before Aura-2 played it (live
+        test 2026-10-29); the browser now keeps the link until ``ended``.
+        """
+        if self._finishing:
+            return
+        self._finishing = True
+        deadline = time.monotonic() + timeout_s
+        while self.proc.agent_talking and time.monotonic() < deadline:
+            await asyncio.sleep(0.05)
+        timed_out = self.proc.agent_talking
+        await asyncio.sleep(tail_s)
+        self.log("finish", timed_out=timed_out)
+        await self.call.voice_state("ended", "")
+        await self.stop()
 
     async def stop(self) -> None:
         """End the session (the call's socket closed)."""

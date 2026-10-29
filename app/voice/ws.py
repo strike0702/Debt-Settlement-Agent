@@ -40,7 +40,9 @@ With ``VOICE_STACK=pipecat`` a voice session (``app.voice.pipeline``) can join
 a started call by id (``live_call``): its final transcripts run the same turn
 path as ``text``, each emitted reply is also sent to its TTS, and acks / barges
 come from what the server actually played, so client ``sentence_done`` /
-``barge_in`` are ignored while it is attached.
+``barge_in`` are ignored while it is attached. A reply that ends the call
+(handoff or close) also starts ``VoiceSession.finish``, which ends voice only
+after that line was played.
 
 ``latency`` carries ``stt_ms``, ``nlu_ms``, ``engine_ms``, ``policy_ms``,
 ``nlg_ms``, ``queue_ms`` (limiter wait inside the other stages, not additive)
@@ -64,7 +66,7 @@ from app.adapter.engine_adapter import EvalSummary
 from app.agent.acts import ACK_TOTAL_ID, acked_fields
 from app.agent.nlu_types import TurnAnalysis
 from app.agent.orchestrator import Orchestrator, Utterance
-from app.agent.policy import Agreement, Intent
+from app.agent.policy import Agreement, Intent, Phase
 from app.agent.reasons import reason_short
 from app.agent.session import CallSession
 from app.autoplay import clamp_pause_ms, new_autoplay_call, run_autoplay
@@ -793,6 +795,15 @@ class _CallConnection:
             )
         if self.voice is not None and utt.sentences:
             await self.voice.speak(utt)
+        if self.voice is not None and self._call_over(utt):
+            # End voice only after the last line was heard (``VoiceSession.finish``).
+            self._spawn(self.voice.finish())
+
+    def _call_over(self, utt: Utterance) -> bool:
+        """The call ended or was handed off with this reply (as the browser's ``isCallOver``)."""
+        assert self.orch is not None
+        phase = self.orch.session.neg.phase
+        return utt.action.intent == Intent.ESCALATE or phase in (Phase.END, Phase.ESCALATE)
 
     async def _emit_drained(self) -> None:
         assert self.orch is not None

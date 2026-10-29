@@ -9,6 +9,7 @@ import {
   callVoiceState,
   CONNECT_FAILED,
   DISCONNECT_GRACE_MS,
+  FINISH_TIMEOUT_MS,
   ICE_WAIT_MS,
   isEcho,
   MAX_RECONNECTS,
@@ -31,8 +32,10 @@ class FakePeer implements PeerLike {
   closed = false;
   added: MediaStreamTrack[] = [];
   private gather: (() => void) | null = null;
+  replaced: (MediaStreamTrack | null)[] = [];
   addTransceiver(track: MediaStreamTrack) {
     this.added.push(track);
+    return { sender: { replaceTrack: async (t: MediaStreamTrack | null) => void this.replaced.push(t) } };
   }
   async createOffer() {
     return { sdp: "offer-sdp", type: "offer" };
@@ -302,5 +305,47 @@ describe("echo hint", () => {
     expect(voice.snapshot().echoHint).toBe(false);
     expect(state()).toBe("rep_speaking");
     expect(isEcho("No.", ["No."])).toBe(false);
+  });
+});
+
+describe("call end (Phase 65)", () => {
+  it("keeps the link until the server says the last line has played", async () => {
+    await live();
+    ev({ type: "voice_state", state: "agent_speaking", text: "" });
+    voice.finish();
+    expect(track.enabled).toBe(false); // no new turns after the end
+    expect(voice.snapshot().link).toBe("live");
+    expect(peers[0]!.closed).toBe(false);
+    ev({ type: "voice_state", state: "ended", text: "" });
+    expect(voice.snapshot().link).toBe("off");
+    expect(peers[0]!.closed).toBe(true);
+  });
+
+  it("hangs up after the timeout, and does not reconnect when the server closes", async () => {
+    vi.useFakeTimers();
+    await live();
+    voice.finish();
+    peers[0]!.state("disconnected");
+    expect(voice.snapshot().link).toBe("off");
+    expect(peers).toHaveLength(1);
+
+    await live();
+    voice.finish();
+    vi.advanceTimersByTime(FINISH_TIMEOUT_MS);
+    expect(voice.snapshot().link).toBe("off");
+  });
+});
+
+describe("mic change (Phase 65)", () => {
+  it("swaps in a new mic track on the same connection when the device goes away", async () => {
+    await live();
+    const old = track as unknown as MediaStreamTrack & { onended: (() => void) | null };
+    const next = fakeTrack();
+    deps.getUserMedia.mockResolvedValueOnce({ getAudioTracks: () => [next], getTracks: () => [next] } as unknown as MediaStream);
+    old.onended?.();
+    await vi.waitFor(() => expect(peers[0]!.replaced).toEqual([next]));
+    expect(track.stopped).toBe(true);
+    expect(peers).toHaveLength(1); // no renegotiation
+    expect(voice.snapshot().link).toBe("live");
   });
 });

@@ -43,7 +43,6 @@ profiles:
     nlg:
       - {target: groq/openai/gpt-oss-20b, params: {reasoning_effort: low}}
       - gemini/gemini-3.1-flash-lite
-    stt: [groq/whisper-large-v3-turbo]
   eval: # quota first; never put Mistral first
     nlu:
       # Measured 2026-10-07: Gemini NLU p50 11.4 s / p95 17.5 s (n=15), so the

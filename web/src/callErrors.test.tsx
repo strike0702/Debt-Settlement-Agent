@@ -1,5 +1,5 @@
 /**
- * Call errors in the console: server `error` / `stt_error` frames become one
+ * Call errors in the console: `error` frames become one
  * plain, sentence-case alert next to the composer (newest only), with the raw
  * server text in the Debt negotiator view only. The alert clears on the next
  * agent reply or a new call, and the composer stays usable.
@@ -8,7 +8,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "@/App";
 import { Conversation } from "@/components/Conversation";
-import { callErrorText, GENERIC_ERROR, STT_ERROR } from "@/lib/callError";
+import { callErrorText, GENERIC_ERROR } from "@/lib/callError";
 import { foldCall, reduceCall } from "@/lib/callState";
 import type { RepAccount, ScenarioMeta, ServerEvent } from "@/types/protocol";
 
@@ -22,7 +22,6 @@ describe("callErrorText", () => {
     expect(callErrorText({ kind: "error", message: "autoplay is driving this call" })).toBe(
       "The simulated rep is playing this call, so your reply was not sent.",
     );
-    expect(callErrorText({ kind: "stt_error", message: "stt: all providers failed" })).toBe(STT_ERROR);
     expect(callErrorText({ kind: "error", message: "unknown event: zap" })).toBe(GENERIC_ERROR);
   });
 });
@@ -45,14 +44,13 @@ describe("call state", () => {
     expect(reduceCall(reduceCall(s, agent), err(NLU_DOWN)).error?.seq).toBe(3);
   });
 
-  it("takes stt_error too, and a new call starts with none", () => {
-    expect(foldCall([{ type: "stt_error", message: "stt down" }]).error?.kind).toBe("stt_error");
+  it("starts a new call with none", () => {
     expect(foldCall([]).error).toBeNull();
   });
 });
 
 describe("Conversation error alert", () => {
-  const base = { messages: [], mic: "listening" as const, suggested: [], emptyHint: "" };
+  const base = { messages: [], suggested: [], emptyHint: "" };
 
   it("announces the plain line, with the server text only when given", () => {
     const { rerender } = render(<Conversation {...base} onSend={() => {}} error={{ text: READ_FAIL, detail: NLU_DOWN, seq: 1 }} />);

@@ -4,9 +4,9 @@
  * driver in the same init script.
  *
  * Logs, with epoch-ms timestamps (performance.timeOrigin + now):
- *   ws_in / ws_out / ws_out_wav  call-socket frames (legacy console)
- *   tts_speak / tts_start / tts_end / tts_error / tts_cancel  speechSynthesis
- *   agent_audio_on / agent_audio_off  energy on remote WebRTC audio (spike)
+ *   ws_in / ws_out  call-socket frames (product UI)
+ *   agent_audio_on / agent_audio_off  energy on remote WebRTC audio
+ *   pc_state  RTCPeerConnection state
  *   rep_start / rep_end  injected rep clips
  * With __VH_CFG.inject, getUserMedia returns a WebAudio stream the driver
  * feeds through __vh.play(url, id) instead of the microphone.
@@ -28,7 +28,6 @@
     for (const k of KEEP) if (k in o) out[k] = o[k];
     if (o.type === "latency") Object.assign(out, o);
     if (o.type === "turn_trace") out.timings = o.timings;
-    if (o.type === "timing") Object.assign(out, o);
     return out;
   };
   const NativeWS = window.WebSocket;
@@ -51,32 +50,11 @@
         } catch {
           /* not JSON */
         }
-      } else {
-        log("ws_out_wav", { bytes: data.byteLength ?? data.size ?? 0 });
       }
       return super.send(data);
     }
   }
   window.WebSocket = ProbeWS;
-
-  // ---------------------------------------------------------------- speechSynthesis
-  const synth = window.speechSynthesis;
-  if (synth) {
-    const speak = synth.speak.bind(synth);
-    const cancel = synth.cancel.bind(synth);
-    synth.speak = (u) => {
-      const text = u.text;
-      log("tts_speak", { text });
-      u.addEventListener("start", () => log("tts_start", { text }));
-      u.addEventListener("end", () => log("tts_end", { text }));
-      u.addEventListener("error", (e) => log("tts_error", { text, error: e.error }));
-      return speak(u);
-    };
-    synth.cancel = () => {
-      if (synth.speaking || synth.pending) log("tts_cancel", {});
-      return cancel();
-    };
-  }
 
   // ---------------------------------------------------------------- remote audio energy
   const tapTrack = (track) => {
@@ -171,17 +149,6 @@
     );
     if (!btn) return false;
     btn.click();
-    return true;
-  };
-  /** Set a <select> that has an option with value `value`. */
-  vh.select = (value) => {
-    const sel = [...document.querySelectorAll("select")].find((s) =>
-      [...s.options].some((o) => o.value === value),
-    );
-    if (!sel) return false;
-    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set;
-    setter.call(sel, value);
-    sel.dispatchEvent(new Event("change", { bubbles: true }));
     return true;
   };
 })();

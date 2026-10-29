@@ -1,12 +1,12 @@
 /**
- * Voice controls for the Pipecat stack (WebRTC), shown in the conversation panel.
+ * Voice controls (Pipecat over WebRTC), shown in the conversation panel.
  *
  * `VoiceStatus` sits in the panel header: the call state at a glance
  * (connecting, listening, rep speaking, thinking, agent speaking, muted,
  * reconnecting) and the voice on/off button. `VoiceBar` sits above the text
  * box while voice is on: mute, push to talk, and the hold-to-talk button.
- * Display only: `useWebRtcVoice` owns the connection. The legacy stack keeps
- * the mic button inside `Conversation`.
+ * Display only: `useWebRtcVoice` owns the connection. Replay shows
+ * `VoiceStatus` as "Voice off" with no button action.
  */
 import { Hand, Mic, MicOff, Phone, PhoneOff } from "lucide-react";
 import type { KeyboardEvent } from "react";

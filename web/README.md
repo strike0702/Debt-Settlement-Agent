@@ -27,7 +27,7 @@ npm test               # vitest run
 npm run lint
 ```
 
-- Live (default): scenario cards come from `/scenarios`. **Watch a call** opens `/ws/call/{id}?view=…` with the Phase 22 autoplay start (`autoplay: true, autoplay_pause_ms: 1200`); the server's sim creditor plays the rep with template phrasing, so it needs no keys. **Start call** opens the same socket for you to play the rep by typing, clicking a suggested reply (from the scenario's rep card), or using the mic.
+- Live (default): scenario cards come from `/scenarios`. **Watch a call** opens `/ws/call/{id}?view=…` with the Phase 22 autoplay start (`autoplay: true, autoplay_pause_ms: 1200`); the server's sim creditor plays the rep with template phrasing, so it needs no keys. **Start call** opens the same socket for you to play the rep by typing, clicking a suggested reply (from the scenario's rep card), or turning voice on and speaking.
 - Two views, named for people outside the industry (Phase 35): **Debt negotiator** (lens `operator`, socket `?view=operator`) and **Creditor rep** (lens `creditor`, socket `?view=rep`). A one-line subtitle under the toggle says what each shows.
 - The socket's view is fixed per call. Switching to the Creditor rep view mid-call re-filters on the client (`toRepView`). Switching to the Debt negotiator view during or after a call that streams the rep view backfills the decision trace, ladder, latency, audit log and fee columns from `GET /calls/{id}/operator` (kept in server memory per call, Phase 36) and refetches on every `turn_done`.
 - Custom test cases (Phase 36): **Add a test case** (next to "Pick a scenario") opens an inline JSON editor pre-filled from `GET /scenarios/template`, checked as you type by `POST /scenarios/preview` (errors listed with their field path, click to jump). Saved cases join the cards first, marked "Custom", with edit and remove (undo); they persist in `localStorage` (`dsa-custom-cases`). A call on one sends `start.scenario_payload`; autoplay is curated-only, so you play the rep. The Creditor rep view's "Your account" for a custom case comes from `POST /scenarios/preview/rep` (reads only `offer` and `rep_card`).
@@ -35,7 +35,7 @@ npm run lint
 - The Debt negotiator view's state column has the scenario brief and **Client deposits and credits**: the client's dedicated-account ledger (Date, Description, Credit, Debit, Running balance) anchored at the balance on the as-of date, past rows above it and scheduled rows below. PRIVATE: it comes from the operator brief only.
 - "How the agent decided" (the decision trace, Debt negotiator view only, Phase 36): one row per turn, newest first, with the move in plain words ("Countered at 31%"), its number and a few-word reason (`decide.reason_short`). Opening a row tells the turn as What they said / What we heard / Can the client pay? / Decision / What we said; "How this was worked out" holds the affordability curve, belief changes, the reply template, the safety checks (each once) and the policy code. All its wording comes from `src/lib/traceStory.ts` and the server's reason sentences (`app/agent/reasons.py`).
 - The Creditor rep view shows the conversation, **Your account** and the agreed terms (agreement, public schedule, terms heard); no decision trace, ladder, latency or audit log. Its state column opens with **Your account** (`GET /scenarios/{id}/rep`): the rep's creditor name, outstanding and original balance, and their settlement rules from the rep card. It carries no client or firm data; the scenario brief and ledger stay in the Debt negotiator view.
-- Outcomes (Phase 48): a call ends as a deal or a handoff. "Handed off to a specialist" takes the agreement's slot at the top of the state column; the Debt negotiator view gives the reason sentence from `app/agent/reasons.py` (via the ESCALATE turn's trace), the Creditor rep view only what the agent told the rep (`escalate.escalate_reason`). The transcript closes with "Call ended: …". All of it comes from `src/lib/outcome.ts`. The mic goes to call-over on ESCALATE as on END.
+- Outcomes (Phase 48): a call ends as a deal or a handoff. "Handed off to a specialist" takes the agreement's slot at the top of the state column; the Debt negotiator view gives the reason sentence from `app/agent/reasons.py` (via the ESCALATE turn's trace), the Creditor rep view only what the agent told the rep (`escalate.escalate_reason`). The transcript closes with "Call ended: …". All of it comes from `src/lib/outcome.ts`. Voice ends after the last line on ESCALATE as on END.
 - Trace words (Phase 48): price moves are titled by their ladder step ("Made a first offer of 42%", "Held our offer at 42%", "Took a step up to 51%", "Raised our offer by half their drop, to 37%", "Made a final offer of 48%", "Accepted 50% when they repeated it", "They accepted our 52% offer"). An open rep turn carries a badge naming who read the line ("Read by Claude Haiku", "Read by Groq (fallback)", "Budget reached, using Groq", "Read by code (no AI needed)", "Simulated rep: no AI reading") from `turn_trace.reader`, and "What we heard" tells corrections, disputes, held-back amounts ("Held back $420 … because …") and dropped questions from `turn_trace.notes`. Both are built by the server from the turn's audit rows and exist only on the operator stream. Each dropped term gives its real reason (`DroppedTerm.reason`).
 - URL (Phase 48): `?scenario=<id>&view=operator|rep` reflects the picked scenario and view (`src/hooks/useUrlState.ts`); a change pushes history, so back and forward work. A scenario from the URL is refused while a call runs, and an unknown id falls back to Easy deal.
 - **Download log** fetches `/calls/{id}/export?view=rep|operator` for the last call (it survives the end of the call); the rep export drops private audit rows.
@@ -60,13 +60,10 @@ src/
     call_easy_deal.json    synthetic operator stream: {t, ev} frames + private_values (validated by pytest)
     index.ts               typed fixture + the one-entry catalog fixture mode shows
   lib/
-    callState.ts           reduceCall / foldCall: events (+ local tts_onset) → CallState
+    callState.ts           reduceCall / foldCall: events (+ local voice_live) → CallState
     repView.ts             toRepView: client mirror of app/voice/views.py redact_for_view
-    voice/engine.ts        VoiceEngine: TTS + sentence_done acks, barge-in, echo guard, VAD/browser STT, backchannel
-    voice/vad.ts           pinned vad-web 0.0.22 + onnxruntime-web 1.14.0 (CDN) and Phase 21 VAD settings
-    voice/speech.ts        speakableText, preferred voices, benign TTS errors
-    voice/wav.ts           16 kHz mono 16-bit WAV encoder
-    mic.ts                 mic state machine (off/listening/thinking/speaking)
+    voice/webrtc.ts        WebRtcVoice: mic over WebRTC to /voice/offer, call state, reconnect, echo hint, text-mode acks
+    callError.ts           plain copy for error frames (server and voice client)
     format.ts              cents → "$1,250.00" (en-US), bp → "45%", field labels
     highlight.ts           quote and {placeholder} splitting
     latency.ts             waterfall rows from turn_trace timings
@@ -77,8 +74,8 @@ src/
     outcome.ts             deal or handoff in words for both views (handoff reason: Debt negotiator only)
     customCases.ts         custom test cases: localStorage, ScenarioSource, JSON parse errors, path → cursor
   hooks/
-    useCall.ts             one call socket: start / autoplay / text / WAV / end, raw frames + subscribers
-    useVoice.ts            React wrapper over VoiceEngine (mic state, notices, STT mode)
+    useCall.ts             one call socket: start / autoplay / text / end, raw frames + subscribers
+    useWebRtcVoice.ts      React wrapper over WebRtcVoice (snapshot, panel state)
     useScenarios.ts        /scenarios catalog; brief + ledger (Debt negotiator view only) and rep account, curated or custom; template
     useOperatorDetail.ts   /calls/{id}/operator backfill for a call streamed in the Creditor rep view
     useFixtureReplay.ts    timed replay of frames
@@ -86,7 +83,8 @@ src/
     useUrlState.ts         ?scenario=&view= in the URL, back/forward
   components/
     AppShell.tsx           header, lens + theme toggles, scenario cards (+ custom), 3-column grid
-    Conversation.tsx       bubbles, mic state, suggested replies, text box
+    Conversation.tsx       bubbles, suggested replies, text box; voice slots in the header and above the replies
+    VoiceControls.tsx      VoiceStatus (state + voice on/off) and VoiceBar (mute, push to talk, hold to talk)
     DecisionTrace.tsx      "How the agent decided": one row per turn, open for the story and details; Debt negotiator view only
     CurveSparkline.tsx     feasibility curve 1–100% with ask, ours, dashed private ceiling
     StatePanel.tsx         agreement and schedule first, then brief/account slot, ladder, belief table, latency, audit
@@ -118,15 +116,16 @@ Private data is hidden at two layers:
 
 `src/creditorLens.test.tsx` renders the whole recorded call in each lens. In the operator lens it asserts that every private string (`52%`, `$45.00`, `$9.50`, `$225.00`, and each savings balance) appears, which proves the test can detect them. In the creditor lens it asserts that none of them appear, with `<details>` sections forced open.
 
-## Voice (ported from the old app.js in 23b)
+## Voice (Pipecat over WebRTC, Phase 64; the only path since Phase 67)
 
-`useVoice` wraps `VoiceEngine`, a framework-free port of the old `app/static/app.js` voice code. Its browser APIs are injected, so `useVoice.test.ts` drives it with fakes. Those tests replace `tests/unit/test_app_js_contracts.py`.
+`useWebRtcVoice` wraps `WebRtcVoice` (`src/lib/voice/webrtc.ts`); its browser APIs are injected, so `webrtc.test.ts` drives it with fakes. The server (`app/voice/pipeline`, Deepgram Flux STT and Aura-2 TTS) hears, decides barges and speaks; the browser only sends the mic and plays the agent's track.
 
-- **TTS:** one `SpeechSynthesisUtterance` per `say`, expanding `%`/`$` for speech only. Every sentence is acked with `sentence_done`, also when playback fails (F06) or when there is no `speechSynthesis`. The current utterance stays referenced, because Chrome garbage-collects it otherwise. A generation counter makes a stale `onend` after a cancel a no-op.
-- **Barge-in:** speech over the agent after the 750 ms echo guard sends `barge_in{spoken_ids}`, with the acked ids plus the one in flight. That clip is marked contaminated and never transcribed, and VAD capture is reset. A typed reply while the agent is speaking barges first. When the rep's next line reaches the server before any of the agent's reply was heard (for example, a pause split one sentence into two clips), the server drops that reply and sends `speech_dropped{ids}`; the engine stops those sentences at once, even mid-word, never acks them, and plays only the newer reply.
-- **STT:** in server mode, vad-web sends 16 kHz WAV frames. In browser mode, `webkitSpeechRecognition` runs and is stopped for the whole agent turn, then re-armed 500 ms after it. A VAD load failure or a server `stt_error` falls back to browser STT. The server drops Whisper hallucinations (silent `verbose_json` segments, or bias-prompt words with repeats such as "and payment, payment.", filler, "Thank you.") as if the clip were silent, and audits them as `stt_dropped` (`app/voice/stt.py`).
-- **Latency:** `timing{vad_end_to_first_audio_ms}` is sent once per reply, from `onstart`. A local "One moment." plays if no `say` arrives within 1.7 s (`BACKCHANNEL_AFTER_MS`); it is never sent or acked. The `say`→`onstart` gap becomes the waterfall's "Voice onset" stage (local `tts_onset` event).
-- **Autoplay** calls are passive: no TTS and no acks, because the server auto-acks.
+- **Turn voice on** posts an SDP offer to `/voice/offer?call_id=` for a call that has started on the socket. The server speaks the opening if nobody has read it yet.
+- **Call state** in the header comes from the socket's `voice_state` frames: Connecting, Listening, Rep speaking (with Flux's live partial), Thinking, Agent speaking, Muted, Reconnecting, Voice off. The bar above the replies has Mute, Push to talk and Hold to talk (Space / Enter).
+- **Acks.** While voice is on, the server acks what it played and ignores client acks. While voice is off, the rep reads the lines, so the client sends `sentence_done`: the opening waits until the rep's first typed line (voice may still join and speak it), and after that each `say` is acked as it arrives. Without this, a typed reply would barge an "unheard" agent turn and roll it back (Phase 67, DECISIONS D17).
+- **Failures** (mic blocked or missing, connection failed, budget reached, voice not configured, second session) go to the visible error line; voice errors clear once the link is live again. A dropped link reconnects up to 3 times.
+- **Autoplay** calls are passive: no acks, because the server auto-acks.
+- The browser-speech client (speechSynthesis, vad-web from the CDN, WAV upload, `webkitSpeechRecognition`) was removed in Phase 67; its evidence stays in `docs/eval/voice_baseline_20261028/`.
 
 ## Deviations and notes
 

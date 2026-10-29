@@ -1,13 +1,12 @@
 /**
  * Handoff UI: the handoff outcome in both views (and nothing private in the
  * Creditor rep view), the end-of-call line, the model badge in the Debt
- * negotiator trace only, the mic going to call-over on a handoff, the URL
+ * negotiator trace only, the URL
  * holding the scenario and view, the case editor's unsaved-text warning, and
  * the theme-color meta following the theme.
  */
 import { act, fireEvent, render, renderHook, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { micFromEvents } from "@/App";
 import { CaseEditor } from "@/components/CaseEditor";
 import { Conversation } from "@/components/Conversation";
 import { DecisionTrace } from "@/components/DecisionTrace";
@@ -16,7 +15,6 @@ import { useTheme } from "@/hooks/useTheme";
 import { readUrlState, urlWith, useUrlState } from "@/hooks/useUrlState";
 import { type CallState, isCallOver, reduceCall } from "@/lib/callState";
 import type { Lens } from "@/lib/lens";
-import { micEventFor } from "@/lib/mic";
 import { callOutcome, endedLine } from "@/lib/outcome";
 import { toRepView } from "@/lib/repView";
 import { fullCall } from "@/test/fixtureState";
@@ -87,7 +85,7 @@ describe("handoff outcome", () => {
   it.each<Lens>(["operator", "creditor"])("closes the transcript with how the call ended (%s)", (lens) => {
     const s = lens === "operator" ? handoffCall() : asRep(handoffCall());
     expect(endedLine(s, lens)).toBe("Call ended: handed off to a specialist");
-    render(<Conversation messages={s.messages} mic="off" suggested={[]} emptyHint="" ended={endedLine(s, lens)} />);
+    render(<Conversation messages={s.messages} suggested={[]} emptyHint="" ended={endedLine(s, lens)} />);
     expect(screen.getByTestId("call-ended")).toHaveTextContent("Call ended: handed off to a specialist");
   });
 
@@ -95,29 +93,6 @@ describe("handoff outcome", () => {
     const deal = fullCall("operator");
     expect(endedLine(deal, "operator")).toBe("Call ended: deal sent to the client for approval");
     expect(endedLine({ ...deal, phase: "NEGOTIATE", autoplay: null }, "operator")).toBeNull();
-  });
-
-  it("turns the mic off on a handoff as on END", () => {
-    expect(micEventFor({ type: "phase", phase: "ESCALATE", intent: null, turn: 6 })).toEqual({ type: "call_over" });
-    expect(micEventFor({ type: "phase", phase: "END", intent: null, turn: 6 })).toEqual({ type: "call_over" });
-    expect(micEventFor({ type: "phase", phase: "NEGOTIATE", intent: null, turn: 6 })).toEqual({ type: "agent_done" });
-  });
-
-  it("turns the mic off on any handoff ending, whether or not the phase names the move", () => {
-    expect(micEventFor({ type: "phase", phase: "ESCALATE", intent: "ESCALATE", turn: 6 })).toEqual({ type: "call_over" });
-    expect(micEventFor({ type: "phase", phase: "END", intent: "CLOSE", turn: 6 })).toEqual({ type: "call_over" });
-    expect(micEventFor({ type: "escalate", reason: "rep_ended", escalate_reason: null })).toEqual({ type: "call_over" });
-    // A mid-call phase that names the move is not a mic transition.
-    expect(micEventFor({ type: "phase", phase: "NEGOTIATE", intent: "COUNTER", turn: 3 })).toBeNull();
-    // Replayed: the mic is off after a handoff, with no trailing intent-free phase.
-    const events = [
-      { type: "say", id: "s1", text: "Hi." },
-      { type: "transcript", role: "creditor", text: "Goodbye.", spoken: true, sentence_id: null, blocked: false },
-      { type: "phase", phase: "ESCALATE", intent: "ESCALATE", turn: 2 },
-      { type: "escalate", reason: "rep_ended", escalate_reason: null },
-      { type: "say", id: "s2", text: "A specialist will follow up." },
-    ] as ServerEvent[];
-    expect(micFromEvents(events)).toBe("off");
   });
 
   it("counts a handoff event as the end of the call", () => {

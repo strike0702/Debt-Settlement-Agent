@@ -263,6 +263,29 @@ settings (`VOICE_VAD_CONFIDENCE`, `VOICE_VAD_MIN_VOLUME`, `VOICE_VAD_START_S`).
 ("it's better now") `VOICE_STACK=pipecat` became the default; `legacy` stays selectable
 until Phase 67 removes it.
 
+## D17. Legacy voice removed; text mode acks what the rep read (Phase 67, 2026-10-30)
+
+**Question.** With the browser-speech client gone, who acks the agent's lines in a typed call?
+The old client spoke every `say` with `speechSynthesis` (also in text mode) and acked it. The
+WebRTC client never acks: the server acks what it played. So on main, with voice off, a typed
+reply found the agent's last turn still unheard, barged it with nothing heard and rolled it
+back (ADR 4), and a deal's agreement never committed.
+
+**Chosen.** The browser acks while voice is off. The opening waits (the rep may still turn
+voice on, and the server then speaks it); the rep's first typed line acks it first, and after
+that each line is acked as it arrives. While voice is on the server keeps acking and ignores
+client acks. The socket protocol is unchanged (`sentence_done` / `barge_in` stay for this,
+scripts and tests).
+
+**Alternatives rejected.** Server auto-ack whenever no voice session is attached: the opening
+would be acked before voice can join, so turning voice on would never speak it, and the
+socket tests that drive acks by hand would change meaning. Acking only on the rep's next
+line: the agreement, eval and phase panels would lag one turn.
+
+**Kept** (they started in the legacy era but the Pipecat path uses them): heard tracking,
+rollback of unheard turns and fragment merge (Phase 56), `speech_dropped`, the voice budget,
+the voice harness's WebRTC targets, and the frozen voice reports under `docs/eval/`.
+
 ## Process choices
 
 - Each phase runs in its own git worktree with a paste-ready prompt; phases that touch the
@@ -277,5 +300,6 @@ until Phase 67 removes it.
 - Completeness of the take-home family without tiers: conjecture only.
 - Adversarial tail over 150 ms (57b, 59); proportional fee inexact and slow (opt-in).
 - Voice thresholds: tuned on injected audio and one laptop-speaker test by the user (D16); no wider device check.
+- Hosted demo voice needs TURN and a Deepgram key on Render (Phase 66); until then the hosted demo is text only.
 - haggling_rep reads back "no special payment tiers" after the deal is sent (policy bug).
 - Sim creditor rejects a legal confirm whose count differs from its own plan.

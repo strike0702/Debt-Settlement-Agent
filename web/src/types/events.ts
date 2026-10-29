@@ -20,7 +20,6 @@ export type ServerEvent =
   | AuditEvent
   | PhaseEvent
   | AgreementEvent
-  | SttErrorEvent
   | ErrorEvent
   | TurnDoneEvent
   | TurnTraceEvent
@@ -45,7 +44,7 @@ export type Intent =
   | "ESCALATE"
   | "ANSWER";
 export type Phase = "OPENING" | "DISCOVERY" | "NEGOTIATE" | "CONFIRM" | "WRAP" | "ESCALATE" | "END";
-export type ClientEvent = StartEvent | EndEvent | TextEvent | SentenceDoneEvent | BargeInEvent | TimingEvent;
+export type ClientEvent = StartEvent | EndEvent | TextEvent | SentenceDoneEvent | BargeInEvent;
 export type View = "rep" | "operator";
 
 export interface WsProtocol {
@@ -129,7 +128,6 @@ export interface LatencyEvent {
   policy_ms: number | null;
   queue_ms: number | null;
   server_total_ms: number | null;
-  stt_ms: number | null;
   turn: number;
   type: "latency";
 }
@@ -156,10 +154,6 @@ export interface AgreementEvent {
   rows: ScheduleRow[];
   status: "pending_client_approval";
   type: "agreement";
-}
-export interface SttErrorEvent {
-  message: string;
-  type: "stt_error";
 }
 export interface ErrorEvent {
   message: string;
@@ -407,9 +401,4 @@ export interface SentenceDoneEvent {
 export interface BargeInEvent {
   spoken_ids: string[];
   type: "barge_in";
-}
-export interface TimingEvent {
-  turn?: number | null;
-  type: "timing";
-  vad_end_to_first_audio_ms?: number | null;
 }

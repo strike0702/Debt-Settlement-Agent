@@ -305,7 +305,7 @@ def _recv_until(ws: Any, kind: str) -> list[dict[str, Any]]:
 def test_socket_bridge_speaks_replies_and_refuses_voice_over_budget(tmp_path: Path) -> None:
     settings = Settings(
         nlu_mode="oracle", nlg_mode="template", llm_profile="offline", db_path=":memory:",
-        voice_stack="pipecat", deepgram_api_key="test-key", api_key_pool={},
+        deepgram_api_key="test-key", api_key_pool={},
         voice_daily_budget_usd=Decimal("0"),
     )  # fmt: skip
     audit = AuditLog(tmp_path / "ws.db")

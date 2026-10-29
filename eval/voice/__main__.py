@@ -1,7 +1,5 @@
 """One command for the voice harness: ``uv run python -m eval.voice``.
 
-    uv run python -m eval.voice --target legacy-server \
-        --out docs/eval/voice_baseline_20261028/legacy-server
     uv run python -m eval.voice --target spike --out docs/eval/voice_spike_20261028/spike
     uv run python -m eval.voice --target pipecat-ui --audio speakers \
         --out docs/eval/voice_client_20261029/pipecat-ui-speakers
@@ -29,8 +27,6 @@ from typing import Any
 from eval.voice import driver, metrics
 from eval.voice.script import CALLS, call_by_id
 
-WEB_DIST = driver.ROOT / "web/dist/index.html"
-
 
 def _ensure_fixtures() -> None:
     missing = [
@@ -38,13 +34,6 @@ def _ensure_fixtures() -> None:
     ]
     if missing:
         raise SystemExit(f"missing fixtures {missing}; run: uv run python -m eval.voice.fixtures")
-
-
-def _ensure_web() -> None:
-    if not WEB_DIST.exists():
-        web = driver.ROOT / "web"
-        subprocess.run(["npm", "ci"], cwd=web, check=True)
-        subprocess.run(["npm", "run", "build"], cwd=web, check=True)
 
 
 def _build_web() -> None:
@@ -65,24 +54,13 @@ async def run(
     runs: list[driver.CallRun] = []
     chrome_args: list[str] = []
     log = out / "server.log"
-    if target.startswith("legacy"):
-        _ensure_web()
-        stt = target.split("-", 1)[1]
-        with tempfile.TemporaryDirectory() as tmp:
-            async with driver.legacy_server(port, log, Path(tmp) / "audit.db") as base:
-                for call in calls:
-                    runs.append(
-                        await driver.run_legacy(
-                            call, base=base, stt=stt, audio=audio, chrome_args=chrome_args
-                        )  # type: ignore[arg-type]
-                    )
-    elif target in ("pipecat", "pipecat-ui"):
+    if target in ("pipecat", "pipecat-ui"):
         if target == "pipecat-ui":
             _build_web()
         play = driver.run_pipecat_ui if target == "pipecat-ui" else driver.run_pipecat
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "audit.db"
-            async with driver.legacy_server(port, log, db, voice_stack="pipecat") as base:
+            async with driver.app_server(port, log, db) as base:
                 for call in calls:
                     runs.append(
                         await play(
@@ -182,7 +160,7 @@ def render_md(doc: dict[str, Any], rows: list[metrics.TurnRow]) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Voice measurement harness")
-    targets = ["legacy-server", "legacy-browser", "spike", "pipecat", "pipecat-ui"]
+    targets = ["spike", "pipecat", "pipecat-ui"]
     ap.add_argument("--target", choices=targets, required=True)
     ap.add_argument("--audio", choices=["inject", "speakers"], default="inject")
     ap.add_argument("--calls", default="all", help="comma-separated call ids, or all")

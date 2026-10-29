@@ -87,7 +87,7 @@ def test_reader_marks_the_daily_budget_skip() -> None:
 
 def test_reader_ignores_other_roles_and_uses_the_last_nlu_answer() -> None:
     rows = [
-        _llm(1, provider="groq", model="whisper", role="stt"),
+        _llm(1, provider="groq", model="openai/gpt-oss-20b", role="sim"),
         _llm(2, provider="cerebras", model="gpt-oss-120b"),
         _llm(3, provider="groq", model="openai/gpt-oss-20b", role="nlg"),
     ]

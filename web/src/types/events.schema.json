@@ -878,17 +878,6 @@
           ],
           "title": "Server Total Ms"
         },
-        "stt_ms": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Stt Ms"
-        },
         "turn": {
           "title": "Turn",
           "type": "integer"
@@ -902,7 +891,6 @@
       "required": [
         "type",
         "turn",
-        "stt_ms",
         "nlu_ms",
         "engine_ms",
         "policy_ms",
@@ -1247,26 +1235,6 @@
       "title": "StartEvent",
       "type": "object"
     },
-    "SttErrorEvent": {
-      "additionalProperties": false,
-      "properties": {
-        "message": {
-          "title": "Message",
-          "type": "string"
-        },
-        "type": {
-          "const": "stt_error",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "type",
-        "message"
-      ],
-      "title": "SttErrorEvent",
-      "type": "object"
-    },
     "TextEvent": {
       "additionalProperties": false,
       "properties": {
@@ -1310,45 +1278,6 @@
         "text"
       ],
       "title": "TextEvent",
-      "type": "object"
-    },
-    "TimingEvent": {
-      "additionalProperties": false,
-      "properties": {
-        "turn": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Turn"
-        },
-        "type": {
-          "const": "timing",
-          "title": "Type",
-          "type": "string"
-        },
-        "vad_end_to_first_audio_ms": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Vad End To First Audio Ms"
-        }
-      },
-      "required": [
-        "type"
-      ],
-      "title": "TimingEvent",
       "type": "object"
     },
     "TraceBeliefChange": {
@@ -2208,8 +2137,7 @@
           "end": "#/$defs/EndEvent",
           "sentence_done": "#/$defs/SentenceDoneEvent",
           "start": "#/$defs/StartEvent",
-          "text": "#/$defs/TextEvent",
-          "timing": "#/$defs/TimingEvent"
+          "text": "#/$defs/TextEvent"
         },
         "propertyName": "type"
       },
@@ -2228,9 +2156,6 @@
         },
         {
           "$ref": "#/$defs/BargeInEvent"
-        },
-        {
-          "$ref": "#/$defs/TimingEvent"
         }
       ],
       "title": "Clientevent"
@@ -2250,7 +2175,6 @@
           "phase": "#/$defs/PhaseEvent",
           "say": "#/$defs/SayEvent",
           "speech_dropped": "#/$defs/SpeechDroppedEvent",
-          "stt_error": "#/$defs/SttErrorEvent",
           "transcript": "#/$defs/TranscriptEvent",
           "turn_done": "#/$defs/TurnDoneEvent",
           "turn_trace": "#/$defs/TurnTraceEvent",
@@ -2288,9 +2212,6 @@
         },
         {
           "$ref": "#/$defs/AgreementEvent"
-        },
-        {
-          "$ref": "#/$defs/SttErrorEvent"
         },
         {
           "$ref": "#/$defs/ErrorEvent"

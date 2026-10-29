@@ -10,9 +10,9 @@ disclosure), and the engine's schedule objective and fee policy
 ``claude_daily_budget_usd`` (env ``CLAUDE_DAILY_BUDGET_USD``) caps the
 demo's paid Claude NLU per UTC day; see ``app.llm.budget``.
 
-``voice_stack`` (env ``VOICE_STACK``, default ``pipecat``) picks the voice path: ``legacy`` (browser
-or WAV upload STT, browser TTS) or ``pipecat`` (``app.voice.pipeline``: WebRTC,
-Deepgram Flux STT and Aura-2 TTS, under ``voice_daily_budget_usd``).
+Voice is always ``app.voice.pipeline`` (Pipecat over WebRTC, Deepgram Flux STT
+and Aura-2 TTS, under ``voice_daily_budget_usd``); the browser-speech path and
+its ``VOICE_STACK`` switch were removed in Phase 67.
 
 API key pools: besides the declared ``<provider>_api_key`` fields, every
 ``*_KEY`` / ``*_KEY_<n>`` variable in the environment or ``.env`` is collected
@@ -121,7 +121,6 @@ class Settings(BaseSettings):
     # Per-request LLM timeouts (s). A timeout fails over to the next route target.
     llm_timeout_nlu_s: float = 6.0
     llm_timeout_nlg_s: float = 4.0
-    llm_timeout_stt_s: float = 8.0
     # Sim phrasing is eval-only and not on the voice path; looser bound.
     llm_timeout_sim_s: float = 15.0
     # Eval-only A/B agent arms (eval/agents): multi-step tool calls, not on the voice path.
@@ -154,7 +153,6 @@ class Settings(BaseSettings):
     engine_fee_policy: Literal["front_loaded", "proportional"] = "front_loaded"
 
     # --- Voice (Phase 63; app.voice.pipeline) ---
-    voice_stack: Literal["legacy", "pipecat"] = "pipecat"
     # Deepgram key for the Pipecat path only (server-side; never sent to the browser).
     deepgram_api_key: SecretStr | None = None
     # Daily cap (USD, UTC day) on Deepgram voice spend; new voice sessions are

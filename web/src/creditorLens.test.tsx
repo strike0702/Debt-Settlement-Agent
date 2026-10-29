@@ -29,7 +29,7 @@ function renderConsole(lens: Lens) {
       onLens={() => {}}
       theme="light"
       onTheme={() => {}}
-      conversation={<Conversation messages={state.messages} mic="off" suggested={[]} emptyHint="" />}
+      conversation={<Conversation messages={state.messages} suggested={[]} emptyHint="" />}
       trace={lens === "operator" ? <DecisionTrace traces={state.traces} lens={lens} /> : null}
       state={<StatePanel state={state} lens={lens} />}
     />,

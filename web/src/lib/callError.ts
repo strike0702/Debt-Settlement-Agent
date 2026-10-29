@@ -1,5 +1,5 @@
 /**
- * Plain copy for the server's `error` and `stt_error` frames.
+ * Plain copy for the call's `error` frames (server and voice client).
  *
  * `callState` keeps only the newest one (`CallState.error`); the conversation
  * panel shows `callErrorText` next to the composer in both views and the raw
@@ -7,7 +7,7 @@
  */
 
 export interface CallError {
-  kind: "error" | "stt_error";
+  kind: "error";
   /** Raw server text, e.g. "NLU unavailable: all providers failed". */
   message: string;
   /** Counts errors in this call, so a repeat of the same message is still news. */
@@ -19,7 +19,7 @@ const KNOWN: readonly [RegExp, string][] = [
   [/^call not started/i, "The call has not started yet. Press Start call first."],
   [/^autoplay is driving this call/i, "The simulated rep is playing this call, so your reply was not sent."],
   [/^server not configured/i, "The server is not set up for calls right now."],
-  // WebRTC voice (Pipecat stack): client-side failures and /voice/offer refusals.
+  // WebRTC voice: client-side failures and /voice/offer refusals.
   [/^mic blocked/i, "The browser blocked the mic. Allow Microphone from the site icon in the address bar, then turn voice on again."],
   [/^mic unavailable/i, "The mic could not start. Check that one is connected, then turn voice on again."],
   [/^voice connection failed/i, "Voice could not connect. Check your network, then turn voice on again. You can still type."],
@@ -45,10 +45,8 @@ export function errorDetailLabel(message: string): string {
 }
 
 export const GENERIC_ERROR = "Something went wrong on the server. Try again.";
-export const STT_ERROR = "The agent could not hear that line. Say it again, or type it.";
 
 /** One short, sentence-case line for a call error. */
 export function callErrorText(e: Pick<CallError, "kind" | "message">): string {
-  if (e.kind === "stt_error") return STT_ERROR;
   return KNOWN.find(([re]) => re.test(e.message))?.[1] ?? GENERIC_ERROR;
 }

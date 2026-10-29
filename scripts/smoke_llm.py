@@ -105,7 +105,7 @@ async def _one(provider: str, model: str, settings: Settings | None = None) -> t
         await client.aclose()
         raise LLMUnavailable(f"{provider} not initialized")
     target = [parse_route_entry(f"{provider}/{model}")]
-    client._profiles["demo"] = {"nlu": target, "nlg": target, "sim": target, "stt": target}
+    client._profiles["demo"] = {"nlu": target, "nlg": target, "sim": target}
     t0 = time.perf_counter()
     out = await client.chat_json(
         "nlu",

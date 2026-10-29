@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Latency probe: scripted WS turns against a running local server.
 
-Drives ``/ws/call/{id}`` exactly like the browser does (``start`` →
-``text`` or binary WAV → ``sentence_done`` for every ``say``), repeating a
+Drives ``/ws/call/{id}`` like the browser does in text mode (``start`` →
+``text`` → ``sentence_done`` for every ``say``), repeating a
 short scripted ``easy_deal`` call until ``--turns`` rep turns have run. Reads
 the server's per-turn ``latency`` events and reports p50 / p95 per stage, plus
 the client-observed time from send to the first ``say``.
 
-``--wav`` renders each scripted line with macOS ``say`` to 16 kHz WAV and
-sends the bytes instead of text, so the turn includes server STT.
+Voice turns are measured by ``python -m eval.voice`` instead (the WAV path and
+its server STT were removed in Phase 67).
 ``--oracle`` attaches the scripted line's ``TurnAnalysis`` to each text turn,
 for a server started with ``NLU_MODE=oracle``: every stage but NLU stays live
 (used when the NLU provider's quota is spent).
@@ -24,9 +24,7 @@ import argparse
 import asyncio
 import json
 import math
-import subprocess
 import sys
-import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -61,7 +59,6 @@ ORACLE: tuple[dict[str, Any], ...] = (
 )
 
 STAGES: tuple[str, ...] = (
-    "stt_ms",
     "nlu_ms",
     "engine_ms",
     "policy_ms",
@@ -84,19 +81,6 @@ def percentile(xs: list[float], p: float) -> float | None:
     return s[lo] + (s[hi] - s[lo]) * (k - lo)
 
 
-def render_wavs(lines: tuple[str, ...], out_dir: Path) -> list[bytes]:
-    """Render each line with macOS ``say`` to 16 kHz mono 16-bit WAV."""
-    wavs: list[bytes] = []
-    for i, line in enumerate(lines):
-        path = out_dir / f"line_{i}.wav"
-        subprocess.run(
-            ["say", "-o", str(path), "--file-format=WAVE", "--data-format=LEI16@16000", line],
-            check=True,
-        )
-        wavs.append(path.read_bytes())
-    return wavs
-
-
 async def _drain_turn(ws: Any, t_send: float) -> tuple[list[dict[str, Any]], float | None]:
     """Read events until ``turn_done``; return them and ms to the first ``say``."""
     events: list[dict[str, Any]] = []
@@ -109,15 +93,14 @@ async def _drain_turn(ws: Any, t_send: float) -> tuple[list[dict[str, Any]], flo
         if msg.get("type") == "error":
             raise RuntimeError(f"server error: {msg.get('message')}")
         if msg.get("type") == "turn_done":
-            # STT failures and empty transcripts also end with turn_done, no say.
-            if any(m.get("type") in ("latency", "stt_error") for m in events):
+            if any(m.get("type") == "latency" for m in events):
                 return events, first_say
             if not any(m.get("type") == "transcript" for m in events):
                 return events, first_say
 
 
 async def _ack(ws: Any, events: list[dict[str, Any]]) -> None:
-    """Ack every spoken sentence (as the browser does after TTS)."""
+    """Ack every sentence (as the browser does in text mode)."""
     for ev in events:
         if ev.get("type") == "say":
             await ws.send(json.dumps({"type": "sentence_done", "id": ev["id"]}))
@@ -130,7 +113,6 @@ async def probe(
     scenario: str,
     turns: int,
     *,
-    wavs: list[bytes] | None,
     pause_s: float,
     oracle: bool = False,
 ) -> list[dict[str, Any]]:
@@ -147,13 +129,10 @@ async def probe(
                     break
                 await asyncio.sleep(pause_s)
                 t_send = time.perf_counter()
-                if wavs is not None:
-                    await ws.send(wavs[i])
-                else:
-                    payload: dict[str, Any] = {"type": "text", "text": line}
-                    if oracle:
-                        payload["oracle"] = ORACLE[i]
-                    await ws.send(json.dumps(payload))
+                payload: dict[str, Any] = {"type": "text", "text": line}
+                if oracle:
+                    payload["oracle"] = ORACLE[i]
+                await ws.send(json.dumps(payload))
                 events, first_say = await _drain_turn(ws, t_send)
                 lat = next((e for e in events if e.get("type") == "latency"), None)
                 phase = next(
@@ -205,21 +184,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scenario", default="easy_deal")
     ap.add_argument("--turns", type=int, default=20)
     ap.add_argument("--pause", type=float, default=1.0, help="seconds between rep turns")
-    ap.add_argument("--wav", action="store_true", help="send macOS `say` WAVs (voice turns)")
     ap.add_argument("--oracle", action="store_true", help="send oracle NLU (NLU_MODE=oracle)")
     ap.add_argument("--out", type=Path, help="write samples + summary JSON here")
     args = ap.parse_args(argv)
-    if args.oracle and args.wav:
-        ap.error("--oracle needs text turns (the WAV path carries no oracle)")
-
-    wavs = None
-    if args.wav:
-        with tempfile.TemporaryDirectory() as d:
-            wavs = render_wavs(SCRIPT, Path(d))
     samples = asyncio.run(
-        probe(
-            args.url, args.scenario, args.turns, wavs=wavs, pause_s=args.pause, oracle=args.oracle
-        )
+        probe(args.url, args.scenario, args.turns, pause_s=args.pause, oracle=args.oracle)
     )
     summary = summarize(samples)
     print(render_table(summary))

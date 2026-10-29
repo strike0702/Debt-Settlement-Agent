@@ -136,7 +136,6 @@ def test_latency_event_has_engine_and_queue(tmp_path: Path) -> None:
             events = _recv_until(ws, lambda m: m.get("type") == "turn_done")
         latency = next(e for e in events if e["type"] == "latency")
         for key in (
-            "stt_ms",
             "nlu_ms",
             "engine_ms",
             "policy_ms",

@@ -20,6 +20,7 @@ consequences; numbers link to the committed evidence in [`docs/eval/`](eval/).
 | [6](#adr-6-claude-reads-the-rep-on-the-demo-under-a-daily-cap) | Claude reads the rep on the demo, under a daily cap |
 | [7](#adr-7-how-negotiation-decisions-are-made) | How negotiation decisions are made |
 | [8](#adr-8-engine-v2-exact-search-objectives-explanations) | Engine v2: exact search, objectives, explanations |
+| [9](#adr-9-voice-on-pipecat--deepgram-over-webrtc) | Voice on Pipecat + Deepgram over WebRTC |
 | [Voice turn](#one-voice-turn-annotated) | One voice turn, annotated with measured stage timings |
 
 ## ADR 1. Code owns the policy; no ReAct agent in the product
@@ -113,8 +114,8 @@ behind auth.
 interrupted before the creditor hears it. If state updated when the line was
 generated, the agent would believe it had offered something nobody heard.
 
-**Decision.** `Action.effects` are deferred. The browser acks each sentence
-after it plays (`sentence_done`); only then does `apply_effects` commit agreed
+**Decision.** `Action.effects` are deferred. Each sentence is acked once the
+rep has heard it: in voice, when the server has played its audio (ADR 9); only then does `apply_effects` commit agreed
 terms, phases and drafts. On barge-in, effects of unheard sentences are dropped;
 if the rep heard part of a question (ASK / CLARIFY) before talking over it, its
 question counts still apply (Phase 54), so a question the rep keeps talking
@@ -123,13 +124,15 @@ A small set of bookkeeping effects (`offer_counter`, `record_confirm`,
 `set_phase`, …) applies on emit, so a fast "yes" during TTS wraps instead of
 re-confirming. A barge that heard none of the reply undoes the whole turn,
 eager effects included (Phase 56): the state from before it is restored, the
-browser is told to stop those sentences (`speech_dropped`), and the rep's line
+voice session is told to drop those sentences (`speech_dropped`), and the rep's line
 is joined to their next line, which goes through NLU once. This is the usual
 case when a pause splits one rep sentence into two speech clips. A late
 `sentence_done` for a dropped sentence is ignored.
 
 **Consequences.** Belief and the audit log match what was actually said. Text
-mode uses the same path and auto-acks. The ordering is subtle, so it is pinned
+mode uses the same path: with voice off the browser acks what the rep has read
+(the opening on the rep's first typed line, then each line as it arrives;
+D17), and autoplay auto-acks on the server. The ordering is subtle, so it is pinned
 by orchestrator and WebSocket tests (barge-in during NLU, merged turns).
 
 ## ADR 5. Feasibility is non-monotonic, so scan the curve
@@ -372,45 +375,84 @@ trace only; it is PRIVATE and blocklisted from speech. Open: the proportional fe
 exact over the search's family only, client-first has a slow adversarial tail, and
 completeness of the take-home family without tiers stays a conjecture.
 
+## ADR 9. Voice on Pipecat + Deepgram over WebRTC
+
+**Context.** Voice first ran in the browser: `speechSynthesis` spoke, vad-web cut
+the mic into clips, and the server sent each clip to Groq Whisper (or the browser
+ran `webkitSpeechRecognition`). Three rounds of fixes made it worse
+([D12](history/DECISIONS.md)): Chrome does not use its own speech as an
+echo-cancellation reference, so the agent heard itself, and every guard against
+that echo also ate real speech; batch STT per clip and silence-only turn
+detection added latency and lost words. Measured on the same injected rep audio
+([baseline](eval/voice_baseline_20261028/legacy-server-inject/summary.md)): first
+reply audio 4463 / 5172 ms p50 / p95, numbers heard 20 of 24, the first word lost on
+4 of 30 lines, 4 turns split by a pause.
+
+**Decision.** Pipecat inside the FastAPI app (`app/voice/pipeline/`), audio over
+WebRTC both ways so the browser's echo cancellation has the agent's audio as its
+reference, Deepgram Flux for streaming STT with model-based end of turn, and
+Aura-2 for streaming TTS. A spike and a harness came first, with a go / no-go
+([spike](eval/voice_spike_20261028/summary.md)). The orchestrator stays the only
+decision maker: Flux's final transcript runs the same turn path as typed text,
+and "heard" means the sentence's audio has been written to WebRTC, so ADR 4's
+acks come from what was actually played. Barge-in is two steps
+([D15](history/DECISIONS.md)): a server VAD pauses the agent when the rep starts
+talking over it, and Flux's words decide (two non-backchannel words stop it and
+drop the rest; a backchannel or quiet resumes). A number the code cannot confirm
+in the transcript is read back, not dropped ([D14](history/DECISIONS.md)). The
+pause was made less sensitive after the user's laptop test, and the new path
+became the default ([D16](history/DECISIONS.md)). Phase 67 removed the browser
+path, its server STT route and the `stt` model role
+([D17](history/DECISIONS.md)). Deepgram keys stay on the server, and spend is
+capped per UTC day (`VOICE_DAILY_BUDGET_USD`, audited as `stt_session` /
+`tts_request`).
+
+**Consequences.** On the same injected audio, after tuning
+([Phase 65](eval/voice_tuned_20261029/summary.md)): every reply turn got a
+reply (13 / 13), numbers heard 12 / 12, no lost first words, split turns or false
+barges, real interruptions 2 / 2 stopped, first reply audio 3185 / 4829 ms p50 /
+p95. That misses the 2000 / 3000 ms targets; about 1.95 s of it is the NLU
+reading the line, which voice cannot remove. Speech now costs money (about
+$0.008 per minute of voice session plus $0.03 per 1,000 spoken characters) and the venv
+grew by about 500 MB. Not yet measured: recognition through real laptop speakers
+and mic (the harness's `afplay` lines were mostly not heard;
+[client run](eval/voice_client_20261029/summary.md)), other devices, and the
+hosted demo, which needs a TURN server.
+
 ## One voice turn, annotated
 
-Per-stage p50s are the Phase 21 AFTER voice run (n=20, `easy_deal`, demo
-profile, before the demo NLU moved to Claude in ADR 6) in
-[`docs/eval/latency_20261007.md`](eval/latency_20261007.md). Stages nest:
-`queue_ms` (rate-limit wait) sits inside NLU. The VAD hangover and TTS onset
-are not measured by the probe; the end-to-end figure is an estimate until a
-browser-measured voice run exists.
+Per-stage p50s are the Phase 65 tuned run ([`voice_tuned_20261029`](eval/voice_tuned_20261029/summary.md):
+injected rep audio in Chrome, both scripted calls, free Groq NLU chain, template /
+bank NLG). Times are from the end of the rep's clip.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant B as Browser (VAD, TTS)
-    participant W as WebSocket /ws/call
+    participant B as Browser (mic, agent audio)
+    participant V as Voice pipeline (Pipecat, Flux, Aura-2)
+    participant W as Call socket /ws/call
     participant O as Orchestrator
     participant L as LLM client (by role)
-    participant P as Policy + engine
-    participant G as NLG bank + guards
+    participant G as Policy, engine, NLG bank + guards
 
-    Note over B: rep stops talking, VAD hangover 770 ms (setting)
-    B->>W: WAV clip
-    W->>L: STT (Groq Whisper)
-    L-->>W: text — stt_ms p50 207
+    B->>V: mic over WebRTC
+    Note over V: Flux end of turn p50 651 (eager guess 313)
+    V->>W: final transcript (shown as the rep's line)
     W->>O: creditor turn
-    O->>L: NLU (Groq gpt-oss-120b)
-    L-->>O: TurnAnalysis — nlu_ms p50 3432 (incl. queue_ms p50 2001)
-    O->>O: verify quotes and numbers, update belief
-    O->>P: affordability scan + decide()
-    P-->>O: Action — engine_ms p50 1, policy_ms p50 1
-    O->>G: template from bank, fill PUBLIC facts, 2 guards
-    G-->>O: line — nlg_ms p50 0
-    O-->>B: say — WAV send → first say p50 3704
-    Note over B: browser TTS onset ≈ 200 ms (estimate)
-    B->>W: sentence_done (ack)
-    W->>O: commit deferred effects
+    O->>L: NLU
+    L-->>O: TurnAnalysis
+    O->>G: verify, belief, affordability, decide(), template, guards
+    G-->>O: line (final → reply p50 1946, mostly NLU)
+    O->>W: say (UI) and the sentence to TTS
+    V->>V: Aura-2 first byte p50 373 after the reply
+    V-->>B: agent audio; first reply audio p50 3185
+    V->>O: sentence played → ack, commit deferred effects
 ```
 
-End of speech to first audio is therefore about 4.7 s p50 (estimate). The NLU
-request alone is about 1.4 s p50; the rest of NLU's 3.4 s in this run was Groq
-tokens-per-minute waiting. With the Phase 27 key pool, text-turn NLU fell to
-1415 ms p50 / 2215 ms p95 with `queue_ms` 0
-([key pool table](eval/latency_20261007.md#after-key-pool-phase-27-2026-10-07)).
+A short reply the code reads without the model ("Correct.") reaches first audio
+in about 1.1 to 1.3 s. When the eager end-of-turn guess is right, NLU starts before
+Flux commits the turn; when the rep keeps talking, the new words are merged into
+the running NLU or the early turn is withdrawn. The earlier browser-speech path
+(Whisper per clip, browser TTS) measured about 4.7 s p50 end of speech to first
+audio as an estimate from stages ([latency_20261007](eval/latency_20261007.md));
+its injected-audio baseline is in ADR 9.

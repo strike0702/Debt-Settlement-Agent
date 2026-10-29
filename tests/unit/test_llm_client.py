@@ -23,7 +23,6 @@ profiles:
   demo:
     nlu: [primary/test-model, backup/test-model]
     nlg: [primary/test-model]
-    stt: [primary/whisper]
   offline:
     all: [fake]
 providers:
@@ -455,7 +454,7 @@ async def test_hung_provider_times_out_and_fails_over(tmp_path: Path) -> None:
 
 def test_timeouts_are_per_role() -> None:
     s = Settings()
-    assert (s.llm_timeout_nlu_s, s.llm_timeout_nlg_s, s.llm_timeout_stt_s) == (6.0, 4.0, 8.0)
+    assert (s.llm_timeout_nlu_s, s.llm_timeout_nlg_s) == (6.0, 4.0)
 
 
 @pytest.mark.asyncio
@@ -492,32 +491,6 @@ async def test_connection_error_fails_over(tmp_path: Path) -> None:
     await client.aclose()
     assert out.ok is True
     assert len(seen["backup"]) == 1
-
-
-@pytest.mark.asyncio
-async def test_hung_stt_times_out(tmp_path: Path) -> None:
-    import asyncio
-
-    path = _write_yaml(tmp_path, _PROVIDERS_YAML)
-
-    async def primary(request: httpx.Request) -> httpx.Response:
-        await asyncio.sleep(30)
-        return httpx.Response(200, json={"text": "late"})
-
-    events: list[dict[str, Any]] = []
-    client = LLMClient(
-        _settings(llm_timeout_stt_s=0.2),
-        providers_path=path,
-        http_clients={"primary": httpx.AsyncClient(transport=httpx.MockTransport(primary))},
-        on_call=events.append,
-        skip_health_check=True,
-    )
-    t0 = time.perf_counter()
-    with pytest.raises(LLMUnavailable):
-        await client.transcribe(b"RIFF")
-    await client.aclose()
-    assert time.perf_counter() - t0 < 2.0
-    assert events[0]["role"] == "stt" and events[0]["error"]
 
 
 # --- Burst bucket, per-model buckets, route params, queue_ms ---------------

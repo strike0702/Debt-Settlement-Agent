@@ -3,9 +3,7 @@
  *
  * Pure and framework-free: the fixture replay and the live `useCall` hook both
  * feed events through `reduceCall`. Besides server events it takes one local
- * event, `tts_onset` (from `useVoice`: `say` received → speech audibly starts),
- * which becomes the `tts_onset_ms` stage of that turn's latency waterfall, and
- * `voice_live` (WebRTC voice link up again), which clears a voice error.
+ * event, `voice_live` (WebRTC voice link up again), which clears a voice error.
  * It does not filter private data; `toRepView` in `repView.ts` does that
  * before events get here.
  */
@@ -26,19 +24,12 @@ import type {
   TurnTraceEvent,
 } from "@/types/protocol";
 
-/** Client-measured: ms from the turn's first `say` to `SpeechSynthesisUtterance.onstart`. */
-export interface TtsOnsetEvent {
-  type: "tts_onset";
-  turn: number;
-  ms: number;
-}
-
 /** Client-side: the WebRTC voice link is live (again). */
 export interface VoiceLiveEvent {
   type: "voice_live";
 }
 
-export type CallEvent = ServerEvent | TtsOnsetEvent | VoiceLiveEvent;
+export type CallEvent = ServerEvent | VoiceLiveEvent;
 
 export interface ChatMessage {
   key: string;
@@ -62,9 +53,7 @@ export interface CallState {
   escalation: EscalateEvent | null;
   /** Set by the last frame of an autoplayed call. */
   autoplay: AutoplayDoneEvent | null;
-  /** TTS onsets that arrived before their turn's trace. */
-  ttsOnset: Record<number, number>;
-  /** Newest server `error` / `stt_error` of this call; cleared by the next agent reply. */
+  /** Newest `error` of this call; cleared by the next agent reply. */
   error: CallError | null;
   /** Errors seen in this call so far (gives each `error` its `seq`). */
   errorCount: number;
@@ -88,16 +77,11 @@ export const initialCallState: CallState = {
   agreement: null,
   escalation: null,
   autoplay: null,
-  ttsOnset: {},
   error: null,
   errorCount: 0,
   thinking: false,
   speakingId: null,
 };
-
-function withOnset(t: TurnTraceEvent, ms: number | undefined): TurnTraceEvent {
-  return ms == null ? t : { ...t, timings: { ...t.timings, tts_onset_ms: ms } };
-}
 
 /** Apply one event. Never mutates `state`. */
 export function reduceCall(state: CallState, ev: CallEvent): CallState {
@@ -158,19 +142,10 @@ export function reduceCall(state: CallState, ev: CallEvent): CallState {
     case "turn_trace":
       return {
         ...state,
-        traces: [...state.traces.filter((t) => t.turn !== ev.turn), withOnset(ev, state.ttsOnset[ev.turn])],
+        traces: [...state.traces.filter((t) => t.turn !== ev.turn), ev],
       };
-    case "tts_onset":
-      if (state.traces.some((t) => t.turn === ev.turn)) {
-        return {
-          ...state,
-          traces: state.traces.map((t) => (t.turn === ev.turn ? withOnset(t, ev.ms) : t)),
-        };
-      }
-      return { ...state, ttsOnset: { ...state.ttsOnset, [ev.turn]: ev.ms } };
     case "autoplay_done":
       return { ...state, autoplay: ev, thinking: false };
-    case "stt_error":
     case "error":
       return {
         ...state,
@@ -197,17 +172,15 @@ export function foldCall(events: readonly CallEvent[]): CallState {
 
 /**
  * Lay the server's Debt negotiator detail (`GET /calls/{id}/operator`) over a
- * call folded from a rep stream: its traces (with any local TTS
- * onsets), the full audit log with privacy flags, and the eval and agreement
+ * call folded from a rep stream: its traces, the full audit log with privacy flags, and the eval and agreement
  * with their fee columns. Everything else (conversation, belief, phase) stays
  * from the live stream, which is always at least as new.
  */
 export function withOperatorDetail(state: CallState, detail: OperatorDetail): CallState {
-  const traces = detail.traces.map((t) => withOnset(t, state.ttsOnset[t.turn]));
   const known = new Set(detail.audit.map((a) => a.id));
   return {
     ...state,
-    traces,
+    traces: detail.traces,
     audit: [...detail.audit, ...state.audit.filter((a) => !known.has(a.id))],
     evaluation: detail.eval ?? state.evaluation,
     agreement: detail.agreement ?? state.agreement,

@@ -2,10 +2,9 @@ import { describe, expect, it } from "vitest";
 import { errorDetailLabel } from "@/lib/callError";
 import { easyDeal } from "@/fixtures";
 import { foldCall, ladderPoints, withOperatorDetail } from "@/lib/callState";
-import { micReducer } from "@/lib/mic";
 import { splitByQuotes, splitTemplate } from "@/lib/highlight";
 import { money, ordinal, pct, termValue } from "@/lib/format";
-import { eventsForLens, micFromEvents } from "@/App";
+import { eventsForLens } from "@/App";
 import type { AuditEvent, TurnTraceEvent } from "@/types/protocol";
 
 const events = easyDeal.frames.map((f) => f.ev);
@@ -33,22 +32,6 @@ describe("foldCall over the fixture", () => {
   it("frames are time-ordered", () => {
     const ts = easyDeal.frames.map((f) => f.t);
     expect([...ts].sort((a, b) => a - b)).toEqual(ts);
-  });
-});
-
-describe("mic state machine", () => {
-  it("cycles listening → thinking → speaking → listening", () => {
-    let m = micReducer("off", { type: "toggle" });
-    expect(m).toBe("listening");
-    m = micReducer(m, { type: "rep_done" });
-    expect(m).toBe("thinking");
-    m = micReducer(m, { type: "agent_say" });
-    expect(m).toBe("speaking");
-    expect(micReducer(m, { type: "barge_in" })).toBe("listening");
-    expect(micReducer("off", { type: "agent_say" })).toBe("off");
-  });
-  it("is off after the replayed call ends", () => {
-    expect(micFromEvents(events)).toBe("off");
   });
 });
 
@@ -83,13 +66,12 @@ describe("formatting and highlighting", () => {
 describe("withOperatorDetail", () => {
   it("restores the trace, private audit and fee columns over a rep-stream fold", () => {
     const op = foldCall(events);
-    const rep = foldCall([...eventsForLens(events, "creditor"), { type: "tts_onset", turn: 2, ms: 120 }]);
+    const rep = foldCall(eventsForLens(events, "creditor"));
     expect(rep.traces).toEqual([]);
     const traces = events.filter((e): e is TurnTraceEvent => e.type === "turn_trace");
     const audit = events.filter((e): e is AuditEvent => e.type === "audit");
     const merged = withOperatorDetail(rep, { call_id: "c", traces, audit, eval: op.evaluation, agreement: op.agreement });
     expect(merged.traces.map((t) => t.turn)).toEqual(op.traces.map((t) => t.turn));
-    expect(merged.traces.find((t) => t.turn === 2)?.timings.tts_onset_ms).toBe(120);
     expect(merged.audit.length).toBe(op.audit.length);
     expect(merged.audit.some((a) => a.private)).toBe(true);
     expect(merged.evaluation).toEqual(op.evaluation);

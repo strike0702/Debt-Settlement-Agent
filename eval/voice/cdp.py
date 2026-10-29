@@ -2,12 +2,11 @@
 
 Launches a headed Chrome with a throwaway profile and talks CDP over the
 page's WebSocket: evaluate JS, add an init script, navigate. It is just
-enough to drive the voice console and the Pipecat spike page from Python
+enough to drive the product UI and the voice test pages from Python
 without adding Playwright. It does not know anything about calls or audio;
 ``eval.voice.driver`` owns that.
 
-Chrome is the user's installed Google Chrome (Chrome-branded builds carry the
-Google keys that ``webkitSpeechRecognition`` needs). Every launch uses its own
+Chrome is the user's installed Google Chrome. Every launch uses its own
 ``--user-data-dir``, so the user's own Chrome session is never touched.
 """
 

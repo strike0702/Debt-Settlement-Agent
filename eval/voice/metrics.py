@@ -1,8 +1,9 @@
 """Per-turn voice metrics from a normalized event timeline.
 
 Input is a list of events (``{"t": epoch_ms, "kind": ..., ...}``) that the
-driver has already mapped to target-neutral kinds, so the legacy console and
-the Pipecat spike are scored by the same code:
+driver has already mapped to target-neutral kinds, so the Pipecat spike and
+the app's Pipecat path are scored by the same code (the Phase 62 baseline also
+scored the removed browser-speech console this way):
 
     rep_start / rep_end (id)   scripted rep clip played into the mic
     eot                        the stack decided the rep's turn ended
@@ -11,10 +12,10 @@ the Pipecat spike are scored by the same code:
     eager_eot                  Flux predicted the end of turn early (spike only)
     tts_byte                   first TTS audio byte on the server (spike only)
     audio_on / audio_off       agent audio audibly started / stopped
-    filler_on                  a local filler ("One moment.") started (legacy)
+    filler_on                  a filler ("One moment.") started, not the reply
     barge                      the stack decided to interrupt the agent
     stop                       agent audio stopped because of a barge
-    stages (dict)              server stage timings for a turn (legacy only)
+    stages (dict)              server stage timings for a turn (no current target)
 
 Text scoring turns spoken numbers into canonical tokens first ("one hundred
 twenty dollars" and "$120" both become ``<120> dollars``; "$562.50" and "five

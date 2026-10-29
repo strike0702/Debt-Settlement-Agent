@@ -621,7 +621,7 @@ def _route_models(settings: Settings, path: Path = _DEFAULT_PROVIDERS) -> dict[s
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     profile = data["profiles"].get(settings.llm_profile, {})
     out: dict[str, list[str]] = {}
-    for role in ("nlu", "nlg", "sim", "stt", "agent"):
+    for role in ("nlu", "nlg", "sim", "agent"):
         specs = profile.get(role) or profile.get("all") or []
         out[role] = list(specs)
     return out

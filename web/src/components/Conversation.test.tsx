@@ -18,12 +18,12 @@ function suggestionButtons(): HTMLElement[] {
 describe("suggested rep replies", () => {
   it("lists a repeated script line once, in first-occurrence order", () => {
     const script = ["A.", "B.", "A.", "C.", "B.", "B."];
-    render(<Conversation messages={[]} mic="off" suggested={script} emptyHint="" />);
+    render(<Conversation messages={[]} suggested={script} emptyHint="" />);
     expect(suggestionButtons().map((b) => b.textContent)).toEqual(["A.", "B.", "C."]);
   });
 
   it("shows every suggestion in one neutral style, with no highlight", () => {
-    render(<Conversation messages={[]} mic="off" suggested={LINES} emptyHint="" onSend={() => {}} />);
+    render(<Conversation messages={[]} suggested={LINES} emptyHint="" onSend={() => {}} />);
     const buttons = suggestionButtons();
     expect(buttons.map((b) => b.textContent)).toEqual(UNIQUE);
     const styles = new Set(buttons.map((b) => b.className));
@@ -36,7 +36,7 @@ describe("suggested rep replies", () => {
 
   it("keeps every suggestion clickable when the call is live", () => {
     const onSend = vi.fn();
-    render(<Conversation messages={[]} mic="off" suggested={LINES} emptyHint="" onSend={onSend} />);
+    render(<Conversation messages={[]} suggested={LINES} emptyHint="" onSend={onSend} />);
     const buttons = suggestionButtons();
     fireEvent.click(buttons[1]!);
     fireEvent.click(buttons[2]!);

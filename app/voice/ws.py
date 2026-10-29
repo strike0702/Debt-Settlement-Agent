@@ -36,6 +36,12 @@ feeds the rep socket.
 A reader task feeds an ``asyncio.Queue`` and each event (except ``start``)
 runs as its own task, so ``text`` / ``barge_in`` / ``sentence_done`` are
 handled while a turn awaits NLU: the orchestrator's cancel-and-merge is live.
+With ``VOICE_STACK=pipecat`` a voice session (``app.voice.pipeline``) can join
+a started call by id (``live_call``): its final transcripts run the same turn
+path as ``text``, each emitted reply is also sent to its TTS, and acks / barges
+come from what the server actually played, so client ``sentence_done`` /
+``barge_in`` are ignored while it is attached.
+
 ``latency`` carries ``stt_ms``, ``nlu_ms``, ``engine_ms``, ``policy_ms``,
 ``nlg_ms``, ``queue_ms`` (limiter wait inside the other stages, not additive)
 and ``server_total_ms``. Does not own policy or NLG.
@@ -81,6 +87,9 @@ from app.voice.views import redact_for_view
 
 router = APIRouter()
 
+# call_id → the socket driving it, so a voice session can join by id.
+_LIVE: dict[str, _CallConnection] = {}
+
 # Injected by ``app.main`` lifespan (shared across connections).
 _audit: AuditLog | None = None
 _llm: Any | None = None
@@ -98,6 +107,11 @@ def configure(
     _audit = audit
     _llm = llm
     _settings = settings or get_settings()
+
+
+def live_call(call_id: str) -> _CallConnection | None:
+    """The socket connection driving ``call_id``, if one is open."""
+    return _LIVE.get(call_id)
 
 
 def _ser_value(value: Any) -> Any:
@@ -629,7 +643,7 @@ class _CallConnection:
     ) -> None:
         self.ws = ws
         self.call_id = call_id
-        self.audit = audit
+        self.audit_log = audit
         self.llm = llm
         self.settings = settings
         self.orch: Orchestrator | None = None
@@ -642,6 +656,8 @@ class _CallConnection:
         self._emitted: deque[Utterance] = deque(maxlen=16)
         # Set while a sim creditor drives the call (``start`` with ``autoplay``).
         self._autoplay: asyncio.Task[None] | None = None
+        # The Pipecat voice session attached to this call (app.voice.pipeline.session).
+        self.voice: Any | None = None
 
     async def run(self) -> None:
         reader = asyncio.create_task(self._read())
@@ -654,6 +670,10 @@ class _CallConnection:
                     raise item
                 await self._dispatch(item)
         finally:
+            if _LIVE.get(self.call_id) is self:
+                del _LIVE[self.call_id]
+            if self.voice is not None:
+                await self.voice.stop()
             reader.cancel()
             for task in list(self._tasks):
                 task.cancel()
@@ -725,6 +745,8 @@ class _CallConnection:
                 return
             if event in ("sentence_done", "barge_in"):
                 return  # autoplay auto-acks; client TTS acks are moot
+        if self.voice is not None and event in ("sentence_done", "barge_in"):
+            return  # the voice session acks what the server played
             if event == "end":
                 await self._stop_autoplay()
         handler = {
@@ -746,7 +768,7 @@ class _CallConnection:
     async def _audit_tail_and_done(self) -> None:
         """Push new audit rows then ``turn_done``; caller holds ``_send_lock``."""
         self.audit_after = await _send_audit_tail(
-            self.ws, self.audit, self.call_id, after_id=self.audit_after
+            self.ws, self.audit_log, self.call_id, after_id=self.audit_after
         )
         await _send(self.ws, {"type": "turn_done"})
 
@@ -769,6 +791,8 @@ class _CallConnection:
                 audit_after=self.audit_after,
                 stt_queue_ms=stt_queue_ms,
             )
+        if self.voice is not None and utt.sentences:
+            await self.voice.speak(utt)
 
     async def _emit_drained(self) -> None:
         assert self.orch is not None
@@ -777,7 +801,7 @@ class _CallConnection:
 
     async def _nlu_unavailable(self, e: LLMUnavailable) -> None:
         """No NLU provider answered: tell the client, unblock it, keep the call alive."""
-        self.audit.append(self.call_id, "nlu", "llm_unavailable", {"message": str(e)})
+        self.audit_log.append(self.call_id, "nlu", "llm_unavailable", {"message": str(e)})
         async with self._send_lock:
             await _send(self.ws, {"type": "error", "message": f"NLU unavailable: {e}"})
             await self._audit_tail_and_done()
@@ -798,7 +822,7 @@ class _CallConnection:
             return
         _reset_operator_detail(self.call_id)
         # Private audit row (not allow-listed for the rep): the cushion this call uses.
-        self.audit.append(
+        self.audit_log.append(
             self.call_id,
             "orchestrator",
             "min_cushion",
@@ -815,11 +839,11 @@ class _CallConnection:
             session,
             llm=self.llm,
             settings=self.settings,
-            audit=self.audit,
+            audit=self.audit_log,
             auto_ack=False,
         )
         self.orch.on_speech_dropped = self._on_speech_dropped
-        self.audit.append(
+        self.audit_log.append(
             self.call_id,
             "orchestrator",
             "call_started",
@@ -839,7 +863,7 @@ class _CallConnection:
     ) -> None:
         try:
             orch, creditor = new_autoplay_call(
-                scenario, scenario_id, settings=self.settings, audit=self.audit,
+                scenario, scenario_id, settings=self.settings, audit=self.audit_log,
                 call_id=self.call_id,
             )  # fmt: skip
         except (ValueError, FileNotFoundError, KeyError) as e:
@@ -849,7 +873,7 @@ class _CallConnection:
         self.audit_after = 0
         self.ws.trace_after = 0
         pause_ms = clamp_pause_ms(data.get("autoplay_pause_ms"))
-        self.audit.append(
+        self.audit_log.append(
             self.call_id,
             "orchestrator",
             "call_started",
@@ -876,7 +900,7 @@ class _CallConnection:
                 on_creditor=on_creditor,
                 pause_s=pause_ms / 1000.0,
             )
-            self.audit.append(
+            self.audit_log.append(
                 self.call_id,
                 "orchestrator",
                 "autoplay_done",
@@ -903,7 +927,7 @@ class _CallConnection:
             with llm_call_scope(self.call_id), queue_wait_scope() as stt_queue:
                 heard = await transcribe_screened(self.llm, wav)
         except LLMUnavailable as e:
-            self.audit.append(self.call_id, "stt", "stt_error", {"message": str(e)})
+            self.audit_log.append(self.call_id, "stt", "stt_error", {"message": str(e)})
             async with self._send_lock:
                 await _send(self.ws, {"type": "stt_error", "message": str(e)})
                 # Client set waiting=true on WAV send — unblock the UI.
@@ -912,7 +936,7 @@ class _CallConnection:
         text, stt_ms = heard.text, heard.stt_ms
         if heard.dropped is not None:
             # Whisper hallucination (noise or our own TTS echo): same as silence.
-            self.audit.append(
+            self.audit_log.append(
                 self.call_id,
                 "stt",
                 "stt_dropped",
@@ -943,7 +967,7 @@ class _CallConnection:
             return
         source = data.get("source")
         if source:
-            self.audit.append(
+            self.audit_log.append(
                 self.call_id,
                 "creditor",
                 "utterance_source",
@@ -968,14 +992,19 @@ class _CallConnection:
         if sid is None or str(sid).strip() == "":
             await self._send_one({"type": "error", "message": "sentence_done requires id"})
             return
+        await self.ack([str(sid)])
+
+    async def ack(self, ids: list[str]) -> None:
+        """Ack spoken sentences, then send phase / eval / agreement and drained turns."""
+        assert self.orch is not None
         orch = self.orch
         unavailable: LLMUnavailable | None = None
         try:
-            agreement = await orch.on_sentence_done([str(sid)])
+            agreement = await orch.on_sentence_done(ids)
         except LLMUnavailable as e:
             # The ack committed; only the post-NLU drain of queued text failed.
             agreement, unavailable = None, e
-            self.audit.append(self.call_id, "nlu", "llm_unavailable", {"message": str(e)})
+            self.audit_log.append(self.call_id, "nlu", "llm_unavailable", {"message": str(e)})
         async with self._send_lock:
             await _send(self.ws, _phase_payload(orch.session))
             if orch.session.last_eval is not None:
@@ -993,7 +1022,11 @@ class _CallConnection:
 
     async def _on_barge_in(self, data: dict[str, Any]) -> None:
         assert self.orch is not None
-        spoken = [str(x) for x in (data.get("spoken_ids") or [])]
+        await self.barge([str(x) for x in (data.get("spoken_ids") or [])])
+
+    async def barge(self, spoken: list[str]) -> None:
+        """Barge-in with the sentences the rep heard; the rest are dropped."""
+        assert self.orch is not None
         await self.orch.on_barge_in(spoken)
         async with self._send_lock:
             await _send(self.ws, _phase_payload(self.orch.session))
@@ -1002,11 +1035,55 @@ class _CallConnection:
     async def _on_speech_dropped(self, ids: list[str]) -> None:
         """Tell the client to cancel sentences a barge dropped (it may still be playing them)."""
         await self._send_one({"type": "speech_dropped", "ids": ids})
+        if self.voice is not None:
+            await self.voice.drop(ids)
+
+    # --- VoiceCall (app.voice.pipeline.turns) -------------------------------
+
+    async def show_creditor(self, text: str) -> None:
+        """Show a voice transcript as the rep's line (before NLU, like ``text``)."""
+        async with self._send_lock:
+            await _send_creditor_transcript(self.ws, text)
+
+    async def emit(self, utt: Utterance) -> None:
+        """Emit a voice turn's reply (UI events, then its sentences to TTS)."""
+        await self._emit(utt)
+
+    async def nlu_unavailable(self, e: LLMUnavailable) -> None:
+        """VoiceCall hook: same as a text turn whose NLU failed."""
+        await self._nlu_unavailable(e)
+
+    def audit(self, event_type: str, payload: dict[str, Any]) -> None:
+        """Append a ``voice`` audit row for this call."""
+        self.audit_log.append(self.call_id, "voice", event_type, payload)
+
+    async def voice_error(self, message: str) -> None:
+        """A voice session was refused or failed: tell the UI."""
+        await self._send_one({"type": "error", "message": message})
+
+    def attach_voice(self, session: Any) -> None:
+        """Join a voice session; it speaks the reply still waiting to be heard (the opening)."""
+        self.voice = session
+        pending = self.orch.session.pending if self.orch is not None else None
+        if pending is None or not self._emitted:
+            return
+        waiting = [
+            (sid, text)
+            for sid, text in self._emitted[-1].sentences
+            if sid in pending.sentence_ids and sid not in pending.acked
+        ]
+        if waiting:
+            self._spawn(session.speak_sentences(waiting))
+
+    def detach_voice(self, session: Any) -> None:
+        """The voice session ended."""
+        if self.voice is session:
+            self.voice = None
 
     async def _on_timing(self, data: dict[str, Any]) -> None:
         vad_ms = data.get("vad_end_to_first_audio_ms")
         payload = {"turn": data.get("turn"), "vad_end_to_first_audio_ms": vad_ms}
-        self.audit.append(self.call_id, "client", "timing", payload)
+        self.audit_log.append(self.call_id, "client", "timing", payload)
         if isinstance(vad_ms, (int, float)):
             LATENCY_BUFFER.record({"vad_end_to_first_audio_ms": float(vad_ms)})
         async with self._send_lock:
@@ -1036,6 +1113,7 @@ async def call_socket(websocket: WebSocket, call_id: str, view: str = "operator"
         llm=_llm,
         settings=_settings or get_settings(),
     )
+    _LIVE[call_id] = conn
     try:
         await conn.run()
     except WebSocketDisconnect:

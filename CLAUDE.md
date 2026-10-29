@@ -14,6 +14,7 @@ Voice agent that negotiates debt settlements. Code-based policy decides every mo
 - The LLM never produces digits or number words for speech. Spoken numbers only come from `Fact.render()`.
 - The NLG prompt never receives PRIVATE facts or client financials.
 - All LLM and STT calls go through `app/llm/client.py`, by role (`nlu`, `nlg`, `sim`, `stt`), never by model name.
+- Exception: the Pipecat voice path (`app/voice/pipeline/`, `VOICE_STACK=pipecat`) calls Deepgram (Flux STT, Aura-2 TTS) directly; it is audited (`stt_session`, `tts_request`) and capped by the daily voice budget there. NLU and NLG on that path still go through `app/llm/client.py`.
 - `sim/` must not import `app.agent`.
 - Every belief change, block, escalation, and LLM call is appended to the audit log.
 - Python 3.12, FastAPI, Pydantic v2, pytest, ruff. Type hints on all public functions.

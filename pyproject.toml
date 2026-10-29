@@ -12,6 +12,7 @@ dependencies = [
     "httpx",  # LLM client HTTP (Groq STT multipart + provider calls)
     "pyyaml",
     "anthropic>=1.12.0",  # Claude judge role (Messages API)
+    "pipecat-ai[deepgram,webrtc]>=1.14,<1.15",
 ]
 
 [dependency-groups]

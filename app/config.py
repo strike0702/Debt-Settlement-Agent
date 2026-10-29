@@ -10,6 +10,10 @@ disclosure), and the engine's schedule objective and fee policy
 ``claude_daily_budget_usd`` (env ``CLAUDE_DAILY_BUDGET_USD``) caps the
 demo's paid Claude NLU per UTC day; see ``app.llm.budget``.
 
+``voice_stack`` (env ``VOICE_STACK``) picks the voice path: ``legacy`` (browser
+or WAV upload STT, browser TTS) or ``pipecat`` (``app.voice.pipeline``: WebRTC,
+Deepgram Flux STT and Aura-2 TTS, under ``voice_daily_budget_usd``).
+
 API key pools: besides the declared ``<provider>_api_key`` fields, every
 ``*_KEY`` / ``*_KEY_<n>`` variable in the environment or ``.env`` is collected
 into ``api_key_pool``; ``api_keys(key_env)`` returns a provider's ordered,
@@ -148,6 +152,26 @@ class Settings(BaseSettings):
     # policy changes fee timing only, never which prices are affordable.
     engine_objective: Literal["fee_first", "client_first"] = "fee_first"
     engine_fee_policy: Literal["front_loaded", "proportional"] = "front_loaded"
+
+    # --- Voice (Phase 63; app.voice.pipeline) ---
+    voice_stack: Literal["legacy", "pipecat"] = "legacy"
+    # Deepgram key for the Pipecat path only (server-side; never sent to the browser).
+    deepgram_api_key: SecretStr | None = None
+    # Daily cap (USD, UTC day) on Deepgram voice spend; new voice sessions are
+    # refused once today's estimate reaches it. Decimal, never float.
+    voice_daily_budget_usd: Decimal = Field(default=Decimal("1.00"), ge=0)
+    # Deepgram list prices used for the estimate (verify before relying on them).
+    deepgram_flux_usd_per_min: Decimal = Decimal("0.0077")
+    deepgram_aura2_usd_per_1k_chars: Decimal = Decimal("0.030")
+    voice_tts_voice: str = "aura-2-thalia-en"
+    # Flux turn settings; None keeps Deepgram's defaults (eot 0.7, timeout 5000 ms).
+    # One-word turns ("Correct.") need no change here: they were lost to gaps in
+    # the audio stream, which app.voice.pipeline.processors.SilenceFill closes.
+    voice_eot_threshold: float | None = Field(default=None, ge=0.5, le=0.9)
+    voice_eot_timeout_ms: int | None = Field(default=None, ge=500, le=10000)
+    voice_eager_eot_threshold: float | None = Field(default=0.5, ge=0.3, le=0.9)
+    # Start NLU on Flux's EagerEndOfTurn; the committed turn reuses it or redoes it.
+    voice_eager_nlu: bool = True
 
     firm_name: str = "Synthetic Debt Relief"
     opening_disclosure: str = (

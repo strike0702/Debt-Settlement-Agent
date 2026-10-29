@@ -114,3 +114,8 @@
 {"ts": "2026-10-28T23:02:44", "kind": "aura2_tts", "chars": 471, "seconds": 0.0, "usd": "0.014130", "note": "spike"}
 {"ts": "2026-10-28T23:06:43", "kind": "flux_stt", "chars": 0, "seconds": 237.12, "usd": "0.030430", "note": "spike"}
 {"ts": "2026-10-28T23:06:43", "kind": "aura2_tts", "chars": 471, "seconds": 0.0, "usd": "0.014130", "note": "spike"}
+{"ts": "2026-10-29T12:02:21", "kind": "flux_stt", "chars": 0, "seconds": 18.28, "usd": "0.002346", "note": "p63 eot probe"}
+{"ts": "2026-10-29T12:02:49", "kind": "flux_stt", "chars": 0, "seconds": 7.35, "usd": "0.000943", "note": "p63 eot probe"}
+{"ts": "2026-10-29T12:03:44", "kind": "flux_stt", "chars": 0, "seconds": 17.96, "usd": "0.002305", "note": "p63 eot probe"}
+{"ts": "2026-10-29T14:33:00", "kind": "flux_stt", "chars": 0, "seconds": 235.2, "usd": "0.030184", "note": "p63 pipecat harness run"}
+{"ts": "2026-10-29T14:33:00", "kind": "aura2_tts", "chars": 1700, "seconds": 0.0, "usd": "0.051000", "note": "p63 pipecat harness run (estimate: 34 sentences)"}

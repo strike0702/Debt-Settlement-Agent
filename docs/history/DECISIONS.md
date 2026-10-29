@@ -221,6 +221,21 @@ blocklist, never an NLG fact, never on the rep stream.
 **Not done by choice.** The engine can test structure and segment changes, but the agent's
 policy does not propose them yet.
 
+## D14. Keep the code-side number check; read back what it cannot confirm (2026-10-29)
+
+**Question.** After the first Pipecat voice calls misread spoken amounts ("hundred and twenty
+dollars" → $20; "a hundred and twenty dollars" not understood, then a handoff), should the agent
+drop the code-side number reader and trust the LLM's reading?
+
+**Chosen.** Keep it, fix the reader for spoken forms (Flux returns words, Whisper returned digits),
+and add a fallback: a value the model read but the code cannot confirm is read back to the rep
+("Just to confirm, a $120 minimum payment?") instead of re-asking.
+
+**Why.** The reader does two jobs: short answers skip the LLM (about 1.5 s saved per turn), and
+every amount the model extracts is confirmed against the rep's own words, which guards against
+invented or misread money. The read-back keeps the model's reading useful without ever acting on
+an amount the rep has not confirmed.
+
 ## Process choices
 
 - Each phase runs in its own git worktree with a paste-ready prompt; phases that touch the

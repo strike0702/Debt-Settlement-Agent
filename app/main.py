@@ -53,7 +53,7 @@ from app.voice.views import is_private_audit
 
 WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 # Paths the SPA fallback must never answer: an unknown API path stays a 404.
-_API_PREFIXES = ("ws", "scenarios", "calls", "metrics", "healthz", "assets")
+_API_PREFIXES = ("ws", "scenarios", "calls", "metrics", "healthz", "assets", "voice")
 _NO_CACHE = {"Cache-Control": "no-cache"}
 _IMMUTABLE = "public, max-age=31536000, immutable"
 
@@ -130,6 +130,13 @@ def create_app(
     application.include_router(voice_ws.router)
     if pipecat is not None:
         application.include_router(pipecat.router)
+
+    stack = (settings or get_settings()).voice_stack
+
+    @application.get("/voice/config")
+    async def voice_config() -> dict[str, str]:
+        """Which voice client the UI runs: ``legacy`` (browser TTS/STT) or ``pipecat`` (WebRTC)."""
+        return {"stack": stack}
 
     @application.get("/healthz")
     async def healthz() -> dict[str, str]:

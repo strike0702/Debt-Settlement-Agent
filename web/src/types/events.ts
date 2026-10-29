@@ -25,7 +25,8 @@ export type ServerEvent =
   | TurnDoneEvent
   | TurnTraceEvent
   | AutoplayDoneEvent
-  | SpeechDroppedEvent;
+  | SpeechDroppedEvent
+  | VoiceStateEvent;
 export type Intent =
   | "OPENING"
   | "ASK"
@@ -359,6 +360,18 @@ export interface AutoplayDoneEvent {
 export interface SpeechDroppedEvent {
   ids: string[];
   type: "speech_dropped";
+}
+/**
+ * Pipecat voice path only: what the call is doing now, for the browser's call state.
+ *
+ * ``rep_speaking`` carries Flux's live partial in ``text`` (empty at start of
+ * turn); ``thinking`` follows a final the agent will answer; ``agent_speaking``
+ * and ``listening`` follow the agent's audio starting and stopping.
+ */
+export interface VoiceStateEvent {
+  state: "listening" | "rep_speaking" | "thinking" | "agent_speaking";
+  text?: string;
+  type: "voice_state";
 }
 /**
  * Start a call. ``autoplay`` lets the sim creditor drive it (curated ids only).

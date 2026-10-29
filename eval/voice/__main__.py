@@ -3,6 +3,8 @@
     uv run python -m eval.voice --target legacy-server \
         --out docs/eval/voice_baseline_20261028/legacy-server
     uv run python -m eval.voice --target spike --out docs/eval/voice_spike_20261028/spike
+    uv run python -m eval.voice --target pipecat-ui --audio speakers \
+        --out docs/eval/voice_client_20261029/pipecat-ui-speakers
 
 Starts the target's server on a free port (never 8056 / 8071), opens Chrome,
 plays every scripted call (``eval.voice.script``), stops everything, and
@@ -45,6 +47,14 @@ def _ensure_web() -> None:
         subprocess.run(["npm", "run", "build"], cwd=web, check=True)
 
 
+def _build_web() -> None:
+    """Always rebuild: the UI target must run the client in this checkout."""
+    web = driver.ROOT / "web"
+    if not (web / "node_modules").is_dir():
+        subprocess.run(["npm", "ci"], cwd=web, check=True)
+    subprocess.run(["npm", "run", "build"], cwd=web, check=True, stdout=subprocess.DEVNULL)
+
+
 async def run(
     target: str, audio: str, call_ids: list[str], out: Path, repeat: int = 1
 ) -> dict[str, Any]:
@@ -66,13 +76,16 @@ async def run(
                             call, base=base, stt=stt, audio=audio, chrome_args=chrome_args
                         )  # type: ignore[arg-type]
                     )
-    elif target == "pipecat":
+    elif target in ("pipecat", "pipecat-ui"):
+        if target == "pipecat-ui":
+            _build_web()
+        play = driver.run_pipecat_ui if target == "pipecat-ui" else driver.run_pipecat
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "audit.db"
             async with driver.legacy_server(port, log, db, voice_stack="pipecat") as base:
                 for call in calls:
                     runs.append(
-                        await driver.run_pipecat(
+                        await play(
                             call, base=base, audio=audio, chrome_args=chrome_args
                         )  # type: ignore[arg-type]
                     )
@@ -169,7 +182,7 @@ def render_md(doc: dict[str, Any], rows: list[metrics.TurnRow]) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Voice measurement harness")
-    targets = ["legacy-server", "legacy-browser", "spike", "pipecat"]
+    targets = ["legacy-server", "legacy-browser", "spike", "pipecat", "pipecat-ui"]
     ap.add_argument("--target", choices=targets, required=True)
     ap.add_argument("--audio", choices=["inject", "speakers"], default="inject")
     ap.add_argument("--calls", default="all", help="comma-separated call ids, or all")

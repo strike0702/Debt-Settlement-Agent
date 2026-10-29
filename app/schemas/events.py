@@ -396,6 +396,19 @@ class SpeechDroppedEvent(_Model):
     ids: list[str]
 
 
+class VoiceStateEvent(_Model):
+    """Pipecat voice path only: what the call is doing now, for the browser's call state.
+
+    ``rep_speaking`` carries Flux's live partial in ``text`` (empty at start of
+    turn); ``thinking`` follows a final the agent will answer; ``agent_speaking``
+    and ``listening`` follow the agent's audio starting and stopping.
+    """
+
+    type: Literal["voice_state"]
+    state: Literal["listening", "rep_speaking", "thinking", "agent_speaking"]
+    text: str = ""
+
+
 class TurnTraceEvent(TurnTrace):
     type: Literal["turn_trace"]
 
@@ -427,7 +440,8 @@ ServerEvent = Annotated[
     | TurnDoneEvent
     | TurnTraceEvent
     | AutoplayDoneEvent
-    | SpeechDroppedEvent,
+    | SpeechDroppedEvent
+    | VoiceStateEvent,
     Field(discriminator="type"),
 ]
 SERVER_EVENT_ADAPTER: TypeAdapter[Any] = TypeAdapter(ServerEvent)
@@ -448,6 +462,7 @@ SERVER_EVENT_TYPES: tuple[str, ...] = (
     "turn_trace",
     "autoplay_done",
     "speech_dropped",
+    "voice_state",
 )
 
 

@@ -14,9 +14,13 @@ gap longer than ``GAP_S``.
 ``OrchestratorProcessor`` takes Flux's final transcripts to ``VoiceTurns``,
 decides barge-ins itself (Flux runs with ``should_interrupt=False``; see
 ``rules``), and speaks each reply sentence as one ``TTSSpeakFrame`` followed by
-a ``SentenceEndFrame``. The TTS service keeps data frames in order behind the
-audio before them, and the output transport pushes a data frame on only after
-the audio before it was written, so ``Tap("out")`` sees ``SentenceEndFrame``
+a ``SentenceEndFrame``. It also tells the browser what the call is doing
+(``VoiceCall.voice_state``: live partials, thinking, agent audio on / off) so
+the WebRTC client can show it; that is display only, never a turn.
+
+The TTS service keeps data frames in order behind the audio before them, and
+the output transport pushes a data frame on only after the audio before it was
+written, so ``Tap("out")`` sees ``SentenceEndFrame``
 when that sentence finished playing: that is "heard" (``HeardTracker``).
 """
 
@@ -116,11 +120,19 @@ class OrchestratorProcessor(FrameProcessor):
         self.tts_chars = 0
         self._spawned: set[asyncio.Task[None]] = set()
         self.on_tts_request: Callable[[str, str], None] | None = None
+        self._shown: tuple[str, str] | None = None
 
     @property
     def agent_talking(self) -> bool:
         """The agent is playing audio or has sentences waiting to play."""
         return (self.bot_speaking or self.tracker.speaking) and not self._barged
+
+    def _show(self, state: str, text: str = "") -> None:
+        """Send the browser's call state once per change (``voice_state``)."""
+        if self._shown == (state, text):
+            return
+        self._shown = (state, text)
+        self._spawn(self.turns.call.voice_state(state, text))
 
     def _spawn(self, coro: Any) -> None:
         # Turns run beside the pipeline so frames keep flowing while NLU runs.
@@ -134,13 +146,16 @@ class OrchestratorProcessor(FrameProcessor):
             await self._final(frame.text)
             return
         if isinstance(frame, InterimTranscriptionFrame):
+            self._show("rep_speaking", frame.text.strip())
             if self.agent_talking and is_barge(frame.text):
                 await self.interrupt(reason="interim", text=frame.text)
             return
         if isinstance(frame, BotStartedSpeakingFrame):
             self.bot_speaking = True
+            self._show("agent_speaking")
         elif isinstance(frame, BotStoppedSpeakingFrame):
             self.bot_speaking = False
+            self._show("listening")
         await self.push_frame(frame, direction)
 
     async def _final(self, text: str) -> None:
@@ -155,6 +170,7 @@ class OrchestratorProcessor(FrameProcessor):
                 return
             await self.interrupt(reason="final", text=text)
         self.log("final", text=text)
+        self._show("thinking")
         self._spawn(self.turns.on_final(text))
 
     async def interrupt(self, *, reason: str, text: str = "", barge: bool = True) -> None:

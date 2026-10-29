@@ -46,6 +46,7 @@ class FakeCall:
         self.shown: list[str] = []
         self.emitted: list[Utterance] = []
         self.rows: list[tuple[str, dict[str, Any]]] = []
+        self.states: list[tuple[str, str]] = []
 
     async def show_creditor(self, text: str) -> None:
         self.shown.append(text)
@@ -64,6 +65,9 @@ class FakeCall:
 
     def audit(self, event_type: str, payload: dict[str, Any]) -> None:
         self.rows.append((event_type, payload))
+
+    async def voice_state(self, state: str, text: str) -> None:
+        self.states.append((state, text))
 
 
 async def _speak_and_interrupt(orch: Orchestrator, utt: Utterance, played: int) -> None:
@@ -210,6 +214,13 @@ async def test_processor_barges_only_on_real_speech_while_the_agent_talks() -> N
     assert turns.barges == [["a1"]]
     assert turns.finals == ["No wait, that is wrong."]
     assert ("backchannel_ignored", {"text": "Okay."}) in turns.call.rows
+    # The browser's call state: agent audio, live partials (deduped), then thinking.
+    assert turns.call.states == [
+        ("agent_speaking", ""),
+        ("rep_speaking", "mm okay"),
+        ("rep_speaking", "No wait, that is wrong"),
+        ("thinking", ""),
+    ]
 
 
 async def test_one_word_turn_while_the_agent_is_silent_is_a_turn() -> None:

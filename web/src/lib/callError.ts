@@ -19,6 +19,14 @@ const KNOWN: readonly [RegExp, string][] = [
   [/^call not started/i, "The call has not started yet. Press Start call first."],
   [/^autoplay is driving this call/i, "The simulated rep is playing this call, so your reply was not sent."],
   [/^server not configured/i, "The server is not set up for calls right now."],
+  // WebRTC voice (Pipecat stack): client-side failures and /voice/offer refusals.
+  [/^mic blocked/i, "The browser blocked the mic. Allow Microphone from the site icon in the address bar, then turn voice on again."],
+  [/^mic unavailable/i, "The mic could not start. Check that one is connected, then turn voice on again."],
+  [/^voice connection failed/i, "Voice could not connect. Check your network, then turn voice on again. You can still type."],
+  [/^Voice is paused/i, "Voice is paused for today because the voice budget is used up. You can still type."],
+  [/^Voice is not configured/i, "Voice is not set up on this server. You can still type."],
+  [/already has a voice session/i, "Voice is already on for this call in another tab."],
+  [/^Start the call before turning voice on/i, "The call has not started yet. Press Start call first."],
 ];
 
 export const GENERIC_ERROR = "Something went wrong on the server. Try again.";

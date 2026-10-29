@@ -1057,6 +1057,10 @@ class _CallConnection:
         """Append a ``voice`` audit row for this call."""
         self.audit_log.append(self.call_id, "voice", event_type, payload)
 
+    async def voice_state(self, state: str, text: str) -> None:
+        """VoiceCall hook: the WebRTC client's call state (live partial, thinking, agent audio)."""
+        await self._send_one({"type": "voice_state", "state": state, "text": text})
+
     async def voice_error(self, message: str) -> None:
         """A voice session was refused or failed: tell the UI."""
         await self._send_one({"type": "error", "message": message})

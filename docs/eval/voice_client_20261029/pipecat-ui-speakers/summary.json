@@ -1,0 +1,52 @@
+{
+ "target": "pipecat-ui",
+ "audio": "speakers",
+ "date": "2026-10-29 15:05",
+ "summary": {
+  "reply_turns": 13,
+  "replied": 1,
+  "first_audio_p50_ms": 7449.7,
+  "first_audio_p95_ms": 7449.7,
+  "any_audio_p50_ms": 7449.7,
+  "eot_p50_ms": 4339.1,
+  "eager_eot_p50_ms": 4289.5,
+  "final_p50_ms": 4339.3,
+  "wer_mean": 1.0,
+  "number_recall": 0.0,
+  "numbers": "0/12",
+  "first_word_lost": 15,
+  "lines_scored": 15,
+  "split_turns": 0,
+  "phantom_finals": 1,
+  "false_barges": 0,
+  "backchannels_barged": "0/3",
+  "interrupts_over_agent": "0/2",
+  "interrupts_barged": "0/0",
+  "barge_stop_p50_ms": null,
+  "barge_stop_max_ms": null
+ },
+ "phantoms": [
+  {
+   "call": "numbers_easy#1",
+   "t": 1793266095519.779,
+   "kind": "final",
+   "text": "box."
+  }
+ ],
+ "false_barges": [],
+ "notes": [
+  "numbers_easy#1: a04_pause: agent did not finish a turn before this line",
+  "numbers_easy#1: a05_interrupt: agent never spoke 1200 ms in a row; played anyway",
+  "numbers_easy#1: a06_date: agent did not finish a turn before this line",
+  "numbers_easy#1: a07_yes: agent did not finish a turn before this line",
+  "numbers_easy#1: a08_bye: agent did not finish a turn before this line",
+  "numbers_haggle#1: b03_correct: agent did not finish a turn before this line",
+  "numbers_haggle#1: b04_seventy: agent did not finish a turn before this line",
+  "numbers_haggle#1: b05_interrupt: agent never spoke 1200 ms in a row; played anyway",
+  "numbers_haggle#1: b06_pause: agent did not finish a turn before this line",
+  "numbers_haggle#1: b07_right: agent never spoke 1500 ms in a row; played anyway",
+  "numbers_haggle#1: b08_date: agent did not finish a turn before this line",
+  "numbers_haggle#1: b09_yes: agent did not finish a turn before this line",
+  "numbers_haggle#1: b10_bye: agent did not finish a turn before this line"
+ ]
+}

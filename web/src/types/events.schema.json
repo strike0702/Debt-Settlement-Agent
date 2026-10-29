@@ -2164,6 +2164,38 @@
       ],
       "title": "TurnTraceEvent",
       "type": "object"
+    },
+    "VoiceStateEvent": {
+      "additionalProperties": false,
+      "description": "Pipecat voice path only: what the call is doing now, for the browser's call state.\n\n``rep_speaking`` carries Flux's live partial in ``text`` (empty at start of\nturn); ``thinking`` follows a final the agent will answer; ``agent_speaking``\nand ``listening`` follow the agent's audio starting and stopping.",
+      "properties": {
+        "state": {
+          "enum": [
+            "listening",
+            "rep_speaking",
+            "thinking",
+            "agent_speaking"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "text": {
+          "default": "",
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "voice_state",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "state"
+      ],
+      "title": "VoiceStateEvent",
+      "type": "object"
     }
   },
   "description": "Export root: both directions of ``/ws/call/{call_id}?view=rep|operator``.",
@@ -2220,7 +2252,8 @@
           "stt_error": "#/$defs/SttErrorEvent",
           "transcript": "#/$defs/TranscriptEvent",
           "turn_done": "#/$defs/TurnDoneEvent",
-          "turn_trace": "#/$defs/TurnTraceEvent"
+          "turn_trace": "#/$defs/TurnTraceEvent",
+          "voice_state": "#/$defs/VoiceStateEvent"
         },
         "propertyName": "type"
       },
@@ -2272,6 +2305,9 @@
         },
         {
           "$ref": "#/$defs/SpeechDroppedEvent"
+        },
+        {
+          "$ref": "#/$defs/VoiceStateEvent"
         }
       ],
       "title": "Serverevent"

@@ -119,3 +119,7 @@
 {"ts": "2026-10-29T12:03:44", "kind": "flux_stt", "chars": 0, "seconds": 17.96, "usd": "0.002305", "note": "p63 eot probe"}
 {"ts": "2026-10-29T14:33:00", "kind": "flux_stt", "chars": 0, "seconds": 235.2, "usd": "0.030184", "note": "p63 pipecat harness run"}
 {"ts": "2026-10-29T14:33:00", "kind": "aura2_tts", "chars": 1700, "seconds": 0.0, "usd": "0.051000", "note": "p63 pipecat harness run (estimate: 34 sentences)"}
+{"ts": "2026-10-29T15:06:06", "kind": "flux_stt", "chars": 0, "seconds": 112.38, "usd": "0.014422", "note": "p64 UI review session"}
+{"ts": "2026-10-29T15:06:06", "kind": "aura2_tts", "chars": 492, "seconds": 0.0, "usd": "0.014760", "note": "p64 UI review session"}
+{"ts": "2026-10-29T15:06:06", "kind": "flux_stt", "chars": 0, "seconds": 443.93, "usd": "0.056971", "note": "p64 pipecat-ui speakers harness run"}
+{"ts": "2026-10-29T15:06:06", "kind": "aura2_tts", "chars": 672, "seconds": 0.0, "usd": "0.020160", "note": "p64 pipecat-ui speakers harness run"}

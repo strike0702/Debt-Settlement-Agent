@@ -2460,3 +2460,9 @@ Fixed: icon in the reader badge and end-of-call rules `aria-hidden`; outcome tex
 - **Deviations:** (1) No hosted run (cannot deploy); the relay was forced locally, so the remote side was this laptop's aiortc via its own STUN, not Render. (2) Per-session max is per call (sum of its sessions) so a reconnect or voice off/on cannot reset it. (3) `VOICE_STACK` dropped (gone since Phase 67). (4) No lazy Pipecat import (numbers above).
 - **Open issues:** the voice spend counter lives in `DB_PATH` on Render's ephemeral disk, so a restart resets the day's minutes and USD (same as the Claude cap); `CALL_SECONDS` is in memory. The README still says hosted voice is not set up; update it after the user's hosted check.
 - **Checks:** `uv run ruff check .` clean; `uv run pytest -q` 3047 passed / 2 skipped / 25 xfailed; web typecheck / lint / test (148) / build green.
+
+### AWS hosting (orchestrator, 2026-10-30) — not a numbered phase
+
+- **Done.** Voice demo on one EC2 t3.small (ap-southeast-2) behind Caddy at `https://13-236-102-216.sslip.io`; Render stays a text-only mirror (its 0.1 CPU made voice slow and choppy). One user call on EC2: CPU avg 12% / peak 35% of 2 vCPU, app RSS 254 MB, ICE connected in 0.5 s; the user rated it as good as local. Decision D17; setup and operations in `docs/DEPLOY_AWS.md`.
+- **Fix:** aiortc's TURN channel bind against Cloudflare failed with 401 (aioice 0.10.2) on the server side. New setting `voice_server_turn` (default True, keeps Render's behaviour); `ice.server_ice_servers(settings)` returns STUN only when it is off; the browser still gets TURN. The AWS unit sets `VOICE_SERVER_TURN=false`.
+- **Files:** `scripts/deploy_aws.sh` (pull, build, sync, restart, health check; no secrets), `docs/DEPLOY_AWS.md`, README (live demo, voice hosting, what is not measured), `.env.example`, `app/config.py`, `app/voice/pipeline/{ice,routes}.py`, `tests/unit/test_voice_hosting.py` (+1 test).

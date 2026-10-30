@@ -11,6 +11,10 @@ to Cloudflare: never returned, never logged, never put in a URL.
 Without ``CLOUDFLARE_TURN_KEY_ID`` / ``CLOUDFLARE_TURN_API_TOKEN`` (or when
 Cloudflare fails) the list is STUN only, with one warning in the log. That
 works on a laptop but not behind Render's HTTP-only ingress.
+
+``server_ice_servers(settings)`` is the aiortc side's list: the same, or STUN
+only when ``voice_server_turn`` is off (a host with a public IP needs no relay
+of its own; the browser's TURN candidate still reaches it).
 """
 
 from __future__ import annotations
@@ -25,7 +29,9 @@ from app.config import Settings
 _log = logging.getLogger(__name__)
 
 STUN_ONLY: list[dict[str, Any]] = [{"urls": ["stun:stun.cloudflare.com:3478"]}]
-GENERATE_URL = "https://rtc.live.cloudflare.com/v1/turn/keys/{key_id}/credentials/generate-ice-servers"
+GENERATE_URL = (
+    "https://rtc.live.cloudflare.com/v1/turn/keys/{key_id}/credentials/generate-ice-servers"
+)
 TIMEOUT_S = 5.0
 _warned = False
 
@@ -93,3 +99,12 @@ def to_pipecat(servers: list[dict[str, Any]]) -> list[Any]:
         IceServer(urls=s["urls"], username=s.get("username"), credential=s.get("credential"))
         for s in servers
     ]
+
+
+async def server_ice_servers(
+    settings: Settings, *, client: httpx.AsyncClient | None = None
+) -> list[dict[str, Any]]:
+    """ICE servers for the Pipecat / aiortc side; STUN only when ``voice_server_turn`` is off."""
+    if not settings.voice_server_turn:
+        return STUN_ONLY
+    return await ice_servers(settings, client=client)

@@ -286,6 +286,24 @@ line: the agreement, eval and phase panels would lag one turn.
 rollback of unheard turns and fragment merge (Phase 56), `speech_dropped`, the voice budget,
 the voice harness's WebRTC targets, and the frozen voice reports under `docs/eval/`.
 
+## D17. Host the voice demo on AWS EC2, not Render free (2026-10-30)
+
+**Question.** After Phase 66 the hosted voice connected through TURN, but the user heard slow,
+choppy agent speech, late transcripts and missed words on Render. Render's free metrics showed
+nothing. Upgrade Render, or move?
+
+**Evidence.** Pipecat does per-frame audio work in Python (Opus decode/encode, Silero VAD,
+resampling). The same build on an EC2 t3.small averaged 12% and peaked at 35% of 2 vCPU during
+a 2-minute call (about 0.7 of a CPU), against Render free's 0.1 CPU. The user's call there
+"felt as good as on my laptop".
+
+**Chosen.** One t3.small in the account's Region (ap-southeast-2), on the AWS free plan's
+credits (about $23 a month): Caddy for HTTPS on an sslip.io name, systemd, SSH from the owner's
+IP only, no inbound UDP (stateful security group plus the browser's TURN relay), IMDSv2. The
+server's own ICE is STUN only (`VOICE_SERVER_TURN=false`): it has a public IP, and aioice's
+TURN channel bind against Cloudflare failed with 401. Render stays as a text-only mirror.
+Details: [`docs/DEPLOY_AWS.md`](../DEPLOY_AWS.md).
+
 ## Process choices
 
 - Each phase runs in its own git worktree with a paste-ready prompt; phases that touch the

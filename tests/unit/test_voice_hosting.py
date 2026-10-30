@@ -83,6 +83,18 @@ async def test_ice_servers_fetches_short_lived_turn_and_drops_port_53() -> None:
     assert ice.to_pipecat(servers)[1].username == "short-user"
 
 
+async def test_server_side_skips_turn_when_voice_server_turn_is_off() -> None:
+    seen: list[httpx.Request] = []
+    s = _settings(
+        cloudflare_turn_key_id="kid", cloudflare_turn_api_token=TOKEN, voice_server_turn=False
+    )
+    async with httpx.AsyncClient(transport=_cloudflare(seen)) as client:
+        assert await ice.server_ice_servers(s, client=client) == ice.STUN_ONLY
+        assert seen == []
+        # The browser's list still carries TURN.
+        assert len(await ice.ice_servers(s, client=client)) == 2
+
+
 async def test_ice_servers_fall_back_to_stun_with_one_warning(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:

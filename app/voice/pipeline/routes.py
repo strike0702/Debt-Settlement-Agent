@@ -35,7 +35,7 @@ from app.config import Settings
 from app.llm.budget import usd_to_micros
 from app.voice import ws as call_ws
 from app.voice.pipeline.budget import BUDGET_MESSAGE, CALL_CAP_MESSAGE, VoiceBudget
-from app.voice.pipeline.ice import ice_servers, to_pipecat
+from app.voice.pipeline.ice import ice_servers, server_ice_servers, to_pipecat
 from app.voice.pipeline.session import CALL_SECONDS, LAST_EVENTS, SESSIONS, VoiceSession
 
 TEST_PAGE = Path(__file__).with_name("test_page.html")
@@ -112,8 +112,9 @@ async def offer(call_id: str, request: Request) -> Any:
 
     request_obj = SmallWebRTCRequest.from_dict(body)
     if request_obj.pc_id is None:
-        # A new peer connection: aiortc gets its own fresh TURN credentials.
-        _handler.update_ice_servers(to_pipecat(await ice_servers(_settings)))
+        # A new peer connection: aiortc gets its own fresh TURN credentials
+        # (STUN only when VOICE_SERVER_TURN is off).
+        _handler.update_ice_servers(to_pipecat(await server_ice_servers(_settings)))
     return await _handler.handle_web_request(request_obj, on_connection)
 
 

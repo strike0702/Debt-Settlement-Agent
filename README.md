@@ -8,7 +8,9 @@ A voice and text agent that negotiates a debt settlement with a creditor's repre
 
 *A simulated "Haggling rep" call, slowed to 2.6 s per step. The rep asks for 70% and will not move. The agent offers 49%, holds once, steps up to 59%, makes a final offer of 62% when the rep says 65% is their lowest, and accepts 65% when the rep repeats it, because it is within the agent's limit. [MP4 version](docs/assets/demo.mp4).*
 
-**Live demo:** [debt-settlement-agent-ggor.onrender.com](https://debt-settlement-agent-ggor.onrender.com/). Pick a scenario and press **Watch a call**: a simulated creditor plays the representative, so it needs no API keys. Press **Start call** to play the representative yourself: type or click a suggested reply (voice on the hosted demo is not set up yet; run it locally to talk to the agent). The demo runs on a free Render instance, so the first load after a quiet spell can take about 30 s.
+**Live demo, with voice:** [13-236-102-216.sslip.io](https://13-236-102-216.sslip.io/?scenario=easy_deal&view=operator), on AWS (one EC2 instance, see [`docs/DEPLOY_AWS.md`](docs/DEPLOY_AWS.md)). Pick a scenario and press **Watch a call**: a simulated creditor plays the representative. Press **Start call** to play the representative yourself: type, click a suggested reply, or press **Turn voice on** and talk (Chrome, allow the microphone). Voice is capped at 10 minutes per call and 60 minutes per day.
+
+A text-only mirror runs on a free Render instance at [debt-settlement-agent-ggor.onrender.com](https://debt-settlement-agent-ggor.onrender.com/); its first load after a quiet spell can take about 30 s, and its 0.1 CPU is too little for voice.
 
 The console has two views. The **Debt negotiator** view (called the operator view in the code) is the firm's side: the client's private finances, "How the agent decided" for every turn, the safety checks, latency, and the audit log. The **Creditor rep** view (`?view=rep`) shows only what the representative would see; the server filters every message sent to it, and a test scans whole calls for every private value. The operator view is public on the hosted demo by design, because every figure in it is synthetic.
 
@@ -39,7 +41,7 @@ The rules that hold on every turn:
 
 ### Voice
 
-Voice runs on the server: the browser sends the mic over WebRTC and plays the agent's audio, Pipecat inside the FastAPI app streams it to Deepgram Flux (speech-to-text with model-based end of turn) and speaks replies with Deepgram Aura-2. Flux's final transcript goes through the same turn as a typed line, and a sentence counts as heard only once its audio has been played, so an interrupted offer is never booked. When the rep talks over the agent, the agent pauses at once and the rep's words decide: two real words stop it, a "mm-hm" lets it go on. On scripted rep audio injected into Chrome, every reply turn got a reply, all 12 spoken numbers were heard, and first reply audio was [3185 / 4829 ms p50 / p95](docs/eval/voice_tuned_20261029/summary.md), against 4463 / 5172 ms for the earlier browser-speech client ([baseline](docs/eval/voice_baseline_20261028/legacy-server-inject/summary.md)). Voice needs `DEEPGRAM_API_KEY` and is capped per day by `VOICE_DAILY_BUDGET_USD`; without a key, text still works. Why it is built this way: [ADR 9](docs/DESIGN.md#adr-9-voice-on-pipecat--deepgram-over-webrtc).
+Voice runs on the server: the browser sends the mic over WebRTC and plays the agent's audio, Pipecat inside the FastAPI app streams it to Deepgram Flux (speech-to-text with model-based end of turn) and speaks replies with Deepgram Aura-2. Flux's final transcript goes through the same turn as a typed line, and a sentence counts as heard only once its audio has been played, so an interrupted offer is never booked. When the rep talks over the agent, the agent pauses at once and the rep's words decide: two real words stop it, a "mm-hm" lets it go on. On scripted rep audio injected into Chrome, every reply turn got a reply, all 12 spoken numbers were heard, and first reply audio was [3185 / 4829 ms p50 / p95](docs/eval/voice_tuned_20261029/summary.md), against 4463 / 5172 ms for the earlier browser-speech client ([baseline](docs/eval/voice_baseline_20261028/legacy-server-inject/summary.md)). Voice needs `DEEPGRAM_API_KEY` and is capped by `VOICE_DAILY_BUDGET_USD`, `VOICE_DAILY_MINUTES` and `VOICE_SESSION_MAX_S`; without a key, text still works. Hosted, the browser gets short-lived Cloudflare TURN credentials (`CLOUDFLARE_TURN_KEY_ID`, `CLOUDFLARE_TURN_API_TOKEN`) so audio still connects from networks that block direct UDP; the long-term token never leaves the server. A call needs about 0.7 of a CPU at its peaks, which is why the voice demo runs on EC2 rather than a free Render instance. Why it is built this way: [ADR 9](docs/DESIGN.md#adr-9-voice-on-pipecat--deepgram-over-webrtc).
 
 By default the demo's replies come from a bank of templates built and guard-checked offline (`NLG_MODE=bank`), so no model call sits on the reply path. The design decisions behind each rule, and one voice turn annotated stage by stage, are in [`docs/DESIGN.md`](docs/DESIGN.md).
 
@@ -126,7 +128,7 @@ With the free Groq model reading the line, a typed turn took [1420 / 2242 ms p50
 
 ### What is not measured yet
 
-- Voice through real laptop speakers and a real mic (recognition), other devices, and the hosted demo.
+- Voice beyond my own checks: I tested by voice on a laptop (speakers and mic, locally and on the AWS host); other devices, headsets and accents are untested.
 - The hosted demo under load.
 - A simulator, or test labels, written by someone other than me. The simulator and the agent share an author.
 - A human check of the judge with more than one rater.
@@ -156,12 +158,14 @@ cp .env.example .env                  # fill in keys only for the live demo
 uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+Voice works on `http://127.0.0.1` (browsers treat localhost as secure); any other host needs HTTPS for the microphone. To deploy, see [`docs/DEPLOY_AWS.md`](docs/DEPLOY_AWS.md) (`scripts/deploy_aws.sh` after a push); `render.yaml` describes the text-only Render mirror.
+
 `python -m app.cli fixtures/demo` runs a typed call from the terminal. `python -m eval.nlu_corpus --label AFTER` runs the live NLU corpus (needs keys). For UI work, see [`web/README.md`](web/README.md). Long live evals on free tiers can hit daily caps; [`docs/eval/README.md`](docs/eval/README.md#live-runs-and-free-tier-daily-limits) explains how to resume them.
 
 ## Project structure
 
 ```text
-app/          Orchestrator, policy, NLU/NLG, guards, voice WebSocket
+app/          Orchestrator, policy, NLU/NLG, guards, WebSocket, voice pipeline (Pipecat)
 web/          React call console (Vite, TypeScript), served by FastAPI at /
 feasibility/  Settlement engine v2 (exact search; started as an earlier project of mine)
 eval/         Eval runner, metrics, NLU corpus scorer, A/B arms and report
@@ -169,7 +173,8 @@ sim/          Creditor simulator (does not import the agent)
 tests/        Unit, end-to-end, engine and NLU corpus tests
 fixtures/     Synthetic clients, offers, demo scenarios
 config/       Model routes per profile, NLG template bank
-docs/         Design decisions, frozen eval evidence, build history
+docs/         Design decisions, engine write-up, AWS hosting, frozen eval evidence, build history
+scripts/      Template bank build, benchmarks, probes, AWS deploy
 ```
 
 Python 3.12, FastAPI, Pydantic v2, SQLite, pytest and ruff; React with Vite and TypeScript; models from Anthropic, Groq, Cerebras, Gemini and others through one role-based client.

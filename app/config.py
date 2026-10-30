@@ -167,6 +167,11 @@ class Settings(BaseSettings):
     cloudflare_turn_key_id: str | None = None
     cloudflare_turn_api_token: SecretStr | None = None
     voice_turn_ttl_s: int = Field(default=3600, ge=300, le=86400)
+    # TURN for the server's own (aiortc) side. Keep on behind HTTP-only ingress
+    # (Render); turn off on a host with a public IP (the AWS demo): the browser
+    # still relays through TURN when its network needs it, and aioice's channel
+    # bind against Cloudflare fails with 401 there anyway.
+    voice_server_turn: bool = True
     # Deepgram list prices used for the estimate (verify before relying on them).
     deepgram_flux_usd_per_min: Decimal = Decimal("0.0077")
     deepgram_aura2_usd_per_1k_chars: Decimal = Decimal("0.030")

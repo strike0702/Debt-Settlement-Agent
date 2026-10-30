@@ -4,7 +4,9 @@
 the app DB (``Settings.db_path``), like ``app.llm.budget.DailyBudget`` does for
 paid NLU, so a restart does not reset the day. Money is integer micro-dollars.
 ``admit()`` is asked before a voice session starts and refuses once today's
-spend reaches the cap (fail closed when the table is unreadable); ``add()``
+spend reaches the cap, or today's Flux seconds reach ``limit_seconds`` (the
+hosted demo's daily minutes; fail closed when the table is unreadable);
+``remaining_seconds()`` lets a running session stop at the minutes cap; ``add()``
 records a finished session's Flux seconds and Aura-2 characters. A session that
 starts under the cap runs to its end: the cap is checked per session, not per
 frame. Prices come from ``Settings`` (``deepgram_*``); this module calls nothing.
@@ -22,6 +24,9 @@ from pathlib import Path
 from app.llm.budget import usd_to_micros, utc_now
 
 _log = logging.getLogger(__name__)
+
+BUDGET_MESSAGE = "Voice is paused: today's voice budget is used up. Text chat still works."
+CALL_CAP_MESSAGE = "This call has used its voice time. Text chat still works."
 
 
 def stt_cost_micros(seconds: Decimal, usd_per_min: Decimal) -> int:
@@ -42,10 +47,12 @@ class VoiceBudget:
         db_path: str | Path,
         *,
         limit_micros: int,
+        limit_seconds: Decimal | None = None,
         clock: Callable[[], datetime] = utc_now,
     ) -> None:
         self.db_path = Path(db_path)
         self.limit_micros = limit_micros
+        self.limit_seconds = limit_seconds
         self._clock = clock
         self._conn: sqlite3.Connection | None = None
 
@@ -78,9 +85,27 @@ class VoiceBudget:
         ).fetchone()
         return int(row[0]) if row else 0
 
-    def admit(self) -> bool:
-        """True when a new voice session may start (today's spend under the cap)."""
+    def spent_seconds(self) -> Decimal:
+        """Flux session seconds recorded today."""
+        row = self._db().execute(
+            "SELECT stt_seconds FROM voice_daily_spend WHERE day = ?", (self.today().isoformat(),)
+        ).fetchone()
+        return Decimal(row[0]) if row else Decimal(0)
+
+    def remaining_seconds(self) -> Decimal | None:
+        """Seconds left under today's minutes cap (None: no minutes cap)."""
+        if self.limit_seconds is None:
+            return None
         try:
+            return max(Decimal(0), self.limit_seconds - self.spent_seconds())
+        except sqlite3.Error:
+            return Decimal(0)
+
+    def admit(self) -> bool:
+        """True when a new voice session may start (today's spend and minutes under the caps)."""
+        try:
+            if self.limit_seconds is not None and self.spent_seconds() >= self.limit_seconds:
+                return False
             return self.spent_micros() < self.limit_micros
         except sqlite3.Error as e:
             _log.warning("voice budget table unreadable (%s); refusing voice", e)

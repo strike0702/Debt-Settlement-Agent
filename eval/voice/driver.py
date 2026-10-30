@@ -65,6 +65,8 @@ class Soak:
 
 
 SOAK = Soak()
+# "relay": the product UI forces the TURN relay (``?ice=relay``, Phase 66).
+ICE_POLICY = "all"
 SERVER_PIDS: list[int] = []
 IDLE_S = 1.2  # agent quiet this long = its turn is over
 REPLY_TIMEOUT_S = 25.0
@@ -398,7 +400,10 @@ async def run_pipecat_ui(
     ):
         page = await chrome.page()
         await open_page(
-            page, f"{base}/?scenario={call.scenario_id}&view=operator", init_script=init
+            page,
+            f"{base}/?scenario={call.scenario_id}&view=operator"
+            + ("&ice=relay" if ICE_POLICY == "relay" else ""),
+            init_script=init,
         )
         s = Session(page, run, audio)
         started = False

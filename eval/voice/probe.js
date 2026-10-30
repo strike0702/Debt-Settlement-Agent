@@ -7,6 +7,7 @@
  *   ws_in / ws_out  call-socket frames (product UI)
  *   agent_audio_on / agent_audio_off  energy on remote WebRTC audio
  *   pc_state  RTCPeerConnection state
+ *   ice_pair  selected candidate pair types once connected (Phase 66)
  *   rep_start / rep_end  injected rep clips
  * With __VH_CFG.inject, getUserMedia returns a WebAudio stream the driver
  * feeds through __vh.play(url, id) instead of the microphone.
@@ -93,9 +94,23 @@
         this.addEventListener("track", (ev) => {
           if (ev.track.kind === "audio") tapTrack(ev.track);
         });
-        this.addEventListener("connectionstatechange", () =>
-          log("pc_state", { state: this.connectionState }),
-        );
+        // Phase 66: which candidate pair carries the call (relay = TURN).
+        this.logPair = async () => {
+          const stats = [...(await this.getStats()).values()];
+          const pair = stats.find((r) => r.type === "candidate-pair" && r.nominated && r.state === "succeeded");
+          const cand = (id) => stats.find((r) => r.id === id) || {};
+          if (pair)
+            log("ice_pair", {
+              local: cand(pair.localCandidateId).candidateType,
+              remote: cand(pair.remoteCandidateId).candidateType,
+              relay_protocol: cand(pair.localCandidateId).relayProtocol || null,
+              rtt_ms: pair.currentRoundTripTime != null ? pair.currentRoundTripTime * 1000 : null,
+            });
+        };
+        this.addEventListener("connectionstatechange", () => {
+          log("pc_state", { state: this.connectionState });
+          if (this.connectionState === "connected") void this.logPair();
+        });
       }
     };
   }

@@ -123,3 +123,5 @@
 {"ts": "2026-10-29T15:06:06", "kind": "aura2_tts", "chars": 492, "seconds": 0.0, "usd": "0.014760", "note": "p64 UI review session"}
 {"ts": "2026-10-29T15:06:06", "kind": "flux_stt", "chars": 0, "seconds": 443.93, "usd": "0.056971", "note": "p64 pipecat-ui speakers harness run"}
 {"ts": "2026-10-29T15:06:06", "kind": "aura2_tts", "chars": 672, "seconds": 0.0, "usd": "0.020160", "note": "p64 pipecat-ui speakers harness run"}
+{"ts": "2026-10-30T15:50:32", "kind": "flux", "chars": 0, "seconds": 111.2, "usd": "0.014300", "note": "phase 66 relay-forced pipecat-ui numbers_easy (estimate: call span)"}
+{"ts": "2026-10-30T15:50:32", "kind": "aura2", "chars": 900, "seconds": 0.0, "usd": "0.027000", "note": "phase 66 relay-forced call (estimate: 717 reply chars + opening)"}

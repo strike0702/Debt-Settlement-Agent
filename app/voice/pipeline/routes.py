@@ -5,10 +5,15 @@ answer; ``PATCH /voice/offer?call_id=…`` adds trickled ICE candidates. The cal
 must already have started on ``/ws/call/{call_id}``; a second session for the
 same call, a missing Deepgram key or a used-up daily voice budget is refused
 (409 / 503 / 429) with an ``error`` the UI can show, also sent on the call's
-socket. ``GET /voice/events?call_id=…`` is the session timeline for the voice
+socket. ``GET /voice/ice?call_id=…`` gives the browser fresh ICE servers
+(Cloudflare STUN + short-lived TURN, ``ice``); the Pipecat side fetches its own
+before each new offer. Hosted-demo caps: today's Flux minutes
+(``voice_daily_minutes``) and voice seconds per call (``voice_session_max_s``)
+refuse a new session with a message (429); text chat is never capped here.
+``GET /voice/events?call_id=…`` is the session timeline for the voice
 harness; ``GET /voice/test`` is a minimal page the harness drives. The
-Deepgram key stays on the server: the page never sees it, and no key is ever
-put in a URL.
+Deepgram key and the long-term Cloudflare token stay on the server: the page
+never sees them, and no key is ever put in a URL.
 """
 
 from __future__ import annotations
@@ -29,11 +34,11 @@ from pipecat.transports.smallwebrtc.request_handler import (
 from app.config import Settings
 from app.llm.budget import usd_to_micros
 from app.voice import ws as call_ws
-from app.voice.pipeline.budget import VoiceBudget
-from app.voice.pipeline.session import LAST_EVENTS, SESSIONS, VoiceSession
+from app.voice.pipeline.budget import BUDGET_MESSAGE, CALL_CAP_MESSAGE, VoiceBudget
+from app.voice.pipeline.ice import ice_servers, to_pipecat
+from app.voice.pipeline.session import CALL_SECONDS, LAST_EVENTS, SESSIONS, VoiceSession
 
 TEST_PAGE = Path(__file__).with_name("test_page.html")
-BUDGET_MESSAGE = "Voice is paused: today's voice budget is used up. Text chat still works."
 
 router = APIRouter()
 _handler: SmallWebRTCRequestHandler | None = None
@@ -47,7 +52,9 @@ def configure(settings: Settings, budget: VoiceBudget | None = None) -> None:
     global _handler, _budget, _settings
     _settings = settings
     _budget = budget or VoiceBudget(
-        settings.db_path, limit_micros=usd_to_micros(settings.voice_daily_budget_usd)
+        settings.db_path,
+        limit_micros=usd_to_micros(settings.voice_daily_budget_usd),
+        limit_seconds=settings.voice_daily_minutes * 60,
     )
     _handler = SmallWebRTCRequestHandler()
 
@@ -87,6 +94,9 @@ async def offer(call_id: str, request: Request) -> Any:
         if not _budget.admit():
             conn.audit("voice_refused", {"reason": "budget"})
             return await _refuse(call_id, 429, BUDGET_MESSAGE)
+        if CALL_SECONDS.get(call_id, 0.0) >= _settings.voice_session_max_s:
+            conn.audit("voice_refused", {"reason": "call_cap"})
+            return await _refuse(call_id, 429, CALL_CAP_MESSAGE)
         session = VoiceSession(call_id, conn, settings=_settings, budget=_budget)
         SESSIONS[call_id] = session
         conn.attach_voice(session)
@@ -100,7 +110,11 @@ async def offer(call_id: str, request: Request) -> Any:
         _runs.add(run)
         run.add_done_callback(_runs.discard)
 
-    return await _handler.handle_web_request(SmallWebRTCRequest.from_dict(body), on_connection)
+    request_obj = SmallWebRTCRequest.from_dict(body)
+    if request_obj.pc_id is None:
+        # A new peer connection: aiortc gets its own fresh TURN credentials.
+        _handler.update_ice_servers(to_pipecat(await ice_servers(_settings)))
+    return await _handler.handle_web_request(request_obj, on_connection)
 
 
 async def _run(session: VoiceSession, connection: Any) -> None:
@@ -110,6 +124,16 @@ async def _run(session: VoiceSession, connection: Any) -> None:
         conn = call_ws.live_call(session.call_id)
         if conn is not None:
             conn.detach_voice(session)
+
+
+@router.get("/voice/ice")
+async def ice_config(call_id: str) -> Any:
+    """Fresh ICE servers for the browser's peer connection (only for a started call)."""
+    assert _settings is not None
+    conn = call_ws.live_call(call_id)
+    if conn is None or conn.orch is None:
+        return JSONResponse({"error": "Start the call before turning voice on."}, 404)
+    return {"iceServers": await ice_servers(_settings)}
 
 
 @router.patch("/voice/offer")

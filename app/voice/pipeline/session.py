@@ -9,6 +9,11 @@ session's estimated cost, which is added to ``VoiceBudget``. Deepgram is
 called directly by Pipecat's services here, not through ``app.llm.client``;
 NLU and NLG still go through it.
 
+Hosted-demo cap: a session ends by itself, with a message on the call's socket,
+once the call's voice seconds reach ``voice_session_max_s`` (``CALL_SECONDS``
+counts all sessions of a call, so a reconnect does not reset it) or today's
+Flux minutes run out (``VoiceBudget.remaining_seconds``).
+
 When the call ends (handoff or close), ``finish`` lets the last sentences
 play out, sends ``voice_state: ended`` and only then stops; the browser keeps
 the link open until that event (the closing line used to be cut).
@@ -40,7 +45,13 @@ from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
 from app.agent.orchestrator import Utterance
 from app.config import Settings
 from app.llm.budget import micros_to_usd
-from app.voice.pipeline.budget import VoiceBudget, stt_cost_micros, tts_cost_micros
+from app.voice.pipeline.budget import (
+    BUDGET_MESSAGE,
+    CALL_CAP_MESSAGE,
+    VoiceBudget,
+    stt_cost_micros,
+    tts_cost_micros,
+)
 from app.voice.pipeline.heard import HeardTracker
 from app.voice.pipeline.processors import (
     OrchestratorProcessor,
@@ -60,6 +71,9 @@ FINISH_TAIL_S = 0.5
 
 # call_id → its live voice session (one per call).
 SESSIONS: dict[str, VoiceSession] = {}
+# call_id → voice seconds its ended sessions used (the per-call cap); bounded.
+CALL_SECONDS: OrderedDict[str, float] = OrderedDict()
+MAX_CALLS_TRACKED = 500
 # Timelines of recently ended sessions (harness reads them after hang-up).
 LAST_EVENTS: OrderedDict[str, list[dict[str, Any]]] = OrderedDict()
 
@@ -101,6 +115,7 @@ class VoiceSession:
         self.started = 0.0
         self.connected = asyncio.Event()
         self._finishing = False
+        self._cap_task: asyncio.Task[None] | None = None
 
     def log(self, kind: str, **data: Any) -> None:
         if len(self.events) < MAX_EVENTS:
@@ -211,12 +226,30 @@ class VoiceSession:
         self.started = time.monotonic()
         self.log("session_start")
         self.call.audit("voice_session_start", {"stack": "pipecat"})
+        self._cap_task = asyncio.get_running_loop().create_task(self._cap())
         try:
             await PipelineRunner(handle_sigint=False).run(self.task)
         finally:
+            self._cap_task.cancel()
             await self.turns.aclose()
             await self.proc.aclose()
             self._close()
+
+    def cap_seconds(self) -> tuple[float, str]:
+        """Seconds this session may run, and the message shown when they run out."""
+        left = self.settings.voice_session_max_s - CALL_SECONDS.get(self.call_id, 0.0)
+        daily = self.budget.remaining_seconds()
+        if daily is not None and float(daily) < left:
+            return max(0.0, float(daily)), BUDGET_MESSAGE
+        return max(0.0, left), CALL_CAP_MESSAGE
+
+    async def _cap(self) -> None:
+        seconds, message = self.cap_seconds()
+        await asyncio.sleep(seconds)
+        self.log("capped", seconds=seconds)
+        self.call.audit("voice_capped", {"seconds": seconds, "reason": message})
+        await self.call.voice_error(message)
+        await self.finish()
 
     def _close(self) -> None:
         s = self.settings
@@ -235,6 +268,9 @@ class VoiceSession:
             },
         )
         self.log("session_end", seconds=float(secs))
+        CALL_SECONDS[self.call_id] = CALL_SECONDS.pop(self.call_id, 0.0) + float(secs)
+        while len(CALL_SECONDS) > MAX_CALLS_TRACKED:
+            CALL_SECONDS.popitem(last=False)
         LAST_EVENTS[self.call_id] = self.events
         while len(LAST_EVENTS) > 20:
             LAST_EVENTS.popitem(last=False)

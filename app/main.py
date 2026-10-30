@@ -8,11 +8,11 @@ paths get ``index.html`` with ``Cache-Control: no-cache``; hashed files under
 creditor's own account and rules for the rep lens; ``/template`` and
 ``POST /preview`` + ``/preview/rep`` for custom test cases pasted in the UI),
 and ``/calls*`` (``?view=rep`` drops private audit rows; ``/{id}/operator`` is
-the in-memory decision trace of a call, whatever view it streamed). With
-``VOICE_STACK=pipecat`` it also mounts ``/voice/*`` (``app.voice.pipeline.routes``:
-WebRTC offer / ICE, harness timeline and test page). LLM +
+the in-memory decision trace of a call, whatever view it streamed). It also
+mounts ``/voice/*`` (``app.voice.pipeline.routes``: WebRTC offer / ICE,
+harness timeline and test page). LLM +
 audit are created once in lifespan and shared across sockets; the LLM's
-``on_call`` hook appends every LLM / STT call to the audit log
+``on_call`` hook appends every LLM call to the audit log
 (``app.llm.call_audit``). This module builds no UI: ``npm run build``
 in ``web/`` does.
 """
@@ -49,6 +49,7 @@ from app.schemas.events import VIEWS, View
 from app.store.audit import AuditLog
 from app.voice import ws as voice_ws
 from app.voice.metrics_buf import metrics_summary
+from app.voice.pipeline import routes as voice_routes
 from app.voice.views import is_private_audit
 
 WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
@@ -104,8 +105,7 @@ def create_app(
             prior_hook = getattr(client, "on_call", None)
             client.on_call = audit_llm_calls(log, then=prior_hook)
         voice_ws.configure(audit=log, llm=client, settings=cfg)
-        if pipecat is not None:
-            pipecat.configure(cfg)
+        voice_routes.configure(cfg)
         app.state.audit = log
         app.state.llm = client
         app.state.settings = cfg
@@ -116,27 +116,13 @@ def create_app(
                 await client.aclose()
             elif not owns_llm:
                 client.on_call = prior_hook
-            if pipecat is not None:
-                await pipecat.shutdown()
+            await voice_routes.shutdown()
             if owns_audit:
                 log.close()
 
-    # VOICE_STACK=pipecat mounts /voice/* (Pipecat imported only then; legacy never loads it).
-    pipecat: Any | None = None
-    if (settings or get_settings()).voice_stack == "pipecat":
-        from app.voice.pipeline import routes as pipecat
-
     application = FastAPI(title="Debt Settlement Agent", lifespan=lifespan)
     application.include_router(voice_ws.router)
-    if pipecat is not None:
-        application.include_router(pipecat.router)
-
-    stack = (settings or get_settings()).voice_stack
-
-    @application.get("/voice/config")
-    async def voice_config() -> dict[str, str]:
-        """Which voice client the UI runs: ``legacy`` (browser TTS/STT) or ``pipecat`` (WebRTC)."""
-        return {"stack": stack}
+    application.include_router(voice_routes.router)
 
     @application.get("/healthz")
     async def healthz() -> dict[str, str]:

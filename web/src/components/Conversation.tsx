@@ -1,39 +1,33 @@
 /**
  * Left column: the call as the two speakers hear it.
  *
- * Chat bubbles (agent left, creditor rep right), the mic with its
- * listening/thinking/speaking state, suggested rep replies from the scenario
- * card, and a text box. `onSend` / `onMicToggle` are wired by App to the
- * call socket and `useVoice`; when absent (replay, no call) their controls
- * are disabled. `interim` is the voice cue or a live browser-STT partial.
+ * Chat bubbles (agent left, creditor rep right), suggested rep replies from
+ * the scenario card, and a text box. `onSend` is wired by App to the call
+ * socket; when absent (replay, no call) the controls are disabled.
+ * `voiceStatus` (header) and `voiceBar` (above the replies) come from
+ * `VoiceControls`; `interim` is Flux's live partial.
  * `ended` closes the transcript with a quiet line saying how the
  * call ended ("Call ended: handed off to a specialist").
  * `error` is the newest call error, shown as an alert above the text box
  * (plain copy; `detail` is the raw server text, Debt negotiator view only).
  * A new error puts the rep's last sent line back in an empty text box, so
  * "try sending it again" is one click.
- * On the Pipecat stack App passes `voiceStatus` (header) and `voiceBar`
- * (above the replies) from `VoiceControls` in place of the legacy mic button
- * and STT picker; `interim` is then Flux's live partial.
  */
-import { AlertTriangle, Mic, MicOff, Send, X } from "lucide-react";
+import { AlertTriangle, Send, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import type { ChatMessage } from "@/lib/callState";
 import { cn } from "@/lib/cn";
-import { MIC_LABEL, type MicState } from "@/lib/mic";
 
 export interface ConversationProps {
   messages: ChatMessage[];
-  mic: MicState;
   /**
    * Rep lines to click, shown once each. All look the same: no "next"
    * highlight, since a rep who haggles their own way makes the scripted order meaningless.
    */
   suggested: string[];
   onSend?: (text: string) => void;
-  onMicToggle?: () => void;
   emptyHint: string;
   /** Shown under the last bubble once the call is over (how it ended). */
   ended?: string | null;
@@ -42,37 +36,24 @@ export interface ConversationProps {
   interim?: string;
   notice?: string;
   onDismissNotice?: () => void;
-  sttMode?: "server" | "browser";
-  onSttMode?: (m: "server" | "browser") => void;
   /** Newest call error; `seq` changes with each new one. */
   error?: { text: string; detail?: string | null; detailLabel?: string; seq: number } | null;
-  /** WebRTC voice: replaces the mic button and STT picker in the header. */
+  /** Voice state and the voice on/off button, in the header. */
   voiceStatus?: ReactNode;
   /** WebRTC voice controls (mute, push to talk), shown while voice is on. */
   voiceBar?: ReactNode;
 }
 
-const MIC_DOT: Record<MicState, string> = {
-  off: "bg-faint",
-  listening: "bg-good animate-pulse",
-  thinking: "bg-warn animate-pulse",
-  speaking: "bg-accent animate-pulse",
-};
-
 export function Conversation({
   messages,
-  mic,
   suggested,
   onSend,
-  onMicToggle,
   emptyHint,
   ended,
   idleHint = "Replaying a recorded call",
   interim,
   notice,
   onDismissNotice,
-  sttMode,
-  onSttMode,
   error,
   voiceStatus,
   voiceBar,
@@ -102,43 +83,7 @@ export function Conversation({
 
   return (
     <Card className="flex min-h-0 flex-col">
-      <CardHeader
-        title="Conversation"
-        aside={
-          voiceStatus ?? (
-            <div className="flex items-center gap-2">
-              {sttMode && onSttMode && (
-                <label className="flex items-center gap-1 text-sm text-muted">
-                  <span className="sr-only">Speech recognition</span>
-                  <select
-                    className="rounded-md border border-border bg-surface px-1.5 py-1 text-sm text-fg"
-                    value={sttMode}
-                    onChange={(e) => onSttMode(e.target.value as "server" | "browser")}
-                    title="Where speech is transcribed"
-                  >
-                    <option value="server">Server STT</option>
-                    <option value="browser">Browser STT</option>
-                  </select>
-                </label>
-              )}
-              <span className="inline-flex items-center gap-2 text-sm whitespace-nowrap text-muted" aria-live="polite">
-                <span className={cn("h-2 w-2 rounded-full", MIC_DOT[mic])} aria-hidden />
-                {MIC_LABEL[mic]}
-              </span>
-              <Button
-                size="icon"
-                variant={mic === "off" ? "outline" : "primary"}
-                aria-label={mic === "off" ? "Turn mic on" : "Turn mic off"}
-                aria-pressed={mic !== "off"}
-                onClick={onMicToggle}
-                disabled={!onMicToggle}
-              >
-                {mic === "off" ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-              </Button>
-            </div>
-          )
-        }
-      />
+      <CardHeader title="Conversation" aside={voiceStatus} />
 
       <div
         ref={log}

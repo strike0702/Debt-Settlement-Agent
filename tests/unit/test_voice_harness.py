@@ -1,5 +1,5 @@
 """Voice harness (eval/voice) scoring, offline: number tokens, WER, per-turn timing,
-phantom lines, false barges, the legacy and spike event mapping, and clip trimming.
+phantom lines, false barges, the spike event mapping, and clip trimming.
 No browser, server or Deepgram call."""
 
 from __future__ import annotations
@@ -80,21 +80,6 @@ def test_score_call_reply_timings_and_barges() -> None:
     s = metrics.summarize(list(rows.values()), phantoms=1, false_barge_count=1)
     assert s["first_audio_p50_ms"] == 2000 and s["barge_stop_p50_ms"] == 700
     assert s["backchannels_barged"] == "1/1" and s["interrupts_barged"] == "1/1"
-
-
-def test_legacy_mapping_skips_fillers_and_counts_wav_as_end_of_turn() -> None:
-    run = driver.CallRun("c", "legacy-server", "inject")
-    run.page = [
-        {"t": 1, "kind": "ws_out_wav", "bytes": 10},
-        {"t": 2, "kind": "ws_in", "type": "transcript", "role": "creditor", "text": "Correct"},
-        {"t": 3, "kind": "tts_start", "text": "One moment."},
-        {"t": 4, "kind": "ws_in", "type": "say", "id": "x", "text": "Thanks."},
-        {"t": 5, "kind": "tts_start", "text": "Thanks."},
-        {"t": 6, "kind": "ws_out", "type": "barge_in", "spoken_ids": []},
-        {"t": 7, "kind": "tts_cancel"},
-    ]
-    kinds = [e["kind"] for e in driver.normalize(run)]
-    assert kinds == ["eot", "final", "filler_on", "reply", "audio_on", "barge", "stop"]
 
 
 def test_spike_mapping_counts_interruptions_only_while_the_bot_speaks() -> None:

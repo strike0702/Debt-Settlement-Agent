@@ -78,7 +78,6 @@ _REP_AUDIT_EVENTS: dict[str, frozenset[str]] = {
         }
     ),
     "policy": frozenset({"decide"}),
-    "stt": frozenset({"stt_error"}),
 }
 _REP_ROW_KEYS = ("date", "creditor_payment_cents")
 # Operator-only keys removed from every rep frame, whatever its type.

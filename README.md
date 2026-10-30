@@ -8,7 +8,7 @@ A voice and text agent that negotiates a debt settlement with a creditor's repre
 
 *A simulated "Haggling rep" call, slowed to 2.6 s per step. The rep asks for 70% and will not move. The agent offers 49%, holds once, steps up to 59%, makes a final offer of 62% when the rep says 65% is their lowest, and accepts 65% when the rep repeats it, because it is within the agent's limit. [MP4 version](docs/assets/demo.mp4).*
 
-**Live demo:** [debt-settlement-agent-ggor.onrender.com](https://debt-settlement-agent-ggor.onrender.com/). Pick a scenario and press **Watch a call**: a simulated creditor plays the representative, so it needs no API keys. Press **Start call** to play the representative yourself (type, click a suggested reply, or use the mic). The demo runs on a free Render instance, so the first load after a quiet spell can take about 30 s.
+**Live demo:** [debt-settlement-agent-ggor.onrender.com](https://debt-settlement-agent-ggor.onrender.com/). Pick a scenario and press **Watch a call**: a simulated creditor plays the representative, so it needs no API keys. Press **Start call** to play the representative yourself: type or click a suggested reply (voice on the hosted demo is not set up yet; run it locally to talk to the agent). The demo runs on a free Render instance, so the first load after a quiet spell can take about 30 s.
 
 The console has two views. The **Debt negotiator** view (called the operator view in the code) is the firm's side: the client's private finances, "How the agent decided" for every turn, the safety checks, latency, and the audit log. The **Creditor rep** view (`?view=rep`) shows only what the representative would see; the server filters every message sent to it, and a test scans whole calls for every private value. The operator view is public on the hosted demo by design, because every figure in it is synthetic.
 
@@ -18,14 +18,14 @@ One representative turn, left to right. Language goes in and comes out through a
 
 ```mermaid
 flowchart LR
-  Rep["Rep speaks or types"] --> STT["Speech-to-text<br/>(Groq Whisper)"]
+  Rep["Rep speaks or types"] --> STT["Speech-to-text<br/>(Deepgram Flux over WebRTC)"]
   STT --> NLU["NLU: Claude Haiku 5.5<br/>(free fallbacks: Groq, Cerebras)<br/>terms + stance + flags as JSON"]
   NLU --> Check["Code-side checks<br/>quote in the line? number parses?<br/>phrase rules"]
   Check --> Policy["Policy decide()<br/>picks one move"]
   Policy <--> Engine["Feasibility engine<br/>can the client fund X%?<br/>payment schedule"]
   Policy --> NLG["NLG: sentence template<br/>with placeholders, no digits"]
   NLG --> Guards["Fill from PUBLIC facts<br/>+ two guards"]
-  Guards --> Speak["Browser speech<br/>effects commit when heard"]
+  Guards --> Speak["Aura-2 speech over WebRTC<br/>effects commit when heard"]
 ```
 
 The rules that hold on every turn:
@@ -36,6 +36,10 @@ The rules that hold on every turn:
 - **Private facts never reach the model.** The reply prompt sees PUBLIC facts only; the client's maximum, balances and fees stay in code.
 - **The model's reading is untrusted input.** A quote that is not in the line is dropped, a hedged number stays tentative, and a short "yeah" only counts as acceptance when it is most of the line.
 - **Everything is audited.** Belief changes, blocked sentences, hand-offs, each policy decision and every model call are written to an append-only SQLite log (triggers reject updates and deletes).
+
+### Voice
+
+Voice runs on the server: the browser sends the mic over WebRTC and plays the agent's audio, Pipecat inside the FastAPI app streams it to Deepgram Flux (speech-to-text with model-based end of turn) and speaks replies with Deepgram Aura-2. Flux's final transcript goes through the same turn as a typed line, and a sentence counts as heard only once its audio has been played, so an interrupted offer is never booked. When the rep talks over the agent, the agent pauses at once and the rep's words decide: two real words stop it, a "mm-hm" lets it go on. On scripted rep audio injected into Chrome, every reply turn got a reply, all 12 spoken numbers were heard, and first reply audio was [3185 / 4829 ms p50 / p95](docs/eval/voice_tuned_20261029/summary.md), against 4463 / 5172 ms for the earlier browser-speech client ([baseline](docs/eval/voice_baseline_20261028/legacy-server-inject/summary.md)). Voice needs `DEEPGRAM_API_KEY` and is capped per day by `VOICE_DAILY_BUDGET_USD`; without a key, text still works. Why it is built this way: [ADR 9](docs/DESIGN.md#adr-9-voice-on-pipecat--deepgram-over-webrtc).
 
 By default the demo's replies come from a bank of templates built and guard-checked offline (`NLG_MODE=bank`), so no model call sits on the reply path. The design decisions behind each rule, and one voice turn annotated stage by stage, are in [`docs/DESIGN.md`](docs/DESIGN.md).
 
@@ -49,8 +53,9 @@ By default the demo's replies come from a bank of templates built and guard-chec
 | `app/agent/nlg.py`, `app/agent/guards.py` | Turns an `Action` into a template, fills it from facts, and runs the two guards. |
 | `app/adapter/engine_adapter.py` | The only bridge to the engine: builds creditor rules from belief and scans 1%–100% for affordability. `app/adapter/validator.py` re-checks every drafted schedule independently. |
 | `feasibility/engine.py` | The settlement engine: `evaluate(problem, bp)` returns a payment schedule or the extra money needed; the exact search is in `search.py`. See [`docs/ENGINE.md`](docs/ENGINE.md). |
-| `app/llm/client.py` | Every model call goes through here by role (`nlu`, `nlg`, `sim`, `stt`), with fail-over and audit. Providers per role are in `config/providers.yaml`. |
+| `app/llm/client.py` | Every model call goes through here by role (`nlu`, `nlg`, `sim`), with fail-over and audit. Providers per role are in `config/providers.yaml`. |
 | `app/voice/ws.py` | The WebSocket protocol for the console; `app/voice/views.py` filters what the creditor view may see. |
+| `app/voice/pipeline/` | Voice: Pipecat + Deepgram over WebRTC (`session.py` builds one call's pipeline, `processors.py` decides barges and tracks what was heard). |
 | `sim/creditor.py` | The simulated creditor representative used by "Watch a call" and the evals. It does not import the agent. |
 | `eval/run_eval.py` | The eval runner; scoring is in `eval/metrics.py`. |
 | `web/src/App.tsx` | The React console. |
@@ -117,11 +122,11 @@ That table is the free-tier Groq model with the same prompt in both runs, so the
 
 ### Latency
 
-With the free Groq model reading the line, a typed turn took [1420 / 2242 ms p50 / p95](docs/eval/latency_20261007.md#after-key-pool-phase-27-2026-10-07) from message to first reply, almost all of it the model reading the line. From the end of speech to the first audio is about [4.7 s p50](docs/eval/latency_20261007.md#reading-it), but that is an **estimate** built from measured stages, not a browser measurement.
+With the free Groq model reading the line, a typed turn took [1420 / 2242 ms p50 / p95](docs/eval/latency_20261007.md#after-key-pool-phase-27-2026-10-07) from message to first reply, almost all of it the model reading the line. By voice, from the end of the rep's speech to the agent's first audio took [3185 / 4829 ms p50 / p95](docs/eval/voice_tuned_20261029/summary.md) in Chrome on injected audio (free Groq NLU), and about 1.1 to 1.3 s when the code reads the line without the model. That misses the 2 s / 3 s targets; about 1.95 s of it is the model reading the line.
 
 ### What is not measured yet
 
-- Voice end to end in a real browser.
+- Voice through real laptop speakers and a real mic (recognition), other devices, and the hosted demo.
 - The hosted demo under load.
 - A simulator, or test labels, written by someone other than me. The simulator and the agent share an author.
 - A human check of the judge with more than one rater.
@@ -142,7 +147,7 @@ The eval prints a metrics table that should match [`summary.md`](docs/eval/polic
 
 ## Running locally
 
-You need Python 3.12, [`uv`](https://docs.astral.sh/uv/), and Node 24 (or 22.22 or later) for the web console. The tests and the offline eval need no keys. The live demo needs at least one of `GROQ_API_KEY` or `GEMINI_API_KEY` in `.env`; server-side speech-to-text needs Groq. `ANTHROPIC_API_KEY` is optional and paid: with it, the `demo` profile reads the representative with Claude Haiku 5.5 and falls back to the free models when Claude is unavailable. Evals skip paid models unless you pass `--allow-budgeted` or an explicit `--providers` file.
+You need Python 3.12, [`uv`](https://docs.astral.sh/uv/), and Node 24 (or 22.22 or later) for the web console. The tests and the offline eval need no keys. The live demo needs at least one of `GROQ_API_KEY` or `GEMINI_API_KEY` in `.env`; voice needs `DEEPGRAM_API_KEY` (paid, capped per day by `VOICE_DAILY_BUDGET_USD`). `ANTHROPIC_API_KEY` is optional and paid: with it, the `demo` profile reads the representative with Claude Haiku 5.5 and falls back to the free models when Claude is unavailable. Evals skip paid models unless you pass `--allow-budgeted` or an explicit `--providers` file.
 
 ```bash
 uv sync --group dev

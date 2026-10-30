@@ -37,7 +37,6 @@ _YAML = """
 profiles:
   demo:
     nlu: [primary/m, backup/m]
-    stt: [primary/whisper, backup/whisper]
 providers:
   primary:
     base_url: "https://primary.test/v1"
@@ -299,21 +298,6 @@ async def test_every_key_disabled_fails_over(tmp_path: Path) -> None:
     await client.aclose()
     assert seen["primary"] == [K1]
     assert "every key disabled" in metas[0]["error"] and metas[0]["key_id"] == "primary#0"
-
-
-async def test_stt_rotates_to_next_key_on_429(tmp_path: Path) -> None:
-    pool = {"GROQ_API_KEY_1": K1, "GROQ_API_KEY_2": K2}
-
-    def primary(request: httpx.Request) -> httpx.Response:
-        if _bearer(request) == K1:
-            return _rate_limited("30")
-        return httpx.Response(200, json={"text": "hello"})
-
-    client, metas, seen = _client(tmp_path, _settings(pool), primary)
-    assert await client.transcribe(b"RIFF....") == "hello"
-    await client.aclose()
-    assert seen["primary"] == [K1, K2] and seen["backup"] == []
-    assert [m["key_id"] for m in metas] == ["primary#1", "primary#2"]
 
 
 # --- one deadline per target (21.3) ------------------------------------------

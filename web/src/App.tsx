@@ -18,10 +18,10 @@
  * refetches on every `turn_done`, so the trace is there whichever
  * view the call was started in.
  *
- * Voice: `GET /voice/config` picks the client. `legacy` runs `useVoice`
- * (browser TTS, VAD, STT). `pipecat` runs `useWebRtcVoice`: the server hears
- * and speaks over WebRTC, `say` lines are never spoken here, and voice
- * failures (mic, connection, budget) land on the same visible error line.
+ * Voice: `useWebRtcVoice` (Pipecat over WebRTC). The server hears and speaks,
+ * `say` lines are never spoken here, and voice failures (mic, connection,
+ * budget) land on the same visible error line. With voice off the client acks
+ * the lines the rep has read (`WebRtcVoice.beforeRepText`).
  *
  * Minimum client cushion: the Debt negotiator view shows `CushionField` before a
  * call, pre-filled with the scenario's firm default (`brief.firm.min_cushion_cents`,
@@ -61,8 +61,6 @@ import { useOperatorDetail } from "@/hooks/useOperatorDetail";
 import { useScenarioBrief, useScenarios, useScenarioTemplate } from "@/hooks/useScenarios";
 import { useTheme } from "@/hooks/useTheme";
 import { readUrlState, useUrlState } from "@/hooks/useUrlState";
-import { useVoice } from "@/hooks/useVoice";
-import { useVoiceStack } from "@/hooks/useVoiceStack";
 import { useWebRtcVoice } from "@/hooks/useWebRtcVoice";
 import { VoiceBar, VoiceStatus } from "@/components/VoiceControls";
 import { type CallEvent, type CallState, foldCall, isCallOver, withOperatorDetail } from "@/lib/callState";
@@ -79,7 +77,6 @@ import {
 } from "@/lib/customCases";
 import { formatCushion } from "@/lib/cushion";
 import { type Lens, viewFor } from "@/lib/lens";
-import { micEventFor, micReducer, type MicState } from "@/lib/mic";
 import { endedLine } from "@/lib/outcome";
 import { callErrorText, errorDetailLabel } from "@/lib/callError";
 import { toRepView } from "@/lib/repView";
@@ -98,17 +95,6 @@ function params(): { fixture: boolean; speed: number } {
 export function eventsForLens(events: readonly CallEvent[], lens: Lens): CallEvent[] {
   if (lens === "operator") return [...events];
   return events.map(toRepView).filter((e): e is CallEvent => e !== null);
-}
-
-export function micFromEvents(events: readonly CallEvent[]): MicState {
-  // Replay assumes the mic was switched on when the call started.
-  let mic: MicState = events.length > 0 ? "listening" : "off";
-  for (const ev of events) {
-    if (ev.type === "tts_onset" || ev.type === "voice_live") continue;
-    const m = micEventFor(ev);
-    if (m) mic = micReducer(mic, m);
-  }
-  return mic;
 }
 
 const Loading = () => <Card className="h-48 animate-pulse" aria-hidden />;
@@ -194,7 +180,7 @@ function FixtureApp({ speed }: { speed: number }) {
       conversation={
         <Conversation
           messages={state.messages}
-          mic={isCallOver(state) ? "off" : micFromEvents(events)}
+          voiceStatus={<VoiceStatus state="off" />}
           suggested={scenario.suggested}
           ended={endedLine(state, lens)}
           emptyHint="Press “Watch a call” to replay a full negotiation."
@@ -266,23 +252,13 @@ function LiveApp() {
     const folded = foldCall(events);
     return detail.status === "ready" ? withOperatorDetail(folded, detail.detail) : folded;
   }, [events, detail]);
-  const stateRef = useRef(state);
-  useLayoutEffect(() => {
-    stateRef.current = state;
-  });
 
   const live = call.status === "live" && !call.autoplay && !isCallOver(state);
-  const voice = useVoice({
-    sendJson: call.sendJson,
-    sendWav: call.sendWav,
-    sendRepText: (text, source) => send(text, source),
-    currentTurn: () => stateRef.current.turn || null,
-    onTtsOnset: (turn, ms) => call.addLocal({ type: "tts_onset", turn, ms }),
+  const { addLocal, sendJson } = call;
+  const rtc = useWebRtcVoice({
+    onError: (message) => addLocal({ type: "error", message }),
+    ack: (ids) => ids.forEach((id) => sendJson({ type: "sentence_done", id })),
   });
-  const { engine } = voice;
-  const pipecat = useVoiceStack() === "pipecat";
-  const { addLocal } = call;
-  const rtc = useWebRtcVoice({ onError: (message) => addLocal({ type: "error", message }) });
   const rtcEngine = rtc.engine;
   // A voice error is over once the link is live again (e.g. after a reconnect).
   const rtcLive = rtc.snapshot.link === "live";
@@ -292,31 +268,23 @@ function LiveApp() {
 
   const send = (text: string, source = "typed") => {
     if (!live) return;
-    // WebRTC: the server owns barge-in, so a typed line needs no client bookkeeping.
-    if (pipecat) {
-      call.sendText(text, source);
-      return;
-    }
-    engine.beforeRepText();
-    if (!call.sendText(text, source)) engine.onServerEvent({ type: "turn_done" });
+    // Voice on: the server owns barge-in. Voice off: ack what the rep has read first.
+    rtcEngine.beforeRepText();
+    call.sendText(text, source);
   };
 
   const { subscribe } = call;
-  useEffect(
-    () => subscribe((ev) => (pipecat ? rtcEngine : engine).onServerEvent(ev)),
-    [subscribe, engine, rtcEngine, pipecat],
-  );
+  useEffect(() => subscribe((ev) => rtcEngine.onServerEvent(ev)), [subscribe, rtcEngine]);
 
-  // The mic goes off when the call is over or the socket is gone. WebRTC voice
-  // stays up after a handoff or close until its last line has played.
+  // Voice goes off when the socket is gone; after a handoff or close it stays
+  // up until its last line has played.
   const gone = call.status === "closed" || state.autoplay !== null;
   const over = isCallOver(state) || gone;
   useEffect(() => {
     if (!over) return;
-    void engine.stopMic(true);
     if (gone) rtcEngine.hangUp();
     else rtcEngine.finish();
-  }, [over, gone, engine, rtcEngine]);
+  }, [over, gone, rtcEngine]);
 
   const brief = useScenarioBrief(source, lens, source !== null);
 
@@ -334,14 +302,12 @@ function LiveApp() {
   const startCall = useCallback(
     (autoplay: boolean) => {
       if (custom && autoplay) return;
-      engine.reset(autoplay);
-      rtcEngine.reset();
-      if (autoplay) void engine.stopMic();
+      rtcEngine.reset(autoplay);
       const minCushionCents = cushionOverride;
       if (custom) start(serverId(custom.payload), { view: viewFor(lens), payload: custom.payload, minCushionCents });
       else start(selected, { view: viewFor(lens), autoplay, minCushionCents });
     },
-    [start, engine, rtcEngine, selected, lens, custom, cushionOverride],
+    [start, rtcEngine, selected, lens, custom, cushionOverride],
   );
 
   const scenario = scenarios.find((s) => s.id === selected) ?? null;
@@ -431,30 +397,6 @@ function LiveApp() {
   const toggleRtc = liveCallId
     ? () => (rtc.state === "off" ? void rtcEngine.connect(liveCallId) : rtcEngine.hangUp())
     : undefined;
-  const voiceProps = pipecat
-    ? {
-        voiceStatus: <VoiceStatus state={over ? "off" : rtc.state} onToggle={toggleRtc} />,
-        voiceBar: rtc.state !== "off" && !over && (
-          <VoiceBar
-            muted={rtc.snapshot.muted}
-            pushToTalk={rtc.snapshot.pushToTalk}
-            talking={rtc.snapshot.talking}
-            onMute={(m) => rtcEngine.setMuted(m)}
-            onPushToTalk={(on) => rtcEngine.setPushToTalk(on)}
-            onTalk={(down) => rtcEngine.talk(down)}
-          />
-        ),
-        interim: rtc.snapshot.partial,
-        notice: rtc.snapshot.echoHint ? ECHO_HINT : "",
-        onDismissNotice: () => rtcEngine.dismissEcho(),
-      }
-    : {
-        interim: voice.snapshot.interim,
-        notice: voice.snapshot.notice,
-        onDismissNotice: () => engine.dismissNotice(),
-        sttMode: voice.snapshot.sttMode,
-        onSttMode: voice.setSttMode,
-      };
 
   return (
     <AppShell
@@ -534,18 +476,32 @@ function LiveApp() {
       conversation={
         <Conversation
           messages={state.messages}
-          mic={over ? "off" : voice.mic}
           suggested={scenario?.suggested ?? []}
           ended={endedLine(state, lens)}
           onSend={live ? (t) => send(t, scenario?.suggested.includes(t) ? "suggested" : "typed") : undefined}
-          onMicToggle={live ? voice.toggleMic : undefined}
           emptyHint={
             custom
-              ? "Press “Start call” to play the creditor rep on your test case: type, click a suggested reply, or use the mic."
-              : "Press “Start call” to play the creditor rep yourself (type, click a suggested reply, or use the mic), or “Watch a call” to let the simulated rep play it."
+              ? "Press “Start call” to play the creditor rep on your test case: type, click a suggested reply, or turn voice on."
+              : "Press “Start call” to play the creditor rep yourself (type, click a suggested reply, or turn voice on), or “Watch a call” to let the simulated rep play it."
           }
           idleHint={call.autoplay && callRunning ? "The simulated rep is playing this call" : "Start a call to reply as the rep"}
-          {...voiceProps}
+          voiceStatus={<VoiceStatus state={over ? "off" : rtc.state} onToggle={toggleRtc} />}
+          voiceBar={
+            rtc.state !== "off" &&
+            !over && (
+              <VoiceBar
+                muted={rtc.snapshot.muted}
+                pushToTalk={rtc.snapshot.pushToTalk}
+                talking={rtc.snapshot.talking}
+                onMute={(m) => rtcEngine.setMuted(m)}
+                onPushToTalk={(on) => rtcEngine.setPushToTalk(on)}
+                onTalk={(down) => rtcEngine.talk(down)}
+              />
+            )
+          }
+          interim={rtc.snapshot.partial}
+          notice={rtc.snapshot.echoHint ? ECHO_HINT : ""}
+          onDismissNotice={() => rtcEngine.dismissEcho()}
           error={
             state.error && {
               text: callErrorText(state.error),

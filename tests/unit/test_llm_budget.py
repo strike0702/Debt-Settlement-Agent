@@ -206,11 +206,10 @@ def test_shipped_demo_nlu_is_haiku_first_then_the_old_free_chain() -> None:
         "mistral/mistral-small-latest",
     ]
     assert all(not t.budgeted for t in nlu[1:])
-    # NLG and STT never reach Anthropic; no other profile is budgeted.
-    for role in ("nlg", "stt"):
-        assert all(
-            parse_route_entry(e).provider != "anthropic" for e in data["profiles"]["demo"][role]
-        )
+    # NLG never reaches Anthropic; no other profile is budgeted.
+    assert all(
+        parse_route_entry(e).provider != "anthropic" for e in data["profiles"]["demo"]["nlg"]
+    )
     for pname, roles in data["profiles"].items():
         for role, entries in roles.items():
             if (pname, role) == ("demo", "nlu"):

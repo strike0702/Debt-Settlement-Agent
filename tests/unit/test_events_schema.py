@@ -34,7 +34,7 @@ def test_cli_writes_schema(tmp_path: Path) -> None:
 def test_schema_lists_every_event_type() -> None:
     expected = {
         "transcript", "say", "belief", "eval", "blocked", "escalate", "latency",
-        "audit", "phase", "agreement", "stt_error", "error", "turn_done",
+        "audit", "phase", "agreement", "error", "turn_done",
         "turn_trace", "autoplay_done", "speech_dropped", "voice_state",
     }  # fmt: skip
     assert set(SERVER_EVENT_TYPES) == expected
@@ -68,7 +68,7 @@ def test_every_frame_of_an_autoplay_call_validates(tmp_path: Path) -> None:
 
 
 def test_web_fixture_frames_match_the_protocol() -> None:
-    """The UI's recorded fixture is valid wire data (``tts_onset`` is client-local)."""
+    """The UI's recorded fixture is valid wire data."""
     import json
     from pathlib import Path
 
@@ -76,7 +76,6 @@ def test_web_fixture_frames_match_the_protocol() -> None:
 
     path = Path(__file__).resolve().parents[2] / "web/src/fixtures/call_easy_deal.json"
     frames = json.loads(path.read_text())["frames"]
-    server = [f["ev"] for f in frames if f["ev"]["type"] != "tts_onset"]
-    assert len(server) > 100 and len(server) < len(frames)
-    for ev in server:
+    assert len(frames) > 100
+    for ev in (f["ev"] for f in frames):
         SERVER_EVENT_ADAPTER.validate_python(ev)

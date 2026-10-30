@@ -115,7 +115,7 @@ def test_autoplay_makes_no_llm_calls(tmp_path: Path) -> None:
         async def chat_text(self, *a, **k):  # pragma: no cover - must not run
             raise AssertionError("autoplay called the LLM")
 
-        chat_json = transcribe = chat_text
+        chat_json = chat_text
 
     settings = offline_settings(nlu_mode="llm", nlg_mode="llm", llm_profile="demo")
     with make_client(tmp_path, settings=settings, llm=_NoCalls()) as client:

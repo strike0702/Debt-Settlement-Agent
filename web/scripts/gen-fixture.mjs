@@ -1,7 +1,6 @@
 // Builds web/src/fixtures/call_easy_deal.json from a hand-written synthetic call.
 // Usage (from web/): node scripts/gen-fixture.mjs src/fixtures/call_easy_deal.json
-// Frames follow the generated protocol (src/types/events.ts), plus the client-side
-// `tts_onset` event the voice engine adds. Audit privacy uses the server's rule
+// Frames follow the generated protocol (src/types/events.ts). Audit privacy uses the server's rule
 // (app/voice/views.py is_private_audit), so fixture mode filters like ?view=rep.
 import { writeFileSync } from "node:fs";
 
@@ -95,7 +94,7 @@ function turn(n, spec) {
     agreement = null,
   } = spec;
 
-  const { tts_onset_ms, ...serverTimings } = timings;
+  const serverTimings = timings;
   if (creditor) {
     push(2600, {
       type: "transcript",
@@ -133,7 +132,7 @@ function turn(n, spec) {
 
   const serverMs = (timings.nlu_ms ?? 0) + (timings.engine_ms ?? 0) + (timings.policy_ms ?? 0) + (timings.nlg_ms ?? 0);
   // Agent reply lands after server processing.
-  let dt = creditor ? Math.round(serverMs) + (timings.stt_ms ?? 0) : 400;
+  let dt = creditor ? Math.round(serverMs) : 400;
   const ids = sentences.map((_, i) => `t${n}-s${i}`);
   sentences.forEach((text, i) => {
     push(i === 0 ? dt : 40, { type: "say", id: ids[i], text });
@@ -154,7 +153,6 @@ function turn(n, spec) {
   push(0, {
     type: "latency",
     turn: n,
-    stt_ms: timings.stt_ms ?? null,
     nlu_ms: timings.nlu_ms ?? null,
     engine_ms: timings.engine_ms ?? null,
     policy_ms: timings.policy_ms ?? null,
@@ -195,10 +193,8 @@ function turn(n, spec) {
     timings: serverTimings,
   });
   push(0, { type: "turn_done" });
-  // Client-measured: `say` received → TTS audibly starts (the voice engine adds it).
-  if (tts_onset_ms != null) push(tts_onset_ms, { type: "tts_onset", turn: n, ms: tts_onset_ms });
 
-  // Client TTS finishes and acks each sentence; effects commit on the last ack.
+  // Each sentence is heard and acked (server voice, or the client in text mode); effects commit on the last ack.
   sentences.forEach((text, i) => {
     const speakMs = 260 + text.length * 55;
     const last = i === sentences.length - 1;
@@ -243,7 +239,7 @@ turn(0, {
     "What payment terms can you work with for a settlement?",
   ],
   nextPhase: "DISCOVERY",
-  timings: { queue_ms: 0, engine_ms: 8.4, policy_ms: 0.1, nlg_ms: 0.3, tts_onset_ms: 290 },
+  timings: { queue_ms: 0, engine_ms: 8.4, policy_ms: 0.1, nlg_ms: 0.3 },
 });
 
 // ---- turn 1: terms
@@ -265,7 +261,7 @@ turn(1, {
   nlg: tmpl("What settlement percentage of the balance are you looking for?"),
   sentences: ["What settlement percentage of the balance are you looking for?"],
   nextPhase: "NEGOTIATE",
-  timings: { stt_ms: 410, queue_ms: 0, nlu_ms: 812, engine_ms: 9.1, policy_ms: 0.2, nlg_ms: 0.3, tts_onset_ms: 300 },
+  timings: { queue_ms: 0, nlu_ms: 812, engine_ms: 9.1, policy_ms: 0.2, nlg_ms: 0.3 },
 });
 
 const evalAt = (bp, n, agreed = bp) => ({
@@ -296,7 +292,7 @@ turn(2, {
   sentences: ["We can propose 32% of the balance, which is $400.00.", "Would that work?"],
   evalEv: evalAt(3200, 4),
   nextPhase: "NEGOTIATE",
-  timings: { stt_ms: 380, queue_ms: 0, nlu_ms: 744, engine_ms: 11.7, policy_ms: 0.2, nlg_ms: 512, tts_onset_ms: 310 },
+  timings: { queue_ms: 0, nlu_ms: 744, engine_ms: 11.7, policy_ms: 0.2, nlg_ms: 512 },
 });
 
 // ---- turn 3: ask 42%, counter 37% (LLM phrasing blocked by guard, template fallback)
@@ -322,7 +318,7 @@ turn(3, {
   sentences: ["We can propose 37% of the balance, which is $462.50.", "Would that work?"],
   evalEv: evalAt(3700, 4),
   nextPhase: "NEGOTIATE",
-  timings: { stt_ms: 395, queue_ms: 0, nlu_ms: 790, engine_ms: 10.2, policy_ms: 0.2, nlg_ms: 604, tts_onset_ms: 305 },
+  timings: { queue_ms: 0, nlu_ms: 790, engine_ms: 10.2, policy_ms: 0.2, nlg_ms: 604 },
 });
 
 // ---- turn 4: firm floor 40%, confirm schedule
@@ -346,7 +342,7 @@ turn(4, {
   ],
   evalEv: evalAt(4000, 5),
   nextPhase: "CONFIRM",
-  timings: { stt_ms: 402, queue_ms: 0, nlu_ms: 701, engine_ms: 12.3, policy_ms: 0.3, nlg_ms: 548, tts_onset_ms: 298 },
+  timings: { queue_ms: 0, nlu_ms: 701, engine_ms: 12.3, policy_ms: 0.3, nlg_ms: 548 },
 });
 
 const finalEval = lastEval;
@@ -376,7 +372,7 @@ turn(5, {
     assumed_fields: ["first_payment_date"],
     rows: finalEval.rows,
   },
-  timings: { stt_ms: 350, queue_ms: 0, nlu_ms: 455, engine_ms: 0.4, policy_ms: 0.2, nlg_ms: 0.3, tts_onset_ms: 300 },
+  timings: { queue_ms: 0, nlu_ms: 455, engine_ms: 0.4, policy_ms: 0.2, nlg_ms: 0.3 },
 });
 
 // ---- turn 6: close
@@ -390,7 +386,7 @@ turn(6, {
   nlg: tmpl("Thank you for your time. Goodbye."),
   sentences: ["Thank you for your time.", "Goodbye."],
   nextPhase: "END",
-  timings: { stt_ms: 330, queue_ms: 0, nlu_ms: 402, engine_ms: 0.3, policy_ms: 0.1, nlg_ms: 0.2, tts_onset_ms: 295 },
+  timings: { queue_ms: 0, nlu_ms: 402, engine_ms: 0.3, policy_ms: 0.1, nlg_ms: 0.2 },
 });
 
 const fixture = {

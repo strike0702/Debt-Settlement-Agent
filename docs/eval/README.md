@@ -6,7 +6,9 @@ and [`DESIGN.md`](../DESIGN.md) can be traced to a file. Each folder is one run
 produced it. Per-run raw outputs under `eval/results/` stay gitignored. The engine gap reports
 were made by `scripts/engine_gap_report.py` and the frozen take-home generator
 `feasibility/legacy.py`, both removed in Phase 61; they are in git history up to
-commit `25fd375`. The engine itself is described in [`ENGINE.md`](../ENGINE.md). Summary
+commit `25fd375`. The voice reports were made by `uv run python -m eval.voice`; the
+browser-speech targets they compare against were removed in Phase 67 and are in git
+history before it. The engine itself is described in [`ENGINE.md`](../ENGINE.md). Summary
 titles name the build phase they were made in; the phases come from the
 original [build plan](../history/PLAN.md).
 
@@ -22,6 +24,11 @@ original [build plan](../history/PLAN.md).
 | [`nlu_guard_20261008/`](nlu_guard_20261008/summary.md), [`nlu_phrase_guards_20261009/`](nlu_phrase_guards_20261009/summary.md), [`nlu_rules_20261009/`](nlu_rules_20261009/summary.md) | The code-side stance guards and reading rules, measured on and off |
 | [`haiku_nlu_demo_20261008/`](haiku_nlu_demo_20261008/summary.md), [`claude_nlu_demo_20261008/`](claude_nlu_demo_20261008/summary.md) | Live latency and cost probes of the demo's NLU route |
 | [`latency_20261007.md`](latency_20261007.md), [`latency_20261007/`](latency_20261007/) | Stage-by-stage latency before and after the template bank and key pool |
+| [`voice_tuned_20261029/`](voice_tuned_20261029/summary.md) | Voice after turn-taking and interruption tuning (Phase 65), plus a long call and the less sensitive pause check; the README's voice numbers |
+| [`voice_pipeline_20261029/`](voice_pipeline_20261029/summary.md) | First run of the server voice pipeline with real turns (Phase 63) |
+| [`voice_client_20261029/`](voice_client_20261029/summary.md) | The product UI's WebRTC client on laptop speakers (Phase 64): connects and plays, but `afplay` rep lines were mostly not recognized |
+| [`voice_spike_20261028/`](voice_spike_20261028/summary.md) | Pipecat + Deepgram spike against the old browser-speech client: the go / no-go (Phase 62) |
+| [`voice_baseline_20261028/`](voice_baseline_20261028/legacy-server-inject/summary.md) | The browser-speech client (vad-web, server Whisper, browser TTS) on injected audio, before its removal in Phase 67 |
 | [`engine_v2_20261028/`](engine_v2_20261028/summary.md) | Finished engine v2 (Phase 61): offline policy eval identical to main, and the [engine benchmark](engine_v2_20261028/bench.md) in the agent's and both ranked modes |
 | [`engine_v2_20261027/`](engine_v2_20261027/bench.md) | Engine benchmark before and after the exact search (Phase 57b), and per objective and fee policy (Phase 59) |
 | [`engine_gap_20261027_full/`](engine_gap_20261027_full/summary.md) | Gap report re-run with the exact search: 0 engine misses on every set (Phase 57b) |

@@ -438,6 +438,8 @@ def test_split_providers_file_halves_every_rate() -> None:
         entries[:] = [e for e in entries if not (isinstance(e, dict) and e.get("budgeted"))]
     # It also predates the eval sim route (Groq gpt-oss-120b first).
     base["profiles"]["eval"]["sim"] = split["profiles"]["eval"]["sim"]
+    # And it still has the demo's Whisper STT route, removed in Phase 67.
+    split["profiles"]["demo"].pop("stt")
     assert split["profiles"] == base["profiles"]
     for name, cfg in base["providers"].items():
         for key in ("rpm", "tpm"):

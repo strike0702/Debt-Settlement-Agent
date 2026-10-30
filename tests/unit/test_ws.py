@@ -278,32 +278,12 @@ def test_metrics_summary_shape(tmp_path: Path) -> None:
         assert "n" in body["server_total_ms"]
 
 
-@pytest.mark.asyncio
-async def test_stt_wrapper_timing() -> None:
-    from app.voice.stt import transcribe
-
-    fake = FakeLLM()
-    fake.enqueue("stt", "hello from whisper")
-    text, ms = await transcribe(fake, b"RIFF....")
-    assert text == "hello from whisper"
-    assert ms >= 0
-
-
-def test_ws_stt_call_is_audited(tmp_path: Path) -> None:
-    """F5: the binary-WAV STT call lands in the audit log under the socket's call id."""
-    audit = AuditLog(tmp_path / "ws_audit.db")
-    fake = FakeLLM()
-    fake.enqueue("stt", "   ")  # blank transcript → turn_done, no agent turn
-    app = create_app(settings=_settings(), llm=fake, audit=audit)
-    with TestClient(app) as client:
-        with client.websocket_connect("/ws/call/stt-audit") as ws:
-            ws.send_json({"type": "start", "scenario": "fixtures/demo"})
-            _recv_until(ws, lambda m: m.get("type") == "turn_done")
-            ws.send_bytes(b"RIFF....")
-            _recv_until(ws, lambda m: m.get("type") == "turn_done")
-    rows = [e for e in audit.for_call("stt-audit") if e["type"] == "llm_call"]
-    assert [r["payload"]["role"] for r in rows] == ["stt"]
-    audit.close()
+def test_voice_routes_mounted_without_a_stack_switch(tmp_path: Path) -> None:
+    """Phase 67: the WebRTC voice routes are always there; the legacy stack switch is gone."""
+    with _client(tmp_path) as client:
+        offer = client.post("/voice/offer?call_id=nope", json={"sdp": "x", "type": "offer"})
+        assert offer.status_code == 404  # route mounted: the call has not started
+        assert client.get("/voice/config").status_code == 404
 
 
 def test_healthz(tmp_path: Path) -> None:
@@ -340,18 +320,3 @@ def test_nlu_llm_unavailable_keeps_socket_open(tmp_path: Path) -> None:
     assert any(e["type"] == "llm_unavailable" and e["actor"] == "nlu" for e in events)
 
 
-def test_stt_then_nlu_llm_unavailable_keeps_socket_open(tmp_path: Path) -> None:
-    settings = _settings().model_copy(update={"nlu_mode": "llm"})
-    llm = FakeLLM()
-    audit = AuditLog(tmp_path / "ws_audit.db")
-    app = create_app(settings=settings, llm=llm, audit=audit)
-    with TestClient(app) as client, client.websocket_connect("/ws/call/unavail-2") as ws:
-        ws.send_json({"type": "start", "scenario": "fixtures/demo"})
-        _ack_all_says(ws, _recv_until(ws, lambda m: m.get("type") == "turn_done"))
-        llm.enqueue("stt", "We can take eight payments of some amount.")
-        ws.send_bytes(b"RIFF....WAVE")
-        failed = _recv_until(ws, lambda m: m.get("type") == "turn_done")
-        assert any(m["type"] == "error" for m in failed)
-        ws.send_json({"type": "end"})
-        ended = _recv_until(ws, lambda m: m.get("type") == "turn_done")
-        assert any(m["type"] == "say" for m in ended)

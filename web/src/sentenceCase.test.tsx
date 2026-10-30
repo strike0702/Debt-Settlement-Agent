@@ -109,7 +109,7 @@ function renderConsole(lens: Lens) {
       onAddCase={() => {}}
       onEditCase={() => {}}
       onRemoveCase={() => {}}
-      conversation={<Conversation messages={state.messages} mic="listening" suggested={["Correct."]} emptyHint="Press start." />}
+      conversation={<Conversation messages={state.messages} suggested={["Correct."]} emptyHint="Press start." />}
       trace={lens === "operator" ? <DecisionTrace traces={state.traces} lens={lens} /> : null}
       state={
         <StatePanel

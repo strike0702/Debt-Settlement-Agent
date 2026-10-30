@@ -1,14 +1,17 @@
 /**
- * WebRTC voice client for `VOICE_STACK=pipecat`: mic up, agent audio down, call state.
+ * WebRTC voice client (the only voice path): mic up, agent audio down, call state.
  *
  * The server (Pipecat + Deepgram) hears, decides barges and speaks; this file
  * only connects the mic to it and shows what the call is doing. It sends the
  * mic over one `RTCPeerConnection` (signaling: `POST /voice/offer?call_id=`),
  * hands the agent's audio track to an `<audio>` element, and folds the
  * socket's `voice_state` frames (live Flux partials, thinking, agent audio on
- * and off) into a snapshot. It never speaks `say` lines and never acks them:
- * the server acks what it played. Not the legacy path (`engine.ts`: browser
- * TTS, VAD, WAV upload, browser STT), which stays behind the flag.
+ * and off) into a snapshot. It never speaks `say` lines. While voice is on the
+ * server acks what it played; while voice is off the rep reads the lines, so
+ * this client acks them (`io.ack`): the opening waits (voice may still join and
+ * speak it) until the rep's first typed line, and after that every line is
+ * acked as it arrives. Without those acks a typed reply would barge an
+ * "unheard" agent turn and roll it back (Phase 67, DECISIONS D17).
  *
  * `useWebRtcVoice` wraps it for React; tests pass fake `RtcDeps`.
  * Failures go to `RtcIO.onError` as raw messages that `callErrorText` turns
@@ -103,6 +106,8 @@ export interface RtcDeps {
 export interface RtcIO {
   /** A failure for the visible error line (raw text; `callErrorText` words it). */
   onError(message: string): void;
+  /** Text mode: the rep has seen these sentences (`sentence_done` each). */
+  ack?(ids: string[]): void;
 }
 
 /** One label for the panel: link problems first, then the agent, then the mic. */
@@ -189,6 +194,11 @@ export class WebRtcVoice {
   private finishTimer: ReturnType<typeof setTimeout> | null = null;
   private sender: { replaceTrack(track: MediaStreamTrack | null): Promise<void> } | null = null;
   private offDevices: (() => void) | null = null;
+  /** Text mode: `say` ids shown but not yet acked (the opening, before the rep's first line). */
+  private unacked: string[] = [];
+  private repSpoke = false;
+  /** Autoplay: the server acks every line itself. */
+  private passive = false;
 
   constructor(
     private io: RtcIO,
@@ -353,6 +363,7 @@ export class WebRtcVoice {
     if (st === "connected") {
       this.clearTimer();
       this.attempts = 0;
+      this.unacked = []; // the server speaks and acks whatever is still waiting
       this.set({ link: "live" });
     } else if (st === "disconnected") {
       // ICE often recovers by itself; restart only if it does not.
@@ -433,10 +444,23 @@ export class WebRtcVoice {
   }
 
   /** New call: voice off, and the headphone hint may show again. */
-  reset(): void {
+  reset(autoplay = false): void {
     this.hangUp();
+    this.passive = autoplay;
+    this.unacked = [];
+    this.repSpoke = false;
     this.echoDismissed = false;
     this.set({ echoHint: false });
+  }
+
+  /** The rep typed or clicked a reply: with voice off, ack what they have read first. */
+  beforeRepText(): void {
+    this.repSpoke = true;
+    // The server ignores client acks while its voice session is attached.
+    if (this.snap.link === "live" || this.unacked.length === 0) return;
+    const ids = this.unacked;
+    this.unacked = [];
+    this.io.ack?.(ids);
   }
 
   dispose(): void {
@@ -480,6 +504,10 @@ export class WebRtcVoice {
     if (ev.type === "say") {
       // Never spoken here (the server's TTS speaks it); kept for the echo check.
       this.agentTexts = [...this.agentTexts.slice(-5), ev.text];
+      if (this.passive || this.snap.link === "live") return;
+      // While voice is connecting it may still speak the line; hold it until the link is up.
+      if (this.repSpoke && this.snap.link === "off") this.io.ack?.([ev.id]);
+      else this.unacked.push(ev.id);
       return;
     }
     if (this.snap.link === "off") return;

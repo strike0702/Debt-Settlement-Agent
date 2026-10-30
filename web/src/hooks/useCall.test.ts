@@ -101,8 +101,7 @@ describe("useCall", () => {
     const ws = FakeSocket.all[0]!;
     act(() => ws.open());
     expect(hook.result.current.sendText("Forty percent.", "suggested")).toBe(true);
-    expect(hook.result.current.sendWav(new ArrayBuffer(4))).toBe(true);
-    expect(ws.sent.slice(1)).toEqual([{ type: "text", text: "Forty percent.", source: "suggested" }, new ArrayBuffer(4)]);
+    expect(ws.sent.slice(1)).toEqual([{ type: "text", text: "Forty percent.", source: "suggested" }]);
   });
 
   it("end: hangs up after the close turn; the last call id stays downloadable", () => {

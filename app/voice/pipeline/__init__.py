@@ -1,4 +1,4 @@
-"""Server voice pipeline (Phase 63): Pipecat + Deepgram over WebRTC, behind ``VOICE_STACK``.
+"""Server voice pipeline (Phase 63): Pipecat + Deepgram over WebRTC, the only voice path.
 
 Audio only: the browser sends its mic over WebRTC and plays the agent's Aura-2
 audio; every UI event still goes over the call's WebSocket (``app.voice.ws``).

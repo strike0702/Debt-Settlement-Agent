@@ -1,7 +1,8 @@
 /**
  * `WebRtcVoice` with fake browser deps: signaling to `/voice/offer`, the call
  * state machine (server `voice_state`, mute, push to talk), failures routed to
- * the error line, reconnect after a drop, the echo hint, and `say` never spoken.
+ * the error line, reconnect after a drop, the echo hint, `say` never spoken,
+ * and the text-mode acks while voice is off.
  */
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import { callErrorText } from "@/lib/callError";
@@ -87,12 +88,14 @@ let deps: RtcDeps & {
   log: Mock<RtcDeps["log"]>;
 };
 let errors: string[];
+let acked: string[];
 let voice: WebRtcVoice;
 let clock: number;
 
 beforeEach(() => {
   peers = [];
   errors = [];
+  acked = [];
   clock = 0;
   track = fakeTrack();
   const stream = { getAudioTracks: () => [track], getTracks: () => [track] } as unknown as MediaStream;
@@ -108,7 +111,7 @@ beforeEach(() => {
     now: () => clock,
     log: vi.fn<RtcDeps["log"]>(),
   };
-  voice = new WebRtcVoice({ onError: (m) => errors.push(m) }, deps);
+  voice = new WebRtcVoice({ onError: (m) => errors.push(m), ack: (ids) => acked.push(...ids) }, deps);
 });
 afterEach(() => vi.useRealTimers());
 
@@ -217,6 +220,31 @@ describe("call state", () => {
     expect(state()).toBe("listening");
     voice.talk(false);
     expect(track.enabled).toBe(false);
+  });
+});
+
+describe("text mode acks (Phase 67)", () => {
+  const say = (id: string) => ev({ type: "say", id, text: "A line." });
+
+  it("holds the opening for voice, acks it on the first typed line, then acks each line", () => {
+    say("open");
+    expect(acked).toEqual([]);
+    voice.beforeRepText();
+    expect(acked).toEqual(["open"]);
+    say("r1");
+    expect(acked).toEqual(["open", "r1"]);
+  });
+
+  it("leaves acks to the server while voice is on, and sends none under autoplay", async () => {
+    say("open");
+    await live(); // the server speaks the opening now
+    voice.beforeRepText();
+    say("r1");
+    expect(acked).toEqual([]);
+    voice.reset(true);
+    voice.beforeRepText();
+    say("a1");
+    expect(acked).toEqual([]);
   });
 });
 

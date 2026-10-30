@@ -1,4 +1,4 @@
-"""HTTP routes of the Pipecat voice path, mounted only when ``VOICE_STACK=pipecat``.
+"""HTTP routes of the voice path (Pipecat over WebRTC), mounted by ``app.main``.
 
 ``POST /voice/offer?call_id=…`` takes the browser's SDP offer and returns the
 answer; ``PATCH /voice/offer?call_id=…`` adds trickled ICE candidates. The call

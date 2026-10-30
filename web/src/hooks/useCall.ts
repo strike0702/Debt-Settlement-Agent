@@ -41,8 +41,7 @@ export interface UseCall {
   end: () => void;
   sendText: (text: string, source?: string) => boolean;
   sendJson: (ev: ClientEvent) => void;
-  sendWav: (wav: ArrayBuffer) => boolean;
-  /** Append a client-side event (`tts_onset`) to the stream. */
+  /** Append a client-side event (`voice_live`, a voice `error`) to the stream. */
   addLocal: (ev: CallEvent) => void;
   subscribe: (fn: (ev: ServerEvent) => void) => () => void;
 }
@@ -91,7 +90,6 @@ export function useCall(
       const id = makeId();
       const ws = makeSocket(wsUrl(id, opts.view));
       sock.current = ws;
-      ws.binaryType = "arraybuffer";
       ending.current = false;
       sawEnd.current = false;
       setEvents([]);
@@ -172,12 +170,6 @@ export function useCall(
     [sendJson],
   );
 
-  const sendWav = useCallback((wav: ArrayBuffer) => {
-    if (!isOpen()) return false;
-    sock.current!.send(wav);
-    return true;
-  }, []);
-
   const addLocal = useCallback((ev: CallEvent) => setEvents((prev) => [...prev, ev]), []);
 
   const subscribe = useCallback((fn: (ev: ServerEvent) => void) => {
@@ -187,5 +179,5 @@ export function useCall(
     };
   }, []);
 
-  return { events, status, callId, lastCallId, view, autoplay, start, end, sendText, sendJson, sendWav, addLocal, subscribe };
+  return { events, status, callId, lastCallId, view, autoplay, start, end, sendText, sendJson, addLocal, subscribe };
 }

@@ -2,11 +2,11 @@
 
 Server events are what ``app.voice.ws`` sends (``transcript``, ``say``,
 ``belief``, ``eval``, ``blocked``, ``escalate``, ``latency``, ``audit``,
-``phase``, ``agreement``, ``stt_error``, ``error``, ``turn_done``,
-``turn_trace``, ``autoplay_done``, ``speech_dropped``); client events are what it accepts. The web
-UI's TypeScript types are generated from the exported schema, so this file is
-the protocol's single source of truth. ``TurnTrace`` is also the type of
-``Orchestrator``'s ``Utterance.trace``.
+``phase``, ``agreement``, ``error``, ``turn_done``, ``turn_trace``,
+``autoplay_done``, ``speech_dropped``, ``voice_state``); client events are
+what it accepts. The web UI's TypeScript types are generated from the
+exported schema, so this file is the protocol's single source of truth.
+``TurnTrace`` is also the type of ``Orchestrator``'s ``Utterance.trace``.
 
 Fields marked "operator only" are absent (not null) on the ``?view=rep``
 stream; ``app.voice.views`` does that filtering, not these models.
@@ -338,7 +338,6 @@ class EscalateEvent(_Model):
 class LatencyEvent(_Model):
     type: Literal["latency"]
     turn: int
-    stt_ms: float | None
     nlu_ms: float | None
     engine_ms: float | None
     policy_ms: float | None
@@ -373,11 +372,6 @@ class AgreementEvent(_Model):
     status: Literal["pending_client_approval"]
     assumed_fields: list[str]
     rows: list[ScheduleRow]
-
-
-class SttErrorEvent(_Model):
-    type: Literal["stt_error"]
-    message: str
 
 
 class ErrorEvent(_Model):
@@ -437,7 +431,6 @@ ServerEvent = Annotated[
     | AuditEvent
     | PhaseEvent
     | AgreementEvent
-    | SttErrorEvent
     | ErrorEvent
     | TurnDoneEvent
     | TurnTraceEvent
@@ -458,7 +451,6 @@ SERVER_EVENT_TYPES: tuple[str, ...] = (
     "audit",
     "phase",
     "agreement",
-    "stt_error",
     "error",
     "turn_done",
     "turn_trace",
@@ -509,14 +501,8 @@ class BargeInEvent(_Model):
     spoken_ids: list[str]
 
 
-class TimingEvent(_Model):
-    type: Literal["timing"]
-    turn: int | None = None
-    vad_end_to_first_audio_ms: float | None = None
-
-
 ClientEvent = Annotated[
-    StartEvent | EndEvent | TextEvent | SentenceDoneEvent | BargeInEvent | TimingEvent,
+    StartEvent | EndEvent | TextEvent | SentenceDoneEvent | BargeInEvent,
     Field(discriminator="type"),
 ]
 

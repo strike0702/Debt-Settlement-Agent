@@ -6,13 +6,11 @@
 import type { TraceTimings } from "@/types/protocol";
 
 export const STAGES = [
-  ["stt_ms", "Speech to text"],
   ["queue_ms", "Queue"],
   ["nlu_ms", "Understand (NLU)"],
   ["engine_ms", "Engine"],
   ["policy_ms", "Policy"],
   ["nlg_ms", "Phrase (NLG)"],
-  ["tts_onset_ms", "Voice onset"],
 ] as const satisfies readonly (readonly [keyof TraceTimings, string])[];
 
 export interface WaterfallRow {

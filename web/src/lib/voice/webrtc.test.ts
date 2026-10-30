@@ -124,6 +124,15 @@ async function live() {
 }
 
 describe("signaling", () => {
+  it("builds each peer connection with the call's fresh ICE servers", async () => {
+    const turn = [{ urls: ["turn:turn.example:3478?transport=udp"], username: "u", credential: "c" }];
+    deps.iceServers = vi.fn(async () => turn);
+    const make = vi.spyOn(deps, "makePeer");
+    await voice.connect("call 1");
+    expect(deps.iceServers).toHaveBeenCalledWith("call 1");
+    expect(make).toHaveBeenCalledWith(turn);
+  });
+
   it("sends the mic with echo cancellation, posts the offer and applies the answer", async () => {
     const p = voice.connect("call 1");
     expect(state()).toBe("connecting");

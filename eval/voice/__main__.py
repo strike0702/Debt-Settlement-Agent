@@ -169,7 +169,11 @@ def main() -> None:
     ap.add_argument("--gap-s", type=float, default=0.0, help="extra silence before each reply")
     ap.add_argument("--blip-before", help="line id: stall the server just before it")
     ap.add_argument("--blip-s", type=float, default=8.0, help="stall length")
+    ap.add_argument(
+        "--ice", choices=["all", "relay"], default="all", help="pipecat-ui: relay forces TURN"
+    )
     a = ap.parse_args()
+    driver.ICE_POLICY = a.ice
     driver.SOAK = driver.Soak(a.gap_s, a.blip_before, a.blip_s)
     ids = [c.id for c in CALLS] if a.calls == "all" else a.calls.split(",")
     doc = asyncio.run(run(a.target, a.audio, ids, a.out, a.repeat))

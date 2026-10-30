@@ -13,6 +13,11 @@
  * acked as it arrives. Without those acks a typed reply would barge an
  * "unheard" agent turn and roll it back (Phase 67, DECISIONS D17).
  *
+ * Each new peer connection first gets fresh ICE servers from
+ * `GET /voice/ice?call_id=` (Cloudflare STUN + short-lived TURN, minted on the
+ * server; Render's ingress needs the TURN relay). If that fails the connection
+ * still tries without them.
+ *
  * `useWebRtcVoice` wraps it for React; tests pass fake `RtcDeps`.
  * Failures go to `RtcIO.onError` as raw messages that `callErrorText` turns
  * into the visible error line; refusals the server already put on the call
@@ -91,9 +96,18 @@ export interface FetchResponse {
   json(): Promise<unknown>;
 }
 
+/** One `RTCIceServer` as `GET /voice/ice` returns it. */
+export interface IceServerLike {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
+}
+
 export interface RtcDeps {
   getUserMedia(c: MediaStreamConstraints): Promise<MediaStream>;
-  makePeer(): PeerLike;
+  makePeer(iceServers?: IceServerLike[]): PeerLike;
+  /** Fresh ICE servers for the call (`GET /voice/ice`); fakes may omit it. */
+  iceServers?(callId: string): Promise<IceServerLike[]>;
   fetch(url: string, init: { method: string; headers: Record<string, string>; body: string }): Promise<FetchResponse>;
   /** Play the agent's audio (an `<audio>` element's `srcObject`). */
   playRemote(stream: MediaStream | null, track: MediaStreamTrack): void;
@@ -302,7 +316,9 @@ export class WebRtcVoice {
   private async negotiate(gen: number): Promise<void> {
     const track = this.track;
     if (!track || gen !== this.gen) return;
-    const pc = this.deps.makePeer();
+    const servers = await this.deps.iceServers?.(this.callId ?? "").catch(() => undefined);
+    if (gen !== this.gen || this.track !== track) return;
+    const pc = this.deps.makePeer(servers);
     this.pc = pc;
     this.sender = pc.addTransceiver(track, { direction: "sendrecv" }).sender;
     pc.ontrack = (ev) => this.deps.playRemote(ev.streams[0] ?? null, ev.track);

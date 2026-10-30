@@ -58,3 +58,20 @@ services:
       # Anthropic console as the backstop.
       - key: CLAUDE_DAILY_BUDGET_USD
         sync: false
+      # Voice (Pipecat over WebRTC, Phase 66). Without DEEPGRAM_API_KEY, Turn
+      # voice on says voice is not set up; text chat always works. Render has no
+      # inbound UDP, so voice needs the Cloudflare TURN relay (both keys).
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: CLOUDFLARE_TURN_KEY_ID
+        sync: false
+      - key: CLOUDFLARE_TURN_API_TOKEN
+        sync: false
+      # Voice caps (spend counter in DB_PATH: a restart starts the day at 0, so
+      # keep an eye on Deepgram usage as the backstop).
+      - key: VOICE_DAILY_BUDGET_USD
+        value: "1.00"
+      - key: VOICE_DAILY_MINUTES
+        value: "60"
+      - key: VOICE_SESSION_MAX_S
+        value: "600"

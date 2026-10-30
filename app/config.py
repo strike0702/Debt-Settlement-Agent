@@ -158,6 +158,15 @@ class Settings(BaseSettings):
     # Daily cap (USD, UTC day) on Deepgram voice spend; new voice sessions are
     # refused once today's estimate reaches it. Decimal, never float.
     voice_daily_budget_usd: Decimal = Field(default=Decimal("1.00"), ge=0)
+    # Hosted-demo caps (Phase 66): Flux minutes per UTC day (new sessions refused
+    # once reached) and voice seconds per call (the session ends with a message).
+    voice_daily_minutes: Decimal = Field(default=Decimal("60"), ge=0)
+    voice_session_max_s: int = Field(default=600, ge=10)
+    # Cloudflare TURN (Phase 66; app.voice.pipeline.ice). Without both, voice
+    # uses STUN only, which cannot connect from behind Render's HTTP ingress.
+    cloudflare_turn_key_id: str | None = None
+    cloudflare_turn_api_token: SecretStr | None = None
+    voice_turn_ttl_s: int = Field(default=3600, ge=300, le=86400)
     # Deepgram list prices used for the estimate (verify before relying on them).
     deepgram_flux_usd_per_min: Decimal = Decimal("0.0077")
     deepgram_aura2_usd_per_1k_chars: Decimal = Decimal("0.030")

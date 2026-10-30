@@ -54,6 +54,9 @@ class VoiceCall(Protocol):
     async def voice_state(self, state: str, text: str) -> None:
         """Show the browser what the call is doing (``voice_state``; display only)."""
 
+    async def voice_error(self, message: str) -> None:
+        """Show a voice message on the UI's error line (``error``)."""
+
 
 class VoiceTurns:
     """Runs final / eager transcripts and heard / barge signals against one call."""

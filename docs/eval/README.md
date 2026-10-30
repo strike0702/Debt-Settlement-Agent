@@ -26,6 +26,7 @@ original [build plan](../history/PLAN.md).
 | [`latency_20261007.md`](latency_20261007.md), [`latency_20261007/`](latency_20261007/) | Stage-by-stage latency before and after the template bank and key pool |
 | [`voice_tuned_20261029/`](voice_tuned_20261029/summary.md) | Voice after turn-taking and interruption tuning (Phase 65), plus a long call and the less sensitive pause check; the README's voice numbers |
 | [`voice_pipeline_20261029/`](voice_pipeline_20261029/summary.md) | First run of the server voice pipeline with real turns (Phase 63) |
+| [`voice_hosting_20261030/`](voice_hosting_20261030/summary.md) | One relay-forced call through Cloudflare TURN (Phase 66): connect time, RTT, server peak RSS |
 | [`voice_client_20261029/`](voice_client_20261029/summary.md) | The product UI's WebRTC client on laptop speakers (Phase 64): connects and plays, but `afplay` rep lines were mostly not recognized |
 | [`voice_spike_20261028/`](voice_spike_20261028/summary.md) | Pipecat + Deepgram spike against the old browser-speech client: the go / no-go (Phase 62) |
 | [`voice_baseline_20261028/`](voice_baseline_20261028/legacy-server-inject/summary.md) | The browser-speech client (vad-web, server Whisper, browser TTS) on injected audio, before its removal in Phase 67 |

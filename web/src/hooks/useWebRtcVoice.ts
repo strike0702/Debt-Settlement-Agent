@@ -15,6 +15,7 @@ import {
   type RtcDeps,
   type RtcIO,
   type RtcSnapshot,
+  type IceServerLike,
 } from "@/lib/voice/webrtc";
 
 /** The real browser: getUserMedia, RTCPeerConnection, fetch, an `<audio>` element. */
@@ -22,7 +23,17 @@ export function browserRtcDeps(): RtcDeps {
   let audio: HTMLAudioElement | null = null;
   return {
     getUserMedia: (c) => navigator.mediaDevices.getUserMedia(c),
-    makePeer: () => new RTCPeerConnection() as unknown as ReturnType<RtcDeps["makePeer"]>,
+    makePeer: (iceServers) =>
+      new RTCPeerConnection({
+        iceServers,
+        // `?ice=relay` forces the TURN relay (testing what Render needs).
+        iceTransportPolicy: new URLSearchParams(location.search).get("ice") === "relay" ? "relay" : "all",
+      }) as unknown as ReturnType<RtcDeps["makePeer"]>,
+    iceServers: async (callId) => {
+      const res = await fetch(`/voice/ice?call_id=${encodeURIComponent(callId)}`);
+      if (!res.ok) throw new Error(`voice ice ${res.status}`);
+      return ((await res.json()) as { iceServers: IceServerLike[] }).iceServers;
+    },
     fetch: (url, init) => fetch(url, init),
     playRemote: (stream, track) => {
       audio ??= Object.assign(new Audio(), { autoplay: true });

@@ -304,6 +304,27 @@ server's own ICE is STUN only (`VOICE_SERVER_TURN=false`): it has a public IP, a
 TURN channel bind against Cloudflare failed with 401. Render stays as a text-only mirror.
 Details: [`docs/DEPLOY_AWS.md`](../DEPLOY_AWS.md).
 
+## D19. NLU v2: typed acts plus call context instead of flat flags (2026-11-07)
+
+**Question.** Two live Haiku calls failed in ways no test had covered: the agent accepted 75%
+after the rep said 73 (the model returned no number; the policy reused the last final ask), and
+the tier dialogue broke on natural phrasing ("that's all the tiers" ended the call). Patch each
+case (a Phase 68b), or change how the NLU reports a turn?
+
+**Chosen.** Redesign: the model returns a short list of typed acts from a closed set (about 17
+types, including `unclear`), each with its own fields and a quote, and receives a PUBLIC summary
+of the call state (phase, what we await, asks and offers on the table, the list being collected).
+Code still owns every number, with a new rule that every number in the line must be claimed by a
+verified act or the turn cannot act on older values. Coverage is tested as a grid of phase × act
+type rather than by conversations. 71a ships it behind a flag with a converter and an A/B on
+Haiku under a rule written first ([`docs/NLU_PLAN.md`](../NLU_PLAN.md)); 71b moves the policy to
+acts. No interim 73-vs-75 patch: the demo is not shared before 71 lands (user).
+
+**Why.** Flat flags have no meaning of their own, so conflicts are settled by a priority order
+and each new situation adds a flag that can break an old one; the model also lacked the context
+that makes "seventy three" a price and "that's all" the end of a list. Shorter structured output
+should also cut the live NLU time (about 550 output tokens, 3 s).
+
 ## Process choices
 
 - Each phase runs in its own git worktree with a paste-ready prompt; phases that touch the

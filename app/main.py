@@ -30,8 +30,9 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.types import Scope
 
-from app.autoplay import scenario_rules
+from app.autoplay import scenario_rules, sim_rules
 from app.config import Settings, get_settings
+from app.domain.rule_replies import merge_suggestions
 from app.domain.scenario import (
     SCENARIO_TEMPLATE,
     details_from_scenario,
@@ -146,7 +147,10 @@ def create_app(
                 "title": m.title,
                 "description": m.description,
                 "expected": m.expected,
-                "suggested": rep_card_suggestions(load_rep_card(m.id)),
+                # Card lines plus spoken tier / level lines built from the true rules.
+                "suggested": merge_suggestions(
+                    rep_card_suggestions(load_rep_card(m.id)), sim_rules(m.id)
+                ),
             }
             for m in list_scenario_metas()
         ]

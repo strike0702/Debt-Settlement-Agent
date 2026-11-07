@@ -92,6 +92,10 @@ export interface RepAccount {
     opening_ask_bp: number | null;
     floor_bp: number | null;
     first_payment: string | null;
+    /** Plain words from the card, e.g. "Payments 1 to 2 at least $190, 3 to 5 at least $250". */
+    payment_tiers?: string | null;
+    /** E.g. "Up to 3". */
+    payment_levels?: string | null;
   };
 }
 

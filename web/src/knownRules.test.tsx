@@ -5,9 +5,10 @@
  * block Start; "Fill from scenario" copies the scenario's true rules; the rep view
  * never shows the panel or rules the operator entered.
  */
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "@/App";
+import { PANEL_HINT } from "@/components/KnownRulesPanel";
 import { toRepView } from "@/lib/repView";
 import type { BeliefEvent, ScenarioBrief, ScenarioMeta } from "@/types/protocol";
 
@@ -139,6 +140,16 @@ describe("Known creditor rules panel", () => {
     expect(input("Tier 1 from payment number").value).toBe("4");
     expect(input("Tier 1 minimum payment").value).toBe("200");
     expect(startMsg()).toMatchObject({ known_rules: BRIEF.scenario_rules });
+  });
+
+  it("puts its description in a tooltip on the title, not under it", async () => {
+    render(<App />);
+    const card = await panel();
+    const title = within(card).getByText("Known creditor rules");
+    const tip = document.getElementById(title.getAttribute("aria-describedby")!)!;
+    expect(tip).toHaveAttribute("role", "tooltip");
+    expect(tip).toHaveTextContent(PANEL_HINT);
+    expect(within(card).queryByText(/Rules you already know/, { ignore: "[role=tooltip]" })).toBeNull();
   });
 
   it("is never shown in the Creditor rep view", async () => {

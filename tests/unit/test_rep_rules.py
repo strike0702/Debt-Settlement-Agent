@@ -20,12 +20,12 @@ from datetime import date
 from app.agent.nlg import TEMPLATES, render_action
 from app.agent.nlu import post_verify, repair_defines_field
 from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
-from app.agent.numbers import extract_tokens
 from app.agent.orchestrator import Orchestrator
 from app.agent.policy import Intent, NegotiationState, Phase, decide
 from app.agent.session import CallSession
 from app.autoplay import new_autoplay_call, run_autoplay
 from app.domain.belief import BeliefState, TermStatus
+from app.domain.rule_replies import merge_suggestions, rule_reply_lines
 from app.domain.scenario import (
     load_scenario,
     rep_card_suggestions,
@@ -225,15 +225,18 @@ async def test_tier_definer_autoplay_reaches_a_deal_on_the_tiers() -> None:
 
 
 def test_tier_definer_card_matches_its_autoplay_truth() -> None:
-    """The card's suggested tier lines give the simulated rep's tiers, in order."""
+    """The suggested tier lines (built from ``sim.json``, Phase 69) give the sim rep's tiers."""
     folder = resolve_scenario_dir("tier_definer")
     card = (folder / "rep_card.md").read_text(encoding="utf-8")
     truth = json.loads((folder / "sim.json").read_text())
-    said: list[list[int]] = []
-    for line in rep_card_suggestions(card):
-        if " tier is from the " in line:
-            toks = extract_tokens(line.split(" tier is from the ", 1)[1])
-            frm = next(t.value for t in toks if t.kind in ("ordinal", "count"))
-            cents = next(t.value for t in toks if t.kind == "money")
-            said.append([frm, cents])
-    assert said == truth["rules"]["min_payment_tiers"]
+    lines = merge_suggestions(rep_card_suggestions(card), truth["rules"])
+    at = lines.index("Before we get to a price, I need to define the payment tiers.")
+    assert lines[at + 1 : at + 7] == [
+        "There are three payment tiers.",
+        "The first two payments must be at least one hundred ninety dollars.",
+        "Payments three to five must be at least two hundred fifty dollars.",
+        "Payments six to eight must be at least three hundred dollars.",
+        "That's all the tiers.",
+        "At most three payment levels.",
+    ]
+    assert rule_reply_lines({"max_segments": 2, "min_payment_tiers": []}) == []

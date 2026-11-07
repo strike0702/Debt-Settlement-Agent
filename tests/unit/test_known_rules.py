@@ -17,9 +17,15 @@ from typing import Any
 import pytest
 
 from app.agent.session import CallSession
+from app.autoplay import scenario_rules
 from app.domain.belief import TermStatus
 from app.domain.known_rules import parse_known_rules
-from app.domain.scenario import SCENARIO_TEMPLATE, load_scenario, scenario_payload_errors
+from app.domain.scenario import (
+    SCENARIO_TEMPLATE,
+    load_scenario,
+    resolve_scenario_dir,
+    scenario_payload_errors,
+)
 from app.voice import ws as ws_mod
 from tests.wsutil import _ACCEPT, _ASK, ack_all, make_client, turn
 
@@ -39,8 +45,10 @@ def _record(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ws_mod, "CallSession", _RecordingSession)
 
 
-def _play(ws: Any, start: dict[str, Any], lines: list[dict[str, Any]]) -> list[dict]:
-    ws.send_json({"type": "start", "scenario_id": "easy_deal", **start})
+def _play(
+    ws: Any, start: dict[str, Any], lines: list[dict[str, Any]], scenario_id: str = "easy_deal"
+) -> list[dict]:
+    ws.send_json({"type": "start", "scenario_id": scenario_id, **start})
     frames = turn(ws)
     frames += ack_all(ws, frames)
     for msg in lines:
@@ -55,7 +63,7 @@ def _play(ws: Any, start: dict[str, Any], lines: list[dict[str, Any]]) -> list[d
     [
         ({"min_payment_cents": 10_000,
           "min_payment_tiers": [{"from_payment": 3, "min_cents": 9_000}]},
-         "more than the minimum payment"),
+         "less than the minimum payment"),
         ({"max_payments": 4, "min_payment_tiers": [{"from_payment": 6, "min_cents": 20_000}]},
          "after the last allowed payment"),
         ({"min_payment_tiers": [{"from_payment": 4, "min_cents": 30_000},
@@ -158,3 +166,28 @@ def test_firm_default_per_creditor_and_call_override(tmp_path: Path) -> None:
     payload["firm"]["known_creditor_rules"] = {creditor: {"first_payment_date": "2030-01-31"}}
     assert [e["path"] for e in scenario_payload_errors(payload)] == ["firm.known_creditor_rules"]
     assert load_scenario(Path("fixtures/scenarios/easy_deal")).known_rules == {}
+
+
+def test_filled_flexible_scenario_skips_the_sweep_and_every_ask(tmp_path: Path) -> None:
+    """Fill from scenario on ``tier_definer`` (flexible, tiers): no optional sweep, no rule ask."""
+    call = load_scenario(resolve_scenario_dir("tier_definer"), rebase_to=date.today())
+    rules = scenario_rules("tier_definer", call)
+    assert rules and rules["payment_structure"] == "flexible" and rules["min_payment_tiers"]
+    ask = {
+        "type": "text",
+        "text": "We are looking for sixty percent of the balance.",
+        "oracle": {"settlement_ask_pct": 60.0, "ask_quote": "sixty percent", "stance": "offer"},
+    }
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-flex") as ws:
+        frames = _play(ws, {"known_rules": rules}, [ask], scenario_id="tier_definer")
+    belief = _SESSIONS[-1].belief
+    assert belief.get("min_payment_tiers").status == TermStatus.KNOWN
+    assert belief.get("max_segments").status == TermStatus.KNOWN
+    intents = [f["intent"] for f in frames if f["type"] == "phase" and f.get("intent")]
+    assert "ASK" not in intents and "READ_BACK" not in intents
+    reasons = [
+        f["payload"].get("reason") for f in frames
+        if f["type"] == "audit" and f["actor"] == "policy" and f["event"] == "decide"
+    ]
+    assert reasons and "optional_sweep" not in reasons
+    assert "min_payment_tiers" not in reasons

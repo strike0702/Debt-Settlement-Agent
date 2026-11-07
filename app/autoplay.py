@@ -112,16 +112,23 @@ def parse_haggle(raw: Any, *, where: str = "sim.json") -> Haggle:
     )
 
 
+def sim_rules(scenario_id: str) -> dict[str, Any] | None:
+    """The curated scenario's raw ``sim.json`` ``rules`` (creditor terms), or ``None``."""
+    path = resolve_scenario_dir(scenario_id) / SIM_TRUTH_FILE
+    if not path.is_file():
+        return None
+    return dict(json.loads(path.read_text())["rules"])
+
+
 def scenario_rules(scenario_id: str, call: CallScenario) -> dict[str, Any] | None:
     """The curated scenario's true creditor rules as known-rules wire JSON, or ``None``.
 
     Feeds the operator panel's "Fill from scenario" (demo convenience; operator brief
     only). Relative ``sim.json`` dates resolve against ``call``; ``"default"`` is left out.
     """
-    path = resolve_scenario_dir(scenario_id) / SIM_TRUTH_FILE
-    if not path.is_file():
+    rules = sim_rules(scenario_id)
+    if rules is None:
         return None
-    rules = json.loads(path.read_text())["rules"]
     spec = str(rules.get("first_payment_date", "default"))
     fpd = None if spec == "default" else _first_payment_date(spec, call)
     return rules_from_sim(rules, fpd)

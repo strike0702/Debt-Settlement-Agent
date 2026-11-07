@@ -31,10 +31,6 @@ term back to you ("So payments ... Is that right?"), answer "Correct." (or "No")
 
 - We can take up to eight payments, at least one hundred ninety dollars each, on a flexible schedule.
 - Before we get to a price, I need to define the payment tiers.
-- We will have three payment tiers.
-- The first tier is from the first payment on, at least one hundred ninety dollars.
-- The second tier is from the third payment on, at least two hundred fifty dollars.
-- The third tier is from the sixth payment on, at least three hundred dollars.
 - Correct.
 - We are looking for sixty percent of the balance.
 - Fifty-five percent is my floor. I can't go lower than that.

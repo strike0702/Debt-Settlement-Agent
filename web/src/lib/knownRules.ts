@@ -93,8 +93,8 @@ export function parseRules(form: RulesForm, asOf?: string): { rules: KnownRules;
         errors.min_payment_tiers = "Each tier must start at a later payment and ask for more than the one before.";
       else if (rules.max_payments != null && last.from_payment > rules.max_payments)
         errors.min_payment_tiers = `A tier starts at payment ${last.from_payment}, after the last allowed payment (${rules.max_payments}).`;
-      else if (rules.min_payment_cents != null && tiers[0]!.min_cents <= rules.min_payment_cents)
-        errors.min_payment_tiers = "Every tier must ask for more than the minimum payment.";
+      else if (rules.min_payment_cents != null && tiers[0]!.min_cents < rules.min_payment_cents)
+        errors.min_payment_tiers = "No tier can ask for less than the minimum payment.";
       else rules.min_payment_tiers = tiers;
     }
   }

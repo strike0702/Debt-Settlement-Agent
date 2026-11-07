@@ -560,6 +560,11 @@ def _free_text(text: str) -> str | None:
     return text or None
 
 
+def _sentence(text: str) -> str | None:
+    """Free text with a capital first letter (sentence case on the rep's card)."""
+    return text[:1].upper() + text[1:] if text else None
+
+
 _ACCOUNT_ROWS: dict[str, tuple[str, _RowParser]] = {
     "creditor": ("name", _free_text),
     "outstanding balance": ("outstanding_balance_cents", _money_cents),
@@ -572,6 +577,9 @@ _RULE_ROWS: dict[str, tuple[str, _RowParser]] = {
     "opening ask": ("opening_ask_bp", _pct_bp),
     "floor": ("floor_bp", _pct_bp),
     "first payment": ("first_payment", _free_text),
+    # Plain words the rep reads aloud, e.g. "payments 1 to 2 at least $190, 3 to 5 ...".
+    "payment tiers": ("payment_tiers", _sentence),
+    "payment levels": ("payment_levels", _sentence),
 }
 
 

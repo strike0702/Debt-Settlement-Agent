@@ -10,7 +10,7 @@
  * blur, neutral grey while it is being changed or when empty, red when it does not
  * parse or does not fit the other rules). Help and errors sit in a tooltip bubble
  * under the box (`role="tooltip"`, the control's `aria-describedby`); an error keeps
- * it open. No focus ring: the caret shows focus. Payment tiers are a small table
+ * it open. The panel's own description is a tooltip on its title (no text under it). No focus ring: the caret shows focus. Payment tiers are a small table
  * (from payment # → minimum $) with add and remove buttons; its error shows under
  * the table. "Fill from scenario" copies the scenario's true rules (demo shortcut).
  */
@@ -28,6 +28,10 @@ const BORDER: Record<RuleState, string> = {
   empty: "border-border",
   invalid: "border-bad",
 };
+
+/** The panel's description: a tooltip on its title (hover or keyboard focus). */
+export const PANEL_HINT =
+  "Rules you already know before the call. The agent won't ask for them and reads them back before agreeing. Fill from scenario is a demo shortcut.";
 
 /** Help text per field (tooltip and accessible description). */
 export const HELP: Record<RuleKey, string> = {
@@ -171,11 +175,25 @@ export function KnownRulesPanel({
     set("min_payment_tiers", tiers.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const tierState = state("min_payment_tiers");
   const tierHint = useId();
+  const titleHint = useId();
 
   return (
     <Card data-testid="known-rules">
       <CardHeader
-        title="Known creditor rules"
+        title={
+          <span className="group relative">
+            <span tabIndex={0} aria-describedby={titleHint} className="cursor-help">
+              Known creditor rules
+            </span>
+            <span
+              id={titleHint}
+              role="tooltip"
+              className="absolute top-full left-0 z-20 mt-1.5 hidden w-max max-w-[min(18rem,calc(100vw-2rem))] rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-normal text-fg shadow-lg group-focus-within:block group-hover:block"
+            >
+              {PANEL_HINT}
+            </span>
+          </span>
+        }
         aside={
           onFill && (
             <Button size="sm" variant="ghost" className="text-accent" onClick={onFill} title="Demo shortcut: copies this scenario's real rules">
@@ -185,10 +203,6 @@ export function KnownRulesPanel({
         }
       />
       <CardBody className="flex flex-col gap-3">
-        <p className="m-0 text-sm text-muted">
-          Rules you already know before the call. The agent won't ask for them and reads them back before agreeing.
-          {onFill && " Fill from scenario is a demo shortcut."}
-        </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {text("max_payments")}
           {text("min_payment_cents", "$")}

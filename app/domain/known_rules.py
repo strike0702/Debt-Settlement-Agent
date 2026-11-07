@@ -74,9 +74,9 @@ def parse_known_rules(
     """Validate known rules JSON into belief values ``{field: value}``; absent/null fields left out.
 
     Tiers must make sense together with the other rules: each tier starts at a
-    later payment than the one before and asks for more, above the minimum
-    payment and no later than the maximum number of payments (a tier that never
-    raises the floor is a typo, not a rule). Raises ``ValueError`` with a plain
+    later payment than the one before and asks for more, at or above the minimum
+    payment (as Phase 68's ``tier_conflict``) and no later than the maximum number
+    of payments. Raises ``ValueError`` with a plain
     message that names ``known_rules.<field>``. ``allow_date=False`` (firm
     defaults) refuses a first payment date, which is set per call.
     """
@@ -120,9 +120,9 @@ def parse_known_rules(
                 f"known_rules.min_payment_tiers: a tier starts at payment {tiers[-1][0]}, "
                 f"after the last allowed payment ({n})."
             )
-        if tiers and floor is not None and tiers[0][1] <= floor:
+        if tiers and floor is not None and tiers[0][1] < floor:
             raise ValueError(
-                "known_rules.min_payment_tiers: every tier must ask for more than the "
+                "known_rules.min_payment_tiers: no tier can ask for less than the "
                 "minimum payment."
             )
         out["min_payment_tiers"] = tiers

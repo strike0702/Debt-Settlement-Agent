@@ -26,6 +26,8 @@ export function ruleLines(rules: RepAccount["rules"]): string[] {
   if (n != null) out.push(n === 1 ? "A single payment" : `Up to ${n} payments`);
   if (rules.min_payment_cents != null) out.push(`At least ${moneyShort(rules.min_payment_cents)} each`);
   if (rules.structure) out.push(STRUCTURE[rules.structure]);
+  if (rules.payment_tiers) out.push(`Payment tiers: ${rules.payment_tiers}`);
+  if (rules.payment_levels) out.push(`Payment levels: ${rules.payment_levels}`);
   if (rules.opening_ask_bp != null) out.push(`Opening ask ${pct(rules.opening_ask_bp)}`);
   if (rules.floor_bp != null) out.push(`Floor ${pct(rules.floor_bp)} — don't go below`);
   if (rules.first_payment) out.push(`First payment: ${rules.first_payment}`);

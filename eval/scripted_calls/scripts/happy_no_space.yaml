@@ -1,0 +1,24 @@
+# Happy path for no_space (Phase 71a). Expected moves = the oracle run on these lines.
+name: happy_no_space
+scenario: no_space
+turns:
+- rep: We allow up to four payments, at least $350 each, with a flexible schedule.
+  oracle:
+    stance: info
+    terms:
+    - {field: max_payments, value: 4, quote: four payments}
+    - {field: min_payment_cents, value: 35000, quote: $350}
+    - {field: payment_structure, value: flexible, quote: flexible schedule}
+  expect: {intent: ASK, reason: optional_sweep}
+- rep: No, nothing like that.
+  oracle: {stance: info, readback_response: null}
+  expect: {intent: ASK_SETTLEMENT}
+- rep: We'd settle for forty percent of the balance.
+  oracle: {stance: offer, settlement_ask_pct: 40, ask_quote: forty percent}
+  expect: {intent: COUNTER_TERMS, reason: alt_first_payment_date}
+- rep: Okay, that works for us.
+  oracle: {stance: accept}
+  expect: {intent: ESCALATE, reason: no_legal_counter}
+- rep: Yes, that schedule works.
+  oracle: {stance: accept}
+  expect: {intent: ESCALATE, reason: already_escalated}

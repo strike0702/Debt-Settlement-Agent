@@ -8,6 +8,8 @@ is first-match and its order is load-bearing:
 1. ``_decide_interruptions``: turn cap, hostility, private ask, commitment
    demand, post-proposal phases (``_decide_wrap``), no-progress loop guard,
    schedule request, end.
+1b. ``_decide_unread`` (acts NLU only): a firm line whose new number no act
+   claimed, or an ``unclear`` reply → number-free CLARIFY, never the old ask.
 2. ``_decide_clarify``: "first N payments" tiers / CONTRADICTED → CLARIFY (escalate
    after two); TENTATIVE → READ_BACK.
 3. ``_decide_rep_rules``: the rep announced a rule (``defines_field``) → ask

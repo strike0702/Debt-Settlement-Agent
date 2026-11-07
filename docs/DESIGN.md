@@ -21,6 +21,7 @@ consequences; numbers link to the committed evidence in [`docs/eval/`](eval/).
 | [7](#adr-7-how-negotiation-decisions-are-made) | How negotiation decisions are made |
 | [8](#adr-8-engine-v2-exact-search-objectives-explanations) | Engine v2: exact search, objectives, explanations |
 | [9](#adr-9-voice-on-pipecat--deepgram-over-webrtc) | Voice on Pipecat + Deepgram over WebRTC |
+| [10](#adr-10-draft-nlu-v2-acts-and-call-context) | Draft: NLU v2, typed acts and call context (behind a flag, not adopted yet) |
 | [Voice turn](#one-voice-turn-annotated) | One voice turn, annotated with measured stage timings |
 
 ## ADR 1. Code owns the policy; no ReAct agent in the product
@@ -418,6 +419,31 @@ grew by about 500 MB. Not yet measured: recognition through real laptop speakers
 and mic (the harness's `afplay` lines were mostly not heard;
 [client run](eval/voice_client_20261029/summary.md)), other devices, and the
 hosted demo, which needs a TURN server.
+
+## ADR 10 (draft). NLU v2: acts and call context
+
+*Draft from Phase 71a; Phase 71b finishes it. Decision D19.*
+
+**Context.** The flat NLU schema (about 20 flags filled every turn, conflicts settled
+by a priority order in the policy) failed two live Haiku calls: a firm "seventy three"
+with no number read was accepted as the older 75%, and "that's all the tiers" ended
+the call. The model also saw nothing of the call state.
+
+**Decision (behind `NLU_SCHEMA=acts`).** The model returns a short list of typed acts
+from a closed set (`app.domain.nlu_types.Act`). Each act has only its own fields and a
+verbatim quote. A strict validation failure becomes one `unclear` act. The prompt
+gets a PUBLIC `CallContext` (phase, what we await, offers on the table, the list
+being collected, the rules stated and who stated them), never a client figure.
+Code still owns every number: acts are quote-checked, mapped to a `TurnAnalysis` and
+run through the same `post_verify`. Tier items are re-read from the rep's words.
+Every number in the line must be claimed by a verified act; on a firm line with an
+unclaimed number the policy asks instead of reusing an older ask. In 71a a
+converter keeps the policy unchanged.
+
+**Result so far.** On Haiku, acts passed every scripted call (63/63 turns vs 49/63
+flat), cut output tokens from about 210 to 65 per line and p50 latency from 1262 to
+1008 ms. It missed one private-info line, so the pre-registered rule failed and the
+flag stays off (`docs/eval/nlu_v2_20261107/summary.md`).
 
 ## One voice turn, annotated
 

@@ -2118,6 +2118,393 @@ Misses (line ids):
 - terms: hs08, hs09
 - filler false accept: -
 
+## FLAT_P71A
+
+- git: `00dfa2b`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 193  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=188, fast_path=5
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 1 | 0 | 0.971 | 1.000 |
+| demands_commitment | 13 | 13 | 4 | 0 | 0.765 | 1.000 |
+| firm | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 6 | 6 | 4 | 0 | 0.600 | 1.000 |
+| hostility | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| stance=accept | 11 | 11 | 1 | 0 | 0.917 | 1.000 |
+| stance=reject | 9 | 9 | 0 | 0 | 1.000 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.907 |
+| term exact-match (all lines) | 0.959 |
+| term exact-match (lines with terms, n=76) | 0.895 |
+| filler false accepts (n=31) | 0 |
+| NLU latency p50 / p95 ms (live n=188) | 1249 / 1489 |
+| tokens in / out (mean out per line) | 397564 / 38976 (207) |
+
+Misses (line ids):
+
+- asks_client_private_info: FP n10; FN -
+- demands_commitment: FP n08, i09, a11, k05; FN -
+- wants_to_end: FP x02, e06, e07, e10; FN -
+- stance=accept: FP c11; FN -
+- terms: f16, f17, d04, d10, t06, t11, rd03, rd08
+- filler false accept: -
+
+## ACTS_P71A
+
+- git: `00dfa2b`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped); NLU v2 acts schema (`--schema acts`)
+- lines: 193  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=188, fast_path=5
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 2 | 0 | 0.944 | 1.000 |
+| demands_commitment | 13 | 13 | 2 | 0 | 0.867 | 1.000 |
+| firm | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 6 | 6 | 3 | 0 | 0.667 | 1.000 |
+| hostility | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| stance=accept | 11 | 11 | 0 | 0 | 1.000 | 1.000 |
+| stance=reject | 9 | 7 | 1 | 2 | 0.875 | 0.778 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.777 |
+| term exact-match (all lines) | 0.922 |
+| term exact-match (lines with terms, n=76) | 0.855 |
+| filler false accepts (n=31) | 0 |
+| act-type set exact (n=193) | 0.699 |
+| NLU latency p50 / p95 ms (live n=188) | 1018 / 1527 |
+| tokens in / out (mean out per line) | 250604 / 10813 (58) |
+
+Misses (line ids):
+
+- asks_client_private_info: FP n02, n10; FN -
+- demands_commitment: FP c13, x03; FN -
+- wants_to_end: FP e06, e07, e10; FN -
+- stance=reject: FP a13; FN a10, x08
+- terms: n04, n15, c03, c16, f01, f16, f27, d04, d10, t06, x05, k04, rd07, rd08, rd09
+- filler false accept: -
+- act-type set: n01, n02, n04, n05, n06, n08, n10, n14, n15, n17, n18, c02, c03, c07, c10, c13, c14, c15, c16, c17, c18, i01, i02, i03, i07, i09, i11, h04, f14, f19, f27, d01, d02, d03, d08, d10, d11, t06, a10, a13, a16, x03, x05, x06, x08, e05, e09, e10, k02, k03, k04, k05, rd01, rd03, rd05, rd06, rd08, rd09
+
+## ACTS_P71A_R2
+
+- git: `00dfa2b`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped); NLU v2 acts schema (`--schema acts`)
+- lines: 193  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=188, fast_path=5
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 31 | 1 | 3 | 0.969 | 0.912 |
+| demands_commitment | 13 | 12 | 2 | 1 | 0.857 | 0.923 |
+| firm | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 6 | 6 | 4 | 0 | 0.600 | 1.000 |
+| hostility | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| stance=accept | 11 | 11 | 1 | 0 | 0.917 | 1.000 |
+| stance=reject | 9 | 8 | 2 | 1 | 0.800 | 0.889 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.860 |
+| term exact-match (all lines) | 0.943 |
+| term exact-match (lines with terms, n=76) | 0.895 |
+| filler false accepts (n=31) | 0 |
+| act-type set exact (n=193) | 0.762 |
+| NLU latency p50 / p95 ms (live n=188) | 1027 / 1510 |
+| tokens in / out (mean out per line) | 285572 / 11152 (59) |
+
+Misses (line ids):
+
+- asks_client_private_info: FP n02; FN p08, p21, f25
+- demands_commitment: FP n08, i09; FN c11
+- wants_to_end: FP x02, e06, e07, e10; FN -
+- stance=accept: FP c11; FN -
+- stance=reject: FP a13, a16; FN x08
+- terms: n15, h02, h09, f01, f16, f17, d04, d10, k04, k05, rd03
+- filler false accept: -
+- act-type set: p08, p20, p21, n02, n08, n14, n15, c02, c07, c10, c11, i01, i03, i07, i09, i11, h02, h04, h09, f01, f14, f17, f19, f25, f27, d01, d02, d03, d08, d10, d11, a13, a16, x02, x06, x08, e05, e09, e10, k01, k02, k04, k05, rd05, rd06, rd10
+
+## ACTS_P71A_R3
+
+- git: `00dfa2b`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped); NLU v2 acts schema (`--schema acts`)
+- lines: 193  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=188, fast_path=5
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 13 | 13 | 2 | 0 | 0.867 | 1.000 |
+| firm | 6 | 6 | 1 | 0 | 0.857 | 1.000 |
+| wants_to_end | 6 | 5 | 4 | 1 | 0.556 | 0.833 |
+| hostility | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| stance=accept | 11 | 11 | 0 | 0 | 1.000 | 1.000 |
+| stance=reject | 9 | 8 | 0 | 1 | 1.000 | 0.889 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.870 |
+| term exact-match (all lines) | 0.969 |
+| term exact-match (lines with terms, n=76) | 0.921 |
+| filler false accepts (n=31) | 0 |
+| act-type set exact (n=193) | 0.813 |
+| NLU latency p50 / p95 ms (live n=188) | 1033 / 1848 |
+| tokens in / out (mean out per line) | 304560 / 12137 (65) |
+
+Misses (line ids):
+
+- demands_commitment: FP i09, k05; FN -
+- firm: FP k05; FN -
+- wants_to_end: FP x02, e06, e07, e10; FN e01
+- stance=reject: FP -; FN x08
+- terms: c03, f01, f16, f17, d04, rd03
+- filler false accept: -
+- act-type set: p10, p14, n02, n11, n14, c02, c03, c07, c10, i01, i02, i03, i09, h04, f08, f14, f17, f19, f28, d01, d02, d03, d08, d11, a13, a16, x02, x08, e01, e04, e05, e09, e10, k04, k05, rd06
+
+## ACTS_P71A_R4
+
+- git: `00dfa2b`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped); NLU v2 acts schema (`--schema acts`)
+- lines: 193  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=188, fast_path=5
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 13 | 13 | 3 | 0 | 0.812 | 1.000 |
+| firm | 6 | 6 | 1 | 0 | 0.857 | 1.000 |
+| wants_to_end | 6 | 6 | 4 | 0 | 0.600 | 1.000 |
+| hostility | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| stance=accept | 11 | 11 | 0 | 0 | 1.000 | 1.000 |
+| stance=reject | 9 | 7 | 1 | 2 | 0.875 | 0.778 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.886 |
+| term exact-match (all lines) | 0.959 |
+| term exact-match (lines with terms, n=76) | 0.908 |
+| filler false accepts (n=31) | 0 |
+| act-type set exact (n=193) | 0.808 |
+| NLU latency p50 / p95 ms (live n=188) | 1026 / 1724 |
+| tokens in / out (mean out per line) | 307004 / 11279 (60) |
+
+Misses (line ids):
+
+- demands_commitment: FP c16, i09, x03; FN -
+- firm: FP k04; FN -
+- wants_to_end: FP x02, e06, e07, e10; FN -
+- stance=reject: FP a16; FN a10, x08
+- terms: c03, f01, f16, f17, d04, k01, k05, rd03
+- filler false accept: -
+- act-type set: p14, p20, n02, n14, n15, c02, c03, c07, c16, i01, i02, i03, i07, i09, h04, f01, f14, f17, f19, d01, d02, d03, d08, d11, a10, a13, a16, x02, x03, x08, e05, e09, e10, k04, k05, rd06, rd10
+
+## FLAT_P71A_FINAL
+
+- git: `00dfa2b`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 193  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=188, fast_path=5
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 1 | 0 | 0.971 | 1.000 |
+| demands_commitment | 13 | 13 | 4 | 0 | 0.765 | 1.000 |
+| firm | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| wants_to_end | 6 | 6 | 4 | 0 | 0.600 | 1.000 |
+| hostility | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| stance=accept | 11 | 11 | 1 | 0 | 0.917 | 1.000 |
+| stance=reject | 9 | 9 | 0 | 0 | 1.000 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.912 |
+| term exact-match (all lines) | 0.964 |
+| term exact-match (lines with terms, n=76) | 0.908 |
+| filler false accepts (n=31) | 0 |
+| NLU latency p50 / p95 ms (live n=188) | 1264 / 1613 |
+| tokens in / out (mean out per line) | 397564 / 39525 (210) |
+
+Misses (line ids):
+
+- asks_client_private_info: FP n10; FN -
+- demands_commitment: FP n08, i09, a11, k05; FN -
+- wants_to_end: FP x02, e06, e07, e10; FN -
+- stance=accept: FP c11; FN -
+- terms: f16, f17, d04, t06, t11, rd03, rd08
+- filler false accept: -
+
+## ACTS_P71A_FINAL
+
+- git: `00dfa2b`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped); NLU v2 acts schema (`--schema acts`)
+- lines: 193  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=188, fast_path=5
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 13 | 13 | 2 | 0 | 0.867 | 1.000 |
+| firm | 6 | 6 | 1 | 0 | 0.857 | 1.000 |
+| wants_to_end | 6 | 6 | 4 | 0 | 0.600 | 1.000 |
+| hostility | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| stance=accept | 11 | 11 | 0 | 0 | 1.000 | 1.000 |
+| stance=reject | 9 | 8 | 0 | 1 | 1.000 | 0.889 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.902 |
+| term exact-match (all lines) | 0.964 |
+| term exact-match (lines with terms, n=76) | 0.921 |
+| filler false accepts (n=31) | 0 |
+| act-type set exact (n=193) | 0.824 |
+| NLU latency p50 / p95 ms (live n=188) | 1010 / 1543 |
+| tokens in / out (mean out per line) | 307004 / 11188 (60) |
+
+Misses (line ids):
+
+- demands_commitment: FP i09, x03; FN -
+- firm: FP k04; FN -
+- wants_to_end: FP x02, e06, e07, e10; FN -
+- stance=reject: FP -; FN a10
+- terms: c03, f01, f16, f17, d04, k05, rd03
+- filler false accept: -
+- act-type set: p10, p14, p20, n02, n08, n14, n15, c02, c03, c07, i01, i03, i07, i09, h04, f14, f17, f19, d01, d02, d03, d08, d11, a10, a13, a16, x02, x03, e05, e09, k01, k04, k05, rd06
+
+## AMOUNTS_FLAT_P71A
+
+- git: `00dfa2b`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 14  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=14
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.571 |
+| term exact-match (all lines) | 1.000 |
+| term exact-match (lines with terms, n=13) | 1.000 |
+| filler false accepts (n=0) | 0 |
+| NLU latency p50 / p95 ms (live n=14) | 1302 / 3132 |
+| tokens in / out (mean out per line) | 29608 / 3711 (265) |
+
+Misses (line ids):
+
+- terms: -
+- filler false accept: -
+
+## AMOUNTS_ACTS_P71A
+
+- git: `00dfa2b`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped); NLU v2 acts schema (`--schema acts`)
+- lines: 14  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=14
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.357 |
+| term exact-match (all lines) | 0.786 |
+| term exact-match (lines with terms, n=13) | 0.769 |
+| filler false accepts (n=0) | 0 |
+| act-type set exact (n=14) | 0.857 |
+| NLU latency p50 / p95 ms (live n=14) | 1056 / 3059 |
+| tokens in / out (mean out per line) | 22818 / 1997 (143) |
+
+Misses (line ids):
+
+- terms: am09, am11, am14
+- filler false accept: -
+- act-type set: am09, am11
+
+## HELDOUT_STANCE_FLAT_P71A
+
+- git: `00dfa2b`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 32  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=32
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 6 | 6 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 5 | 4 | 0 | 1 | 1.000 | 0.800 |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.938 |
+| term exact-match (all lines) | 0.938 |
+| term exact-match (lines with terms, n=16) | 0.875 |
+| filler false accepts (n=0) | 0 |
+| NLU latency p50 / p95 ms (live n=32) | 1249 / 1554 |
+| tokens in / out (mean out per line) | 67653 / 6550 (205) |
+
+Misses (line ids):
+
+- wants_to_end: FP -; FN hs20
+- terms: hs08, hs09
+- filler false accept: -
+
+## HELDOUT_STANCE_ACTS_P71A
+
+- git: `00dfa2b`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped); NLU v2 acts schema (`--schema acts`)
+- lines: 32  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=32
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 6 | 5 | 0 | 1 | 1.000 | 0.833 |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 5 | 4 | 0 | 1 | 1.000 | 0.800 |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.969 |
+| term exact-match (all lines) | 1.000 |
+| term exact-match (lines with terms, n=16) | 1.000 |
+| filler false accepts (n=0) | 0 |
+| act-type set exact (n=32) | 0.906 |
+| NLU latency p50 / p95 ms (live n=32) | 988 / 1657 |
+| tokens in / out (mean out per line) | 52201 / 2024 (63) |
+
+Misses (line ids):
+
+- asks_client_private_info: FP -; FN hs27
+- wants_to_end: FP -; FN hs20
+- terms: -
+- filler false accept: -
+- act-type set: hs20, hs27, hs29
+
 ## Notes
 
 - Both runs used the same model and prompt (Groq `gpt-oss-120b`, temperature 0).

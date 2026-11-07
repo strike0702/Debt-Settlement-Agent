@@ -1,0 +1,17 @@
+# The user's live 73-vs-75 call of 2026-11-07 (docs/NLU_PLAN.md context 1, verbatim
+# rep lines). The agent must never accept 75% after the rep says seventy three.
+name: price_73_vs_75
+scenario: haggling_rep
+turns:
+  - rep: "Up to eight payments, at least $100 each, even payments."
+    oracle: {stance: info, terms: [{field: max_payments, value: 8, quote: "eight payments"}, {field: min_payment_cents, value: 10000, quote: "$100"}, {field: payment_structure, value: even, quote: "even payments"}]}
+    expect: {intent: ASK_SETTLEMENT}
+  - rep: "seventy five percent"
+    oracle: {stance: counter, settlement_ask_pct: 75, ask_quote: "seventy five percent"}
+    expect: {intent: COUNTER}
+  - rep: "I can't go lower than seventy five"
+    oracle: {stance: counter, settlement_ask_pct: 75, ask_quote: "seventy five", firm: true}
+    expect: {intent: COUNTER, reason: final_counter}
+  - rep: "I think seventy three is the lowest I can go"
+    oracle: {stance: counter, settlement_ask_pct: 73, ask_quote: "seventy three", firm: true}
+    expect: {intent: CONFIRM_SCHEDULE, facts: {settlement_pct: 7300}}

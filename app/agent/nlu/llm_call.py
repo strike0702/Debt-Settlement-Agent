@@ -5,7 +5,9 @@ tests); else the ``fast_paths`` that need no model
 (plain yes/no to a read-back, a short pick between the two values of an open
 clarify, a bare answer to the field we just asked); else one JSON ``nlu`` call
 through ``app.llm.client`` (retried once on a parse / validation failure, with
-no broad ``except``), then ``verify.post_verify``. Dollar amounts are resolved
+no broad ``except``), then ``verify.post_verify``. With ``NLU_SCHEMA=acts`` the
+call uses the acts prompt with the PUBLIC ``CallContext`` and ``acts.convert_acts``
+instead (no retry: an invalid reply is one ``unclear`` act). Dollar amounts are resolved
 later by the orchestrator (``amounts.resolve_amounts``), once the balance is
 known. Does not update belief.
 """
@@ -18,6 +20,8 @@ from typing import Any, Protocol
 
 from pydantic import ValidationError
 
+from app.agent.nlu.acts import convert_acts, parse_acts
+from app.agent.nlu.context import CallContext
 from app.agent.nlu.cues import _repair_dispositions
 from app.agent.nlu.fast_paths import (
     try_fast_field_answer,
@@ -30,7 +34,7 @@ from app.agent.nlu.verify import post_verify
 from app.agent.nlu_types import TurnAnalysis
 from app.config import Settings, get_settings
 from app.llm.client import LLMUnavailable
-from app.llm.prompts import nlu_messages
+from app.llm.prompts import nlu_acts_messages, nlu_messages
 from app.store.audit import AuditLog
 
 # Reasoning models (gpt-oss) spend completion budget on hidden reasoning. A
@@ -38,6 +42,8 @@ from app.store.audit import AuditLog
 # 800 cap, so one more reasoning step truncated the JSON (retry = 2x latency, or
 # an empty analysis).
 _NLU_MAX_TOKENS = 1200
+# Acts replies are short (a few acts); the cap only bounds a runaway reply.
+_NLU_ACTS_MAX_TOKENS = 600
 
 
 class _LLM(Protocol):
@@ -63,6 +69,7 @@ async def analyze(
     call_id: str | None = None,
     ref: date | None = None,
     disputed: tuple[str, Any, Any] | None = None,
+    context: CallContext | None = None,
 ) -> VerifiedAnalysis:
     """Run NLU (or oracle) then post-verify. Empty analysis on double validation fail.
 
@@ -134,6 +141,19 @@ async def analyze(
     if llm is None:
         raise ValueError("llm is required when nlu_mode is not oracle")
 
+    if cfg.nlu_schema == "acts":
+        return await _analyze_acts(
+            utterance,
+            last_agent_line,
+            pending_readback,
+            llm=llm,
+            context=context,
+            audit=audit,
+            call_id=call_id,
+            ref=ref,
+            oracle=oracle,
+        )
+
     messages = nlu_messages(utterance, last_agent_line, pending_readback, ref=ref)
     analysis: TurnAnalysis | None = None
     last_err: str | None = None
@@ -185,6 +205,43 @@ async def analyze(
     # When a sim/oracle disposition is supplied under live NLU, keep verified
     # terms/ask from the LLM but overlay stance flags from ground truth so
     # phrasing artifacts cannot false-escalate.
+    if oracle is not None:
+        has_terms = bool(verified.terms) or verified.settlement_ask_pct is not None
+        verified = verified.model_copy(
+            update=_repair_dispositions(oracle, utterance, has_terms=has_terms)
+        )
+    return verified
+
+
+async def _analyze_acts(
+    utterance: str,
+    last_agent_line: str,
+    pending_readback: str | None,
+    *,
+    llm: _LLM,
+    context: CallContext | None,
+    audit: AuditLog | None,
+    call_id: str | None,
+    ref: date | None,
+    oracle: TurnAnalysis | None,
+) -> VerifiedAnalysis:
+    """One acts-schema call: prompt with context, strict parse, convert and verify."""
+    ctx = context or CallContext()
+    messages = nlu_acts_messages(utterance, last_agent_line, ctx.prompt_json(), ref=ref)
+    text = await llm.chat_text("nlu", messages, _NLU_ACTS_MAX_TOKENS, json_mode=True)
+    acts, error = parse_acts(text)
+    if error is not None and audit is not None and call_id is not None:
+        audit.append(call_id, "nlu", "nlu_acts_invalid", {"error": error, "reply": text[:300]})
+    verified = convert_acts(
+        acts,
+        utterance,
+        context=ctx,
+        last_agent_line=last_agent_line,
+        pending_readback=pending_readback,
+        ref=ref,
+        audit=audit,
+        call_id=call_id,
+    )
     if oracle is not None:
         has_terms = bool(verified.terms) or verified.settlement_ask_pct is not None
         verified = verified.model_copy(

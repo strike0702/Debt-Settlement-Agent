@@ -1,0 +1,33 @@
+# Happy path for balloon_structure (Phase 71a). Expected moves = the oracle run on these lines.
+name: happy_balloon_structure
+scenario: balloon_structure
+turns:
+- rep: We allow up to six payments, at least $20 each, with a balloon payment at the end.
+  oracle:
+    stance: info
+    terms:
+    - {field: max_payments, value: 6, quote: six payments}
+    - {field: min_payment_cents, value: 2000, quote: $20}
+    - {field: payment_structure, value: balloon, quote: balloon}
+  expect: {intent: ASK_SETTLEMENT}
+- rep: We'd settle for forty percent of the balance.
+  oracle: {stance: offer, settlement_ask_pct: 40, ask_quote: forty percent}
+  expect:
+    intent: COUNTER
+    facts: {counter_pct: 2800}
+- rep: We could come down to thirty five percent.
+  oracle: {stance: counter, settlement_ask_pct: 35, ask_quote: thirty five percent}
+  expect:
+    intent: COUNTER
+    facts: {counter_pct: 3000}
+- rep: Okay, that works for us.
+  oracle: {stance: accept}
+  expect:
+    intent: CONFIRM_SCHEDULE
+    facts: {settlement_pct: 3000}
+- rep: Yes, that schedule works.
+  oracle: {stance: accept}
+  expect:
+    intent: PROPOSE_WRAP
+    reason: confirmed
+    facts: {settlement_pct: 3000}

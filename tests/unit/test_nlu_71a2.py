@@ -64,6 +64,9 @@ def test_total_next_to_a_percent_is_read_when_the_model_drops_it() -> None:
     out = convert_acts(acts, line, last_agent_line=_ASK, ref=_REF)
     assert (out.settlement_ask_pct, out.settlement_ask_total_cents) == (50.0, 90000)
     assert out.unaccounted_numbers == []
+    long_quote = _acts({"type": "price_ask", "pct": 50, "quote": line.rstrip(".")})
+    out = convert_acts(long_quote, line, last_agent_line=_ASK, ref=_REF)
+    assert out.settlement_ask_total_cents == 90000
     balance = convert_acts(
         acts, "Fifty percent of the $4,000 balance in total.", last_agent_line=_ASK, ref=_REF
     )

@@ -395,7 +395,12 @@ def convert_acts(
     # - a "minimum" read from a bare amount beside an exact payment count with
     #   no per-payment cue ("Three payments, $350.") is ambiguous, unless we
     #   asked for the minimum.
-    found = _unclaimed_total(verified, utterance, [a.quote for a in kept], ref=ref_d)
+    # A percent-only price act's quote may run over the total ("Fifty percent,
+    # which comes to $900 total"); its money is not claimed.
+    money_quotes = [
+        a.quote for a in kept if not (isinstance(a, PriceAskAct) and a.total_cents is None)
+    ]
+    found = _unclaimed_total(verified, utterance, money_quotes, ref=ref_d)
     if found is not None:
         verified = verified.model_copy(
             update={"settlement_ask_total_cents": found[0], "ask_total_quote": found[1]}

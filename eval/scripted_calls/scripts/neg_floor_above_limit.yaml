@@ -1,0 +1,18 @@
+# 71a-2 held-out negotiation: the rep's firm floor is above what the client can
+# pay; the agent must not accept it (the policy hands an ask above the accept
+# line to a specialist).
+name: neg_floor_above_limit
+scenario: easy_deal
+turns:
+  - rep: "Up to eight payments, at least $100 each, even payments."
+    oracle: {stance: info, terms: [{field: max_payments, value: 8, quote: "eight payments"}, {field: min_payment_cents, value: 10000, quote: "$100"}, {field: payment_structure, value: even, quote: "even payments"}]}
+    expect: {intent: ASK_SETTLEMENT}
+  - rep: "We need ninety percent."
+    oracle: {stance: counter, settlement_ask_pct: 90, ask_quote: "ninety percent"}
+    expect: {intent: COUNTER, facts: {counter_pct: 5200}}
+  - rep: "Eighty five percent, and that's final. My manager won't approve anything less."
+    oracle: {stance: counter, settlement_ask_pct: 85, ask_quote: "Eighty five percent", firm: true}
+    expect: {intent: ESCALATE, reason: above_accept_line}
+  - rep: "No. Eighty five is as low as it goes."
+    oracle: {stance: reject, settlement_ask_pct: 85, ask_quote: "Eighty five", firm: true}
+    expect: {intent: ESCALATE}

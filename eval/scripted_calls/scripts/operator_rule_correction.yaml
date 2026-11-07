@@ -5,6 +5,7 @@
 # Enabled in 71a-2 (69 on main): rules seeded with the script's known_rules.
 name: operator_rule_correction
 scenario: easy_deal
+requires: phase69
 known_rules: {max_payments: 8, min_payment_cents: 15000}
 turns:
   - rep: "No, it's six payments now. The minimum is $100 each."

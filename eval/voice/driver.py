@@ -113,14 +113,18 @@ async def serve(
                 proc.kill()
 
 
+# "0" = the budgeted Claude NLU target counts as exhausted and is skipped (free
+# chain only); ``--claude-nlu`` raises it so Claude Haiku reads the rep first.
+CLAUDE_NLU_BUDGET_USD = "0"
+
+
 def app_server(port: int, log: Path, db: Path) -> contextlib.AbstractAsyncContextManager[str]:
-    """The app on the demo profile, free NLU chain only (no paid Claude, no cache)."""
+    """The app on the demo profile, free NLU chain unless ``--claude-nlu`` (no cache)."""
     env = {
         "LLM_PROFILE": "demo",
         "NLU_MODE": "llm",
         "NLG_MODE": "bank",
-        # Budget 0 = the budgeted Claude NLU target counts as exhausted and is skipped.
-        "CLAUDE_DAILY_BUDGET_USD": "0",
+        "CLAUDE_DAILY_BUDGET_USD": CLAUDE_NLU_BUDGET_USD,
         "LLM_CACHE": "false",
         "DB_PATH": str(db),
     }

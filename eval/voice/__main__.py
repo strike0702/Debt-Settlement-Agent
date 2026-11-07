@@ -172,8 +172,15 @@ def main() -> None:
     ap.add_argument(
         "--ice", choices=["all", "relay"], default="all", help="pipecat-ui: relay forces TURN"
     )
+    ap.add_argument(
+        "--claude-nlu",
+        action="store_true",
+        help="paid: Claude Haiku reads the rep first, as on the hosted demo ($1 daily cap)",
+    )
     a = ap.parse_args()
     driver.ICE_POLICY = a.ice
+    if a.claude_nlu:
+        driver.CLAUDE_NLU_BUDGET_USD = "1.00"
     driver.SOAK = driver.Soak(a.gap_s, a.blip_before, a.blip_s)
     ids = [c.id for c in CALLS] if a.calls == "all" else a.calls.split(",")
     doc = asyncio.run(run(a.target, a.audio, ids, a.out, a.repeat))

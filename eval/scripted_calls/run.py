@@ -16,17 +16,19 @@ import importlib.util
 import json
 import statistics
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from app.agent.nlu.context import build_call_context
 from app.agent.nlu_types import TurnAnalysis
 from app.agent.orchestrator import Orchestrator
 from app.agent.session import CallSession
 from app.config import Settings, get_settings
+from app.domain.known_rules import parse_known_rules
 from app.domain.scenario import load_scenario, resolve_scenario_dir
 from app.llm.client import make_client
 
@@ -53,6 +55,11 @@ def load_script(path: Path) -> dict[str, Any]:
     return yaml.safe_load(path.read_text())
 
 
+def _fact_value(fact: Any) -> Any:
+    v = fact.value
+    return v.isoformat() if isinstance(v, date) else v
+
+
 def requirement_missing(script: dict[str, Any]) -> str | None:
     """Why a script cannot run on this tree, or None."""
     if script.get("requires") == "phase69" and importlib.util.find_spec(
@@ -62,15 +69,19 @@ def requirement_missing(script: dict[str, Any]) -> str | None:
     return None
 
 
-def _fact_value(fact: Any) -> Any:
-    v = fact.value
-    return v.isoformat() if isinstance(v, date) else v
+def check_move(
+    expect: dict[str, Any] | None, move: dict[str, Any], known: dict[str, Any] | None = None
+) -> bool:
+    """True when the move matches ``expect`` (intent, reason, listed facts).
 
-
-def check_move(expect: dict[str, Any] | None, move: dict[str, Any]) -> bool:
-    """True when the move matches ``expect`` (intent, reason, listed facts)."""
+    ``expect.known_rules`` (field → ``rep`` | ``operator``) checks the source each
+    rule had in the call context the NLU saw that turn (``known``).
+    """
     if not expect:
         return True
+    for f, src in expect.get("known_rules", {}).items():
+        if (known or {}).get(f, {}).get("source") != src:
+            return False
     intents = expect["intent"] if isinstance(expect["intent"], list) else [expect["intent"]]
     if move["intent"] not in intents:
         return False
@@ -101,12 +112,15 @@ async def run_script(
         return res
     ref = date.fromisoformat(str(script.get("ref", DEFAULT_REF)))
     call = load_scenario(resolve_scenario_dir(script["scenario"]), rebase_to=ref)
+    if "known_rules" in script:  # operator-entered rules (Phase 69 panel), seeded KNOWN
+        call = replace(call, known_rules=parse_known_rules(script["known_rules"]))
     orch = Orchestrator(CallSession(scenario=call), llm=llm, settings=settings, auto_ack=True)
     await orch.start()
     for i, turn in enumerate(script["turns"]):
         oracle = None
         if nlu == "oracle":
             oracle = TurnAnalysis.model_validate(turn.get("oracle") or {"stance": "info"})
+        known = build_call_context(orch.session.belief, orch.session.neg).known_rules
         utt = await orch.on_creditor_text(turn["rep"], oracle=oracle)
         verified = orch._trace_ctx.get("verified")
         move = {
@@ -121,7 +135,8 @@ async def run_script(
                 "move": move,
                 "said": " ".join(t for _, t in utt.sentences),
                 "expect": turn.get("expect"),
-                "ok": check_move(turn.get("expect"), move),
+                "ok": check_move(turn.get("expect"), move, known),
+                "known_rules": known,
                 "nlu_ms": utt.timings.get("nlu_ms"),
                 "acts": getattr(verified, "acts", None),
                 "unaccounted": getattr(verified, "unaccounted_numbers", None),

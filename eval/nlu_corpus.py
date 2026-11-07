@@ -848,7 +848,8 @@ async def run_corpus(
             firm_raw = _raw_firm(reply)
             rule = stance_rule(line["text"], terms=has_terms(out))
             # Guard against this mirror drifting from the shipped repair.
-            if repair_stance(raw, line["text"], has_terms=has_terms(out)) != out.stance:
+            replay = repair_stance(raw, line["text"], has_terms=has_terms(out), opening=not agent)
+            if replay != out.stance:
                 raise RuntimeError(f"{line['id']}: raw stance does not replay to the repaired one")
         rec["predicted"] = {
             **predicted_flags(out, settings.hostility_threshold),

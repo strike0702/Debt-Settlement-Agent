@@ -1,0 +1,14 @@
+# 71a-2 held-out negotiation: the rep prices in dollar totals, not percents
+# (balance $1,250).
+name: neg_total_dollars
+scenario: easy_deal
+turns:
+  - rep: "Up to eight payments, at least $100 each, even payments."
+    oracle: {stance: info, terms: [{field: max_payments, value: 8, quote: "eight payments"}, {field: min_payment_cents, value: 10000, quote: "$100"}, {field: payment_structure, value: even, quote: "even payments"}]}
+    expect: {intent: ASK_SETTLEMENT}
+  - rep: "We could settle the account for nine hundred dollars total."
+    oracle: {stance: counter, settlement_ask_total_cents: 90000, ask_total_quote: "nine hundred dollars total"}
+    expect: {intent: COUNTER, facts: {counter_pct: 5000}}
+  - rep: "I can come down to $500 total, that's the best I can do."
+    oracle: {stance: counter, settlement_ask_total_cents: 50000, ask_total_quote: "$500 total", firm: true}
+    expect: {intent: CONFIRM_SCHEDULE, facts: {settlement_pct: 4000, offer_total: 50000}}

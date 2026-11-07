@@ -101,3 +101,11 @@ Haiku 5.5 with the demo settings:
 5. NLU latency p50 ≤ flat; offline oracle eval PASS.
 
 Private-info recall is reported for both schemas but does not block.
+
+## Result of 71a-2 (2026-11-07)
+
+The rule failed on criterion 1: scripted calls acts 91/92, flat 77/92. Both fail held-out
+`neg_rule_change` #2, a rule correction after a proposal ("actually … not eight") that is
+read as a contradiction, not a revision. Amounts terms failed on the run made under the rule (am14); the
+re-run after a fix passed but was not held out. Criteria 2, 4 and 5 pass. `NLU_SCHEMA`
+stays `flat` ([report](eval/nlu_v2_20261107_r2/summary.md)).

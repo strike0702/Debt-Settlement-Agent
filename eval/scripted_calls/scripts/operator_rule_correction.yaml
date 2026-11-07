@@ -1,15 +1,16 @@
-# Orchestrator note 2026-11-07: Phase 69 seeds operator rules KNOWN (source operator)
-# and the agent mentions them ("Our records show up to 8 payments. What's the minimum
-# payment amount?"). A rep correction is a state_rule for that field (rep is
-# authoritative, not a contradiction); a bare yes confirms. Runs only with 69 on main;
-# the expectations are a draft to re-check against 69's actual opening lines then.
+# Phase 69 seeds operator rules KNOWN (source operator) and the agent mentions them
+# ("Our records show up to 8 payments of at least $150..."). A rep correction is a
+# state_rule for that field (the rep is authoritative, not a contradiction); a bare
+# yes confirms. The context the NLU sees must show the source before and after.
+# Enabled in 71a-2 (69 on main): rules seeded with the script's known_rules.
 name: operator_rule_correction
 scenario: easy_deal
 requires: phase69
+known_rules: {max_payments: 8, min_payment_cents: 15000}
 turns:
   - rep: "No, it's six payments now. The minimum is $100 each."
     oracle: {stance: info, terms: [{field: max_payments, value: 6, quote: "six payments"}, {field: min_payment_cents, value: 10000, quote: "$100"}]}
-    expect: {intent: [ASK, ASK_SETTLEMENT]}
+    expect: {intent: [ASK, ASK_SETTLEMENT], known_rules: {max_payments: operator, min_payment_cents: operator}}
   - rep: "Yes, that's right, even payments."
     oracle: {stance: info, terms: [{field: payment_structure, value: even, quote: "even payments"}]}
-    expect: {intent: [ASK, ASK_SETTLEMENT]}
+    expect: {intent: [ASK, ASK_SETTLEMENT], known_rules: {max_payments: rep, min_payment_cents: rep}}

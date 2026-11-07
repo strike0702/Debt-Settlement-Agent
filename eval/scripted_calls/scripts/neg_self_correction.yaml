@@ -1,0 +1,17 @@
+# 71a-2 held-out negotiation: the rep misspeaks and corrects the number in the
+# same line; only the corrected number counts.
+name: neg_self_correction
+scenario: haggling_rep
+turns:
+  - rep: "Up to eight payments, at least $100 each, even payments."
+    oracle: {stance: info, terms: [{field: max_payments, value: 8, quote: "eight payments"}, {field: min_payment_cents, value: 10000, quote: "$100"}, {field: payment_structure, value: even, quote: "even payments"}]}
+    expect: {intent: ASK_SETTLEMENT}
+  - rep: "We'd be looking at around thirty... no, sorry, seventy five percent."
+    oracle: {stance: counter, settlement_ask_pct: 75, ask_quote: "seventy five percent"}
+    expect: {intent: COUNTER, facts: {counter_pct: 5200}}
+  - rep: "Sixty eight. Sorry, I meant sixty five percent, final."
+    oracle: {stance: counter, settlement_ask_pct: 65, ask_quote: "sixty five percent", firm: true}
+    expect: {intent: COUNTER, reason: final_counter, facts: {counter_pct: 5800}}
+  - rep: "Okay. Fifty eight works."
+    oracle: {stance: accept}
+    expect: {intent: CONFIRM_SCHEDULE, facts: {settlement_pct: 5800}}

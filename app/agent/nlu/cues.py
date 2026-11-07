@@ -213,6 +213,14 @@ _PRIVATE_INFO_RE = re.compile(
     r"|\b(?:client|consumer|debtor|borrower|customer|their|his|her)'?s?\s+social\b(?!\s+media)"
     r"|\blast (?:four|4)(?: digits)? of (?:the |their |his |her |your )?\w*'?s?\s*(?:social|ssn)\b"
     r"|\bss#"
+    # 71a-2: what the client has free after living costs ("left after rent",
+    # "after bills", "disposable", "spare each month").
+    r"|\bafter (?:(?:paying|covering) )?(?:(?:the|their|his|her) )?"
+    r"(?:rent|bills|expenses|living expenses|groceries|utilities)\b"
+    r"|\bdisposable\b"
+    r"|\bspare (?:cash|money|income)\b"
+    r"|\b(?:have|got) (?:\w+ )?(?:to )?spare\b"
+    r"|\bspare (?:each|every|a|per) (?:month|week|paycheck)\b"
     r")",
     re.IGNORECASE,
 )
@@ -348,14 +356,23 @@ def _has_unguarded_reject_phrase(utterance: str) -> bool:
     )
 
 
-def repair_stance(stance: str, utterance: str, *, has_terms: bool = False) -> str:
+def repair_stance(
+    stance: str, utterance: str, *, has_terms: bool = False, opening: bool | None = None
+) -> str:
     """Override LLM stance when the utterance clearly accepts or rejects.
 
     Order: injection (never accept) → reject phrase → accept phrase → short
     acknowledgement that dominates the line and carries no number or term.
     A phrase inside a question, after a conditional ("if", "whether", "before")
     or after a negator in its clause never forces anything; the LLM decides.
+
+    Offer vs counter (71a-2, one rule for both schemas): a price is ``offer``
+    only when the rep speaks first (``opening``); once the agent has spoken,
+    every price line is ``counter``. ``opening=None`` (callers without the
+    agent's line) leaves the label alone. The policy treats both alike.
     """
+    if opening is False and stance == "offer":
+        stance = "counter"
     if _INJECTION_RE.search(utterance):
         return "other" if stance == "accept" else stance
     if _has_unguarded_reject_phrase(utterance):
@@ -670,11 +687,11 @@ def repair_list_done(utterance: str) -> bool:
 
 
 def _repair_dispositions(
-    src: TurnAnalysis, utterance: str, *, has_terms: bool
+    src: TurnAnalysis, utterance: str, *, has_terms: bool, opening: bool | None = None
 ) -> dict[str, Any]:
     """Repaired stance + side-channel flags from an LLM or oracle analysis."""
     return {
-        "stance": repair_stance(src.stance, utterance, has_terms=has_terms),
+        "stance": repair_stance(src.stance, utterance, has_terms=has_terms, opening=opening),
         "readback_response": _verify_readback_response(src.readback_response, utterance),
         "asks_client_private_info": repair_asks_client_private_info(
             src.asks_client_private_info, utterance

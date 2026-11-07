@@ -12,6 +12,9 @@ real ``Orchestrator`` (auto-ack, template NLG) with the chosen NLU:
 - ``flat`` / ``acts``: the live ``nlu`` role on that schema (Phase 71a A/B).
 
 A script with ``requires: phase69`` is skipped (with a note) until Phase 69's
-operator rules are on main. Eval only; ``app/`` never imports it. CLI:
+operator rules are on main. A script-level ``known_rules`` map seeds
+operator-entered rules (Phase 69 panel) and ``expect.known_rules`` (field →
+``rep`` | ``operator``) checks each rule's source in the call context the NLU
+saw that turn. Eval only; ``app/`` never imports it. CLI:
 ``python -m eval.scripted_calls.run --nlu acts --providers PATH --profile NAME``.
 """

@@ -590,7 +590,9 @@ def post_verify(
         or total_cents is not None
         or amb_cents is not None
     )
-    dispositions = _repair_dispositions(analysis, utterance, has_terms=has_terms)
+    dispositions = _repair_dispositions(
+        analysis, utterance, has_terms=has_terms, opening=not last_agent_line
+    )
     asks_question, question_topic = repair_question(
         analysis.asks_question,
         analysis.question_topic,

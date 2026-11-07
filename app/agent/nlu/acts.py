@@ -28,9 +28,14 @@ import re
 from datetime import date
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
-from app.agent.nlu.amounts import bare_amount_ask, total_shape_trigger
+from app.agent.nlu.amounts import (
+    _COUNT_CAP_RE,
+    _EXACT_COUNT_RE,
+    bare_amount_ask,
+    total_shape_trigger,
+)
 from app.agent.nlu.context import CallContext
 from app.agent.nlu.cues import (
     _INJECTION_RE,
@@ -38,12 +43,14 @@ from app.agent.nlu.cues import (
     repair_stance,
     repair_wants_to_end,
 )
+from app.agent.nlu.fast_paths import _field_for_ask_line
 from app.agent.nlu.models import DroppedTerm, VerifiedAnalysis, VerifiedTerm
 from app.agent.nlu.quotes import normalize_for_quote, quote_in_utterance
 from app.agent.nlu.verify import post_verify
 from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
 from app.agent.numbers import extract_tokens
 from app.domain.nlu_types import (
+    Act,
     ActList,
     AnnounceRulesAct,
     AskPrivateInfoAct,
@@ -65,17 +72,67 @@ from app.llm.client import strip_json_fences
 from app.store.audit import AuditLog
 
 _TIERS = "min_payment_tiers"
+_MIN = "min_payment_cents"
+# A figure stated as the whole settlement ("comes to $900 total", "to settle").
+_TOTAL_WORD_RE = re.compile(
+    r"\b(?:total|in full|altogether|all in|to settle|settle (?:it |this |the account )?for"
+    r"|lump[- ]sum|comes? to|works? out to)\b",
+    re.IGNORECASE,
+)
+_BALANCE_RE = re.compile(r"\b(?:balance|owes?|owed|owing|outstanding)\b", re.IGNORECASE)
+# Per-payment cues (amounts.py's set plus "payments of $X").
+_PER_PAYMENT_RE = re.compile(
+    r"\b(?:per (?:payment|month|installment)|each|every|a month|monthly|minimum"
+    r"|at least|no less than|a payment|(?:payments?|installments?) of)\b",
+    re.IGNORECASE,
+)
 # ``hostility`` act level → the 0..1 score the policy compares with its threshold.
 _HOSTILITY_LEVEL = {"mild": 0.4, "strong": 1.0}
 
 
+_ACT_ADAPTER: TypeAdapter[Any] = TypeAdapter(Act)
+
+
 def parse_acts(text: str) -> tuple[ActList, str | None]:
-    """``(acts, error)``: the validated list, or one ``unclear`` act and the error text."""
+    """``(acts, error)``: the validated list, or one ``unclear`` act and the error text.
+
+    A reply that fails as a whole keeps every complete, valid act object it
+    holds (71a-2: a reply cut at the token cap, or one malformed act, used to
+    turn the whole line into ``unclear``); only when none survives is it one
+    ``unclear``. The error is still returned so the caller audits it.
+    """
     try:
         data = json.loads(strip_json_fences(text))
         return ActList.model_validate(data), None
     except (ValidationError, ValueError, TypeError) as e:
+        salvaged = _salvage_acts(text)
+        if salvaged:
+            return ActList(acts=salvaged), f"salvaged {len(salvaged)}: " + str(e)[:280]
         return ActList(acts=[UnclearAct(type="unclear")]), str(e)[:300]
+
+
+def _salvage_acts(text: str) -> list[Any]:
+    """Each complete JSON object after ``"acts": [`` that validates as one act (max 8)."""
+    start = text.find("[", max(text.find('"acts"'), 0))
+    if start < 0:
+        return []
+    decoder = json.JSONDecoder()
+    out: list[Any] = []
+    i = start + 1
+    while len(out) < 8:
+        i = text.find("{", i)
+        if i < 0:
+            break
+        try:
+            obj, end = decoder.raw_decode(text, i)
+        except ValueError:
+            break  # cut mid-object: keep what came before
+        i = end
+        try:
+            out.append(_ACT_ADAPTER.validate_python(obj))
+        except ValidationError:
+            continue
+    return out
 
 
 # --- tier items -----------------------------------------------------------
@@ -326,7 +383,40 @@ def convert_acts(
     )
     if "price" in kinds and not asked:
         stance = _stance(kinds - {"price"}, opening=opening, no_acts=False, utterance=utterance)
-        update["stance"] = repair_stance(stance, utterance, has_terms=bool(verified.terms))
+        update["stance"] = repair_stance(
+            stance, utterance, has_terms=bool(verified.terms), opening=opening
+        )
+
+    # 71a-2 amount readers (the flat prompt's ``amount_ambiguous`` / total rules,
+    # which the act set has no field for):
+    # - a dollar total the model left out next to a price act ("Fifty percent,
+    #   which comes to $900 total"): a money figure no act claimed, with a total
+    #   cue in its sentence, becomes the total ask;
+    # - a "minimum" read from a bare amount beside an exact payment count with
+    #   no per-payment cue ("Three payments, $350.") is ambiguous, unless we
+    #   asked for the minimum.
+    # A percent-only price act's quote may run over the total ("Fifty percent,
+    # which comes to $900 total"); its money is not claimed.
+    money_quotes = [
+        a.quote for a in kept if not (isinstance(a, PriceAskAct) and a.total_cents is None)
+    ]
+    found = _unclaimed_total(verified, utterance, money_quotes, ref=ref_d)
+    if found is not None:
+        verified = verified.model_copy(
+            update={"settlement_ask_total_cents": found[0], "ask_total_quote": found[1]}
+        )
+    asked_min = _MIN in (
+        pending_readback,
+        ctx.awaiting_field,
+        _field_for_ask_line(last_agent_line),
+    )
+    bare_min = None if asked_min else _bare_min_with_count(verified, utterance)
+    if bare_min is not None and verified.amount_ambiguous_cents is None:
+        update |= {
+            "terms": [t for t in verified.terms if t is not bare_min],
+            "amount_ambiguous_cents": bare_min.value,
+            "amount_ambiguous_quote": bare_min.quote,
+        }
 
     # A dollar "total" the code would question anyway (an exact payment count or
     # "pay $X by <date>" beside it, or a bare demanded amount) is the flat
@@ -349,7 +439,7 @@ def convert_acts(
         if _contiguous(ranges):
             tiers = sorted({(frm, cents) for frm, _, cents in ranges})
             update["terms"] = [
-                *(t for t in verified.terms if t.field != _TIERS),
+                *(t for t in update.get("terms", verified.terms) if t.field != _TIERS),
                 VerifiedTerm(
                     field=_TIERS,
                     value=tiers,
@@ -391,6 +481,41 @@ def convert_acts(
             "acts": [a.type for a in kept] + (["unclear"] if unclear else []),
         }
     )
+
+
+def _unclaimed_total(
+    v: VerifiedAnalysis, utterance: str, quotes: list[str], *, ref: date
+) -> tuple[int, str] | None:
+    """``(cents, raw)`` of a dollar total with a total cue that no act quote or term holds."""
+    if v.settlement_ask_total_cents is not None or v.amount_ambiguous_cents is not None:
+        return None
+    held = {t.value for t in v.terms if isinstance(t.value, int)}
+    for q in quotes:
+        held |= {t.value for t in extract_tokens(q, ref=ref) if t.kind == "money"}
+    for sentence in re.split(r"(?<=[.!?;])\s+", utterance):
+        if not _TOTAL_WORD_RE.search(sentence) or _BALANCE_RE.search(sentence):
+            continue
+        money = [t for t in extract_tokens(sentence, ref=ref) if t.kind == "money"]
+        if len(money) == 1 and money[0].value not in held:
+            return int(money[0].value), money[0].raw
+    return None
+
+
+def _bare_min_with_count(v: VerifiedAnalysis, utterance: str) -> VerifiedTerm | None:
+    """The ``min_payment_cents`` term read from a bare amount beside an exact count."""
+    term = next((t for t in v.terms if t.field == _MIN), None)
+    if term is None:
+        return None
+    for sentence in re.split(r"(?<=[.!?;])\s+", utterance):
+        money = [t for t in extract_tokens(sentence) if t.kind == "money"]
+        if not any(t.value == term.value for t in money):
+            continue
+        if _PER_PAYMENT_RE.search(sentence) or not _EXACT_COUNT_RE.search(sentence):
+            return None
+        if _COUNT_CAP_RE.search(sentence):
+            return None
+        return term
+    return None
 
 
 def _claimed_quotes(kept: list[Any], v: VerifiedAnalysis) -> list[str]:

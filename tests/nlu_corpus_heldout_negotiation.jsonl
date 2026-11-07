@@ -1,0 +1,42 @@
+{"id": "hn01", "tags": ["heldout_neg", "ask_pct"], "text": "We're looking for sixty percent on this one.", "stance": "counter", "ask_pct": 60, "acts": ["price_ask"]}
+{"id": "hn02", "tags": ["heldout_neg", "ask_pct"], "agent": "counter", "text": "Can you do sixty five?", "stance": "counter", "ask_pct": 65, "acts": ["price_ask"]}
+{"id": "hn03", "tags": ["heldout_neg", "haggle"], "agent": "counter", "text": "Fifty's too low. Meet me at fifty eight.", "stance": "counter", "ask_pct": 58, "acts": ["respond_to_offer", "price_ask"]}
+{"id": "hn04", "tags": ["heldout_neg", "haggle"], "agent": "counter", "text": "Come up to fifty five and we're done.", "stance": "counter", "ask_pct": 55, "acts": ["price_ask"]}
+{"id": "hn05", "tags": ["heldout_neg", "haggle"], "agent": "counter", "text": "Can we say fifty three?", "stance": "counter", "ask_pct": 53, "acts": ["price_ask"]}
+{"id": "hn06", "tags": ["heldout_neg", "ask_pct"], "text": "Seventy percent, and honestly that's already a discount.", "stance": "counter", "ask_pct": 70, "acts": ["price_ask"]}
+{"id": "hn07", "tags": ["heldout_neg", "firm"], "agent": "counter", "text": "Sixty is final, I can't go any lower.", "stance": "counter", "firm": true, "ask_pct": 60, "acts": ["price_ask"]}
+{"id": "hn08", "tags": ["heldout_neg", "firm"], "agent": "counter", "text": "Fifty five percent is the floor on this account.", "stance": "counter", "firm": true, "ask_pct": 55, "acts": ["price_ask"]}
+{"id": "hn09", "tags": ["heldout_neg", "firm"], "agent": "counter", "text": "The best I can do is fifty two percent.", "stance": "counter", "firm": true, "ask_pct": 52, "acts": ["price_ask"]}
+{"id": "hn10", "tags": ["heldout_neg", "firm"], "agent": "counter", "text": "I already told you, sixty is our floor.", "stance": "counter", "firm": true, "ask_pct": 60, "acts": ["price_ask"]}
+{"id": "hn11", "tags": ["heldout_neg", "self_correction"], "text": "Around thirty... no, sorry, seventy five percent.", "stance": "counter", "ask_pct": 75, "acts": ["price_ask"]}
+{"id": "hn12", "tags": ["heldout_neg", "self_correction"], "text": "We'd need sixty, I mean sixty five percent.", "stance": "counter", "ask_pct": 65, "acts": ["price_ask"]}
+{"id": "hn13", "tags": ["heldout_neg", "self_correction"], "agent": "counter", "text": "Fifty eight. Sorry, fifty six percent.", "stance": "counter", "ask_pct": 56, "acts": ["price_ask"]}
+{"id": "hn14", "tags": ["heldout_neg", "hedge"], "text": "I think we could probably do something like sixty percent.", "stance": "counter", "ask_pct": 60, "acts": ["price_ask"]}
+{"id": "hn15", "tags": ["heldout_neg", "hedge"], "agent": "counter", "text": "Maybe around fifty five, I'd have to double check.", "stance": "counter", "ask_pct": 55, "acts": ["price_ask"]}
+{"id": "hn16", "tags": ["heldout_neg", "small_talk"], "text": "Ha, it's been a long Friday. Anyway, we'd want seventy percent.", "stance": "counter", "ask_pct": 70, "acts": ["price_ask"]}
+{"id": "hn17", "tags": ["heldout_neg", "small_talk"], "text": "Sorry about the hold. So the number on our side is sixty two percent.", "stance": "counter", "ask_pct": 62, "acts": ["price_ask"]}
+{"id": "hn18", "tags": ["heldout_neg", "amount_total"], "text": "We can settle for eleven hundred dollars total.", "stance": "counter", "ask_total_cents": 110000, "acts": ["price_ask"]}
+{"id": "hn19", "tags": ["heldout_neg", "amount_total"], "text": "If the client can do $950 to settle, we'll close it out.", "stance": "counter", "ask_total_cents": 95000, "acts": ["price_ask"]}
+{"id": "hn20", "tags": ["heldout_neg", "amount_total"], "text": "Fifteen hundred dollars in full and the account is closed.", "stance": "counter", "ask_total_cents": 150000, "acts": ["price_ask"]}
+{"id": "hn21", "tags": ["heldout_neg", "amount_total", "firm"], "agent": "counter", "text": "$800 total is the lowest we can go.", "stance": "counter", "firm": true, "ask_total_cents": 80000, "acts": ["price_ask"]}
+{"id": "hn22", "tags": ["heldout_neg", "accept"], "agent": "counter", "text": "Okay, we can accept that.", "stance": "accept", "acts": ["respond_to_offer"]}
+{"id": "hn23", "tags": ["heldout_neg", "accept"], "agent": "confirm", "text": "Yes, that schedule works for us.", "stance": "accept", "acts": ["respond_to_offer"]}
+{"id": "hn24", "tags": ["heldout_neg", "reject"], "agent": "counter", "text": "No, that doesn't work for us.", "stance": "reject", "acts": ["respond_to_offer"]}
+{"id": "hn25", "tags": ["heldout_neg", "reject"], "agent": "counter", "text": "Fifty? No way, that's not happening.", "stance": "reject", "acts": ["respond_to_offer"]}
+{"id": "hn26", "tags": ["heldout_neg", "reject"], "agent": "counter", "text": "I can't take that to my manager.", "stance": "reject", "acts": ["respond_to_offer"]}
+{"id": "hn27", "tags": ["heldout_neg", "schedule_ask"], "agent": "counter", "text": "When would the first payment come out?", "stance": "question", "acts": ["question"]}
+{"id": "hn28", "tags": ["heldout_neg", "schedule_ask"], "agent": "confirm", "text": "Can you walk me through the payment dates?", "stance": "question", "acts": ["question"]}
+{"id": "hn29", "tags": ["heldout_neg", "schedule_ask"], "agent": "counter", "text": "How many payments are you proposing?", "stance": "question", "acts": ["question"]}
+{"id": "hn30", "tags": ["heldout_neg", "rule"], "text": "We can do up to ten payments on this.", "stance": "info", "terms": {"max_payments": 10}, "acts": ["state_rule"]}
+{"id": "hn31", "tags": ["heldout_neg", "rule"], "text": "First payment has to be by May fifteenth.", "stance": "info", "terms": {"first_payment_date": "2026-05-15"}, "acts": ["state_rule"]}
+{"id": "hn32", "tags": ["heldout_neg", "rule"], "text": "Twelve payments max, and they have to be even.", "stance": "info", "terms": {"max_payments": 12, "payment_structure": "even"}, "acts": ["state_rule", "state_rule"]}
+{"id": "hn33", "tags": ["heldout_neg", "rule"], "text": "Six payments.", "stance": "info", "terms": {"max_payments": 6}, "acts": ["state_rule"]}
+{"id": "hn34", "tags": ["heldout_neg", "rule"], "agent": "min_ask", "text": "At least a hundred and fifty dollars a month.", "stance": "info", "terms": {"min_payment_cents": 15000}, "acts": ["answer"]}
+{"id": "hn35", "tags": ["heldout_neg", "readback_correction"], "context": [{"role": "agent", "text": "Just to confirm, that is up to six payments?"}], "pending": "max_payments", "text": "No, eight payments.", "stance": "info", "terms": {"max_payments": 8}, "acts": ["readback_reply"]}
+{"id": "hn36", "tags": ["heldout_neg", "readback_correction"], "context": [{"role": "agent", "text": "Just to confirm, each payment must be at least $100?"}], "pending": "min_payment_cents", "text": "No, it's a hundred and twenty five dollars.", "stance": "info", "terms": {"min_payment_cents": 12500}, "acts": ["readback_reply"]}
+{"id": "hn37", "tags": ["heldout_neg", "readback_correction"], "agent": "confirm", "text": "Wait, I said fifty five, not fifty.", "stance": "counter", "ask_pct": 55, "acts": ["price_ask"]}
+{"id": "hn38", "tags": ["heldout_neg", "stall"], "agent": "counter", "text": "Hold on, let me run that by my supervisor.", "stance": "stall", "acts": ["stall"]}
+{"id": "hn39", "tags": ["heldout_neg", "filler", "stt"], "agent": "counter", "text": "okay so uh yeah sixty percent", "stance": "counter", "ask_pct": 60, "acts": ["price_ask"]}
+{"id": "hn40", "tags": ["heldout_neg", "filler", "stt"], "agent": "counter", "text": "mm-hmm yeah I hear you", "stance": "other", "acts": ["backchannel"]}
+{"id": "hn41", "tags": ["heldout_neg", "filler", "stt"], "agent": "counter", "text": "uh we we can maybe do like sixty two you know", "stance": "counter", "ask_pct": 62, "acts": ["price_ask"]}
+{"id": "hn42", "tags": ["heldout_neg", "filler", "stt"], "agent": "counter", "text": "uh huh, go on", "stance": "other", "acts": ["backchannel"]}

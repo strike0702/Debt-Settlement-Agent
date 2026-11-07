@@ -326,6 +326,10 @@ matter most; the cache only serves lines that are word-for-word repeats.
 still talking: "Hold on. That is too low..."). Evidence:
 [`docs/eval/voice_ack_20261107/summary.md`](../eval/voice_ack_20261107/summary.md).
 
+**Follow-up (user listening check, 2026-11-07).** At 0.15 s the ack was followed by about 3 s of
+silence before a live reply. The ack now waits 0.7 s from Flux's confirmed end of turn (setting
+`voice_ack_delay_ms`); no ack if the reply starts first or the rep starts talking again.
+
 ## Process choices
 
 - Each phase runs in its own git worktree with a paste-ready prompt; phases that touch the

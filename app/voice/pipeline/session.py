@@ -57,7 +57,6 @@ from app.voice.pipeline.budget import (
 )
 from app.voice.pipeline.heard import HeardTracker
 from app.voice.pipeline.processors import (
-    ACK_AFTER_S,
     OrchestratorProcessor,
     OutputGate,
     RepVad,
@@ -192,7 +191,7 @@ class VoiceSession:
         self.proc.filler_after_s = (
             s.voice_filler_after_ms / 1000 if s.voice_filler_after_ms is not None else None
         )
-        self.proc.ack_after_s = ACK_AFTER_S if s.voice_ack else None
+        self.proc.ack_after_s = s.voice_ack_delay_ms / 1000 if s.voice_ack else None
         if s.voice_vad_pause:
             self.proc.gate = gate
             vad = SileroVADAnalyzer(params=vad_params(s))
@@ -226,6 +225,7 @@ class VoiceSession:
     def _flux_events(self, stt: DeepgramFluxSTTService) -> None:
         async def start(_svc: object, transcript: str = "", *_: object) -> None:
             self.log("start_of_turn", text=transcript)
+            self.proc.rep_resumed()
 
         async def end(_svc: object, transcript: str = "", *_: object) -> None:
             self.log("end_of_turn", text=transcript)
@@ -237,6 +237,7 @@ class VoiceSession:
 
         async def resumed(_svc: object, *_: object) -> None:
             self.log("turn_resumed")
+            self.proc.rep_resumed()
             self.turns.on_resumed()
 
         stt.add_event_handler("on_start_of_turn", start)

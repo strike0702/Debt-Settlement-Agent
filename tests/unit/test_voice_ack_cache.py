@@ -14,6 +14,7 @@ from typing import Any
 
 from pipecat.frames.frames import (
     Frame,
+    InterimTranscriptionFrame,
     InterruptionFrame,
     TTSAudioRawFrame,
     TTSSpeakFrame,
@@ -24,6 +25,7 @@ from pipecat.processors.frame_processor import FrameDirection
 from pipecat.services.deepgram.tts import DeepgramTTSService
 from pipecat.tests.utils import run_test
 
+from app.config import Settings
 from app.voice.pipeline import processors
 from app.voice.pipeline.heard import HeardTracker
 from app.voice.pipeline.processors import OrchestratorProcessor, SentenceEndFrame
@@ -148,6 +150,46 @@ async def test_ack_audio_is_not_agent_talk_for_barge_or_pause() -> None:
     assert turns.barges == [] and not any(isinstance(f, InterruptionFrame) for f in sent)
     assert turns.finals[-1] == "No, wait, I meant sixty five."
     await proc.aclose()
+
+
+def test_ack_delay_default_is_700_ms_from_end_of_turn() -> None:
+    assert Settings().voice_ack_delay_ms == 700
+    assert processors.ACK_AFTER_S == 0.7
+
+
+async def test_no_ack_when_the_reply_starts_within_the_delay() -> None:
+    turns = SlowTurns()
+    proc, sent, logged = await _proc(turns)
+    proc.ack_after_s = 0.05
+    await proc._final("We can do eight payments.")
+    await asyncio.sleep(0.02)
+    await proc.speak([("r1", "Thanks. What is the minimum?")])  # a slow model, still in time
+    await asyncio.sleep(0.06)
+    assert "ack" not in logged and processors.ACKS[0] not in _spoken(sent)
+    turns.release.set()
+    await proc.aclose()
+
+
+async def test_no_ack_when_the_rep_talks_again_within_the_delay() -> None:
+    for resume in ("flux", "vad", "interim"):
+        turns = SlowTurns()
+        proc, sent, logged = await _proc(turns)
+        proc.ack_after_s = 0.05
+        proc.gate = processors.OutputGate()
+        await proc._final("We can do eight payments.")
+        await asyncio.sleep(0.02)
+        if resume == "flux":
+            proc.rep_resumed()  # the session's Flux start_of_turn / turn_resumed
+        elif resume == "vad":
+            await proc.on_rep_voice(True)
+        else:
+            await proc.process_frame(
+                InterimTranscriptionFrame("and monthly", "rep", ""), FrameDirection.DOWNSTREAM
+            )
+        await asyncio.sleep(0.06)
+        assert "ack" not in logged, resume
+        turns.release.set()
+        await proc.aclose()
 
 
 # ---------------------------------------------------------------- sentence cache

@@ -29,8 +29,9 @@ takes effect at once, and trims the leading silence Aura-2 puts before the
 first sentence of a reply (about 0.25 s of the reply latency).
 
 Instant ack (Phase 70, DECISIONS D18). When a rep turn is still without a
-reply ``ACK_AFTER_S`` after Flux's committed end of turn (so it went to the
-model; a code fast path has replied by then), the agent says a short neutral
+reply ``ack_after_s`` (``ACK_AFTER_S``, setting ``voice_ack_delay_ms``) after
+Flux's committed end of turn, and the rep has not started talking again, the
+agent says a short neutral
 "Mm-hm." / "Right." (``ACKS``, rotated). It is pushed straight to TTS: no
 sentence id, never acked, not in the transcript, no rollback effect. It is not
 "the agent talking" for barge or pause rules, so the rep can speak over it as
@@ -91,9 +92,10 @@ TRIM_MAX_S = 0.3
 FILLER_AFTER_S = 3.0
 # Spoken while a late reply is computed; never acked, never part of a turn.
 FILLERS = ("One moment.", "Let me check.", "Okay, just a second.", "Let me see.")
-# Instant ack: a rep turn still without a reply this long after the final went
-# to the model (fast paths reply within about 50 ms; model turns take over 1 s).
-ACK_AFTER_S = 0.15
+# Instant ack: a rep turn still without a reply this long after the final gets
+# one (fast paths reply within about 50 ms). 0.15 s left a long silence between
+# the ack and a ~3 s live reply (user listening check); 0.7 s shortens it.
+ACK_AFTER_S = 0.7
 # Neutral sounds only: never "Okay", "Sure" or "Got it", which can sound like
 # agreeing to a price (premature-commitment guard; DECISIONS D18).
 ACKS = ("Mm-hm.", "Right.")
@@ -325,7 +327,7 @@ class OrchestratorProcessor(FrameProcessor):
         self.filler_after_s: float | None = FILLER_AFTER_S
         self._filler_task: asyncio.Task[None] | None = None
         self._fillers = 0
-        # Instant ack: None is off (the session sets ACK_AFTER_S under voice_ack).
+        # Instant ack: None is off (the session sets voice_ack_delay_ms under voice_ack).
         self.ack_after_s: float | None = None
         self.call_over: Callable[[], bool] = lambda: False
         self._ack_task: asyncio.Task[None] | None = None
@@ -359,6 +361,8 @@ class OrchestratorProcessor(FrameProcessor):
             return
         # Only while agent audio is actually playing: a reply still queued for
         # TTS is not something the rep can talk over yet.
+        if speaking:
+            self.rep_resumed()
         if speaking and self.agent_talking and self.bot_speaking and not gate.paused:
             gate.pause()
             self.log("pause")
@@ -399,6 +403,7 @@ class OrchestratorProcessor(FrameProcessor):
             await self._final(frame.text)
             return
         if isinstance(frame, InterimTranscriptionFrame):
+            self.rep_resumed()
             self._show("rep_speaking", frame.text.strip())
             if self.agent_talking and is_barge(frame.text):
                 await self.interrupt(reason="interim", text=frame.text)
@@ -461,6 +466,10 @@ class OrchestratorProcessor(FrameProcessor):
         self._ack_only = True
         self.log("ack", text=text)
         await self.push_frame(TTSSpeakFrame(text))
+
+    def rep_resumed(self) -> None:
+        """The rep started talking again (Flux start of turn, VAD, interim): no pending ack."""
+        self._cancel_ack()
 
     def _cancel_ack(self) -> None:
         if self._ack_task is not None:

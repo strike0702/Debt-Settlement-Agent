@@ -20,6 +20,9 @@ empty cache directory; `warm/` reused the directory `cold/` filled (15 entries b
 | barge stop p50, from clip start | 954 ms | 1235 ms ⁴ | 840 ms |
 | false barges (harness) | 0 | 1 | 2 ⁵ |
 
+**Note (follow-up, same day):** these first-sound numbers predate the 0.7 s ack delay
+(`voice_ack_delay_ms`, was 0.15 s); expect about +0.55 s on acked turns. Not re-measured.
+
 What the rep hears first on a model turn is now about 0.75–0.9 s after they stop (end of turn
 about 0.45 s, ack decision 0.15 s, cached ack audio at once, about 0.1 s to the page), against
 about 2.5 s before. The reply itself is not faster: these two calls are about amounts, so most
@@ -50,8 +53,8 @@ replies).
 
 ## How it works
 
-- **Ack**: at Flux's committed end of turn, if no reply is queued 150 ms later (code fast paths
-  reply within about 50 ms), the agent says "Mm-hm." or "Right." (rotated). Never before the
+- **Ack**: at Flux's committed end of turn, if no reply is queued 700 ms later
+  (`VOICE_ACK_DELAY_MS`; 150 ms when measured) and the rep has not started talking again, the agent says "Mm-hm." or "Right." (rotated). Never before the
   opening, after the call's last line, twice in one turn, while agent audio plays or is paused, or
   in a turn that interrupted the agent. It is pushed straight to TTS: no sentence id, never acked,
   not in the transcript, no rollback effect, and it is not "the agent talking" for barge or pause

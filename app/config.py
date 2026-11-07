@@ -200,6 +200,9 @@ class Settings(BaseSettings):
     # Instant ack (Phase 70, DECISIONS D18): a short neutral "Mm-hm." / "Right."
     # when a rep turn goes to the model; see processors.ACKS.
     voice_ack: bool = True
+    # Measured from Flux's confirmed end of turn: a reply started by then, or
+    # the rep talking again, means no ack (processors.ACK_AFTER_S).
+    voice_ack_delay_ms: int = Field(default=700, ge=0, le=5000)
     # Exact-text audio cache for number-free sentences (Phase 70; tts_cache).
     # Bounded on disk; 0 turns it off. None dir: ``tts_cache/`` next to DB_PATH.
     voice_tts_cache_mb: int = Field(default=50, ge=0, le=2000)

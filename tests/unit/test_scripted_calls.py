@@ -21,8 +21,8 @@ async def test_oracle_scripts_meet_their_moves() -> None:
     settings = scripted_settings("oracle", offline_settings())
     for script in all_scripts():
         res = await run_script(script, settings=settings)
-        if script.get("requires"):
-            assert res.skipped and not res.turns
+        if res.skipped:  # a script whose requirement is not on this branch
+            assert script.get("requires") and not res.turns
             continue
         bad = [t["i"] for t in res.turns if not t["ok"]]
         assert bad == ([2, 4] if script["name"] == "tiers_suggested_lines" else []), script["name"]

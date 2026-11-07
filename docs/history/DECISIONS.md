@@ -286,23 +286,31 @@ line: the agreement, eval and phase panels would lag one turn.
 rollback of unheard turns and fragment merge (Phase 56), `speech_dropped`, the voice budget,
 the voice harness's WebRTC targets, and the frozen voice reports under `docs/eval/`.
 
-## D17. Host the voice demo on AWS EC2, not Render free (2026-10-30)
+## D18. Instant ack in a neutral word; cache only number-free sentences (Phase 70, 2026-11-07)
 
-**Question.** After Phase 66 the hosted voice connected through TURN, but the user heard slow,
-choppy agent speech, late transcripts and missed words on Render. Render's free metrics showed
-nothing. Upgrade Render, or move?
+**Question.** With Claude Haiku reading the rep, the first reply audio was 2.5 s p50 after the
+rep stopped (end of turn 0.5 s, NLU 1.3 s, TTS first byte 0.35 s, playback 0.3 s). How to make
+the agent sound present sooner without letting a model or a canned line decide anything?
 
-**Evidence.** Pipecat does per-frame audio work in Python (Opus decode/encode, Silero VAD,
-resampling). The same build on an EC2 t3.small averaged 12% and peaked at 35% of 2 vCPU during
-a 2-minute call (about 0.7 of a CPU), against Render free's 0.1 CPU. The user's call there
-"felt as good as on my laptop".
+**Chosen (user, 2026-11-07).** (1) An instant ack on model turns: a short pre-rendered sound in
+the agent's own Aura-2 voice, "Mm-hm." or "Right.", never "Okay", "Sure" or "Got it": after a
+price those can sound like agreeing to it (the premature-commitment guard exists for that). It
+commits nothing: no sentence id, no heard tracking, no transcript line, no rollback effect. (2)
+An exact-text audio cache for sentences with no digits and no number words. Sentences with
+numbers always go to live TTS; no splicing of cached words around a live number.
 
-**Chosen.** One t3.small in the account's Region (ap-southeast-2), on the AWS free plan's
-credits (about $23 a month): Caddy for HTTPS on an sslip.io name, systemd, SSH from the owner's
-IP only, no inbound UDP (stateful security group plus the browser's TURN relay), IMDSv2. The
-server's own ICE is STUN only (`VOICE_SERVER_TURN=false`): it has a public IP, and aioice's
-TURN channel bind against Cloudflare failed with 401. Render stays as a text-only mirror.
-Details: [`docs/DEPLOY_AWS.md`](../DEPLOY_AWS.md).
+**Why.** The ack moves the first sound to about 0.75 s (warm p50, was 2.5 s) without touching
+what the agent decides or says. Number splicing would save more on these calls but joins two
+recordings mid-sentence (audible seams, prosody that no longer fits) on exactly the words that
+matter most; the cache only serves lines that are word-for-word repeats.
+
+**Rules added while measuring.** No ack in a turn that interrupted the agent (the rep is usually
+still talking: "Hold on. That is too low..."). Evidence:
+[`docs/eval/voice_ack_20261107/summary.md`](../eval/voice_ack_20261107/summary.md).
+
+**Follow-up (user listening check, 2026-11-07).** At 0.15 s the ack was followed by about 3 s of
+silence before a live reply. The ack now waits 0.7 s from Flux's confirmed end of turn (setting
+`voice_ack_delay_ms`); no ack if the reply starts first or the rep starts talking again.
 
 ## D19. NLU v2: typed acts plus call context instead of flat flags (2026-11-07)
 
@@ -324,6 +332,24 @@ acts. No interim 73-vs-75 patch: the demo is not shared before 71 lands (user).
 and each new situation adds a flag that can break an old one; the model also lacked the context
 that makes "seventy three" a price and "that's all" the end of a list. Shorter structured output
 should also cut the live NLU time (about 550 output tokens, 3 s).
+
+## D20. Host the voice demo on AWS EC2, not Render free (2026-10-30)
+
+**Question.** After Phase 66 the hosted voice connected through TURN, but the user heard slow,
+choppy agent speech, late transcripts and missed words on Render. Render's free metrics showed
+nothing. Upgrade Render, or move?
+
+**Evidence.** Pipecat does per-frame audio work in Python (Opus decode/encode, Silero VAD,
+resampling). The same build on an EC2 t3.small averaged 12% and peaked at 35% of 2 vCPU during
+a 2-minute call (about 0.7 of a CPU), against Render free's 0.1 CPU. The user's call there
+"felt as good as on my laptop".
+
+**Chosen.** One t3.small in the account's Region (ap-southeast-2), on the AWS free plan's
+credits (about $23 a month): Caddy for HTTPS on an sslip.io name, systemd, SSH from the owner's
+IP only, no inbound UDP (stateful security group plus the browser's TURN relay), IMDSv2. The
+server's own ICE is STUN only (`VOICE_SERVER_TURN=false`): it has a public IP, and aioice's
+TURN channel bind against Cloudflare failed with 401. Render stays as a text-only mirror.
+Details: [`docs/DEPLOY_AWS.md`](../DEPLOY_AWS.md).
 
 ## Process choices
 

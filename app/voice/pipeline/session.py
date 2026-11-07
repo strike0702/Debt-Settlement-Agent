@@ -3,9 +3,12 @@
 ``VoiceSession.start`` is called by ``routes`` once WebRTC connects. It joins
 the call (``VoiceCall``) that already runs on the WebSocket, at most one
 session per call (``SESSIONS``). Each reply sentence sent to Aura-2 is audited
-as ``tts_request`` (characters, sentence id, cost estimate); when the session
-ends, ``stt_session`` records the Flux seconds, the characters and the
-session's estimated cost, which is added to ``VoiceBudget``. Deepgram is
+as ``tts_request`` (characters, sentence id, cost estimate) when it goes to
+Aura-2 live, or as ``tts_cache_hit`` (sentence id only) when it plays from the
+number-free sentence cache (``tts_cache``; Phase 70). When the session ends,
+``stt_session`` records the Flux seconds, the live characters, the cache hits
+and the session's estimated cost, which is added to ``VoiceBudget`` (live
+characters only: a hit costs nothing). Deepgram is
 called directly by Pipecat's services here, not through ``app.llm.client``;
 NLU and NLG still go through it.
 
@@ -38,11 +41,11 @@ from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.services.deepgram.flux.stt import DeepgramFluxSTTService
-from pipecat.services.deepgram.tts import DeepgramTTSService
 from pipecat.transports.base_transport import TransportParams
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
 
 from app.agent.orchestrator import Utterance
+from app.agent.policy import Phase
 from app.config import Settings
 from app.llm.budget import micros_to_usd
 from app.voice.pipeline.budget import (
@@ -60,6 +63,7 @@ from app.voice.pipeline.processors import (
     SilenceFill,
     Tap,
 )
+from app.voice.pipeline.tts_cache import CachedDeepgramTTS, cache_dir, shared_cache
 from app.voice.pipeline.turns import VoiceCall, VoiceTurns
 
 FLUX_MODEL = "flux-general-en"
@@ -111,6 +115,8 @@ class VoiceSession:
         self.turns = VoiceTurns(call, eager=settings.voice_eager_nlu)
         self.proc = OrchestratorProcessor(self.turns, self.tracker, log=self.log)
         self.proc.on_tts_request = self._audit_tts
+        self.proc.on_tts_cache_hit = self._audit_hit
+        self.proc.call_over = self._call_over
         self.task: PipelineTask | None = None
         self.started = 0.0
         self.connected = asyncio.Event()
@@ -125,6 +131,16 @@ class VoiceSession:
         price = self.settings.deepgram_aura2_usd_per_1k_chars
         usd = micros_to_usd(tts_cost_micros(len(text), price))
         self.call.audit("tts_request", {"sentence_id": sid, "chars": len(text), "usd": str(usd)})
+
+    def _audit_hit(self, sid: str | None) -> None:
+        self.call.audit("tts_cache_hit", {"sentence_id": sid})
+
+    def _call_over(self) -> bool:
+        """The call has ended or is ending: no ack (the last line may already be out)."""
+        orch = self.call.orch
+        if self._finishing or orch is None:
+            return True
+        return orch.session.neg.phase in (Phase.END, Phase.ESCALATE)
 
     async def speak(self, utt: Utterance) -> None:
         """Send a reply's sentences to TTS (the call emitted its UI events already)."""
@@ -160,8 +176,14 @@ class VoiceSession:
             ),
         )
         self._flux_events(stt)
-        tts = DeepgramTTSService(
-            api_key=key, settings=DeepgramTTSService.Settings(voice=s.voice_tts_voice)
+        cache = None
+        if s.voice_tts_cache_mb > 0:
+            cache = shared_cache(cache_dir(s), s.voice_tts_cache_mb * 1024 * 1024)
+        tts = CachedDeepgramTTS(
+            cache=cache,
+            on_synth=self.proc.synthesized,
+            api_key=key,
+            settings=CachedDeepgramTTS.Settings(voice=s.voice_tts_voice),
         )
         out_tap = Tap("out", log=self.log, on_played=self.proc.played)
         gate = OutputGate(log=self.log)
@@ -169,6 +191,7 @@ class VoiceSession:
         self.proc.filler_after_s = (
             s.voice_filler_after_ms / 1000 if s.voice_filler_after_ms is not None else None
         )
+        self.proc.ack_after_s = s.voice_ack_delay_ms / 1000 if s.voice_ack else None
         if s.voice_vad_pause:
             self.proc.gate = gate
             vad = SileroVADAnalyzer(params=vad_params(s))
@@ -202,6 +225,7 @@ class VoiceSession:
     def _flux_events(self, stt: DeepgramFluxSTTService) -> None:
         async def start(_svc: object, transcript: str = "", *_: object) -> None:
             self.log("start_of_turn", text=transcript)
+            self.proc.rep_resumed()
 
         async def end(_svc: object, transcript: str = "", *_: object) -> None:
             self.log("end_of_turn", text=transcript)
@@ -213,6 +237,7 @@ class VoiceSession:
 
         async def resumed(_svc: object, *_: object) -> None:
             self.log("turn_resumed")
+            self.proc.rep_resumed()
             self.turns.on_resumed()
 
         stt.add_event_handler("on_start_of_turn", start)
@@ -263,6 +288,7 @@ class VoiceSession:
                 "seconds": str(secs),
                 "stt_usd": str(micros_to_usd(stt)),
                 "tts_chars": self.proc.tts_chars,
+                "tts_cache_hits": self.proc.tts_cache_hits,
                 "tts_usd": str(micros_to_usd(tts)),
                 "usd": str(micros_to_usd(stt + tts)),
             },

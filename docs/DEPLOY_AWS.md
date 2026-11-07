@@ -5,7 +5,7 @@ because Pipecat decodes the mic, runs the Silero VAD, resamples for Deepgram and
 agent's audio in Python for every 20 ms frame. On Render's free instance (0.1 CPU) the agent's
 speech came out slow and choppy and transcripts lagged. On EC2 one call peaked at about 0.7 of a
 CPU (35% of a t3.small) and averaged 12%, and it sounded the same as on a laptop
-([D17](history/DECISIONS.md)).
+([D20](history/DECISIONS.md)).
 
 ## What runs where
 

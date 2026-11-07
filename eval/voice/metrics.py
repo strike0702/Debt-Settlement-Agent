@@ -13,6 +13,7 @@ scored the removed browser-speech console this way):
     tts_byte                   first TTS audio byte on the server (spike only)
     audio_on / audio_off       agent audio audibly started / stopped
     filler_on                  a filler ("One moment.") started, not the reply
+    ack_on                     an instant ack ("Mm-hm.") started, not the reply
     barge                      the stack decided to interrupt the agent
     stop                       agent audio stopped because of a barge
     stages (dict)              server stage timings for a turn (no current target)
@@ -257,6 +258,8 @@ class TurnRow:
     tts_byte_ms: float | None = None
     first_audio_ms: float | None = None
     any_audio_ms: float | None = None
+    # First agent sound after the clip: the instant ack or the reply (Phase 70).
+    first_sound_ms: float | None = None
     eot_count: int = 0
     wer: float | None = None
     num_hit: int = 0
@@ -324,6 +327,11 @@ def score_call(
             ]
             if any_audio:
                 row.any_audio_ms = round(any_audio[0] - t1, 1)
+            sound = [
+                e["t"] for e in ev if e["kind"] in ("audio_on", "ack_on") and t1 <= e["t"] < hi
+            ]
+            if sound:
+                row.first_sound_ms = round(sound[0] - t1, 1)
             st = _first(ev, "stages", t0, hi)
             row.stages = st.get("stages") if st else None
         else:
@@ -384,6 +392,7 @@ def summarize(rows: Sequence[TurnRow], *, phantoms: int, false_barge_count: int)
     replies = [r for r in rows if r.kind == "reply" and r.played]
     lat = [r.first_audio_ms for r in replies if r.first_audio_ms is not None]
     anyaud = [r.any_audio_ms for r in replies if r.any_audio_ms is not None]
+    sound = [r.first_sound_ms for r in replies if r.first_sound_ms is not None]
     eot = [r.eot_ms for r in replies if r.eot_ms is not None]
     eager = [r.eager_eot_ms for r in replies if r.eager_eot_ms is not None]
     final = [r.final_ms for r in replies if r.final_ms is not None]
@@ -400,6 +409,8 @@ def summarize(rows: Sequence[TurnRow], *, phantoms: int, false_barge_count: int)
         "first_audio_p50_ms": _pct(lat, 50),
         "first_audio_p95_ms": _pct(lat, 95),
         "any_audio_p50_ms": _pct(anyaud, 50),
+        "first_sound_p50_ms": _pct(sound, 50),
+        "first_sound_p95_ms": _pct(sound, 95),
         "eot_p50_ms": _pct(eot, 50),
         "eager_eot_p50_ms": _pct(eager, 50),
         "final_p50_ms": _pct(final, 50),

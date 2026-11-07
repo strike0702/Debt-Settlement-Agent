@@ -135,14 +135,15 @@ def render_md(doc: dict[str, Any], rows: list[metrics.TurnRow]) -> str:
         "",
         "## Turns",
         "",
-        "| call | line | kind | eot | final | reply | tts byte | first audio | any audio "
-        "| barged | stop | numbers | WER | heard |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "| call | line | kind | eot | final | reply | tts byte | first sound | first audio "
+        "| any audio | barged | stop | numbers | WER | heard |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in rows:
         lines.append(
             f"| {r.call} | {r.line} | {r.kind} | {_fmt(r.eot_ms)} | {_fmt(r.final_ms)} | "
-            f"{_fmt(r.reply_ms)} | {_fmt(r.tts_byte_ms)} | {_fmt(r.first_audio_ms)} | "
+            f"{_fmt(r.reply_ms)} | {_fmt(r.tts_byte_ms)} | {_fmt(r.first_sound_ms)} | "
+            f"{_fmt(r.first_audio_ms)} | "
             f"{_fmt(r.any_audio_ms)} | "
             f"{_fmt(r.barged)} | {_fmt(r.stop_ms)} | {r.num_hit}/{r.num_total} | {_fmt(r.wer)} | "
             f"{r.hyp[:70] or '–'} |"
@@ -177,7 +178,13 @@ def main() -> None:
         action="store_true",
         help="paid: Claude Haiku reads the rep first, as on the hosted demo ($1 daily cap)",
     )
+    ap.add_argument(
+        "--tts-cache",
+        type=Path,
+        help="pipecat: keep the sentence audio cache here (a second run is warm)",
+    )
     a = ap.parse_args()
+    driver.TTS_CACHE_DIR = a.tts_cache.resolve() if a.tts_cache else None
     driver.ICE_POLICY = a.ice
     if a.claude_nlu:
         driver.CLAUDE_NLU_BUDGET_USD = "1.00"

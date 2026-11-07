@@ -435,7 +435,9 @@ _TIERS_FIELD = "min_payment_tiers"
 _TIER_QUESTION = "from which payment does it start, and what is its minimum?"
 _TIER_ASKS: dict[str, str] = {
     "first": f"Go ahead. For each tier, {_TIER_QUESTION}",
-    "first_counted": f"Got it. Starting with the first tier: {_TIER_QUESTION}",
+    # Counts are Facts, never words in the template (the guard blocks those).
+    "first_counted": f"Got it, {{tier_count}} tiers. Starting with tier {{tier_position}}: "
+    f"{_TIER_QUESTION}",
     "next": f"Got it. And the next tier: {_TIER_QUESTION}",
     "more": f"Got it. Is there another tier? If so, {_TIER_QUESTION}",
     "again": f"Let us go through the tiers again. For each tier, {_TIER_QUESTION}",
@@ -471,8 +473,21 @@ def tier_ask_action(
     else:
         stage = "first_counted" if expected is not None else "first"
     spec = FIELDS_BY_NAME["min_payment_tiers"]
+    facts: dict[str, Fact] = {}
+    if stage == "first_counted":
+        assert expected is not None
+        facts = {
+            "tier_count": Fact(
+                id="tier_count", kind="count", value=expected, visibility="PUBLIC",
+                source="creditor",
+            ),
+            "tier_position": Fact(
+                id="tier_position", kind="count", value=1, visibility="PUBLIC", source="config"
+            ),
+        }
     return Action(
         intent=Intent.ASK,
+        facts=facts,
         text_slots={"ask_text": _TIER_ASKS[stage], "field_label": spec.label},
         effects=effects,
         next_phase=Phase.DISCOVERY,

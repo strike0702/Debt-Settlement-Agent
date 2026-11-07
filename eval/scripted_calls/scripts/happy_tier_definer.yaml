@@ -1,0 +1,47 @@
+# Happy path for tier_definer (Phase 71a). Expected moves = the oracle run on these lines.
+name: happy_tier_definer
+scenario: tier_definer
+turns:
+- rep: We allow up to eight payments, at least $190 each, with a flexible schedule.
+  oracle:
+    stance: info
+    terms:
+    - {field: max_payments, value: 8, quote: eight payments}
+    - {field: min_payment_cents, value: 19000, quote: $190}
+    - {field: payment_structure, value: flexible, quote: flexible schedule}
+  expect: {intent: ASK, reason: optional_sweep}
+- rep: Payments one to two at least $190, three to five at least $250, and from the sixth payment on at least $300.
+  oracle:
+    stance: info
+    terms:
+    - field: min_payment_tiers
+      value:
+      - [1, 19000]
+      - [3, 25000]
+      - [6, 30000]
+      quote: from the sixth payment on at least $300
+  expect: {intent: READ_BACK, reason: min_payment_tiers}
+- rep: Yes, that's right.
+  oracle: {stance: info, readback_response: confirm}
+  expect: {intent: ASK_SETTLEMENT}
+- rep: We'd settle for sixty percent of the balance.
+  oracle: {stance: offer, settlement_ask_pct: 60, ask_quote: sixty percent}
+  expect:
+    intent: COUNTER
+    facts: {counter_pct: 4200}
+- rep: We could come down to fifty five percent.
+  oracle: {stance: counter, settlement_ask_pct: 55, ask_quote: fifty five percent}
+  expect:
+    intent: COUNTER
+    facts: {counter_pct: 4400}
+- rep: Okay, that works for us.
+  oracle: {stance: accept}
+  expect:
+    intent: CONFIRM_SCHEDULE
+    facts: {settlement_pct: 4400}
+- rep: Yes, that schedule works.
+  oracle: {stance: accept}
+  expect:
+    intent: PROPOSE_WRAP
+    reason: confirmed
+    facts: {settlement_pct: 4400}

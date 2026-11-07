@@ -148,7 +148,7 @@ _ASKS_FOR_SCHEDULE_RE = re.compile(
 _FIRM_RE = re.compile(
     r"(?:"
     r"\bfinal (?:offer|number)\b"
-    r"|\blowest we can (?:go|do)\b"
+    r"|\blowest (?:we|i) can (?:go|do)\b"
     r"|\b(?:cannot|can ?not|can't|won't) go (?:any )?lower\b"
     r"|\bour floor\b"
     r"|\bis the floor\b"

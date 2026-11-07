@@ -75,6 +75,12 @@ class VerifiedAnalysis(BaseModel):
     defines_field: str | None = None
     expected_count: int | None = None
     list_done: bool = False
+    # Acts schema only (``acts.convert_acts``): numbers no verified act
+    # claimed, and an ``unclear`` reply. Both reach the policy.
+    unaccounted_numbers: list[str] = Field(default_factory=list)
+    unclear: bool = False
+    # Trace only: the act types the acts model returned and kept.
+    acts: list[str] = Field(default_factory=list)
 
     def to_turn_analysis(self) -> TurnAnalysis:
         """Drop verified flags for ``policy.decide``."""
@@ -104,4 +110,6 @@ class VerifiedAnalysis(BaseModel):
             defines_field=self.defines_field,  # type: ignore[arg-type]
             expected_count=self.expected_count,
             list_done=self.list_done,
+            unaccounted_numbers=list(self.unaccounted_numbers),
+            unclear=self.unclear,
         )

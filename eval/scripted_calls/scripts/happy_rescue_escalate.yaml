@@ -1,0 +1,28 @@
+# Happy path for rescue_escalate (Phase 71a). Expected moves = the oracle run on these lines.
+name: happy_rescue_escalate
+scenario: rescue_escalate
+turns:
+- rep: We allow up to four payments, at least $110 each, with a flexible schedule.
+  oracle:
+    stance: info
+    terms:
+    - {field: max_payments, value: 4, quote: four payments}
+    - {field: min_payment_cents, value: 11000, quote: $110}
+    - {field: payment_structure, value: flexible, quote: flexible schedule}
+  expect: {intent: ASK, reason: optional_sweep}
+- rep: No, nothing like that.
+  oracle: {stance: info, readback_response: null}
+  expect: {intent: ASK_SETTLEMENT}
+- rep: We'd settle for forty five percent of the balance.
+  oracle: {stance: offer, settlement_ask_pct: 45, ask_quote: forty five percent}
+  expect: {intent: COUNTER_TERMS, reason: alt_first_payment_date}
+- rep: Okay, that works for us.
+  oracle: {stance: accept}
+  expect:
+    intent: COUNTER
+    facts: {counter_pct: 1300}
+- rep: Yes, that schedule works.
+  oracle: {stance: accept}
+  expect:
+    intent: CONFIRM_SCHEDULE
+    facts: {settlement_pct: 1300}

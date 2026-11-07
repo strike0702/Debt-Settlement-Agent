@@ -211,6 +211,7 @@ def decide(
     action: Action | None = None
     for step in (
         _decide_interruptions,
+        _decide_unread,
         _decide_clarify,
         _decide_rep_rules,
         _decide_confirm,
@@ -289,6 +290,42 @@ def _decide_interruptions(t: _Turn) -> Action | None:
                 reason="thanks_accept",
             )
         return follow_up_action(t.effects)
+    return None
+
+
+# Number-free rephrase asks for the acts NLU's two "cannot act" signals.
+_UNREAD_NUMBER_TEMPLATE = (
+    "Sorry, I want to get your number right. What is the lowest settlement you can accept?"
+)
+_UNCLEAR_TEMPLATE = "Sorry, I did not quite catch that. Could you say it another way?"
+
+
+def _decide_unread(t: _Turn) -> Action | None:
+    """Acts NLU only: never act on an older ask when the rep's new number went unread.
+
+    A firm line with a number no verified act claimed (``unaccounted_numbers``)
+    and no new ask would otherwise reuse the last ask ("I think seventy three is
+    the lowest" accepted at 75): ask for the number instead. An ``unclear``
+    reply gets a rephrase ask. Flat-schema and oracle analyses never set either.
+    """
+    a = t.analysis
+    stay = t.neg.phase if t.neg.phase != Phase.OPENING else Phase.DISCOVERY
+    if a.firm and a.unaccounted_numbers and a.settlement_ask_pct is None:
+        return Action(
+            intent=Intent.CLARIFY,
+            effects=t.effects,
+            next_phase=stay,
+            reason="unaccounted_number",
+            template_override=_UNREAD_NUMBER_TEMPLATE,
+        )
+    if a.unclear:
+        return Action(
+            intent=Intent.CLARIFY,
+            effects=t.effects,
+            next_phase=stay,
+            reason="unclear",
+            template_override=_UNCLEAR_TEMPLATE,
+        )
     return None
 
 

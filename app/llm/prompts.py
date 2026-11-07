@@ -1,6 +1,8 @@
 """Short NLU / NLG prompt builders for the role-based LLM client.
 
-NLU: field units + last agent line + rep utterance → JSON only.
+NLU: field units + last agent line + rep utterance → JSON only. With
+``NLU_SCHEMA=acts`` (``nlu_acts_messages``) the reply is a typed act list and
+the prompt adds a PUBLIC call-context JSON block (``app.agent.nlu.context``).
 NLG: intent instruction + placeholder meanings (never values or digits), plus
 up to the last 3 public turns as context (spoken lines only; the caller drops
 any line that carries a private figure). ``act_messages`` builds the offline
@@ -200,6 +202,92 @@ def nlu_messages(
     )
     return [
         {"role": "system", "content": _NLU_SYSTEM},
+        {"role": "user", "content": user},
+    ]
+
+
+# NLU v2 (``NLU_SCHEMA=acts``): typed acts plus a PUBLIC call context block.
+_NLU_ACTS_SYSTEM = """\
+You read one line a creditor's rep said on a debt-settlement call and list the acts in it.
+Reply with JSON only: {"acts":[...]}. Include every act the line contains, in order,
+each with only its own keys and "quote": the shortest verbatim span that holds it.
+A statement with no rule, price or request (the balance, small talk, "take it to the
+client", "no rush") is {"acts":[]}. Only rules the rep states: never infer a rule
+from other words. Hedged, unsure or disfluent lines still map ("I think the minimum is
+about $200" -> state_rule, hedged). Use "unclear" (alone) only for unintelligible speech.
+Context (JSON) says what the agent is waiting for ("awaiting"), the offers on the table
+and any list being collected. Read short or bare replies against it. In known_rules,
+source "operator" means the agent stated that rule from its records: a rep value that
+differs ("no, it's six now") is a state_rule for that field; a bare "yes / that's right"
+after the agent mentioned it confirms it (no act needed beyond backchannel).
+Fields: max_payments, max_segments, max_token_pays (integers); min_payment_cents
+(integer cents, per payment: "$190" -> 19000); payment_structure (even|balloon|flexible);
+first_payment_date (YYYY-MM-DD); min_payment_tiers.
+Act types, one example each:
+answer: reply to the field the agent asked.
+ {"type":"answer","field":"max_payments","value":6,"quote":"six payments"}
+state_rule: a rule nobody asked about. Add "hedged":true for about/around.
+ {"type":"state_rule","field":"payment_structure","value":"even","quote":"even payments"}
+announce_rules: will give or go over a rule but has not yet; count = how many tiers.
+ {"type":"announce_rules","field":"min_payment_tiers","quote":"I need to define the payment tiers"}
+ "there are three tiers" -> count 3. A number of payment levels is the rule itself:
+ "at most two payment levels" -> state_rule max_segments 2. "No tiers" -> state_rule
+ min_payment_tiers with value [].
+rule_item: one tier: payments it covers and its minimum.
+ {"type":"rule_item","from_payment":3,"to_payment":5,"min_cents":25000,
+  "quote":"payments three to five must be at least $250"}
+list_done: the list is finished.
+ {"type":"list_done","quote":"that's all the tiers"}
+price_ask: settlement price as pct of the balance or total_cents; firmness opening|counter|final
+(final = their floor, lowest, cannot go lower).
+ {"type":"price_ask","pct":73,"firmness":"final","quote":"seventy three is the lowest I can go"}
+respond_to_offer: accept or reject what the agent offered ("not sure" is a stall).
+ {"type":"respond_to_offer","response":"accept","quote":"that works"}
+readback_reply: yes/no to the agent's read-back; correction = the right value if given.
+ {"type":"readback_reply","response":"deny","correction":7,"quote":"no, seven"}
+question: a question or request for information ("send me the dates"); topic
+why_not_higher|next_steps|who_approves|timeline|other.
+ {"type":"question","topic":"next_steps","quote":"what happens next?"}
+ask_private_info: asks, directly or not, about the client's own money: income, take-home
+pay, savings, bank or program balance, assets, budget, what the client can afford, or how
+much the client pays, deposits or has drafted each month. Not the debt itself.
+ {"type":"ask_private_info","quote":"how much does the client make?"}
+demand_commitment: demands the agent commit or guarantee now.
+ {"type":"demand_commitment","quote":"I need your commitment today"}
+hostility: insults or threats only (a firm instruction is not); level mild|strong.
+ {"type":"hostility","level":"strong","quote":"you people are crooks"}
+end_call: kind goodbye|refuse|transfer (not "that's all" closing a list).
+ {"type":"end_call","kind":"goodbye","quote":"thanks, bye"}
+stall: puts off their own answer. Not: "take it to your client", "I'll wait for the
+client", "no rush" (no act).
+ {"type":"stall","quote":"let me check"}
+backchannel: filler with no content.
+ {"type":"backchannel","quote":"mm-hmm"}
+unclear:
+ {"type":"unclear","quote":""}
+"""
+
+
+def nlu_acts_messages(
+    utterance: str,
+    last_agent_line: str,
+    context_json: str,
+    *,
+    ref: date | None = None,
+) -> list[dict[str, str]]:
+    """Chat messages for one acts-schema NLU turn (JSON-only reply).
+
+    ``context_json`` is ``CallContext.prompt_json()``: PUBLIC call state only.
+    """
+    today = f"Today: {ref.isoformat()}\n" if ref is not None else ""
+    user = (
+        today
+        + f"Context: {context_json}\n"
+        f"Agent last said: {last_agent_line or '(opening)'}\n"
+        f"Rep: {utterance}"
+    )
+    return [
+        {"role": "system", "content": _NLU_ACTS_SYSTEM},
         {"role": "user", "content": user},
     ]
 

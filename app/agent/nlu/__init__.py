@@ -21,11 +21,18 @@ trace. Does not update belief: the orchestrator does that via
 ``BeliefState.observe``.
 
 Modules: ``models`` (result types), ``quotes`` (quote / value primitives),
-``parse``, ``fast_paths``, ``cues``, ``verify``, ``amounts``, ``llm_call``.
+``parse``, ``fast_paths``, ``cues``, ``verify``, ``amounts``, ``llm_call``;
+NLU v2 behind ``NLU_SCHEMA=acts``: ``context`` (PUBLIC call state for the
+prompt) and ``acts`` (parse, verify, convert typed acts, number accounting).
 This package re-exports every public name (``__all__``), so
 ``from app.agent.nlu import X`` works for all of them.
 """
 
+from app.agent.nlu.acts import (
+    convert_acts,
+    parse_acts,
+    parse_tier_item,
+)
 from app.agent.nlu.amounts import (
     balance_statement_amount,
     bare_amount_ask,
@@ -34,6 +41,10 @@ from app.agent.nlu.amounts import (
     total_cents_to_bp,
     total_shape_trigger,
     try_resolve_amount_clarify,
+)
+from app.agent.nlu.context import (
+    CallContext,
+    build_call_context,
 )
 from app.agent.nlu.cues import (
     HOSTILITY_FLOOR,
@@ -78,6 +89,7 @@ from app.agent.nlu.verify import (
 )
 
 __all__ = [
+    "CallContext",
     "DroppedTerm",
     "HOSTILITY_FLOOR",
     "VerifiedAnalysis",
@@ -86,10 +98,14 @@ __all__ = [
     "balance_statement_amount",
     "bare_amount_ask",
     "bp_to_ask_pct",
+    "build_call_context",
+    "convert_acts",
     "coerce_analysis_payload",
     "coerce_tiers",
     "hostility_floor_hit",
     "normalize_for_quote",
+    "parse_acts",
+    "parse_tier_item",
     "post_verify",
     "quote_in_utterance",
     "repair_asks_client_private_info",

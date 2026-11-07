@@ -25,7 +25,7 @@ def test_corpus_schema() -> None:
     corpus = load_corpus()
     assert len(corpus) >= 140
     assert len({ln["id"] for ln in corpus}) == len(corpus)
-    allowed = {"id", "tags", "text", "agent", "pending", "stance", "terms", "ask_pct",
+    allowed = {"acts", "id", "tags", "text", "agent", "pending", "stance", "terms", "ask_pct",
                "cents_ambiguity", "defines_field", "expected_count", *FLAGS}
     for ln in corpus:
         assert set(ln) <= allowed, ln["id"]
@@ -260,8 +260,8 @@ def test_heldout_stance_set_schema() -> None:
     assert stances.count("info") >= 8 and stances.count("counter") >= 6
     assert sum(1 for ln in held if ln.get("wants_to_end")) >= 4
     assert sum(1 for ln in held if ln.get("asks_client_private_info")) >= 5
-    allowed = {"id", "tags", "text", "stance", "agent", "terms", "ask_pct", "ask_total_cents",
-               *FLAGS}
+    allowed = {"acts", "id", "tags", "text", "stance", "agent", "terms", "ask_pct",
+               "ask_total_cents", "amount_ambiguous", *FLAGS}
     for ln in held:
         assert "heldout" in ln["tags"], ln["id"]
         assert ln["stance"] in _STANCES, ln["id"]
@@ -654,8 +654,8 @@ def test_rules_heldout_set_schema() -> None:
     ids = [ln["id"] for ln in held]
     assert len(set(ids)) == len(held) >= 30
     assert not other & set(ids)
-    allowed = {"id", "tags", "text", "stance", "agent", "terms", "ask_pct", "ask_total_cents",
-               "amount_ambiguous", *FLAGS}
+    allowed = {"acts", "id", "tags", "text", "stance", "agent", "terms", "ask_pct",
+               "ask_total_cents", "amount_ambiguous", *FLAGS}
     for tag in ("private", "private_neg", "hostile", "hostile_neg", "bare_amount",
                 "bare_amount_neg"):
         assert sum(tag in ln["tags"] for ln in held) >= 3, tag

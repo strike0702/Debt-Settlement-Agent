@@ -80,6 +80,7 @@ from app.agent.nlu import (
     try_resolve_cents_clarify,
     try_resolve_disputed_value,
 )
+from app.agent.nlu.context import build_call_context
 from app.agent.nlu_types import TurnAnalysis
 from app.agent.numbers import extract_tokens
 from app.agent.policy import (
@@ -554,6 +555,8 @@ class Orchestrator:
                 gen = self._nlu_gen
             t_nlu = time.perf_counter()
             disputed = self._disputed_term()
+            # PUBLIC call state for the acts NLU prompt (ignored by the flat schema).
+            nlu_context = build_call_context(session.belief, session.neg)
 
             self._lock.release()
             try:
@@ -569,6 +572,7 @@ class Orchestrator:
                         call_id=session.call_id,
                         ref=self._ref,
                         disputed=disputed,
+                        context=nlu_context,
                     )
                 finally:
                     await self._lock.acquire()

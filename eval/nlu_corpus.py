@@ -53,6 +53,14 @@ form that was measured (``_with_context``: the "Earlier turns" block plus one
 system sentence), so ``CONTEXT_ON_P54`` can be reproduced. Lines without
 ``context`` run exactly as before either way.
 
+``--schema acts`` (Phase 71a) runs the NLU v2 acts prompt (``NLU_SCHEMA=acts``)
+with a PUBLIC call context built from the line's ``agent`` alias
+(``line_call_context``); the metrics are the same for both schemas, plus the
+act-type set against each line's ``acts`` label (``answer`` / ``state_rule`` /
+``rule_item`` count as one). Every run records per-line NLU latency and
+prompt / completion tokens of its live calls; ``--no-cache`` makes every call
+live so two schemas' latencies compare.
+
 Not the policy eval (``eval.run_eval``): no orchestrator, no simulator.
 CLI: ``python -m eval.nlu_corpus --label BEFORE [--profile demo] [--corpus PATH]
 [--providers PATH] [--no-repair-stance] [--from-records PATH [--rescore-guards]]
@@ -68,6 +76,7 @@ import asyncio
 import copy
 import json
 import re
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -80,6 +89,7 @@ from typing import Any
 # the eval never changes how the agent repairs stance.
 from app.agent.nlu import (
     _INJECTION_RE,
+    CallContext,
     VerifiedAnalysis,
     VerifiedTerm,
     _ack_dominant,
@@ -183,6 +193,29 @@ def _with_context(
     block = _CONTEXT_HEADER + format_recent_turns(context[-_CONTEXT_TURNS:]) + "\n"
     user["content"] = user["content"].replace("Agent last said:", block + "Agent last said:", 1)
     return [system, user, *messages[2:]]
+
+
+# The call state each ``agent`` alias implies, for the acts prompt's context.
+_ALIAS_CONTEXT: dict[str, dict[str, Any]] = {
+    "default": {"phase": "DISCOVERY", "awaiting": "none"},
+    "confirm": {"phase": "CONFIRM", "awaiting": "price_response", "our_last_offer_pct": 50.0},
+    "counter": {"phase": "NEGOTIATE", "awaiting": "price_response", "our_last_offer_pct": 50.0},
+    "min_ask": {"phase": "DISCOVERY", "awaiting": "field", "awaiting_field": "min_payment_cents"},
+}
+
+
+def line_call_context(line: dict[str, Any]) -> CallContext:
+    """PUBLIC call context for a corpus line (acts schema), from its ``agent`` alias."""
+    return CallContext(**_ALIAS_CONTEXT.get(line.get("agent", "default"), {}))
+
+
+# Act types scored as one: a rule value however it was offered.
+_RULE_ACTS = frozenset({"answer", "state_rule", "rule_item"})
+
+
+def act_set(types: list[str]) -> list[str]:
+    """Sorted act-type set with ``answer`` / ``state_rule`` / ``rule_item`` merged."""
+    return sorted({"state_rule" if t in _RULE_ACTS else t for t in types})
 
 
 def line_agent_text(line: dict[str, Any]) -> str:
@@ -524,6 +557,21 @@ def score(records: list[dict[str, Any]]) -> dict[str, Any]:
         if r["predicted"]["stance"] == "accept" and r["expected"]["stance"] != "accept"
     ]
     summary["filler"] = {"n": len(filler), "false_accept": len(false_acc), "ids": false_acc}
+    acted = [r for r in done if "acts" in r["predicted"]]
+    if acted:
+        miss = [r["id"] for r in acted if r["expected"]["acts"] != r["predicted"]["acts"]]
+        summary["acts"] = {"exact": 1 - len(miss) / len(acted), "n": len(acted), "miss_ids": miss}
+    usage = [r["usage"] for r in done if r.get("usage")]
+    if usage:
+        lat = sorted(u["latency_ms"] for u in usage)
+        summary["usage"] = {
+            "live": len(usage),
+            "latency_p50_ms": statistics.median(lat),
+            "latency_p95_ms": lat[min(len(lat) - 1, int(0.95 * len(lat)))],
+            "prompt_tokens": sum(u["prompt"] for u in usage),
+            "completion_tokens": sum(u["completion"] for u in usage),
+            "completion_mean": sum(u["completion"] for u in usage) / len(usage),
+        }
     return summary
 
 
@@ -561,6 +609,7 @@ def render_section(label: str, summary: dict[str, Any], meta: dict[str, Any]) ->
             f"| {_fmt(m['precision'])} | {_fmt(m['recall'])} |"
         )
     t, fl = summary["terms"], summary["filler"]
+    ac, us = summary.get("acts"), summary.get("usage")
     lines += [
         "",
         "| metric | value |",
@@ -570,6 +619,18 @@ def render_section(label: str, summary: dict[str, Any], meta: dict[str, Any]) ->
         f"| term exact-match (lines with terms, n={t['n_with_terms']}) "
         f"| {_fmt(t['exact_with_terms'])} |",
         f"| filler false accepts (n={fl['n']}) | {fl['false_accept']} |",
+        *(
+            [f"| act-type set exact (n={ac['n']}) | {_fmt(ac['exact'])} |"] if ac else []
+        ),
+        *(
+            [
+                f"| NLU latency p50 / p95 ms (live n={us['live']}) "
+                f"| {us['latency_p50_ms']:.0f} / {us['latency_p95_ms']} |",
+                f"| tokens in / out (mean out per line) | {us['prompt_tokens']} / "
+                f"{us['completion_tokens']} ({us['completion_mean']:.0f}) |",
+            ]
+            if us else []
+        ),
         "",
         "Misses (line ids):",
         "",
@@ -582,6 +643,8 @@ def render_section(label: str, summary: dict[str, Any], meta: dict[str, Any]) ->
             )
     lines.append(f"- terms: {', '.join(t['miss_ids']) or '-'}")
     lines.append(f"- filler false accept: {', '.join(fl['ids']) or '-'}")
+    if "acts" in summary:
+        lines.append(f"- act-type set: {', '.join(summary['acts']['miss_ids']) or '-'}")
     return "\n".join(lines) + "\n"
 
 
@@ -661,6 +724,8 @@ async def run_corpus(
     providers_path: Path | None = None,
     allow_budgeted: bool = False,
     use_context: bool = False,
+    schema: str = "flat",
+    use_cache: bool = True,
 ) -> tuple[list[dict[str, Any]], Counter[str]]:
     """Analyze every line; returns per-line records and answering-model counts.
 
@@ -678,9 +743,10 @@ async def run_corpus(
     settings = get_settings().model_copy(
         update={
             "llm_profile": profile,
-            "llm_cache": True,
+            "llm_cache": use_cache,
             "llm_cache_path": CACHE_PATH,
             "nlu_mode": "llm",
+            "nlu_schema": schema,
         }
     )
     models: Counter[str] = Counter()
@@ -689,9 +755,16 @@ async def run_corpus(
     line_answered: dict[str, set[str]] = {}
     current: dict[int, str] = {}
     live_lines: set[str] = set()
+    # Per line: live NLU latency and tokens (successful calls only).
+    line_usage: dict[str, dict[str, int]] = {}
 
     def on_call(meta: dict[str, Any]) -> None:
         tid = id(asyncio.current_task())
+        if tid in current and not meta.get("error") and not meta.get("cache_hit"):
+            u = line_usage.setdefault(current[tid], {"latency_ms": 0, "prompt": 0, "completion": 0})
+            u["latency_ms"] += int(meta.get("latency_ms") or 0)
+            u["prompt"] += int(meta.get("prompt_tokens") or 0)
+            u["completion"] += int(meta.get("completion_tokens") or 0)
         if meta.get("model") and tid in current:
             line_models[current[tid]] = f"{meta.get('provider')}/{meta['model']}"
             if not meta.get("error"):
@@ -734,6 +807,7 @@ async def run_corpus(
         current[tid] = line["id"]
         recorder.last.pop(tid, None)
         line_answered.pop(line["id"], None)  # a retry pass starts clean
+        line_usage.pop(line["id"], None)
         agent = line_agent_text(line)
         context = line_context(line) if use_context else []
         rec: dict[str, Any] = {
@@ -753,6 +827,7 @@ async def run_corpus(
                 out = await analyze(
                     line["text"], agent, line.get("pending"),
                     llm=recorder, settings=settings, ref=REF,
+                    context=line_call_context(line),
                 )
         except Exception as e:  # noqa: BLE001 - any failure is a skip, retried below
             rec["skipped"] = True
@@ -760,7 +835,12 @@ async def run_corpus(
             rec["error"] = (kind + str(e))[:200]
             return rec
         reply = recorder.last.pop(tid, None)
-        if reply is None:  # fast path: no LLM call, no stance repair
+        if reply is not None and schema == "acts":
+            # Acts: the converter's stance is the one scored; no flat-reply replay.
+            reply = None
+            raw, rule, source = out.stance, "acts", "llm"
+            firm_raw = out.firm
+        elif reply is None:  # fast path: no LLM call, no stance repair
             raw, rule, source = out.stance, "fast_path", "fast_path"
             firm_raw = out.firm
         else:
@@ -777,6 +857,10 @@ async def run_corpus(
             "firm_raw": firm_raw,
             "terms": predicted_terms(out),
         }
+        if schema == "acts":
+            rec["expected"]["acts"] = act_set(line.get("acts", []))
+            rec["predicted"]["acts"] = act_set(out.acts)
+        rec["usage"] = line_usage.get(line["id"])
         rec["has_terms"] = has_terms(out)
         rec["stance_rule"] = rule
         rec["stance_source"] = source
@@ -889,6 +973,10 @@ def main(argv: list[str] | None = None) -> int:
         "--with-context", action="store_true",
         help="add each line's `context` turns to the NLU prompt (eval only; not shipped)",
     )
+    ap.add_argument("--schema", choices=("flat", "acts"), default="flat",
+                    help="NLU output schema (Phase 71a A/B)")
+    ap.add_argument("--no-cache", action="store_true",
+                    help="every call live (latency comparison)")
     ap.add_argument(
         "--allow-mixed-models", action="store_true",
         help="write the row even if more than one provider/model answered (noted in it)",
@@ -925,6 +1013,8 @@ def main(argv: list[str] | None = None) -> int:
                     providers_path=args.providers,
                     allow_budgeted=args.allow_budgeted,
                     use_context=args.with_context,
+                    schema=args.schema,
+                    use_cache=not args.no_cache,
                 )
             )
         finally:
@@ -976,6 +1066,8 @@ def main(argv: list[str] | None = None) -> int:
         meta["mixed"] = True
     if args.with_context:
         meta["stance_variant"] += "; line `context` turns added (--with-context, eval only)"
+    if args.schema == "acts":
+        meta["stance_variant"] += "; NLU v2 acts schema (`--schema acts`)"
     if args.from_records is not None:
         meta["stance_variant"] += f"; rescored from `{args.from_records}`"
     if args.rescore_guards:

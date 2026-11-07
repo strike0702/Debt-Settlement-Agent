@@ -6,8 +6,8 @@ must match the value for the field's kind, and the value must sit in the
 field's prior range; bare digits for a money field, a bare year as a date,
 tiers phrased as "the first N payments" and a payment-structure word that is
 not about the payments are rejected or flagged. Dropped terms are audited and
-kept on ``VerifiedAnalysis.dropped``. Then it applies the ``cues`` repairs
-(stance, flags, and the rule-announcement side channel ``defines_field``).
+kept on ``VerifiedAnalysis.dropped``. Content only: the turn's other acts
+are repaired by ``cues.repair_acts`` (called from ``acts.verify_acts``).
 The shared quote helpers here are also used by ``fast_paths`` and ``amounts``.
 Dollar totals are only quote-checked here; ``amounts`` converts them.
 """
@@ -18,15 +18,9 @@ import re
 from datetime import date
 from typing import Any
 
-from app.agent.nlu.cues import (
-    _repair_dispositions,
-    repair_defines_field,
-    repair_list_done,
-    repair_question,
-    repair_revises_terms,
-)
+from app.agent.nlu.cues import repair_revises_terms
 from app.agent.nlu.fast_paths import _field_for_ask_line
-from app.agent.nlu.models import DroppedTerm, VerifiedAnalysis, VerifiedTerm
+from app.agent.nlu.models import DroppedTerm, RawReading, VerifiedAnalysis, VerifiedTerm
 from app.agent.nlu.parse import coerce_tiers
 from app.agent.nlu.quotes import (
     _in_prior_range,
@@ -35,7 +29,6 @@ from app.agent.nlu.quotes import (
     normalize_for_quote,
     quote_in_utterance,
 )
-from app.agent.nlu_types import TurnAnalysis
 from app.agent.numbers import extract_tokens
 from app.agent.policy import ask_pct_to_bp
 from app.domain.fields import FIELDS_BY_NAME
@@ -277,7 +270,7 @@ def structure_word_ok(value: str, utterance: str, *, last_agent_line: str = "") 
 
 
 def post_verify(
-    analysis: TurnAnalysis,
+    analysis: RawReading,
     utterance: str,
     *,
     ref: date | None = None,
@@ -537,6 +530,7 @@ def post_verify(
         ref=ref_d,
         drop=_drop,
     )
+
     amb_cents, amb_quote = _verify_amount(
         "amount_ambiguous_cents",
         analysis.amount_ambiguous_cents,
@@ -564,47 +558,6 @@ def post_verify(
         ):
             _unconfirmed(asked, cents, quote, slot)
 
-    defines_field, expected_count = repair_defines_field(
-        analysis.defines_field,
-        analysis.expected_count,
-        utterance,
-        given_fields={t.field for t in verified_terms},
-    )
-    # A count of payment levels is the level limit itself ("at most two payment
-    # levels", "we have three levels"), not a list still to come as with tiers.
-    # The count was read from the line by code, so the term is verified.
-    if defines_field == "max_segments" and expected_count is not None:
-        verified_terms.append(
-            VerifiedTerm(
-                field="max_segments", value=expected_count, quote=utterance.strip(), verified=True
-            )
-        )
-        _log("nlu_levels_from_count", {"value": expected_count, "utterance": utterance[:120]})
-        defines_field, expected_count = None, None
-
-    has_terms = (
-        bool(verified_terms)
-        or ask_pct is not None
-        or cents_ambiguity_bare is not None
-        or tiers_ambiguous
-        or total_cents is not None
-        or amb_cents is not None
-    )
-    dispositions = _repair_dispositions(
-        analysis, utterance, has_terms=has_terms, opening=not last_agent_line
-    )
-    asks_question, question_topic = repair_question(
-        analysis.asks_question,
-        analysis.question_topic,
-        utterance,
-        asks_private=dispositions["asks_client_private_info"],
-    )
-    if analysis.readback_response and dispositions["readback_response"] is None:
-        _log(
-            "nlu_rejected_readback",
-            {"claimed": analysis.readback_response, "utterance": utterance[:120]},
-        )
-
     return VerifiedAnalysis(
         terms=verified_terms,
         dropped=dropped,
@@ -615,14 +568,8 @@ def post_verify(
         ask_total_quote=total_quote,
         amount_ambiguous_cents=amb_cents,
         amount_ambiguous_quote=amb_quote,
-        **dispositions,
         revises_terms=repair_revises_terms(utterance),
         cents_ambiguity_bare=cents_ambiguity_bare,
         cents_ambiguity_field=cents_ambiguity_field,
         tiers_ambiguous=tiers_ambiguous,
-        asks_question=asks_question,
-        question_topic=question_topic,
-        defines_field=defines_field,
-        expected_count=expected_count,
-        list_done=repair_list_done(utterance),
     )

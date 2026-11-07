@@ -7,7 +7,7 @@ CLI: ``python -m eval.run_eval --scenarios 12 --seed 7 [--limit N] [--resume RUN
 ``--limit N`` runs only the first N scenarios of that set.
 
 Two layers:
-- ``--nlu oracle``: offline policy eval. Sim ground-truth ``TurnAnalysis``
+- ``--nlu oracle``: offline policy eval. Sim ground-truth acts (``RepTurn``)
   replaces NLU, ``offline`` profile (FakeLLM), no network or API keys;
   requires template (or bank) NLG. With ``--sim-phrasing llm`` (a smoke
   test of the sim's rewrite check) ``--profile`` is kept, but only the sim
@@ -378,9 +378,9 @@ async def run_one_scenario(
 ) -> dict[str, Any]:
     """Run one full text call with arm ``agent``; return a serializable result dict.
 
-    The sim's ground-truth ``TurnAnalysis`` is always passed under
+    The sim's ground-truth acts (``RepTurn``) are always passed under
     ``nlu_mode=oracle`` (it *is* the NLU); under live NLU it is passed only
-    when ``oracle_overlay`` is set (disposition flags overlay).
+    when ``oracle_overlay`` is set (its dispositions overlay the model's).
     """
     turns = settings.max_turns if max_turns is None else max_turns
     pass_oracle = settings.nlu_mode == "oracle" or oracle_overlay

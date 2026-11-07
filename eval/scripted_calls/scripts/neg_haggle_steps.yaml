@@ -4,20 +4,20 @@ name: neg_haggle_steps
 scenario: easy_deal
 turns:
   - rep: "Sure. We allow up to eight payments, at least a hundred dollars each, and they need to be even payments."
-    oracle: {stance: info, terms: [{field: max_payments, value: 8, quote: "eight payments"}, {field: min_payment_cents, value: 10000, quote: "a hundred dollars"}, {field: payment_structure, value: even, quote: "even payments"}]}
+    oracle: {acts: [{type: "state_rule", field: "max_payments", value: 8, quote: "eight payments"}, {type: "state_rule", field: "min_payment_cents", value: 10000, quote: "a hundred dollars"}, {type: "state_rule", field: "payment_structure", value: "even", quote: "even payments"}]}
     expect: {intent: ASK_SETTLEMENT}
   - rep: "Honestly we'd need seventy percent to close this out."
-    oracle: {stance: counter, settlement_ask_pct: 70, ask_quote: "seventy percent"}
+    oracle: {acts: [{type: "price_ask", pct: 70, quote: "seventy percent", firmness: "counter"}]}
     expect: {intent: COUNTER, facts: {counter_pct: 4900}}
   - rep: "That's way too low. I could maybe do sixty two."
-    oracle: {stance: counter, settlement_ask_pct: 62, ask_quote: "sixty two"}
+    oracle: {acts: [{type: "price_ask", pct: 62, quote: "sixty two", firmness: "counter"}]}
     expect: {intent: COUNTER, facts: {counter_pct: 5300}}
   - rep: "Okay, let me meet you partway. Fifty eight percent."
-    oracle: {stance: counter, settlement_ask_pct: 58, ask_quote: "Fifty eight percent"}
+    oracle: {acts: [{type: "price_ask", pct: 58, quote: "Fifty eight percent", firmness: "counter"}]}
     expect: {intent: COUNTER, facts: {counter_pct: 5500}}
   - rep: "Yeah, okay, that works for us."
-    oracle: {stance: accept}
+    oracle: {acts: [{type: "respond_to_offer", response: "accept", quote: "Yeah, okay, that works for us."}]}
     expect: {intent: CONFIRM_SCHEDULE, facts: {settlement_pct: 5500}}
   - rep: "Yes, that schedule is fine."
-    oracle: {stance: accept}
+    oracle: {acts: [{type: "respond_to_offer", response: "accept", quote: "Yes, that schedule is fine."}]}
     expect: {intent: PROPOSE_WRAP, reason: confirmed}

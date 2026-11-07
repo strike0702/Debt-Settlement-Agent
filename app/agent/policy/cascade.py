@@ -1,16 +1,60 @@
-"""``decide``: the first-match cascade that picks one move per rep turn.
+"""``decide``: one move per rep turn, read from the turn's verified acts.
 
-The step order is load-bearing (see the package docstring): interruptions,
-clarify / read-back, rules the rep wants to define (yield, tiers one by one),
-confirm, discovery (with the optional sweep), negotiate. Each ``_decide_*`` returns
-an ``Action`` or ``None`` to fall through. After the cascade, ``loop_guard``
-hands off instead of asking the same question a third time, and
-``rep_turn_progress`` tells the orchestrator whether a rep turn added anything
-(the no-progress count). Pure: no I/O, no LLM.
+The rep's line arrives as a ``RepTurn`` (``app.domain.nlu_types``): the
+verified acts of a closed set, with code-checked numbers. ``decide`` reads
+them in ``DISPATCH_ORDER``, an order that follows what each act means rather
+than a flag priority:
+
+1. Call guard: the turn cap hands off whatever was said.
+2. Safety acts: ``hostility`` (strong → hand-off), ``ask_private_info``
+   (refuse, hand off on repeat), ``demand_commitment`` (same).
+3. Call state: after a proposal (WRAP / END / ESCALATE) the wrap rules
+   decide (``_decide_wrap``: after a hand-off or the end every line gets the
+   terminal reply; in WRAP an unreadable line is asked again, a line that
+   reopens price or terms re-enters the ladder, anything else closes); a run
+   of turns that added nothing hands off.
+4. Acts that answer themselves: ``question`` (topic ``schedule`` after a
+   proposal → read the schedule; other topics are answered by the act layer,
+   ``app.agent.acts``, and the line goes on), ``end_call`` (an explicit
+   goodbye / refusal / transfer: close on a schedule on the table, else
+   follow up), ``price_ask`` (a number-free "final" while the line holds a
+   number no act claimed → ask for the number, never reuse the old ask),
+   ``unclear`` (ask to rephrase).
+5. Acts folded into the state the phase flow reads: ``readback_reply`` (the
+   orchestrator applied it to belief), ``answer`` / ``state_rule`` (belief),
+   ``announce_rules`` / ``rule_item`` / ``list_done`` (the tier draft),
+   ``respond_to_offer`` (confirm / ladder), ``stall`` / ``backchannel``.
+   An act this phase cannot use (``list_done`` with no list open, a read-back
+   reply with nothing read back) is never dropped silently: a line made only
+   of such acts gets a clarify (``act_unusable``).
+6. Phase flow: clarify / read-back of belief, rules the rep is defining,
+   confirm, discovery, negotiate (the price ladder).
+
+**Multi-act lines.** Acts are read in the order above, whatever their order
+in the line; the first act whose handler returns a move decides, and every
+other act has already been folded into belief or the draft (so "Payments
+three to five at least $250, and that's all" adds the tier and closes the
+list in one move). Conflicts, written once:
+
+- an accept outranks a goodbye in the same line ("Great, thanks") and a
+  schedule cue ("the payment schedule works");
+- "that's all" while a list is open closes the list, not the call (the NLU
+  drops the ``end_call``; ``_read_rule_replies`` keeps the rule after the sweep);
+- an accept that restates a different number is that number, not a yes
+  (CONFIRM wraps only on an accept with no new price);
+- two prices in one line: the later one (a self-correction);
+- ``unclear`` with any other surviving act is dropped by the NLU.
+
+After the move, ``loop_guard`` hands off instead of asking the same question
+a third time and rewords a question the rep just did not answer;
+``rep_turn_progress`` tells the orchestrator whether the turn added anything.
+Every move carries a reason code (``app.agent.reasons.reason_key`` folds a
+missing one into its intent's code). Pure: no I/O, no LLM.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
@@ -48,12 +92,21 @@ from app.domain.belief import BeliefChange, BeliefState, TermStatus
 from app.domain.facts import Fact
 from app.domain.fields import FIELDS_BY_NAME
 from app.domain.negotiation import accept_line_bp
-from app.domain.nlu_types import TurnAnalysis
+from app.domain.nlu_types import (
+    ACT_TYPES,
+    AnnounceRulesAct,
+    ListDoneAct,
+    RepTurn,
+    RespondToOfferAct,
+    RuleItemAct,
+)
 
 # Moves that ask the rep something; the loop guard counts them per key.
 _QUESTION_INTENTS = frozenset(
     {Intent.ASK, Intent.ASK_SETTLEMENT, Intent.CLARIFY, Intent.READ_BACK}
 )
+_TIERS = "min_payment_tiers"
+_SWEEP_KEY = "ASK:optional_sweep"
 
 
 def question_key(action: Action) -> str | None:
@@ -100,7 +153,7 @@ def loop_guard(action: Action, neg: NegotiationState, cfg: Settings) -> Action:
 
 
 def rep_turn_progress(
-    analysis: TurnAnalysis,
+    turn: RepTurn,
     neg: NegotiationState,
     belief_changes: list[BeliefChange],
     *,
@@ -109,29 +162,304 @@ def rep_turn_progress(
     """True when this rep turn added verified information or moved the call.
 
     Progress: a belief value or status changed, a new ask, an accept or reject,
-    a read-back answer, a firm stance, a yes to a non-price alternative, or a
-    rule announcement / tier for the tier draft.
+    a read-back answer, a firm price, a yes to a non-price alternative, or a
+    rule announcement / tier for the tier draft / the end of the list.
     A restated ask, a repeated term, a question or small talk is not progress.
     """
     if any(
         c.old_value != c.new_value or c.old_status != c.new_status for c in belief_changes
     ):
         return True
-    if (
-        analysis.settlement_ask_pct is not None
-        and ask_pct_to_bp(analysis.settlement_ask_pct) != neg.ask_bp
-    ):
+    if turn.ask_pct is not None and ask_pct_to_bp(turn.ask_pct) != neg.ask_bp:
         return True
     return (
-        analysis.stance in ("accept", "reject")
-        or analysis.readback_response in ("confirm", "deny")
-        or analysis.firm
+        turn.accepts
+        or turn.rejects
+        or turn.readback is not None
+        or turn.firm
         or accepted_term_alt
         # Rule announcements and tiers held in the draft (not belief yet).
-        or analysis.defines_field is not None
-        or analysis.list_done
-        or any(t.field == _TIERS for t in analysis.terms)
+        or turn.announced is not None
+        or turn.list_done
+        or bool(turn.tier_items())
     )
+
+
+def decide(
+    belief: BeliefState,
+    neg: NegotiationState,
+    turn: RepTurn,
+    afford: Affordability | None,
+    *,
+    context: Any = None,
+    settings: Settings | None = None,
+    rescue_within_guardrail: bool = False,
+    confirm_facts: dict[str, Fact] | None = None,
+    counter_offer_total_cents: int | None = None,
+    term_alt: tuple[str, Any] | None = None,
+    accepted_term_alt: bool = False,
+) -> Action:
+    """Return the next agent ``Action`` for the rep's verified acts (module docstring).
+
+    ``context`` is the PUBLIC ``CallContext`` built before the turn (what we
+    were awaiting); when omitted it is built from ``belief`` / ``neg``.
+    ``term_alt`` is ``(field, value)`` for the next non-price recovery stage
+    when the curve is empty or the ask sits above the ceiling
+    (first_payment_date → min_payment → max_payments). ``accepted_term_alt`` is
+    true when this turn's accept applied a pending non-price alternative; that
+    yes is not acceptance of the last price.
+    """
+    if context is None:
+        from app.agent.nlu.context import build_call_context
+
+        context = build_call_context(belief, neg)
+    ask_bp = neg.ask_bp
+    effects: list[Effect] = []
+    if turn.ask_pct is not None:
+        ask_bp = ask_pct_to_bp(turn.ask_pct)
+        effects.append(Effect(kind="record_ask", data={"bp": ask_bp}))
+    # A rejected pending non-price alt is cleared so the cascade offers the next stage.
+    if neg.pending_terms_alt is not None and turn.rejects and turn.ask_pct is None:
+        effects.append(Effect(kind="clear_pending_terms_alt", data={}))
+        neg = replace(neg, pending_terms_alt=None)
+
+    turn = _read_rule_replies(turn, neg)
+
+    t = _Turn(
+        belief=belief,
+        neg=neg,
+        turn=turn,
+        ctx=context,
+        afford=afford,
+        cfg=settings or get_settings(),
+        ask_bp=ask_bp,
+        effects=effects,
+        rescue_within_guardrail=rescue_within_guardrail,
+        confirm_facts=confirm_facts,
+        counter_offer_total_cents=counter_offer_total_cents,
+        term_alt=term_alt,
+        accepted_term_alt=accepted_term_alt,
+    )
+    t = _with_tier_draft(t)
+    action = _dispatch(t)
+    return loop_guard(action, neg, t.cfg)
+
+
+# --- act dispatch -------------------------------------------------------------
+
+_Handler = Callable[[_Turn], Action | None]
+
+
+def _dispatch(t: _Turn) -> Action:
+    """Run ``DISPATCH_ORDER``; the first step that returns a move decides."""
+    for _name, step in DISPATCH_ORDER:
+        if step is None:
+            continue
+        action = step(t)
+        if action is not None:
+            return action
+    unusable = _unusable_line(t)
+    if unusable is not None:
+        return unusable
+    for phase_step in (_decide_clarify, _decide_rep_rules, _decide_confirm, _decide_discovery):
+        action = phase_step(t)
+        if action is not None:
+            return action
+    return _decide_negotiate(t)
+
+
+def _stay(neg: NegotiationState) -> Phase:
+    return neg.phase if neg.phase != Phase.OPENING else Phase.DISCOVERY
+
+
+def _max_turns(t: _Turn) -> Action | None:
+    if t.neg.turn_idx > t.cfg.max_turns:
+        return _handoff(t.effects, "max_turns")
+    return None
+
+
+def _on_hostility(t: _Turn) -> Action | None:
+    """Strong hostility (score at the threshold) hands off; mild is ignored."""
+    if t.turn.hostility() >= t.cfg.hostility_threshold:
+        return _escalate(
+            t.effects,
+            reason="hostile",
+            spoken_reason="The tone on this call needs a specialist.",
+        )
+    return None
+
+
+def _on_private_info(t: _Turn) -> Action | None:
+    """Refuse a question about the client's money once; hand off on the second."""
+    if not t.turn.has("ask_private_info"):
+        return None
+    bumped = t.effects + [Effect(kind="inc_private_ask")]
+    if t.neg.private_ask_count >= 1:
+        return _escalate(
+            bumped,
+            reason="sensitive_request",
+            spoken_reason="I need to hand this off after a sensitive request.",
+        )
+    return Action(
+        intent=Intent.REFUSE_PRIVATE, effects=bumped, next_phase=_stay(t.neg), reason="private_info"
+    )
+
+
+def _on_commitment(t: _Turn) -> Action | None:
+    """Refuse a lock-in demand once; hand off on the second."""
+    if not t.turn.has("demand_commitment"):
+        return None
+    bumped = t.effects + [Effect(kind="inc_commit_demand")]
+    if t.neg.commit_demand_count >= 1:
+        return _escalate(
+            bumped,
+            reason="commitment_demand",
+            spoken_reason="I need to involve someone about a commitment demand.",
+        )
+    return Action(
+        intent=Intent.REFUSE_COMMIT, effects=bumped, next_phase=_stay(t.neg), reason="commitment"
+    )
+
+
+def _post_proposal(t: _Turn) -> Action | None:
+    if t.neg.phase in (Phase.WRAP, Phase.END, Phase.ESCALATE):
+        return _decide_wrap(t)
+    return None
+
+
+def _no_progress(t: _Turn) -> Action | None:
+    if t.neg.no_progress_turns >= t.cfg.max_no_progress_turns:
+        return _handoff(t.effects, "no_progress")
+    return None
+
+
+def _on_question(t: _Turn) -> Action | None:
+    """Schedule detail after a proposal: read it (an accept outranks the cue).
+
+    Other topics fall through: the act layer answers them before the move.
+    """
+    tu = t.turn
+    if tu.asks("schedule") and t.neg.last_confirm_key is not None and not tu.accepts:
+        return Action(
+            intent=Intent.SPEAK_SCHEDULE,
+            effects=t.effects,
+            next_phase=Phase.CONFIRM,
+            reason="schedule_detail",
+        )
+    return None
+
+
+def _on_end_call(t: _Turn) -> Action | None:
+    """An explicit goodbye / refusal / transfer (an accept in the line outranks it)."""
+    if not t.turn.ends or t.turn.accepts:
+        return None
+    neg = t.neg
+    # Soft-accept a schedule already on the table, then close with thanks.
+    if neg.phase == Phase.CONFIRM and neg.last_confirm_key is not None:
+        return Action(
+            intent=Intent.CLOSE,
+            facts=dict(t.confirm_facts or {}),
+            effects=t.effects + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
+            next_phase=Phase.END,
+            reason="thanks_accept",
+        )
+    return follow_up_action(t.effects)
+
+
+# Number-free rephrase asks for the two "cannot act" signals.
+_UNREAD_NUMBER_TEMPLATE = (
+    "Sorry, I want to get your number right. What is the lowest settlement you can accept?"
+)
+_UNCLEAR_TEMPLATE = "Sorry, I did not quite catch that. Could you say it another way?"
+_UNUSABLE_TEMPLATE = "Sorry, I am not sure what that refers to. Could you say a bit more?"
+
+
+def _on_price_ask(t: _Turn) -> Action | None:
+    """A final price whose number went unread: ask for it, never reuse the older ask.
+
+    "I think seventy three is the lowest I can go" with the 73 unclaimed would
+    otherwise accept the standing 75. A price with a verified number goes to
+    the ladder (phase flow).
+    """
+    tu = t.turn
+    if tu.firm and tu.unaccounted_numbers and tu.ask_pct is None:
+        return Action(
+            intent=Intent.CLARIFY,
+            effects=t.effects,
+            next_phase=_stay(t.neg),
+            reason="unaccounted_number",
+            template_override=_UNREAD_NUMBER_TEMPLATE,
+        )
+    return None
+
+
+def _on_unclear(t: _Turn) -> Action | None:
+    if t.turn.unclear:
+        return Action(
+            intent=Intent.CLARIFY,
+            effects=t.effects,
+            next_phase=_stay(t.neg),
+            reason="unclear",
+            template_override=_UNCLEAR_TEMPLATE,
+        )
+    return None
+
+
+# Steps in reading order: ``(act type or gate name, handler)``. A ``None``
+# handler means the act is folded into state and the phase flow answers it.
+DISPATCH_ORDER: tuple[tuple[str, _Handler | None], ...] = (
+    ("turn_cap", _max_turns),
+    ("hostility", _on_hostility),
+    ("ask_private_info", _on_private_info),
+    ("demand_commitment", _on_commitment),
+    ("post_proposal", _post_proposal),
+    ("no_progress", _no_progress),
+    ("question", _on_question),
+    ("end_call", _on_end_call),
+    ("price_ask", _on_price_ask),
+    ("unclear", _on_unclear),
+    ("readback_reply", None),
+    ("answer", None),
+    ("state_rule", None),
+    ("announce_rules", None),
+    ("rule_item", None),
+    ("list_done", None),
+    ("respond_to_offer", None),
+    ("stall", None),
+    ("backchannel", None),
+)
+# Every act type has a place in the order (the grid test checks the same).
+assert set(ACT_TYPES) <= {name for name, _ in DISPATCH_ORDER}
+
+
+def _usable(act: Any, t: _Turn) -> bool:
+    """False for an act this phase has no use for (the rest are always read)."""
+    if act.type == "list_done":
+        return t.ctx.collecting is not None or t.neg.tier_draft is not None
+    if act.type == "readback_reply":
+        return (
+            t.ctx.awaiting == "readback"
+            or t.neg.phase == Phase.CONFIRM
+            or getattr(act, "correction", None) is not None
+        )
+    return True
+
+
+def _unusable_line(t: _Turn) -> Action | None:
+    """CLARIFY when every act in the line is one this phase cannot use."""
+    acts = t.turn.acts
+    if not acts or any(_usable(a, t) for a in acts):
+        return None
+    return Action(
+        intent=Intent.CLARIFY,
+        effects=t.effects,
+        next_phase=_stay(t.neg),
+        reason="act_unusable",
+        template_override=_UNUSABLE_TEMPLATE,
+    )
+
+
+# --- post-proposal --------------------------------------------------------------
 
 
 def _close_after_wrap(effects: list[Effect], *, reason: str) -> Action:
@@ -144,194 +472,24 @@ def _close_after_wrap(effects: list[Effect], *, reason: str) -> Action:
     )
 
 
-def _wrap_should_renegotiate(analysis: TurnAnalysis) -> bool:
-    """True when the rep reopens price or terms after PROPOSE_WRAP."""
-    if analysis.settlement_ask_pct is not None:
-        return True
-    if analysis.stance in ("reject", "counter", "offer"):
-        return True
-    if analysis.terms:
-        return True
-    return False
+def _reopens(turn: RepTurn) -> bool:
+    """A reject or a price: the rep reopens the deal."""
+    return turn.rejects or turn.price is not None
 
 
-def decide(
-    belief: BeliefState,
-    neg: NegotiationState,
-    analysis: TurnAnalysis,
-    afford: Affordability | None,
-    *,
-    settings: Settings | None = None,
-    rescue_within_guardrail: bool = False,
-    confirm_facts: dict[str, Fact] | None = None,
-    counter_offer_total_cents: int | None = None,
-    term_alt: tuple[str, Any] | None = None,
-    accepted_term_alt: bool = False,
-) -> Action:
-    """Return the next agent ``Action``: first match of the module-docstring cascade.
-
-    ``term_alt`` is ``(field, value)`` for the next non-price recovery stage
-    when the curve is empty or the ask sits above the ceiling
-    (first_payment_date → min_payment → max_payments).
-
-    ``accepted_term_alt`` is true when this turn's accept applied a pending
-    non-price alternative. That yes is not acceptance of the last price.
-    """
-    ask_bp = neg.ask_bp
-    effects: list[Effect] = []
-    if analysis.settlement_ask_pct is not None:
-        ask_bp = ask_pct_to_bp(analysis.settlement_ask_pct)
-        effects.append(Effect(kind="record_ask", data={"bp": ask_bp}))
-    # A rejected pending non-price alt is cleared so the cascade offers the next stage.
-    if (
-        neg.pending_terms_alt is not None
-        and analysis.stance == "reject"
-        and analysis.settlement_ask_pct is None
-    ):
-        effects.append(Effect(kind="clear_pending_terms_alt", data={}))
-        neg = replace(neg, pending_terms_alt=None)
-
-    analysis = _read_rule_replies(analysis, neg)
-
-    t = _Turn(
-        belief=belief,
-        neg=neg,
-        analysis=analysis,
-        afford=afford,
-        cfg=settings or get_settings(),
-        ask_bp=ask_bp,
-        effects=effects,
-        rescue_within_guardrail=rescue_within_guardrail,
-        confirm_facts=confirm_facts,
-        counter_offer_total_cents=counter_offer_total_cents,
-        term_alt=term_alt,
-        accepted_term_alt=accepted_term_alt,
+def _wrap_should_renegotiate(turn: RepTurn) -> bool:
+    """True when the rep reopens price or terms (or announces a rule) after PROPOSE_WRAP."""
+    return (
+        _reopens(turn)
+        or bool(turn.terms)
+        or bool(turn.tier_items())
+        or turn.announced is not None
     )
-    t = _with_tier_draft(t)
-    action: Action | None = None
-    for step in (
-        _decide_interruptions,
-        _decide_unread,
-        _decide_clarify,
-        _decide_rep_rules,
-        _decide_confirm,
-        _decide_discovery,
-    ):
-        action = step(t)
-        if action is not None:
-            break
-    if action is None:
-        action = _decide_negotiate(t)
-    return loop_guard(action, neg, t.cfg)
-
-
-def _decide_interruptions(t: _Turn) -> Action | None:
-    """Moves that preempt the phase flow, in priority order."""
-    a, neg, cfg = t.analysis, t.neg, t.cfg
-    if neg.turn_idx > cfg.max_turns:
-        return _handoff(t.effects, "max_turns")
-    if a.hostility >= cfg.hostility_threshold:
-        return _escalate(
-            t.effects,
-            reason="hostile",
-            spoken_reason="The tone on this call needs a specialist.",
-        )
-    # Private-info and commitment demands: refuse once, escalate on repeat.
-    stay = neg.phase if neg.phase != Phase.OPENING else Phase.DISCOVERY
-    if a.asks_client_private_info:
-        bumped = t.effects + [Effect(kind="inc_private_ask")]
-        if neg.private_ask_count >= 1:
-            return _escalate(
-                bumped,
-                reason="sensitive_request",
-                spoken_reason="I need to hand this off after a sensitive request.",
-            )
-        return Action(
-            intent=Intent.REFUSE_PRIVATE,
-            effects=bumped,
-            next_phase=stay,
-            reason="private_info",
-        )
-    if a.demands_commitment:
-        bumped = t.effects + [Effect(kind="inc_commit_demand")]
-        if neg.commit_demand_count >= 1:
-            return _escalate(
-                bumped,
-                reason="commitment_demand",
-                spoken_reason="I need to involve someone about a commitment demand.",
-            )
-        return Action(
-            intent=Intent.REFUSE_COMMIT,
-            effects=bumped,
-            next_phase=stay,
-            reason="commitment",
-        )
-    if neg.phase in (Phase.WRAP, Phase.END, Phase.ESCALATE):
-        return _decide_wrap(t)
-    if neg.no_progress_turns >= cfg.max_no_progress_turns:
-        return _handoff(t.effects, "no_progress")
-    # Schedule detail after a proposal; "payment schedule" often appears in accept lines.
-    if a.asks_for_schedule and neg.last_confirm_key is not None and a.stance != "accept":
-        return Action(
-            intent=Intent.SPEAK_SCHEDULE,
-            effects=t.effects,
-            next_phase=Phase.CONFIRM,
-            reason="schedule_detail",
-        )
-    if a.wants_to_end and a.stance != "accept":
-        # Soft-accept a schedule already on the table, then close with thanks.
-        if neg.phase == Phase.CONFIRM and neg.last_confirm_key is not None:
-            return Action(
-                intent=Intent.CLOSE,
-                facts=dict(t.confirm_facts or {}),
-                effects=t.effects
-                + [Effect(kind="set_phase", data={"phase": Phase.END.value})],
-                next_phase=Phase.END,
-                reason="thanks_accept",
-            )
-        return follow_up_action(t.effects)
-    return None
-
-
-# Number-free rephrase asks for the acts NLU's two "cannot act" signals.
-_UNREAD_NUMBER_TEMPLATE = (
-    "Sorry, I want to get your number right. What is the lowest settlement you can accept?"
-)
-_UNCLEAR_TEMPLATE = "Sorry, I did not quite catch that. Could you say it another way?"
-
-
-def _decide_unread(t: _Turn) -> Action | None:
-    """Acts NLU only: never act on an older ask when the rep's new number went unread.
-
-    A firm line with a number no verified act claimed (``unaccounted_numbers``)
-    and no new ask would otherwise reuse the last ask ("I think seventy three is
-    the lowest" accepted at 75): ask for the number instead. An ``unclear``
-    reply gets a rephrase ask. Flat-schema and oracle analyses never set either.
-    """
-    a = t.analysis
-    stay = t.neg.phase if t.neg.phase != Phase.OPENING else Phase.DISCOVERY
-    if a.firm and a.unaccounted_numbers and a.settlement_ask_pct is None:
-        return Action(
-            intent=Intent.CLARIFY,
-            effects=t.effects,
-            next_phase=stay,
-            reason="unaccounted_number",
-            template_override=_UNREAD_NUMBER_TEMPLATE,
-        )
-    if a.unclear:
-        return Action(
-            intent=Intent.CLARIFY,
-            effects=t.effects,
-            next_phase=stay,
-            reason="unclear",
-            template_override=_UNCLEAR_TEMPLATE,
-        )
-    return None
 
 
 def _decide_wrap(t: _Turn) -> Action:
     """Post-proposal phases: stay terminal, or reopen price/terms from WRAP."""
-    a, neg = t.analysis, t.neg
+    tu, neg = t.turn, t.neg
     if neg.phase == Phase.ESCALATE:
         return Action(
             intent=Intent.ESCALATE,
@@ -342,22 +500,32 @@ def _decide_wrap(t: _Turn) -> Action:
         )
     if neg.phase == Phase.END:
         return _close_after_wrap(t.effects, reason="already_ended")
-    if a.asks_for_schedule and a.stance != "accept":
+    if tu.asks("schedule") and not tu.accepts:
         return Action(
             intent=Intent.SPEAK_SCHEDULE,
             effects=t.effects,
             next_phase=Phase.WRAP,
             reason="schedule_detail_post_wrap",
         )
-    if not _wrap_should_renegotiate(a):
+    if tu.unclear:
+        # Proposal sent and the reply could not be read: ask, never close on it.
+        return Action(
+            intent=Intent.CLARIFY,
+            effects=t.effects,
+            next_phase=Phase.WRAP,
+            reason="unclear",
+            template_override=_UNCLEAR_TEMPLATE,
+        )
+    if not _wrap_should_renegotiate(tu):
         return _close_after_wrap(t.effects, reason="post_wrap")
     # Re-enter as CONFIRM/NEGOTIATE; the drafted agreement clears on ack.
     reopen = Phase.CONFIRM if neg.confirmed_bp is not None else Phase.NEGOTIATE
     action = decide(
         t.belief,
         replace(neg, phase=reopen),
-        a,
+        tu,
         t.afford,
+        context=t.ctx,
         settings=t.cfg,
         rescue_within_guardrail=t.rescue_within_guardrail,
         confirm_facts=t.confirm_facts,
@@ -373,11 +541,19 @@ def _decide_wrap(t: _Turn) -> Action:
     )
 
 
+# --- phase flow -------------------------------------------------------------------
+
+_TIERS_CLARIFY_TEMPLATE = (
+    "Just to be sure on the payment tiers: from which payment number "
+    "does each higher minimum start, and what is that minimum?"
+)
+
+
 def _decide_clarify(t: _Turn) -> Action | None:
     """Ambiguous tiers, then CONTRADICTED (CLARIFY, escalate after two), then TENTATIVE."""
     belief = t.belief
-    if t.analysis.tiers_ambiguous:
-        if t.neg.clarify_counts.get("min_payment_tiers", 0) >= 2:
+    if t.turn.tiers_ambiguous or t.tier_gap:
+        if t.neg.clarify_counts.get(_TIERS, 0) >= 2:
             return _escalate(
                 t.effects,
                 reason="tiers_unresolved",
@@ -385,14 +561,10 @@ def _decide_clarify(t: _Turn) -> Action | None:
             )
         return Action(
             intent=Intent.CLARIFY,
-            effects=t.effects
-            + [Effect(kind="note_clarify", data={"field": "min_payment_tiers"})],
+            effects=t.effects + [Effect(kind="note_clarify", data={"field": _TIERS})],
             next_phase=Phase.DISCOVERY,
-            reason="tiers_ambiguous",
-            template_override=(
-                "Just to be sure on the payment tiers: from which payment number "
-                "does each higher minimum start, and what is that minimum?"
-            ),
+            reason="tiers_ambiguous" if t.turn.tiers_ambiguous else "tiers_gap",
+            template_override=_TIERS_CLARIFY_TEMPLATE,
         )
     contradicted = belief.contradicted_fields()
     if contradicted:
@@ -437,12 +609,10 @@ def _decide_clarify(t: _Turn) -> Action | None:
         effects = t.effects + [Effect(kind="set_pending_readback", data={"field": fname})]
         # A READ_BACK mid-CONFIRM keeps the phase, and an accept it preempted is
         # remembered so the readback "yes" wraps instead of reopening the ladder.
-        neg, a = t.neg, t.analysis
+        neg, tu = t.neg, t.turn
         in_confirm = neg.phase == Phase.CONFIRM
-        same_pct = a.settlement_ask_pct is None or (
-            ask_pct_to_bp(a.settlement_ask_pct) == neg.confirmed_bp
-        )
-        if in_confirm and a.stance == "accept" and same_pct and neg.last_confirm_key:
+        same_pct = tu.ask_pct is None or ask_pct_to_bp(tu.ask_pct) == neg.confirmed_bp
+        if in_confirm and tu.accepts and same_pct and neg.last_confirm_key:
             effects.append(
                 Effect(kind="note_confirm_accepted", data={"key": list(neg.last_confirm_key)})
             )
@@ -460,77 +630,101 @@ def _decide_clarify(t: _Turn) -> Action | None:
     return None
 
 
-_TIERS = "min_payment_tiers"
-_SWEEP_KEY = "ASK:optional_sweep"
-
-
-def _read_rule_replies(a: TurnAnalysis, neg: NegotiationState) -> TurnAnalysis:
+def _read_rule_replies(turn: RepTurn, neg: NegotiationState) -> RepTurn:
     """Read short replies in the light of our last rule question.
 
     After the sweep ("Any tiered minimums, or a limit on payment levels?") a
-    bare yes means "there are tiers" (start collecting them) and a bare no is
-    information, not a rejection of a price. While tiers are being listed,
-    "that's all" ends the list, not the call.
+    bare yes means "there are tiers" (start collecting them) and a bare no or
+    "that's all" is information, not a rejection of a price. While tiers are
+    being listed, "that's all" ends the list, not the call.
     """
-    bare = not a.terms and a.settlement_ask_pct is None and a.defines_field is None
+    bare = (
+        not turn.terms
+        and not turn.of(RuleItemAct)
+        and turn.ask_pct is None
+        and turn.announced is None
+    )
     if neg.last_question_key == _SWEEP_KEY and bare:
-        if a.stance == "accept":
-            return a.model_copy(update={"stance": "info", "defines_field": _TIERS})
-        if a.stance == "reject" or a.list_done:
-            return a.model_copy(update={"stance": "info", "list_done": False})
-    if neg.tier_draft is not None and a.list_done and a.wants_to_end:
-        return a.model_copy(update={"wants_to_end": False})
-    return a
+        if turn.accepts:
+            kept = [a for a in turn.acts if not isinstance(a, RespondToOfferAct)]
+            ann = AnnounceRulesAct(type="announce_rules", field=_TIERS, quote="tiers")
+            return turn.model_copy(update={"acts": [*kept, ann]})
+        if turn.rejects or turn.list_done:
+            kept = [
+                a for a in turn.acts if not isinstance(a, (RespondToOfferAct, ListDoneAct))
+            ]
+            return turn.model_copy(update={"acts": kept})
+    if neg.tier_draft is not None and turn.list_done and turn.ends:
+        return turn.model_copy(update={"acts": [a for a in turn.acts if a.type != "end_call"]})
+    return turn
 
 
-def _tier_values(a: TurnAnalysis) -> list[tuple[int, int]]:
-    """Tiers stated this turn (``[(from_payment, min_cents)]``)."""
-    out: list[tuple[int, int]] = []
-    for term in a.terms:
-        if term.field == _TIERS and isinstance(term.value, list):
-            out.extend((int(x[0]), int(x[1])) for x in term.value)
-    return out
+def _gap(ends: dict[int, int], draft: list[tuple[int, int]]) -> bool:
+    """True when a drafted range ends somewhere other than just before the next tier."""
+    starts = [frm for frm, _ in draft]
+    for frm, nxt in zip(starts, starts[1:], strict=False):
+        end = ends.get(frm)
+        if end is not None and nxt != end + 1:
+            return True
+    return False
 
 
 def _with_tier_draft(t: _Turn) -> _Turn:
     """Merge this turn's tiers into the draft the rep is giving one by one.
 
-    Collecting starts when the rep announces tiers (``defines_field``) and ends
-    when the expected count is reached, the rep says that's all (or no), or
-    the rep moves on (a price or another rule): then the set is read back
-    once. ``set_tier_draft`` on every move of the turn records the merge.
+    Collecting starts when the rep announces tiers (``announce_rules``) and
+    ends when the expected count is reached, the rep says that's all (or no),
+    or the rep moves on (a price or another rule): then the set is read back
+    once. A tier whose range leaves a gap or overlaps a drafted one (ends are
+    kept across turns) is not merged and is asked again (``tiers_gap``).
+    ``set_tier_draft`` on every move of the turn records the merge.
     """
-    a, neg = t.analysis, t.neg
-    starting = neg.tier_draft is None and a.defines_field == _TIERS
+    tu, neg = t.turn, t.neg
+    ann = tu.announced
+    announces_tiers = ann is not None and ann.field == _TIERS
+    starting = neg.tier_draft is None and announces_tiers
     if neg.tier_draft is None and not starting:
         return t
-    new = _tier_values(a)
+    items = tu.tier_items()
+    new = [(frm, cents) for frm, _, cents in items]
     merged = dict(neg.tier_draft or [])
     merged.update(new)  # a tier restated from the same payment replaces the old one
+    ends = dict(neg.tier_ends)
+    for frm, to, _ in items:
+        if to is not None:
+            ends[frm] = to
+        else:
+            ends.pop(frm, None)
+    gap = bool(new) and _gap(ends, sorted(merged.items()))
+    if gap:
+        merged, ends, new = dict(neg.tier_draft or []), dict(neg.tier_ends), []
     draft = sorted(merged.items())
     expected = (
-        a.expected_count
-        if a.defines_field == _TIERS and a.expected_count is not None
+        ann.count if announces_tiers and ann is not None and ann.count is not None
         else neg.tier_expected
     )
     moved_on = (
         not new
+        and not gap
         and not starting
-        and a.defines_field != _TIERS
-        and (a.settlement_ask_pct is not None or any(x.field != _TIERS for x in a.terms))
+        and not announces_tiers
+        and (tu.ask_pct is not None or any(x.field != _TIERS for x in tu.terms))
     )
     # A no to the read-back (the orchestrator cleared the draft) is not "no more tiers".
-    said_no_more = a.readback_response != "deny" and (
-        a.list_done or (bool(draft) and not new and a.stance == "reject")
+    said_no_more = tu.readback != "deny" and (
+        tu.list_done or (bool(draft) and not new and tu.rejects)
     )
-    done = said_no_more or moved_on
+    done = not gap and (said_no_more or moved_on)
     readback = bool(draft) and (done or (expected is not None and len(draft) >= expected))
     tiers: list[tuple[int, int]] | None = None if done and not draft else draft
-    effect = tier_draft_effect(tiers, expected, readback=readback)
+    effect = tier_draft_effect(tiers, expected, readback=readback, ends=ends)
     return replace(
         t,
-        neg=replace(neg, tier_draft=tiers, tier_expected=expected, tier_readback=readback),
+        neg=replace(
+            neg, tier_draft=tiers, tier_expected=expected, tier_readback=readback, tier_ends=ends
+        ),
         effects=[*t.effects, effect],
+        tier_gap=gap,
     )
 
 
@@ -546,7 +740,7 @@ def _decide_rep_rules(t: _Turn) -> Action | None:
     max payments or the minimum payment (escalate after two), and read the
     whole set back once it is complete. Another field: ask its question.
     """
-    a, neg = t.analysis, t.neg
+    tu, neg = t.turn, t.neg
     if neg.tier_draft is not None:
         draft = neg.tier_draft
         max_p = _rule_value(t.belief, "max_payments")
@@ -561,20 +755,21 @@ def _decide_rep_rules(t: _Turn) -> Action | None:
                 )
             kind, tier = conflict
             rest = [x for x in draft if x != tier]
+            ends = {k: v for k, v in neg.tier_ends.items() if k != tier[0]}
             effects = [e for e in t.effects if e.kind != "set_tier_draft"]
-            effects.append(tier_draft_effect(rest, neg.tier_expected))
+            effects.append(tier_draft_effect(rest, neg.tier_expected, ends=ends))
             rule = max_p if kind == "past_max" else min_c
             assert rule is not None
             return tier_conflict_clarify_action(kind, tier, rule_value=rule, effects=effects)
         if neg.tier_readback:
             return tier_readback_action(tiers=draft, max_payments=max_p, effects=t.effects)
-        again = not draft and a.readback_response == "deny"
+        again = not draft and tu.readback == "deny"
         return tier_ask_action(
             draft=draft, expected=neg.tier_expected, effects=t.effects, again=again
         )
-    field = a.defines_field
-    if field is not None and field != _TIERS and all(x.field != field for x in a.terms):
-        return yield_ask_action(field, t.effects)
+    ann = tu.announced
+    if ann is not None and ann.field != _TIERS and all(x.field != ann.field for x in tu.terms):
+        return yield_ask_action(ann.field, t.effects)
     return None
 
 
@@ -610,20 +805,20 @@ def _propose_wrap(t: _Turn) -> Action:
 def _decide_confirm(t: _Turn) -> Action | None:
     """CONFIRM-phase accept of the unchanged schedule on the table → PROPOSE_WRAP.
 
-    Not a wrap: ``readback_response``, a restated different % (a correction),
-    a yes to a pending term alt, or a fingerprint that changed since CONFIRM.
+    Not a wrap: a read-back reply, a restated different % (a correction), a
+    yes to a pending term alt, or a fingerprint that changed since CONFIRM.
     Exception: a confirmed READ_BACK after an accept it preempted
     (``accepted_confirm_key``) wraps if the fingerprint is unchanged, else
     re-confirms the accepted bp under the revised terms (never re-ladders).
     """
-    a, neg = t.analysis, t.neg
+    tu, neg = t.turn, t.neg
     if neg.phase != Phase.CONFIRM or neg.confirmed_bp is None or neg.last_confirm_key is None:
         return None
     if (
-        a.readback_response == "confirm"
+        tu.readback == "confirm"
         and neg.accepted_confirm_key == neg.last_confirm_key
-        and a.settlement_ask_pct is None
-        and a.stance not in ("reject", "counter", "offer")
+        and tu.ask_pct is None
+        and not _reopens(tu)
     ):
         if _confirm_key(t.belief, neg.confirmed_bp) == neg.last_confirm_key:
             return _propose_wrap(t)
@@ -642,12 +837,9 @@ def _decide_confirm(t: _Turn) -> Action | None:
                 required=_confirm_required(t.confirm_facts),
                 reason="terms_revised",
             )
-    if a.stance != "accept" or t.accepted_term_alt:
+    if not tu.accepts or t.accepted_term_alt:
         return None
-    if (
-        a.settlement_ask_pct is not None
-        and ask_pct_to_bp(a.settlement_ask_pct) != neg.confirmed_bp
-    ):
+    if tu.ask_pct is not None and ask_pct_to_bp(tu.ask_pct) != neg.confirmed_bp:
         return None
     if _confirm_key(t.belief, neg.confirmed_bp) != neg.last_confirm_key:
         return None
@@ -733,8 +925,8 @@ def _confirm_accepted_counter(t: _Turn, ask_bp: int, afford: Affordability) -> A
     not a yes to the previous price — that counter can be a token percent the
     new terms just made obsolete.
     """
-    a, neg = t.analysis, t.neg
-    if a.stance != "accept":
+    tu, neg = t.turn, t.neg
+    if not tu.accepts:
         return None
     assert afford.max_bp is not None
     line = accept_line_bp(afford.max_bp, t.cfg.accept_line_pct_of_max_bp)
@@ -743,8 +935,8 @@ def _confirm_accepted_counter(t: _Turn, ask_bp: int, afford: Affordability) -> A
     if neg.confirmed_bp is not None:
         ours.add(neg.confirmed_bp)
     bp: int | None = None
-    if a.settlement_ask_pct is not None:
-        stated = ask_pct_to_bp(a.settlement_ask_pct)
+    if tu.ask_pct is not None:
+        stated = ask_pct_to_bp(tu.ask_pct)
         if stated not in ours:
             return None
         if stated in legal:
@@ -771,12 +963,12 @@ def _reconfirm_on_table(t: _Turn, ask_bp: int, afford: Affordability) -> Action 
     safety net), anything else soft-retries up to ``max_counters``. A confirm
     still below the ask, or a new lower ask, falls through to the ladder.
     """
-    neg, a = t.neg, t.analysis
+    neg, tu = t.neg, t.turn
     confirmed = neg.confirmed_bp
     if confirmed is None or neg.last_confirm_key is None:
         return None
     assert afford.max_bp is not None
-    new_ask = a.settlement_ask_pct is not None
+    new_ask = tu.ask_pct is not None
     key_matches = _confirm_key(t.belief, confirmed) == neg.last_confirm_key
     if (
         not new_ask
@@ -795,9 +987,9 @@ def _reconfirm_on_table(t: _Turn, ask_bp: int, afford: Affordability) -> Action 
         )
     if ask_bp > confirmed or not key_matches or (new_ask and ask_bp < confirmed):
         return None
-    if a.stance == "reject":
+    if tu.rejects:
         return _stall_after_confirm(t)
-    if a.stance == "accept":
+    if tu.accepts:
         return _propose_wrap(t)
     soft = t.effects + [Effect(kind="inc_confirm_reject")]
     if neg.confirm_rejects + 1 >= t.cfg.max_counters:

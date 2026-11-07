@@ -28,7 +28,7 @@ from app.domain.scenario import (
     scenario_payload_errors,
 )
 from app.voice import ws as ws_mod
-from tests.wsutil import _ACCEPT, _ASK, ack_all, make_client, turn
+from tests.wsutil import _ACCEPT, _ASK, ack_all, as_acts, make_client, turn
 
 _SESSIONS: list[CallSession] = []
 _RULES = {"max_payments": 8, "min_payment_cents": 10_000, "payment_structure": "even"}
@@ -49,7 +49,7 @@ def _record(monkeypatch: pytest.MonkeyPatch) -> None:
 def _play_more(ws: Any, lines: list[dict[str, Any]]) -> list[dict]:
     frames: list[dict] = []
     for msg in lines:
-        ws.send_json(msg)
+        ws.send_json(as_acts(msg))
         batch = turn(ws)
         frames += batch + ack_all(ws, batch)
     return frames
@@ -62,7 +62,7 @@ def _play(
     frames = turn(ws)
     frames += ack_all(ws, frames)
     for msg in lines:
-        ws.send_json(msg)
+        ws.send_json(as_acts(msg))
         batch = turn(ws)
         frames += batch + ack_all(ws, batch)
     return frames

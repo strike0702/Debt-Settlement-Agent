@@ -25,6 +25,7 @@ from app.agent.nlu.quotes import (
 )
 from app.agent.numbers import extract_tokens
 from app.domain.fields import FIELD_REGISTRY, FIELDS_BY_NAME
+from app.domain.nlu_types import ReadbackReplyAct
 
 _PLAIN_YES_RE = re.compile(
     r"^\s*(?:yes|yep|yeah|correct|that's right|thats right|that is correct|"
@@ -45,12 +46,12 @@ def try_fast_readback(utterance: str, pending_readback: str | None) -> VerifiedA
     if _PLAIN_YES_RE.match(text):
         return VerifiedAnalysis(
             stance="info",
-            readback_response="confirm",
+            acts=[ReadbackReplyAct(type="readback_reply", response="confirm", quote=text)],
         )
     if _PLAIN_NO_RE.match(text):
         return VerifiedAnalysis(
             stance="info",
-            readback_response="deny",
+            acts=[ReadbackReplyAct(type="readback_reply", response="deny", quote=text)],
         )
     return None
 

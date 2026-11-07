@@ -19,13 +19,10 @@ from app.agent.nlu import (
     VerifiedAnalysis,
     VerifiedTerm,
     bp_to_ask_pct,
-    coerce_analysis_payload,
-    post_verify,
     resolve_amounts,
     total_cents_to_bp,
     try_resolve_amount_clarify,
 )
-from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
 from app.agent.orchestrator import Orchestrator
 from app.agent.policy import (
     AMOUNT_CLARIFY_KEY,
@@ -37,10 +34,11 @@ from app.agent.reasons import REASON_SHORT, REASON_TEXT
 from app.agent.session import CallSession
 from app.config import Settings
 from app.domain.belief import TermStatus
+from app.domain.nlu_types import RepTurn
 from app.domain.scenario import load_scenario
 from app.llm.client import FakeLLM
-from app.llm.prompts import nlu_messages
 from app.store.audit import AuditLog
+from tests.acts_helpers import ActsFakeLLM, acts_turn, rule_act, verify_turn
 
 _REF = date(2026, 3, 1)
 # fixtures/demo creditor_balance_cents.
@@ -51,8 +49,8 @@ _USER_SENTENCE = (
 )
 
 
-def _verify(analysis: TurnAnalysis, utterance: str) -> VerifiedAnalysis:
-    return post_verify(analysis, utterance, ref=_REF)
+def _verify(analysis: RepTurn, utterance: str) -> VerifiedAnalysis:
+    return verify_turn(analysis, utterance, ref=_REF)
 
 
 # --- NLU verification of the new slots -------------------------------------
@@ -60,7 +58,7 @@ def _verify(analysis: TurnAnalysis, utterance: str) -> VerifiedAnalysis:
 
 def test_total_slot_kept_when_quote_matches() -> None:
     out = _verify(
-        TurnAnalysis(
+        acts_turn(
             stance="offer", settlement_ask_total_cents=42000, ask_total_quote="$420 total"
         ),
         "We can settle this account for $420 total.",
@@ -72,7 +70,7 @@ def test_total_slot_kept_when_quote_matches() -> None:
 
 def test_total_slot_dropped_on_value_mismatch() -> None:
     out = _verify(
-        TurnAnalysis(stance="offer", settlement_ask_total_cents=45000, ask_total_quote="$420"),
+        acts_turn(stance="offer", settlement_ask_total_cents=45000, ask_total_quote="$420"),
         "We can settle this account for $420 total.",
     )
     assert out.settlement_ask_total_cents is None
@@ -83,7 +81,7 @@ def test_total_slot_dropped_on_value_mismatch() -> None:
 
 def test_total_slot_number_words() -> None:
     out = _verify(
-        TurnAnalysis(
+        acts_turn(
             stance="offer",
             settlement_ask_total_cents=120000,
             ask_total_quote="twelve hundred dollars",
@@ -95,7 +93,7 @@ def test_total_slot_number_words() -> None:
 
 def test_total_slot_dropped_when_quote_not_in_utterance() -> None:
     out = _verify(
-        TurnAnalysis(stance="offer", settlement_ask_total_cents=42000, ask_total_quote="$420"),
+        acts_turn(stance="offer", settlement_ask_total_cents=42000, ask_total_quote="$420"),
         "We can settle this account soon.",
     )
     assert out.settlement_ask_total_cents is None
@@ -105,7 +103,7 @@ def test_total_slot_dropped_when_quote_not_in_utterance() -> None:
 def test_total_slot_rejects_bare_digits_without_unit() -> None:
     """A bare 420 could be dollars or cents: not accepted as a dollar total."""
     out = _verify(
-        TurnAnalysis(stance="offer", settlement_ask_total_cents=42000, ask_total_quote="420"),
+        acts_turn(stance="offer", settlement_ask_total_cents=42000, ask_total_quote="420"),
         "We could do 420 to close it.",
     )
     assert out.settlement_ask_total_cents is None
@@ -113,35 +111,19 @@ def test_total_slot_rejects_bare_digits_without_unit() -> None:
 
 def test_ambiguous_slot_verified_like_total() -> None:
     ok = _verify(
-        TurnAnalysis(stance="offer", amount_ambiguous_cents=42000, amount_ambiguous_quote="$420"),
+        acts_turn(stance="offer", amount_ambiguous_cents=42000, amount_ambiguous_quote="$420"),
         _USER_SENTENCE,
     )
     assert ok.amount_ambiguous_cents == 42000
     bad = _verify(
-        TurnAnalysis(stance="offer", amount_ambiguous_cents=4200, amount_ambiguous_quote="$420"),
+        acts_turn(stance="offer", amount_ambiguous_cents=4200, amount_ambiguous_quote="$420"),
         _USER_SENTENCE,
     )
     assert bad.amount_ambiguous_cents is None
 
 
-def test_coerce_nested_amount_shapes() -> None:
-    out = coerce_analysis_payload(
-        {
-            "settlement_ask_total_cents": {"value": 42000, "quote": "$420"},
-            "amount_ambiguous": {"cents": 9000, "quote": "$90"},
-        }
-    )
-    assert out["settlement_ask_total_cents"] == 42000
-    assert out["ask_total_quote"] == "$420"
-    assert out["amount_ambiguous_cents"] == 9000
-    assert out["amount_ambiguous_quote"] == "$90"
-    assert "amount_ambiguous" not in out
 
 
-def test_prompt_documents_new_slots() -> None:
-    system = nlu_messages("x", "", None)[0]["content"]
-    assert "settlement_ask_total_cents" in system
-    assert "amount_ambiguous_cents" in system
 
 
 # --- dollars → bp (code, Decimal, round up) ---------------------------------
@@ -370,7 +352,7 @@ def _settings(**kw: object) -> Settings:
 
 async def _orch(tmp_path: Path, *, llm: FakeLLM | None = None) -> tuple[Orchestrator, CallSession]:
     session = CallSession(scenario=load_scenario("fixtures/demo"))
-    settings = _settings(nlu_mode="llm", nlu_schema="flat") if llm is not None else _settings()
+    settings = _settings(nlu_mode="llm") if llm is not None else _settings()
     orch = Orchestrator(
         session,
         llm=llm,
@@ -400,7 +382,7 @@ _OLD_STYLE_TERMS = [
 async def test_user_sentence_old_style_nlu_asks_instead_of_filing_minimum(
     tmp_path: Path,
 ) -> None:
-    llm = FakeLLM()
+    llm = ActsFakeLLM()
     llm.enqueue("nlu", _nlu_reply(terms=_OLD_STYLE_TERMS))
     orch, session = await _orch(tmp_path, llm=llm)
     u = await orch.on_creditor_text(_USER_SENTENCE)
@@ -423,7 +405,7 @@ async def test_user_sentence_old_style_nlu_asks_instead_of_filing_minimum(
 
 @pytest.mark.asyncio
 async def test_user_sentence_ambiguous_flag_asks(tmp_path: Path) -> None:
-    llm = FakeLLM()
+    llm = ActsFakeLLM()
     llm.enqueue(
         "nlu",
         _nlu_reply(
@@ -448,13 +430,13 @@ async def test_oracle_total_ask_reaches_engine_as_bp(tmp_path: Path) -> None:
     orch, session = await _orch(tmp_path)
     await orch.on_creditor_text(
         "Up to 6 payments, minimum $50, even, first payment March 15.",
-        oracle=TurnAnalysis(
+        oracle=acts_turn(
             stance="info",
             terms=[
-                ExtractedTerm(field="max_payments", value=6, quote="6 payments"),
-                ExtractedTerm(field="min_payment_cents", value=5000, quote="minimum $50"),
-                ExtractedTerm(field="payment_structure", value="even", quote="even"),
-                ExtractedTerm(
+                rule_act(field="max_payments", value=6, quote="6 payments"),
+                rule_act(field="min_payment_cents", value=5000, quote="minimum $50"),
+                rule_act(field="payment_structure", value="even", quote="even"),
+                rule_act(
                     field="first_payment_date", value=date(2026, 3, 15), quote="March 15"
                 ),
             ],
@@ -462,7 +444,7 @@ async def test_oracle_total_ask_reaches_engine_as_bp(tmp_path: Path) -> None:
     )
     u = await orch.on_creditor_text(
         "We can settle for $1,000 total.",
-        oracle=TurnAnalysis(
+        oracle=acts_turn(
             stance="offer", settlement_ask_total_cents=100000, ask_total_quote="$1,000 total"
         ),
     )
@@ -474,13 +456,13 @@ async def test_oracle_total_ask_reaches_engine_as_bp(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_unclear_answers_ask_twice_then_escalate(tmp_path: Path) -> None:
     orch, session = await _orch(tmp_path)
-    amb = TurnAnalysis(stance="offer", amount_ambiguous_cents=60000, amount_ambiguous_quote="$600")
+    amb = acts_turn(stance="offer", amount_ambiguous_cents=60000, amount_ambiguous_quote="$600")
     u1 = await orch.on_creditor_text("We would need $600 from the client.", oracle=amb)
     assert u1.action.reason == "amount_meaning"
-    u2 = await orch.on_creditor_text("Hmm.", oracle=TurnAnalysis(stance="other"))
+    u2 = await orch.on_creditor_text("Hmm.", oracle=acts_turn(stance="other"))
     assert u2.action.reason == "amount_meaning"
     assert session.neg.clarify_counts[AMOUNT_CLARIFY_KEY] == 2
-    u3 = await orch.on_creditor_text("Like I said.", oracle=TurnAnalysis(stance="other"))
+    u3 = await orch.on_creditor_text("Like I said.", oracle=acts_turn(stance="other"))
     assert u3.action.intent == Intent.ESCALATE
     assert u3.action.reason == "amount_meaning_unresolved"
     assert session.neg.pending_amount_clarify is None
@@ -489,10 +471,10 @@ async def test_unclear_answers_ask_twice_then_escalate(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_closing_while_question_pending_is_not_asked_again(tmp_path: Path) -> None:
     orch, session = await _orch(tmp_path)
-    amb = TurnAnalysis(stance="offer", amount_ambiguous_cents=60000, amount_ambiguous_quote="$600")
+    amb = acts_turn(stance="offer", amount_ambiguous_cents=60000, amount_ambiguous_quote="$600")
     await orch.on_creditor_text("We would need $600 from the client.", oracle=amb)
     u = await orch.on_creditor_text(
-        "Thanks, goodbye.", oracle=TurnAnalysis(stance="other", wants_to_end=True)
+        "Thanks, goodbye.", oracle=acts_turn(stance="other", wants_to_end=True)
     )
     assert u.action.reason != "amount_meaning"
     assert session.neg.pending_amount_clarify is None

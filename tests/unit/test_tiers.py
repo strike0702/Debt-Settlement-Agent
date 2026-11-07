@@ -11,15 +11,14 @@ import pytest
 
 from app.adapter.engine_adapter import Affordability
 from app.agent.nlg import SAFE_FALLBACK, render_action
-from app.agent.nlu import coerce_tiers, post_verify
-from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
+from app.agent.nlu import coerce_tiers
 from app.agent.policy import Intent, NegotiationState, decide
 from app.config import Settings
 from app.domain.belief import BeliefState
 from app.domain.scenario import load_scenario
 from app.domain.units import render_ordinal
-from app.llm.prompts import nlu_messages
 from app.store.audit import AuditLog
+from tests.acts_helpers import acts_turn, rule_act, verify_turn
 
 _REF = date(2026, 3, 1)
 _SETTINGS = Settings(max_counters=4)
@@ -71,9 +70,9 @@ def test_coerce_tiers_rejects_malformed(raw: object) -> None:
 
 def test_post_verify_coerces_tiers_and_keeps_unverified(tmp_path) -> None:
     utt = "From the fourth payment on, the minimum is $75."
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         terms=[
-            ExtractedTerm(
+            rule_act(
                 field="min_payment_tiers",
                 value=[{"from_payment": 4, "min_cents": 7500}],
                 quote="From the fourth payment on, the minimum is $75",
@@ -81,7 +80,7 @@ def test_post_verify_coerces_tiers_and_keeps_unverified(tmp_path) -> None:
         ],
         stance="info",
     )
-    out = post_verify(analysis, utt, ref=_REF)
+    out = verify_turn(analysis, utt, ref=_REF)
     assert [(t.field, t.value, t.verified) for t in out.terms] == [
         ("min_payment_tiers", [(4, 7500)], False)
     ]
@@ -90,9 +89,9 @@ def test_post_verify_coerces_tiers_and_keeps_unverified(tmp_path) -> None:
 def test_post_verify_drops_and_audits_malformed_tiers(tmp_path) -> None:
     audit = AuditLog(tmp_path / "a.db")
     utt = "Up to three payments the minimum is $50."
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         terms=[
-            ExtractedTerm(
+            rule_act(
                 field="min_payment_tiers",
                 value=[{"up_to_payments": 3, "min_cents": 5000}],
                 quote="Up to three payments",
@@ -100,7 +99,7 @@ def test_post_verify_drops_and_audits_malformed_tiers(tmp_path) -> None:
         ],
         stance="info",
     )
-    out = post_verify(analysis, utt, ref=_REF, audit=audit, call_id="c1")
+    out = verify_turn(analysis, utt, ref=_REF, audit=audit, call_id="c1")
     assert out.terms == []
     events = [e["type"] for e in audit.for_call("c1")]
     assert "nlu_rejected_tiers" in events
@@ -109,9 +108,9 @@ def test_post_verify_drops_and_audits_malformed_tiers(tmp_path) -> None:
 def test_post_verify_first_n_payments_is_ambiguous(tmp_path) -> None:
     audit = AuditLog(tmp_path / "a.db")
     utt = "The minimum is $50 for the first three payments, then $75."
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         terms=[
-            ExtractedTerm(
+            rule_act(
                 field="min_payment_tiers",
                 value=[{"from_payment": 4, "min_cents": 7500}],
                 quote="for the first three payments, then $75",
@@ -119,30 +118,26 @@ def test_post_verify_first_n_payments_is_ambiguous(tmp_path) -> None:
         ],
         stance="info",
     )
-    out = post_verify(analysis, utt, ref=_REF, audit=audit, call_id="c1")
+    out = verify_turn(analysis, utt, ref=_REF, audit=audit, call_id="c1")
     assert out.terms == []
     assert out.tiers_ambiguous is True
-    assert out.to_turn_analysis().tiers_ambiguous is True
+    assert out.to_rep_turn().tiers_ambiguous is True
     assert "nlu_tiers_ambiguous" in [e["type"] for e in audit.for_call("c1")]
 
 
 def test_first_payment_date_phrase_is_not_tier_ambiguity() -> None:
     utt = "The first payment is due March 31. There are no tiered minimums."
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         terms=[
-            ExtractedTerm(field="min_payment_tiers", value=[], quote="no tiered minimums")
+            rule_act(field="min_payment_tiers", value=[], quote="no tiered minimums")
         ],
         stance="info",
     )
-    out = post_verify(analysis, utt, ref=_REF)
+    out = verify_turn(analysis, utt, ref=_REF)
     assert out.tiers_ambiguous is False
     assert out.terms[0].value == []
 
 
-def test_nlu_prompt_uses_from_payment_schema() -> None:
-    system = nlu_messages("x", "", None)[0]["content"]
-    assert '"from_payment"' in system
-    assert "up_to_payments" not in system
 
 
 # --- policy speech -----------------------------------------------------------
@@ -164,7 +159,7 @@ def test_readback_one_tier_speaks_ordinal_and_money() -> None:
     action = decide(
         _belief_with_tiers([(4, 7500)]),
         NegotiationState(turn_idx=2, ask_bp=4500),
-        TurnAnalysis(stance="info"),
+        acts_turn(stance="info"),
         _AFFORD,
         settings=_SETTINGS,
     )
@@ -180,7 +175,7 @@ def test_readback_two_tiers_joined() -> None:
     action = decide(
         _belief_with_tiers([(4, 7500), (7, 10000)]),
         NegotiationState(turn_idx=2, ask_bp=4500),
-        TurnAnalysis(stance="info"),
+        acts_turn(stance="info"),
         _AFFORD,
         settings=_SETTINGS,
     )
@@ -196,7 +191,7 @@ def test_readback_empty_tiers() -> None:
     action = decide(
         _belief_with_tiers([]),
         NegotiationState(turn_idx=2, ask_bp=4500),
-        TurnAnalysis(stance="info"),
+        acts_turn(stance="info"),
         _AFFORD,
         settings=_SETTINGS,
     )
@@ -210,7 +205,7 @@ def test_clarify_tiers_contradiction_speaks_both_values() -> None:
     action = decide(
         b,
         NegotiationState(turn_idx=3, ask_bp=4500),
-        TurnAnalysis(stance="info"),
+        acts_turn(stance="info"),
         _AFFORD,
         settings=_SETTINGS,
     )
@@ -225,7 +220,7 @@ def test_tiers_ambiguous_clarifies_then_escalates() -> None:
     action = decide(
         b,
         NegotiationState(turn_idx=3, ask_bp=4500),
-        TurnAnalysis(stance="info", tiers_ambiguous=True),
+        acts_turn(stance="info", tiers_ambiguous=True),
         _AFFORD,
         settings=_SETTINGS,
     )
@@ -239,7 +234,7 @@ def test_tiers_ambiguous_clarifies_then_escalates() -> None:
     action = decide(
         b,
         NegotiationState(turn_idx=4, ask_bp=4500, clarify_counts={"min_payment_tiers": 2}),
-        TurnAnalysis(stance="info", tiers_ambiguous=True),
+        acts_turn(stance="info", tiers_ambiguous=True),
         _AFFORD,
         settings=_SETTINGS,
     )
@@ -291,17 +286,17 @@ async def test_sim_readback_matches_tier_facts() -> None:
     tiers = list(sc.true_rules.min_payment_tiers)
     b = _belief_with_tiers(tiers)
     action = decide(
-        b, NegotiationState(turn_idx=2, ask_bp=4500), TurnAnalysis(stance="info"),
+        b, NegotiationState(turn_idx=2, ask_bp=4500), acts_turn(stance="info"),
         _AFFORD, settings=_SETTINGS,
     )
     assert action.intent == Intent.READ_BACK
     reply = await CreditorPolicy(sc).respond(action)
-    assert reply.analysis.readback_response == "confirm"
+    assert reply.analysis.readback == "confirm"
 
     wrong = [(f + 1, m) for f, m in tiers]
     action = decide(
         _belief_with_tiers(wrong), NegotiationState(turn_idx=2, ask_bp=4500),
-        TurnAnalysis(stance="info"), _AFFORD, settings=_SETTINGS,
+        acts_turn(stance="info"), _AFFORD, settings=_SETTINGS,
     )
     reply = await CreditorPolicy(sc).respond(action)
-    assert reply.analysis.readback_response == "deny"
+    assert reply.analysis.readback == "deny"

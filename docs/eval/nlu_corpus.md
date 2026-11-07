@@ -2814,6 +2814,80 @@ Misses (line ids):
 - filler false accept: -
 - act-type set: am09, am11, am13
 
+## acts_P71B_hneg
+
+- git: `b5413c4`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 42  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=42
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 5 | 5 | 1 | 0 | 0.833 | 1.000 |
+| wants_to_end | 0 | 0 | 1 | 0 | 0.000 | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 2 | 2 | 0 | 0 | 1.000 | 1.000 |
+| stance=reject | 3 | 3 | 1 | 0 | 0.750 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.905 |
+| term exact-match (all lines) | 0.952 |
+| term exact-match (lines with terms, n=31) | 0.935 |
+| filler false accepts (n=4) | 0 |
+| act-type set exact (n=42) | 0.952 |
+| NLU latency p50 / p95 ms (live n=42) | 1008 / 1256 |
+| tokens in / out (mean out per line) | 74847 / 2579 (61) |
+
+Misses (line ids):
+
+- firm: FP hn04; FN -
+- wants_to_end: FP hn04; FN -
+- stance=reject: FP hn03; FN -
+- terms: hn32, hn37
+- filler false accept: -
+- act-type set: hn03, hn37
+
+## acts_P71B_main
+
+- git: `b5413c4`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 193  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=188, fast_path=5
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 33 | 0 | 1 | 1.000 | 0.971 |
+| demands_commitment | 13 | 13 | 3 | 0 | 0.812 | 1.000 |
+| firm | 6 | 6 | 1 | 0 | 0.857 | 1.000 |
+| wants_to_end | 6 | 6 | 4 | 0 | 0.600 | 1.000 |
+| hostility | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| stance=accept | 11 | 11 | 0 | 0 | 1.000 | 1.000 |
+| stance=reject | 9 | 6 | 0 | 3 | 1.000 | 0.667 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.896 |
+| term exact-match (all lines) | 0.959 |
+| term exact-match (lines with terms, n=76) | 0.908 |
+| filler false accepts (n=31) | 0 |
+| act-type set exact (n=193) | 0.793 |
+| NLU latency p50 / p95 ms (live n=188) | 1016 / 1569 |
+| tokens in / out (mean out per line) | 332572 / 10255 (55) |
+
+Misses (line ids):
+
+- asks_client_private_info: FP -; FN f25
+- demands_commitment: FP i09, x03, k05; FN -
+- firm: FP k04; FN -
+- wants_to_end: FP x02, e06, e07, e10; FN -
+- stance=reject: FP -; FN a10, x07, x08
+- terms: n15, f01, f07, f16, f17, d04, k01, rd03
+- filler false accept: -
+- act-type set: p10, p14, n02, n08, n15, c02, c07, i01, i02, i03, i07, i09, h04, f07, f10, f14, f17, f19, f20, f25, d01, d02, d03, d08, d11, a10, a13, a16, x02, x03, x07, x08, e01, e05, e09, e10, k02, k04, k05, rd06
+
 ## Notes
 
 - Both runs used the same model and prompt (Groq `gpt-oss-120b`, temperature 0).

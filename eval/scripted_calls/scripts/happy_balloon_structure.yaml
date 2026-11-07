@@ -4,30 +4,61 @@ scenario: balloon_structure
 turns:
 - rep: We allow up to six payments, at least $20 each, with a balloon payment at the end.
   oracle:
-    stance: info
-    terms:
-    - {field: max_payments, value: 6, quote: six payments}
-    - {field: min_payment_cents, value: 2000, quote: $20}
-    - {field: payment_structure, value: balloon, quote: balloon}
-  expect: {intent: ASK_SETTLEMENT}
+    acts:
+    - type: state_rule
+      field: max_payments
+      value: 6
+      quote: six payments
+    - type: state_rule
+      field: min_payment_cents
+      value: 2000
+      quote: $20
+    - type: state_rule
+      field: payment_structure
+      value: balloon
+      quote: balloon
+  expect:
+    intent: ASK_SETTLEMENT
 - rep: We'd settle for forty percent of the balance.
-  oracle: {stance: offer, settlement_ask_pct: 40, ask_quote: forty percent}
+  oracle:
+    acts:
+    - type: price_ask
+      pct: 40
+      quote: forty percent
+      firmness: counter
   expect:
     intent: COUNTER
-    facts: {counter_pct: 2800}
+    facts:
+      counter_pct: 2800
 - rep: We could come down to thirty five percent.
-  oracle: {stance: counter, settlement_ask_pct: 35, ask_quote: thirty five percent}
+  oracle:
+    acts:
+    - type: price_ask
+      pct: 35
+      quote: thirty five percent
+      firmness: counter
   expect:
     intent: COUNTER
-    facts: {counter_pct: 3000}
+    facts:
+      counter_pct: 3000
 - rep: Okay, that works for us.
-  oracle: {stance: accept}
+  oracle:
+    acts:
+    - type: respond_to_offer
+      response: accept
+      quote: Okay, that works for us.
   expect:
     intent: CONFIRM_SCHEDULE
-    facts: {settlement_pct: 3000}
+    facts:
+      settlement_pct: 3000
 - rep: Yes, that schedule works.
-  oracle: {stance: accept}
+  oracle:
+    acts:
+    - type: respond_to_offer
+      response: accept
+      quote: Yes, that schedule works.
   expect:
     intent: PROPOSE_WRAP
     reason: confirmed
-    facts: {settlement_pct: 3000}
+    facts:
+      settlement_pct: 3000

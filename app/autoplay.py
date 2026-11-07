@@ -1,7 +1,7 @@
 """Autoplay ("Watch a call"): the sim creditor plays the rep against the real agent.
 
 ``run_autoplay`` alternates ``sim.creditor.CreditorPolicy`` (template phrasing,
-ground-truth ``TurnAnalysis`` as oracle NLU) and the normal ``Orchestrator``,
+ground-truth ``RepTurn`` acts as oracle NLU) and the normal ``Orchestrator``,
 pausing between turns, and hands each creditor line and agent ``Utterance`` to
 callbacks. ``app.voice.ws`` uses those callbacks to emit the usual events, so
 the UI renders an autoplayed call exactly like a live one.

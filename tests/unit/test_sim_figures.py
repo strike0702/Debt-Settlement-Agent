@@ -13,11 +13,11 @@ import pytest
 
 from app.domain.actions import Action, Intent, Phase
 from app.domain.facts import Fact
-from app.domain.nlu_types import TurnAnalysis
 from app.llm.client import FakeLLM
 from sim.creditor import CreditorPolicy, CreditorReply
 from sim.figures import figures, rewrite_problem
 from sim.scenarios import generate_one
+from tests.acts_helpers import acts_turn
 
 # (draft, oracle stance of the draft, LLM rewrite, expected fallback reason)
 EVIDENCE: list[tuple[str, str, str, str]] = [
@@ -105,7 +105,7 @@ def _counter(bp: int) -> Action:
     )
 
 
-_REJECT_48 = TurnAnalysis(stance="reject", settlement_ask_pct=48.0, ask_quote="48%")
+_REJECT_48 = acts_turn(stance="reject", settlement_ask_pct=48.0, ask_quote="48%")
 
 
 class _BoomLLM(FakeLLM):

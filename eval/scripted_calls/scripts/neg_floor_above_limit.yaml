@@ -5,14 +5,14 @@ name: neg_floor_above_limit
 scenario: easy_deal
 turns:
   - rep: "Up to eight payments, at least $100 each, even payments."
-    oracle: {stance: info, terms: [{field: max_payments, value: 8, quote: "eight payments"}, {field: min_payment_cents, value: 10000, quote: "$100"}, {field: payment_structure, value: even, quote: "even payments"}]}
+    oracle: {acts: [{type: "state_rule", field: "max_payments", value: 8, quote: "eight payments"}, {type: "state_rule", field: "min_payment_cents", value: 10000, quote: "$100"}, {type: "state_rule", field: "payment_structure", value: "even", quote: "even payments"}]}
     expect: {intent: ASK_SETTLEMENT}
   - rep: "We need ninety percent."
-    oracle: {stance: counter, settlement_ask_pct: 90, ask_quote: "ninety percent"}
+    oracle: {acts: [{type: "price_ask", pct: 90, quote: "ninety percent", firmness: "counter"}]}
     expect: {intent: COUNTER, facts: {counter_pct: 5200}}
   - rep: "Eighty five percent, and that's final. My manager won't approve anything less."
-    oracle: {stance: counter, settlement_ask_pct: 85, ask_quote: "Eighty five percent", firm: true}
+    oracle: {acts: [{type: "price_ask", pct: 85, quote: "Eighty five percent", firmness: "final"}]}
     expect: {intent: ESCALATE, reason: above_accept_line}
   - rep: "No. Eighty five is as low as it goes."
-    oracle: {stance: reject, settlement_ask_pct: 85, ask_quote: "Eighty five", firm: true}
+    oracle: {acts: [{type: "respond_to_offer", response: "reject", quote: "No. Eighty five is as low as it goes."}, {type: "price_ask", pct: 85, quote: "Eighty five", firmness: "final"}]}
     expect: {intent: ESCALATE}

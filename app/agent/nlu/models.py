@@ -1,20 +1,52 @@
 """NLU result models: what the rest of the agent reads after a rep turn.
 
-``VerifiedTerm`` / ``VerifiedAnalysis`` are the post-verified form of the LLM's
-``TurnAnalysis`` (``app.agent.nlu_types``): each term carries ``verified`` and
-the analysis carries every side-channel flag after the code-side repairs.
-``DroppedTerm`` records what verification threw away, for the decision trace
-only (policy never reads it). No logic beyond ``to_turn_analysis``; built by
-``verify.post_verify``, ``fast_paths`` and ``amounts``.
+``RawReading`` is the content of a turn before verification (terms and price
+read off the acts); ``VerifiedTerm`` / ``VerifiedAnalysis`` are its verified
+form plus the verified non-content acts (``acts``: accept / reject, read-back
+reply, question, closing, ...). ``to_rep_turn`` builds the policy's input
+(``app.domain.nlu_types.RepTurn``). ``DroppedTerm`` records what verification
+threw away, for the decision trace only (policy never reads it). No logic
+beyond the view helpers; built by ``acts.verify_acts``, ``fast_paths`` and
+``amounts``.
 """
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
+from app.domain.nlu_types import (
+    Act,
+    PriceAskAct,
+    RepTurn,
+    RuleItemAct,
+    StateRuleAct,
+)
+
+
+class RawTerm(BaseModel):
+    """A rule value as an act stated it, before the quote / number checks."""
+
+    field: str
+    value: int | str | date | dict | list
+    quote: str
+    hedged: bool = False
+
+
+class RawReading(BaseModel):
+    """Turn content read off the acts, before verification (``verify.post_verify``)."""
+
+    terms: list[RawTerm] = Field(default_factory=list)
+    settlement_ask_pct: float | None = None  # percent points, e.g. 45.0 = 45%
+    ask_quote: str | None = None
+    settlement_ask_total_cents: int | None = None
+    ask_total_quote: str | None = None
+    # Oracle only (``RepTurn.amount_ambiguous_*``): ground truth that an amount's
+    # meaning is unclear. Model acts have no such act; code derives it instead.
+    amount_ambiguous_cents: int | None = None
+    amount_ambiguous_quote: str | None = None
 
 
 class VerifiedTerm(BaseModel):
@@ -37,10 +69,18 @@ class DroppedTerm(BaseModel):
 
 
 class VerifiedAnalysis(BaseModel):
-    """Post-verified turn analysis for policy / belief updates."""
+    """One rep turn after code verification: checked content plus verified acts.
+
+    Content slots (terms, the ask, dollar amounts) hold code-verified numbers;
+    ``acts`` hold the turn's other verified acts (``respond_to_offer``,
+    ``readback_reply``, ``question``, ``ask_private_info``,
+    ``demand_commitment``, ``hostility``, ``end_call``, ``stall``,
+    ``backchannel``, ``announce_rules``, ``list_done``, ``unclear``, and a
+    number-free ``final`` price act). ``to_rep_turn`` is the policy's view.
+    """
 
     terms: list[VerifiedTerm] = Field(default_factory=list)
-    # Decision-trace only (never read by policy): what post_verify threw away.
+    # Decision-trace only (never read by policy): what verification threw away.
     dropped: list[DroppedTerm] = Field(default_factory=list)
     settlement_ask_pct: float | None = None
     ask_quote: str | None = None
@@ -54,62 +94,94 @@ class VerifiedAnalysis(BaseModel):
     # Verified dollar amount whose meaning (total vs per payment) is unclear.
     amount_ambiguous_cents: int | None = None
     amount_ambiguous_quote: str | None = None
-    stance: str = "other"
-    readback_response: str | None = None
-    asks_client_private_info: bool = False
-    demands_commitment: bool = False
-    hostility: float = 0.0
-    wants_to_end: bool = False
-    asks_for_schedule: bool = False
-    firm: bool = False
-    # Orchestrator-only: post-proposal term change cue (not passed to policy).
-    revises_terms: bool = False
     # Bare number for a cents field with no $/dollars/cents cue — ask which unit.
     cents_ambiguity_bare: int | None = None
     cents_ambiguity_field: str | None = None
     tiers_ambiguous: bool = False
-    # Off-script question; answered by ``app.agent.acts``, not policy.
-    asks_question: bool = False
-    question_topic: str | None = None
-    # Rule announced but not given yet (``cues.repair_defines_field``).
-    defines_field: str | None = None
-    expected_count: int | None = None
-    list_done: bool = False
-    # Acts schema only (``acts.convert_acts``): numbers no verified act
-    # claimed, and an ``unclear`` reply. Both reach the policy.
+    # Tiers given as ``rule_item`` acts: ``(from, to | None, min_cents)`` each.
+    tier_items: list[tuple[int, int | None, int]] = Field(default_factory=list)
+    # Verified non-content acts (see the class docstring), in line order.
+    acts: list[Act] = Field(default_factory=list)
+    # Numbers no verified act claimed; the policy will not act on older values.
     unaccounted_numbers: list[str] = Field(default_factory=list)
-    unclear: bool = False
-    # Trace only: the act types the acts model returned and kept.
-    acts: list[str] = Field(default_factory=list)
+    # Orchestrator only: the line cues a post-proposal change of a rule.
+    revises_terms: bool = False
+    # Trace and corpus label only (offer / counter / accept / ...): the policy
+    # and orchestrator read ``acts``, never this.
+    stance: str = "other"
+    # Trace only: the act types the model returned and kept.
+    model_acts: list[str] = Field(default_factory=list)
 
-    def to_turn_analysis(self) -> TurnAnalysis:
-        """Drop verified flags for ``policy.decide``."""
-        return TurnAnalysis(
-            terms=[
-                ExtractedTerm(
-                    field=t.field,  # type: ignore[arg-type]
+    def has(self, type_name: str) -> bool:
+        return any(a.type == type_name for a in self.acts)
+
+    def first(self, type_name: str) -> Any | None:
+        return next((a for a in self.acts if a.type == type_name), None)
+
+    @property
+    def accepts(self) -> bool:
+        return any(a.type == "respond_to_offer" and a.response == "accept" for a in self.acts)
+
+    @property
+    def rejects(self) -> bool:
+        return not self.accepts and any(
+            a.type == "respond_to_offer" and a.response == "reject" for a in self.acts
+        )
+
+    @property
+    def readback_response(self) -> str | None:
+        rb = [a for a in self.acts if a.type == "readback_reply"]
+        return rb[-1].response if rb else None
+
+    @property
+    def interrupts(self) -> bool:
+        """A closing, private ask, lock-in demand or hostile line (outranks a held question)."""
+        return any(
+            a.type in ("end_call", "ask_private_info", "demand_commitment")
+            or (a.type == "hostility" and a.level == "strong")
+            for a in self.acts
+        )
+
+    def to_rep_turn(self) -> RepTurn:
+        """The policy's input: verified rules and price as acts, then the other acts."""
+        content: list[Any] = []
+        items = {(frm, cents): to for frm, to, cents in self.tier_items}
+        for t in self.terms:
+            if t.field == "min_payment_tiers" and items and isinstance(t.value, list):
+                for frm, cents in t.value:
+                    content.append(
+                        RuleItemAct(
+                            type="rule_item",
+                            quote=(t.quote or "tiers")[:300],
+                            from_payment=frm,
+                            to_payment=items.get((frm, cents)),
+                            min_cents=cents,
+                        )
+                    )
+                continue
+            content.append(
+                StateRuleAct.model_construct(
+                    type="state_rule",
+                    field=t.field,
                     value=t.value,
-                    quote=t.quote,
+                    quote=(t.quote or t.field)[:300],
                     hedged=t.hedged,
                 )
-                for t in self.terms
-            ],
-            settlement_ask_pct=self.settlement_ask_pct,
-            ask_quote=self.ask_quote,
-            stance=self.stance,  # type: ignore[arg-type]
-            readback_response=self.readback_response,  # type: ignore[arg-type]
-            asks_client_private_info=self.asks_client_private_info,
-            demands_commitment=self.demands_commitment,
-            hostility=self.hostility,
-            wants_to_end=self.wants_to_end,
-            asks_for_schedule=self.asks_for_schedule,
-            firm=self.firm,
-            tiers_ambiguous=self.tiers_ambiguous,
-            asks_question=self.asks_question,
-            question_topic=self.question_topic,  # type: ignore[arg-type]
-            defines_field=self.defines_field,  # type: ignore[arg-type]
-            expected_count=self.expected_count,
-            list_done=self.list_done,
+            )
+        rest = list(self.acts)
+        if self.settlement_ask_pct is not None:
+            final = any(isinstance(a, PriceAskAct) and a.firmness == "final" for a in rest)
+            rest = [a for a in rest if not isinstance(a, PriceAskAct)]
+            content.append(
+                PriceAskAct(
+                    type="price_ask",
+                    quote=(self.ask_quote or "price")[:300],
+                    pct=self.settlement_ask_pct,
+                    firmness="final" if final else "counter",
+                )
+            )
+        return RepTurn(
+            acts=[*content, *rest],
             unaccounted_numbers=list(self.unaccounted_numbers),
-            unclear=self.unclear,
+            tiers_ambiguous=self.tiers_ambiguous,
         )

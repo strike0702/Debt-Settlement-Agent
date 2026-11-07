@@ -23,22 +23,20 @@ import pytest
 
 from app.agent.acts import is_ack_correction, is_change_request
 from app.agent.nlu import try_resolve_disputed_value
-from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
 from app.agent.orchestrator import Orchestrator
 from app.agent.session import CallSession
 from app.domain.actions import Intent
 from app.domain.belief import TermStatus
-from app.domain.fields import FIELDS_BY_NAME
+from app.domain.nlu_types import RepTurn
 from app.domain.scenario import load_scenario
-from app.llm.client import FakeLLM
-from app.llm.prompts import nlu_messages
 from app.store.audit import AuditLog
+from tests.acts_helpers import ActsFakeLLM, acts_turn, rule_act
 from tests.wsutil import offline_settings
 
 _REF = date(2026, 4, 1)
 
 
-class _RecordingLLM(FakeLLM):
+class _RecordingLLM(ActsFakeLLM):
     """FakeLLM that also keeps the messages of each NLU call."""
 
     def __init__(self) -> None:
@@ -61,7 +59,7 @@ def _nlu(*terms: tuple[str, Any, str], stance: str = "info") -> str:
 
 
 def _orch(tmp_path: Path, *, llm: Any = None, auto_ack: bool = True) -> Orchestrator:
-    kw: dict[str, Any] = {"nlu_mode": "llm", "nlu_schema": "flat"} if llm is not None else {}
+    kw: dict[str, Any] = {"nlu_mode": "llm"} if llm is not None else {}
     return Orchestrator(
         CallSession(scenario=load_scenario("fixtures/scenarios/easy_deal")),
         llm=llm,
@@ -174,18 +172,18 @@ async def test_rules_restated_with_make_that_still_clarifies(tmp_path: Path) -> 
     await orch.start()
     await orch.on_creditor_text(
         "Up to five payments.",
-        oracle=TurnAnalysis(
-            stance="info", terms=[ExtractedTerm(field="max_payments", value=5, quote="five")]
+        oracle=acts_turn(
+            stance="info", terms=[rule_act(field="max_payments", value=5, quote="five")]
         ),
     )
     u = await orch.on_creditor_text(
         "Actually, make that a maximum of 7 payments, minimum $100, flexible structure.",
-        oracle=TurnAnalysis(
+        oracle=acts_turn(
             stance="info",
             terms=[
-                ExtractedTerm(field="max_payments", value=7, quote="7"),
-                ExtractedTerm(field="min_payment_cents", value=10000, quote="$100"),
-                ExtractedTerm(field="payment_structure", value="flexible", quote="flexible"),
+                rule_act(field="max_payments", value=7, quote="7"),
+                rule_act(field="min_payment_cents", value=10000, quote="$100"),
+                rule_act(field="payment_structure", value="flexible", quote="flexible"),
             ],
         ),
     )
@@ -295,15 +293,15 @@ async def test_pick_overrides_an_empty_or_ambiguous_reading(tmp_path: Path) -> N
     for text, value in (("Minimum $180.", 18000), ("No, it's $250.", 25000)):
         await orch.on_creditor_text(
             text,
-            oracle=TurnAnalysis(
+            oracle=acts_turn(
                 stance="info",
-                terms=[ExtractedTerm(field="min_payment_cents", value=value, quote=text[-5:-1])],
+                terms=[rule_act(field="min_payment_cents", value=value, quote=text[-5:-1])],
             ),
         )
     assert orch.session.belief.get("min_payment_cents").status == TermStatus.CONTRADICTED
     u = await orch.on_creditor_text(
         "$250",
-        oracle=TurnAnalysis(
+        oracle=acts_turn(
             stance="info", amount_ambiguous_cents=25000, amount_ambiguous_quote="$250"
         ),
     )
@@ -327,7 +325,7 @@ async def test_third_value_is_a_new_value(tmp_path: Path) -> None:
 # ----- C. barged questions count -----
 
 
-async def _say(orch: Orchestrator, text: str, oracle: TurnAnalysis, *, barge: bool) -> Any:
+async def _say(orch: Orchestrator, text: str, oracle: RepTurn, *, barge: bool) -> Any:
     """One rep turn with manual acks: barge after the first sentence, or hear it all."""
     u = await orch.on_creditor_text(text, oracle=oracle)
     ids = [sid for sid, _ in u.sentences]
@@ -344,9 +342,9 @@ async def test_barged_clarify_counts_and_second_unresolved_hands_off(tmp_path: P
     u = await orch.start()
     await orch.on_sentence_done([sid for sid, _ in u.sentences])
 
-    def mx(v: int, q: str) -> TurnAnalysis:
-        return TurnAnalysis(
-            stance="info", terms=[ExtractedTerm(field="max_payments", value=v, quote=q)]
+    def mx(v: int, q: str) -> RepTurn:
+        return acts_turn(
+            stance="info", terms=[rule_act(field="max_payments", value=v, quote=q)]
         )
 
     await _say(orch, "Up to six payments.", mx(6, "six"), barge=False)
@@ -354,10 +352,10 @@ async def test_barged_clarify_counts_and_second_unresolved_hands_off(tmp_path: P
     assert u.action.intent == Intent.CLARIFY
     assert orch.session.neg.clarify_counts["max_payments"] == 1
     assert orch.session.neg.question_counts["CLARIFY:max_payments"] == 1
-    u = await _say(orch, "Hmm, hold on.", TurnAnalysis(stance="stall"), barge=True)
+    u = await _say(orch, "Hmm, hold on.", acts_turn(stance="stall"), barge=True)
     assert u.action.intent == Intent.CLARIFY
     assert orch.session.neg.clarify_counts["max_payments"] == 2
-    u = await _say(orch, "Hmm.", TurnAnalysis(stance="other"), barge=False)
+    u = await _say(orch, "Hmm.", acts_turn(stance="other"), barge=False)
     assert u.action.intent == Intent.ESCALATE
     assert u.action.reason == "contradiction_unresolved"
     barges = _events(orch, "barge_in")
@@ -372,7 +370,7 @@ async def test_unheard_question_counts_for_nothing(tmp_path: Path) -> None:
     orch = _orch(tmp_path, auto_ack=False)
     u = await orch.start()
     await orch.on_sentence_done([sid for sid, _ in u.sentences])
-    u = await orch.on_creditor_text("Hello.", oracle=TurnAnalysis(stance="other"))
+    u = await orch.on_creditor_text("Hello.", oracle=acts_turn(stance="other"))
     assert u.action.intent == Intent.ASK
     await orch.on_barge_in([])
     assert orch.session.neg.question_counts == {}
@@ -383,7 +381,7 @@ async def test_heard_ask_keeps_only_its_question_count(tmp_path: Path) -> None:
     orch = _orch(tmp_path, auto_ack=False)
     u = await orch.start()
     await orch.on_sentence_done([sid for sid, _ in u.sentences])
-    u = await orch.on_creditor_text("Hello.", oracle=TurnAnalysis(stance="other"))
+    u = await orch.on_creditor_text("Hello.", oracle=acts_turn(stance="other"))
     assert u.action.intent == Intent.ASK
     phase = orch.session.neg.phase
     await orch.on_barge_in([u.sentences[0][0]])
@@ -405,16 +403,8 @@ async def test_live_nlu_prompt_has_no_turn_context(tmp_path: Path) -> None:
     system, user = (m["content"] for m in llm.nlu_messages[-1])
     assert "Earlier turns" not in user and "$180" not in user
     assert "earlier turns" not in system.lower()
-    assert user.startswith("Today's date: ") and "Agent last said: " in user
-    assert (
-        user
-        == nlu_messages(
-            "Sorry, can you change it to $250?",
-            FIELDS_BY_NAME["payment_structure"].ask_text,
-            None,
-            ref=orch._ref,
-        )[1]["content"]
-    )
+    assert user.startswith("Today: ") and "Agent last said: " in user
+    assert user.endswith("Rep: Sorry, can you change it to $250?")
 
 
 @pytest.mark.asyncio

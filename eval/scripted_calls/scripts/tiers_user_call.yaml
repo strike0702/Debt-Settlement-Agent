@@ -3,26 +3,26 @@ name: tiers_user_call
 scenario: tier_definer
 turns:
   - rep: "Up to eight payments, at least $190 each."
-    oracle: {stance: info, terms: [{field: max_payments, value: 8, quote: "eight payments"}, {field: min_payment_cents, value: 19000, quote: "$190"}]}
+    oracle: {acts: [{type: "state_rule", field: "max_payments", value: 8, quote: "eight payments"}, {type: "state_rule", field: "min_payment_cents", value: 19000, quote: "$190"}]}
     expect: {intent: ASK, reason: payment_structure}
   - rep: "I need a flexible schedule. I will define the payment structure."
-    oracle: {stance: info, terms: [{field: payment_structure, value: flexible, quote: "flexible"}]}
+    oracle: {acts: [{type: "state_rule", field: "payment_structure", value: "flexible", quote: "flexible"}]}
     expect: {intent: ASK, reason: optional_sweep}
   - rep: "Uh, before that, I need to define the payment tiers."
     expect: {intent: ASK, reason: min_payment_tiers}
   - rep: "So we will have three payment tiers."
     expect: {intent: ASK, reason: min_payment_tiers, facts: {tier_count: 3}}
   - rep: "Payments 1 to 2, at least $190."
-    oracle: {stance: info, terms: [{field: min_payment_tiers, value: [[1, 19000]], quote: "Payments 1 to 2, at least $190"}]}
+    oracle: {acts: [{type: "state_rule", field: "min_payment_tiers", value: [[1, 19000]], quote: "Payments 1 to 2, at least $190"}]}
     expect: {intent: ASK, reason: min_payment_tiers}
   - rep: "Then from the 3rd payment on, at least $250."
-    oracle: {stance: info, terms: [{field: min_payment_tiers, value: [[3, 25000]], quote: "from the 3rd payment on, at least $250"}]}
+    oracle: {acts: [{type: "state_rule", field: "min_payment_tiers", value: [[3, 25000]], quote: "from the 3rd payment on, at least $250"}]}
     expect: {intent: ASK, reason: min_payment_tiers}
   - rep: "And from the 6th payment on, at least $300."
-    oracle: {stance: info, terms: [{field: min_payment_tiers, value: [[6, 30000]], quote: "from the 6th payment on, at least $300"}]}
+    oracle: {acts: [{type: "state_rule", field: "min_payment_tiers", value: [[6, 30000]], quote: "from the 6th payment on, at least $300"}]}
     expect: {intent: READ_BACK, reason: min_payment_tiers}
   - rep: "That's all."
     expect: {intent: [READ_BACK, ASK_SETTLEMENT]}
   - rep: "Yes, that's right."
-    oracle: {stance: info, readback_response: confirm}
+    oracle: {acts: [{type: "readback_reply", response: "confirm", quote: "Yes, that's right."}]}
     expect: {intent: ASK_SETTLEMENT}

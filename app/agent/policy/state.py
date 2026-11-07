@@ -4,10 +4,10 @@
 offered, ladder stage, loop-guard counts, pending clarifies); the policy only
 reads it and requests changes through ``Action.effects``, which the
 orchestrator applies on speech ack. ``_Turn`` bundles one ``decide`` call's
-inputs. ``Agreement`` / ``draft_agreement`` build the drafted deal from an
-engine schedule, ``ask_pct_to_bp`` is the one float → basis-point
-conversion, and the ``terms_*`` helpers key the non-price alternatives
-already offered. No decisions here.
+inputs (the rep's verified acts as a ``RepTurn``). ``Agreement`` /
+``draft_agreement`` build the drafted deal from an engine schedule,
+``ask_pct_to_bp`` is the one float → basis-point conversion, and the
+``terms_*`` helpers key the non-price alternatives already offered. No decisions here.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from app.config import Settings
 from app.domain.actions import Effect, Phase
 from app.domain.belief import BeliefState
 from app.domain.facts import Fact
-from app.domain.nlu_types import TurnAnalysis
+from app.domain.nlu_types import RepTurn
 from app.store.audit import AuditLog
 from feasibility.engine import ScheduleRow
 
@@ -84,6 +84,10 @@ class NegotiationState:
     # the whole set was read back. Belief gets the set only on the rep's yes
     # (the orchestrator commits it), so a half-given list never reaches the engine.
     tier_draft: list[tuple[int, int]] | None = None
+    # Where each drafted tier ends (``from_payment → to_payment``) when the rep
+    # said it ("payments three to five"), so a later tier that leaves a gap or
+    # overlaps is caught across turns.
+    tier_ends: dict[int, int] = field(default_factory=dict)
     tier_expected: int | None = None
     tier_readback: bool = False
     # The one "any tiers or level limit?" question before the price was asked.
@@ -183,11 +187,16 @@ def draft_agreement(
 
 @dataclass(frozen=True)
 class _Turn:
-    """Inputs of one ``decide`` call after the prelude (ask recorded, rejected alt cleared)."""
+    """Inputs of one ``decide`` call after the prelude (ask recorded, rejected alt cleared).
+
+    ``turn`` is the rep's verified acts; ``ctx`` the PUBLIC call context from
+    before the turn (``app.agent.nlu.context.CallContext``: what we awaited).
+    """
 
     belief: BeliefState
     neg: NegotiationState
-    analysis: TurnAnalysis
+    turn: RepTurn
+    ctx: Any
     afford: Affordability | None
     cfg: Settings
     ask_bp: int | None
@@ -197,3 +206,5 @@ class _Turn:
     counter_offer_total_cents: int | None
     term_alt: tuple[str, Any] | None
     accepted_term_alt: bool
+    # A tier given this turn leaves a gap or overlaps a drafted range.
+    tier_gap: bool = False

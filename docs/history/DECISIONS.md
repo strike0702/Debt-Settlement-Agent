@@ -381,6 +381,30 @@ exactly that (scripted calls and the frozen held-out negotiation set) acts is be
 everywhere. Recorded as a second amendment made after seeing a result, like D21: the rule was not
 met as written.
 
+## D23. The policy dispatches acts by meaning, not by a flag priority (2026-11-08)
+
+**Question.** With acts adopted (D22), Phase 71b moves `decide()` onto the verified acts.
+In what order should a line's acts be read, and what happens to an act the current phase
+has no use for? The old cascade answered both with a fixed priority over about 20 flags
+(`wants_to_end` above tier collection, so "that's all the tiers" ended the call).
+
+**Chosen.** One handler per act type in a written order by meaning
+(`app.agent.policy.cascade.DISPATCH_ORDER`): the turn cap, then safety acts (hostility,
+private-info ask, commitment demand), then the call state (after a proposal, a stalled
+call), then the acts that answer themselves (schedule question, explicit `end_call`, a
+`final` price whose number went unread, `unclear`); every other act is folded into belief
+or the tier draft and the phase flow answers the whole line. Conflicts are written once
+(an accept beats a goodbye in the same line; "that's all" closes an open list, not the
+call; an accept with a new number is that number; the later of two prices stands). A line
+made only of acts the phase cannot use is asked about (`act_unusable`), never dropped.
+The order was chosen so the simulator's ground truth decides exactly as before: the
+offline oracle eval is identical to main on every turn.
+
+**Why.** An order by meaning is one list a reader can check, and a new act type gets a
+place in it rather than a new flag that can shadow an old one. Keeping the oracle eval
+identical shows the move to acts changed no negotiation rule; the grid test (every phase
+× act type, plus the empty line) shows no act falls through without a legal move.
+
 ## Process choices
 
 - Each phase runs in its own git worktree with a paste-ready prompt; phases that touch the

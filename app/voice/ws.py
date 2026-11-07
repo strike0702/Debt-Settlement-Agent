@@ -67,7 +67,6 @@ from pydantic import ValidationError
 
 from app.adapter.engine_adapter import EvalSummary
 from app.agent.acts import ACK_TOTAL_ID, acked_fields
-from app.agent.nlu_types import TurnAnalysis
 from app.agent.orchestrator import Orchestrator, Utterance
 from app.agent.policy import Agreement, Intent, Phase
 from app.agent.reasons import reason_short
@@ -76,6 +75,7 @@ from app.autoplay import clamp_pause_ms, new_autoplay_call, run_autoplay
 from app.config import Settings, get_settings
 from app.domain.fields import REQUIRED_FIELDS
 from app.domain.known_rules import parse_known_rules
+from app.domain.nlu_types import RepTurn
 from app.domain.scenario import (
     CallScenario,
     load_scenario,
@@ -555,13 +555,13 @@ async def _emit_utterance(
     return audit_after
 
 
-def _parse_oracle(raw: Any) -> TurnAnalysis | None:
+def _parse_oracle(raw: Any) -> RepTurn | None:
     if raw is None:
         return None
-    if isinstance(raw, TurnAnalysis):
+    if isinstance(raw, RepTurn):
         return raw
     try:
-        return TurnAnalysis.model_validate(raw)
+        return RepTurn.model_validate(raw)
     except ValidationError:
         return None
 

@@ -18,13 +18,13 @@ import json
 from datetime import date
 
 from app.agent.nlg import TEMPLATES, render_action
-from app.agent.nlu import post_verify, repair_defines_field
-from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
+from app.agent.nlu import repair_defines_field
 from app.agent.orchestrator import Orchestrator
 from app.agent.policy import Intent, NegotiationState, Phase, decide
 from app.agent.session import CallSession
 from app.autoplay import new_autoplay_call, run_autoplay
 from app.domain.belief import BeliefState, TermStatus
+from app.domain.nlu_types import RepTurn
 from app.domain.rule_replies import merge_suggestions, rule_reply_lines
 from app.domain.scenario import (
     load_scenario,
@@ -32,6 +32,7 @@ from app.domain.scenario import (
     resolve_scenario_dir,
 )
 from eval.nlu_corpus import load_corpus
+from tests.acts_helpers import acts_turn, flag, rule_act, verify_turn
 from tests.wsutil import offline_settings
 
 _REF = date(2026, 3, 1)
@@ -39,10 +40,10 @@ _SETTINGS = offline_settings()
 _TIERS = [(1, 19000), (3, 25000), (6, 30000)]
 
 
-def _tier(frm: int, cents: int, quote: str) -> TurnAnalysis:
-    return TurnAnalysis(
+def _tier(frm: int, cents: int, quote: str) -> RepTurn:
+    return acts_turn(
         stance="info",
-        terms=[ExtractedTerm(field="min_payment_tiers", value=[(frm, cents)], quote=quote)],
+        terms=[rule_act(field="min_payment_tiers", value=[(frm, cents)], quote=quote)],
     )
 
 
@@ -58,7 +59,7 @@ def _belief(structure: str = "flexible") -> BeliefState:
 
 
 def _decide(line: str, neg: NegotiationState, *, belief: BeliefState | None = None):  # noqa: ANN202
-    analysis = post_verify(TurnAnalysis(stance="info"), line, ref=_REF).to_turn_analysis()
+    analysis = verify_turn(acts_turn(stance="info"), line, ref=_REF).to_rep_turn()
     return decide(belief or _belief(), neg, analysis, None, settings=_SETTINGS)
 
 
@@ -67,23 +68,23 @@ async def test_live_call_rep_defines_three_tiers_before_the_price() -> None:
     orch = Orchestrator(CallSession(scenario=call), settings=_SETTINGS, auto_ack=True)
     await orch.start()
 
-    async def say(text: str, oracle: TurnAnalysis | None = None) -> tuple[str, str | None, str]:
-        utt = await orch.on_creditor_text(text, oracle=oracle or TurnAnalysis(stance="info"))
+    async def say(text: str, oracle: RepTurn | None = None) -> tuple[str, str | None, str]:
+        utt = await orch.on_creditor_text(text, oracle=oracle or acts_turn(stance="info"))
         return utt.action.intent.value, utt.action.reason, " ".join(t for _, t in utt.sentences)
 
-    rules = TurnAnalysis(
+    rules = acts_turn(
         stance="info",
         terms=[
-            ExtractedTerm(field="max_payments", value=8, quote="eight payments"),
-            ExtractedTerm(field="min_payment_cents", value=19000, quote="$190"),
+            rule_act(field="max_payments", value=8, quote="eight payments"),
+            rule_act(field="min_payment_cents", value=19000, quote="$190"),
         ],
     )
     assert (await say("Up to eight payments, at least $190 each.", rules))[1] == (
         "payment_structure"
     )
-    flexible = TurnAnalysis(
+    flexible = acts_turn(
         stance="info",
-        terms=[ExtractedTerm(field="payment_structure", value="flexible", quote="flexible")],
+        terms=[rule_act(field="payment_structure", value="flexible", quote="flexible")],
     )
     _, reason, _ = await say(
         "I need a flexible schedule. I will define the payment structure.", flexible
@@ -107,12 +108,12 @@ async def test_live_call_rep_defines_three_tiers_before_the_price() -> None:
     )
     # Nothing reached belief before the yes; a plain no starts the list again.
     assert orch.session.belief.get("min_payment_tiers").status == TermStatus.ASSUMED
-    intent, _, again = await say("No.", TurnAnalysis(stance="info", readback_response="deny"))
+    intent, _, again = await say("No.", acts_turn(stance="info", readback_response="deny"))
     assert intent == "ASK" and again.startswith("Let us go through the tiers again")
     for q, t in zip(lines, _TIERS, strict=True):
         intent, _, _ = await say(f"{q}.", _tier(*t, q))
     assert intent == "READ_BACK"
-    intent, _, _ = await say("Correct.", TurnAnalysis(stance="info", readback_response="confirm"))
+    intent, _, _ = await say("Correct.", acts_turn(stance="info", readback_response="confirm"))
     tiers = orch.session.belief.get("min_payment_tiers")
     assert tiers.status == TermStatus.KNOWN and [tuple(x) for x in tiers.value] == _TIERS
     assert intent == "ASK_SETTLEMENT" and orch.session.neg.tier_draft is None
@@ -169,7 +170,7 @@ def test_sweep_asks_once_and_only_for_a_flexible_schedule() -> None:
     after = NegotiationState(
         phase=Phase.DISCOVERY, optional_sweep_done=True, last_question_key="ASK:optional_sweep"
     )
-    yes = decide(_belief(), after, TurnAnalysis(stance="accept"), None, settings=_SETTINGS)
+    yes = decide(_belief(), after, acts_turn(stance="accept"), None, settings=_SETTINGS)
     assert yes.intent == Intent.ASK and yes.reason == "min_payment_tiers"
 
 
@@ -244,19 +245,20 @@ def test_tier_definer_card_matches_its_autoplay_truth() -> None:
 
 def test_a_count_of_payment_levels_is_the_limit_not_an_announcement() -> None:
     # Haiku (2026-11-07 corpus t06) read this as tiers = 2 plus "levels to come".
-    claimed = TurnAnalysis(
+    claimed = acts_turn(
         stance="info",
         terms=[
-            ExtractedTerm(field="min_payment_tiers", value=2, quote="At most two payment levels")
+            rule_act(field="min_payment_tiers", value=2, quote="At most two payment levels")
         ],
         defines_field="max_segments",
         expected_count=2,
     )
-    out = post_verify(claimed, "At most two payment levels.", ref=_REF)
+    out = verify_turn(claimed, "At most two payment levels.", ref=_REF)
     assert [(t.field, t.value, t.verified) for t in out.terms] == [("max_segments", 2, True)]
-    assert out.defines_field is None and out.expected_count is None
+    assert flag(out, "defines_field") is None and flag(out, "expected_count") is None
     # Tiers keep their meaning: "three tiers" is a list still to come.
-    tiers = post_verify(
-        TurnAnalysis(stance="info"), "So we will have three payment tiers.", ref=_REF
+    tiers = verify_turn(
+        acts_turn(stance="info"), "So we will have three payment tiers.", ref=_REF
     )
-    assert tiers.defines_field == "min_payment_tiers" and tiers.expected_count == 3
+    assert flag(tiers, "defines_field") == "min_payment_tiers"
+    assert flag(tiers, "expected_count") == 3

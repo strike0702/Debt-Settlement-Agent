@@ -1,8 +1,8 @@
 """Short NLU / NLG prompt builders for the role-based LLM client.
 
-NLU: field units + last agent line + rep utterance → JSON only. With
-``NLU_SCHEMA=acts`` (``nlu_acts_messages``) the reply is a typed act list and
-the prompt adds a PUBLIC call-context JSON block (``app.agent.nlu.context``).
+NLU (``nlu_acts_messages``): last agent line + rep utterance + a PUBLIC
+call-context JSON block (``app.agent.nlu.context``) → a typed act list, JSON
+only.
 NLG: intent instruction + placeholder meanings (never values or digits), plus
 up to the last 3 public turns as context (spoken lines only; the caller drops
 any line that carries a private figure). ``act_messages`` builds the offline
@@ -85,128 +85,7 @@ _INTENT_INSTRUCTION: dict[Intent, str] = {
     Intent.ANSWER: "Output exactly {answer_text} and nothing else.",
 }
 
-_NLU_SYSTEM = """\
-Extract creditor settlement terms from the collection rep's utterance.
-Reply with JSON only in this exact shape (no other top-level keys):
-{
-  "terms":[{"field":"max_payments","value":6,"quote":"six payments","hedged":false}],
-  "settlement_ask_pct":45.0,
-  "ask_quote":"forty-five percent",
-  "settlement_ask_total_cents":null,
-  "ask_total_quote":null,
-  "amount_ambiguous_cents":null,
-  "amount_ambiguous_quote":null,
-  "stance":"info",
-  "readback_response":null,
-  "asks_client_private_info":false,
-  "demands_commitment":false,
-  "hostility":0.0,
-  "wants_to_end":false,
-  "asks_for_schedule":false,
-  "firm":false,
-  "asks_question":false,
-  "question_topic":null,
-  "defines_field":null,
-  "expected_count":null
-}
-Field names for terms[].field (only these):
-max_payments, min_payment_cents, payment_structure, first_payment_date,
-max_segments, max_token_pays, min_payment_tiers.
-Units:
-- max_payments / max_segments / max_token_pays: integers
-- min_payment_cents: dollars as integer cents ($250 → 25000), only for the smallest
-  amount of each payment (per payment, each, a month, monthly, minimum, at least
-  $X a payment).
-  Bare digits with no $ / dollars / cents stay empty so the agent can clarify.
-- payment_structure: "even" | "balloon" | "flexible"
-- first_payment_date: YYYY-MM-DD
-- min_payment_tiers: list of {"from_payment":int,"min_cents":int}; from_payment is
-  the 1-based payment number where that higher minimum starts
-  ("from the fourth payment on, at least $75" → [{"from_payment":4,"min_cents":7500}]).
-  "No tiers" / "no tiered minimums" → [].
-- settlement_ask_pct: percent points as a bare number (45.0), not an object
-- settlement_ask_total_cents: the settlement ask as a dollar TOTAL in integer cents
-  ("settle for $1,200 total" → 120000), with ask_total_quote. Cues: total, in full,
-  to settle, settle for, pay $X by a date with no payment count or per-payment word.
-- amount_ambiguous_cents: a dollar amount (integer cents) that could be either the
-  total to settle or the minimum per payment, with amount_ambiguous_quote. Use it
-  instead of guessing, e.g. "$350, three payments" or "pay $420 by March 31, we only
-  accept 3 payments". Do not also put that amount in terms or the total.
-Each term quote, ask_total_quote and amount_ambiguous_quote must be a verbatim
-substring of the utterance.
-hedged=true for hedges like about/around/roughly.
-If pending_readback is set, fill readback_response with "confirm" or "deny".
-stance must be one of: offer, counter, accept, reject, stall, info, question, other.
-- info: the rep states a fact, rule or limit (payment count, minimum per payment,
-  even/balloon, first payment date, balance, policy), even hedged, and names no
-  settlement price. Extracting a term does not make a line an offer or counter.
-  Stance never changes extraction: still put every rule or limit the line states
-  in terms, and a dollar amount with no total or per-payment cue stays ambiguous.
-  Telling the agent to take it to the client, or that there is no rush, is info.
-- counter: the rep names a settlement price (a percent of the balance or a dollar
-  total to settle), or asks to change a price or term already proposed by either side.
-  offer: the same, but only when Agent last said is (opening).
-- accept when the rep agrees to a schedule or counter ("agreed", "that works").
-- reject when they refuse terms, are unhappy with an offer, or say a schedule
-  does not work.
-- question: the rep asks a question or requests information. Demands are not questions.
-- stall: the rep puts off their own answer (hold on, let me check, I'll ask my
-  supervisor, I'm not sure).
-- other: closings, goodbyes, impatience to end the call, insults, and fillers or
-  unfinished fragments with no content.
-  A rep who is ending or wants to end the call is other, never stall.
-Examples: "Six installments is our limit." → info; "We'd take fifty-two percent." →
-counter; "Give me a minute to check." → stall; "Okay, I'll let you go." → other.
-Set wants_to_end=true for thanks, thank you, goodbye, bye, that's all, or similar closings.
-asks_client_private_info=true when the rep asks about the client's own money, directly
-or indirectly: income, take-home pay, savings, bank or program account balance, assets,
-budget, what the client can afford, or how much the client pays, deposits or has
-drafted each month ("How much is the client saving toward this each week?").
-Not for questions about the debt itself: balance owed, account number, payment
-history, or the terms being proposed.
-Set asks_for_schedule=true when the rep asks for payment dates or amounts per payment.
-firm=true only when the rep says the number is final, their floor, or they cannot go lower.
-asks_question=true only for an off-script process question the terms do not answer:
-why the offer is not higher, next steps, who approves, or how long things take.
-Not for questions about terms, percentages, schedules, or the client's finances.
-question_topic: why_not_higher | next_steps | who_approves | timeline | other
-(null when asks_question is false).
-defines_field: when the rep announces a rule but does not give it yet ("before that,
-I need to define the payment tiers", "there are three tiers", "let me tell you the
-payment levels"), the field name from the list above; else null. Still extract any
-rule the line does give. expected_count: how many tiers or levels they say there
-will be ("three tiers" → 3), else null.
-Omit unknown fields; use [] / null when nothing extracted.
-"""
-
-
-def nlu_messages(
-    utterance: str,
-    last_agent_line: str,
-    pending_readback: str | None,
-    *,
-    ref: date | None = None,
-) -> list[dict[str, str]]:
-    """Build chat messages for one NLU turn (JSON-only reply).
-
-    ``ref`` is the call's reference date so a yearless "May 15" can resolve.
-    """
-    pending = pending_readback or "(none)"
-    today = f"Today's date: {ref.isoformat()}\n" if ref is not None else ""
-    user = (
-        today
-        + f"Agent last said: {last_agent_line or '(opening)'}\n"
-        f"Pending read-back field: {pending}\n"
-        f"Rep utterance: {utterance}\n"
-        "Reply with JSON only."
-    )
-    return [
-        {"role": "system", "content": _NLU_SYSTEM},
-        {"role": "user", "content": user},
-    ]
-
-
-# NLU v2 (``NLU_SCHEMA=acts``): typed acts plus a PUBLIC call context block.
+# NLU: typed acts plus a PUBLIC call context block.
 _NLU_ACTS_SYSTEM = """\
 You read one line a creditor's rep said on a debt-settlement call and list the acts in it.
 Reply with JSON only: {"acts":[...]}. Include every act the line contains, in order,

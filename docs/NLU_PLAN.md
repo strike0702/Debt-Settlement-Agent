@@ -121,3 +121,12 @@ held-out negotiation set.
 
 **Adopted (user decision D22, second amendment made after a result, recorded as such):**
 `NLU_SCHEMA=acts` is the default. The shared revision cue is fixed in 71b.
+
+## Result of 71b (2026-11-08)
+
+The policy reads the verified acts directly (`decide(belief, neg, RepTurn, afford,
+context=)`, dispatch order D23); the flat schema, prompt, converter and flags are gone.
+On Haiku, scripted calls 92/92 including `neg_rule_change` #2 (a rule change that names
+the old value is now a revision). The offline oracle eval decides exactly as before on
+every turn. Corpus numbers are within one or two lines of 71a-2's acts run, all from
+model variance ([report](eval/nlu_v2_20261108_policy/summary.md)).

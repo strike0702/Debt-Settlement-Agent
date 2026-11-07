@@ -1,37 +1,33 @@
-"""NLU: read one rep turn into verified terms and flags the policy can act on.
+"""NLU: read one rep turn into verified acts the policy can dispatch on.
 
 The model only reads; code decides what to trust. ``analyze`` (``llm_call``)
 first tries the code-only ``fast_paths`` (a plain yes / no to a read-back, a
 short pick between the two values of an open clarify, a bare answer to the
-field we just asked), then makes one JSON ``nlu`` call (retried once on a
-validation failure) and parses it (``parse``).
-``verify.post_verify`` then drops bad quotes and out-of-range values and sets
-``verified`` from ``app.agent.numbers.extract_tokens`` matches, and the
-``cues`` repairs fix the stance (accept phrase, dominant short ack, never
-accept on injection) and OR each side-channel flag with a regex cue. Those
-code-side rules apply whatever the model returned: wider private-info cues, a
-hostility floor for clear insults / threats, the off-script question flag only
-with a question cue and never on a private-info ask (that one is refused, not
-answered). ``amounts`` turns a verified dollar total into the ask once the
-balance is known, or asks "total or per payment?" (no question on a balance
-statement; always one for a bare demanded amount). ``NLU_MODE=oracle`` skips
-the LLM and uses a caller-supplied ``TurnAnalysis`` (sim / tests). Rejected
-terms are audited and kept on ``VerifiedAnalysis.dropped`` for the decision
-trace. Does not update belief: the orchestrator does that via
-``BeliefState.observe``.
+field we just asked), then makes one JSON ``nlu`` call that returns a typed
+act list (``app.domain.nlu_types.ActList``) given a PUBLIC ``context`` of the
+call. ``acts.verify_acts`` is the one verification path for model acts and
+the simulator's oracle acts: rules and price through ``verify.post_verify``
+(quote / number / range checks against ``app.agent.numbers``), every other act
+through the ``cues`` repairs (accept / reject phrases, never accept on
+injection, private-info and commitment cues, hostility floor, closing vs
+"that's all", firmness, questions, announcements), and number accounting.
+``amounts`` turns a verified dollar total into the ask once the balance is
+known, or asks "total or per payment?". Rejected terms are audited and kept
+on ``VerifiedAnalysis.dropped`` for the decision trace;
+``VerifiedAnalysis.to_rep_turn()`` is the policy's input. Does not update
+belief: the orchestrator does that via ``BeliefState.observe``.
 
 Modules: ``models`` (result types), ``quotes`` (quote / value primitives),
-``parse``, ``fast_paths``, ``cues``, ``verify``, ``amounts``, ``llm_call``;
-NLU v2 behind ``NLU_SCHEMA=acts``: ``context`` (PUBLIC call state for the
-prompt) and ``acts`` (parse, verify, convert typed acts, number accounting).
-This package re-exports every public name (``__all__``), so
+``parse`` (tier shape), ``fast_paths``, ``cues``, ``verify``, ``amounts``,
+``context`` (PUBLIC call state), ``acts`` (parse and verify acts),
+``llm_call``. This package re-exports every public name (``__all__``), so
 ``from app.agent.nlu import X`` works for all of them.
 """
 
 from app.agent.nlu.acts import (
-    convert_acts,
     parse_acts,
     parse_tier_item,
+    verify_acts,
 )
 from app.agent.nlu.amounts import (
     balance_statement_amount,
@@ -49,6 +45,7 @@ from app.agent.nlu.context import (
 from app.agent.nlu.cues import (
     HOSTILITY_FLOOR,
     hostility_floor_hit,
+    repair_acts,
     repair_asks_client_private_info,
     repair_asks_for_schedule,
     repair_defines_field,
@@ -69,14 +66,16 @@ from app.agent.nlu.fast_paths import (
 )
 from app.agent.nlu.llm_call import (
     analyze,
+    overlay_oracle_acts,
 )
 from app.agent.nlu.models import (
     DroppedTerm,
+    RawReading,
+    RawTerm,
     VerifiedAnalysis,
     VerifiedTerm,
 )
 from app.agent.nlu.parse import (
-    coerce_analysis_payload,
     coerce_tiers,
 )
 from app.agent.nlu.quotes import (
@@ -92,6 +91,8 @@ __all__ = [
     "CallContext",
     "DroppedTerm",
     "HOSTILITY_FLOOR",
+    "RawReading",
+    "RawTerm",
     "VerifiedAnalysis",
     "VerifiedTerm",
     "analyze",
@@ -99,14 +100,14 @@ __all__ = [
     "bare_amount_ask",
     "bp_to_ask_pct",
     "build_call_context",
-    "convert_acts",
-    "coerce_analysis_payload",
     "coerce_tiers",
     "hostility_floor_hit",
     "normalize_for_quote",
+    "overlay_oracle_acts",
     "parse_acts",
     "parse_tier_item",
     "post_verify",
+    "repair_acts",
     "quote_in_utterance",
     "repair_asks_client_private_info",
     "repair_asks_for_schedule",
@@ -128,6 +129,7 @@ __all__ = [
     "try_resolve_amount_clarify",
     "try_resolve_cents_clarify",
     "try_resolve_disputed_value",
+    "verify_acts",
 ]
 
 # Private helpers that eval tooling imports from this path; not public API.
@@ -136,7 +138,4 @@ from app.agent.nlu.cues import (  # noqa: E402, F401
     _ack_dominant,
     _has_unguarded_accept_phrase,
     _has_unguarded_reject_phrase,
-)
-from app.agent.nlu.parse import (  # noqa: E402, F401
-    _parse_analysis,
 )

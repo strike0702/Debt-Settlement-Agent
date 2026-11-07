@@ -20,9 +20,8 @@ from datetime import date
 import pytest
 
 import app.agent.orchestrator as orch_mod
-from app.agent.nlu import CallContext, build_call_context, convert_acts, parse_acts
+from app.agent.nlu import CallContext, build_call_context, parse_acts, verify_acts
 from app.agent.nlu.context import ListState
-from app.agent.nlu_types import TurnAnalysis
 from app.agent.numbers import extract_tokens
 from app.agent.policy import Intent, NegotiationState, Phase, decide
 from app.autoplay import new_autoplay_call, run_autoplay
@@ -30,6 +29,7 @@ from app.domain.negotiation import accept_line_bp
 from app.domain.nlu_types import ActList
 from app.domain.scenario import load_scenario, resolve_scenario_dir
 from app.llm.prompts import nlu_acts_messages
+from tests.acts_helpers import acts_turn, flag
 from tests.wsutil import offline_settings
 
 _REF = date(2026, 3, 1)
@@ -54,9 +54,9 @@ def _acts(*acts: dict) -> ActList:
 def test_invalid_reply_becomes_one_unclear_act_and_a_rephrase(reply: str) -> None:
     acts, error = parse_acts(reply)
     assert error is not None and [a.type for a in acts.acts] == ["unclear"]
-    out = convert_acts(acts, "Blah blah whatever.", ref=_REF)
-    assert out.unclear and out.acts == ["unclear"]
-    action = decide(_belief(), NegotiationState(), out.to_turn_analysis(), None, settings=_SETTINGS)
+    out = verify_acts(acts, "Blah blah whatever.", ref=_REF)
+    assert flag(out, "unclear") and out.model_acts == ["unclear"]
+    action = decide(_belief(), NegotiationState(), out.to_rep_turn(), None, settings=_SETTINGS)
     assert (action.intent, action.reason) == (Intent.CLARIFY, "unclear")
 
 
@@ -116,7 +116,7 @@ def test_tier_items_are_read_by_code_and_must_be_contiguous() -> None:
         {"type": "rule_item", "from_payment": 1, "to_payment": 3, "min_cents": 1, "quote": line}
     )
     ctx = CallContext(awaiting="list_item", collecting=ListState(expected=3))
-    out = convert_acts(acts, line, context=ctx, ref=_REF)
+    out = verify_acts(acts, line, context=ctx, ref=_REF)
     tiers = next(t for t in out.terms if t.field == "min_payment_tiers")
     assert tiers.value == [(1, 19000)] and not out.tiers_ambiguous
     assert out.unaccounted_numbers == []
@@ -125,7 +125,7 @@ def test_tier_items_are_read_by_code_and_must_be_contiguous() -> None:
         {"type": "rule_item", "quote": "Payments one to two at least $190"},
         {"type": "rule_item", "quote": "payments four to five at least $250"},
     )
-    out = convert_acts(acts, gap, context=ctx, ref=_REF)
+    out = verify_acts(acts, gap, context=ctx, ref=_REF)
     assert out.tiers_ambiguous and not any(t.field == "min_payment_tiers" for t in out.terms)
 
 
@@ -135,19 +135,19 @@ def test_firm_line_with_an_unread_number_never_reuses_the_old_ask() -> None:
         phase=Phase.NEGOTIATE, ask_bp=7500, counters_offered=[6000], final_counter_ask=7500
     )
     ctx = build_call_context(_belief(), neg)
-    out = convert_acts(_acts({"type": "stall", "quote": "I think"}), line, context=ctx, ref=_REF)
-    assert out.firm and out.unaccounted_numbers == ["seventy three"]
-    action = decide(_belief(), neg, out.to_turn_analysis(), None, settings=_SETTINGS)
+    out = verify_acts(_acts({"type": "stall", "quote": "I think"}), line, context=ctx, ref=_REF)
+    assert flag(out, "firm") and out.unaccounted_numbers == ["seventy three"]
+    action = decide(_belief(), neg, out.to_rep_turn(), None, settings=_SETTINGS)
     assert (action.intent, action.reason) == (Intent.CLARIFY, "unaccounted_number")
-    read = convert_acts(
+    read = verify_acts(
         _acts({"type": "price_ask", "pct": 73, "firmness": "final", "quote": line}),
         line,
         context=ctx,
         ref=_REF,
     )
-    assert read.settlement_ask_pct == 73 and read.firm and read.unaccounted_numbers == []
+    assert read.settlement_ask_pct == 73 and flag(read, "firm") and read.unaccounted_numbers == []
     # Flat schema / oracle analyses never carry the new fields: no policy change there.
-    assert TurnAnalysis(firm=True).unaccounted_numbers == []
+    assert acts_turn(firm=True).unaccounted_numbers == []
 
 
 def test_thats_all_while_collecting_tiers_closes_the_list_not_the_call() -> None:
@@ -159,11 +159,11 @@ def test_thats_all_while_collecting_tiers_closes_the_list_not_the_call() -> None
     collecting = CallContext(
         awaiting="list_item", collecting=ListState(have=[(1, 19000), (3, 25000)])
     )
-    out = convert_acts(acts, line, context=collecting, ref=_REF)
-    assert out.list_done and not out.wants_to_end
+    out = verify_acts(acts, line, context=collecting, ref=_REF)
+    assert flag(out, "list_done") and not flag(out, "wants_to_end")
     # Outside a list, a goodbye still ends the call.
-    out = convert_acts(acts, line, context=CallContext(), ref=_REF)
-    assert out.wants_to_end
+    out = verify_acts(acts, line, context=CallContext(), ref=_REF)
+    assert flag(out, "wants_to_end")
 
 
 def test_call_context_marks_operator_rules_until_the_rep_states_them() -> None:

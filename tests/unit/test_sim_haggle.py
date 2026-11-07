@@ -40,7 +40,7 @@ async def _asks(rep: CreditorPolicy, bps: list[int]) -> list[tuple[str, float | 
     out = []
     for bp in bps:
         r = (await rep.respond(_counter(bp))).analysis
-        out.append((r.stance, r.settlement_ask_pct, r.firm))
+        out.append(("reject" if r.rejects else "accept" if r.accepts else "", r.ask_pct, r.firm))
     return out
 
 
@@ -64,9 +64,9 @@ async def test_holder_holds_then_steps_then_is_firm_at_floor() -> None:
 
 async def test_haggler_accepts_only_at_or_above_floor() -> None:
     rep = CreditorPolicy(_scenario(Haggle("stepper", steps_bp=(200, 300))))
-    assert (await rep.respond(_counter(5900))).analysis.stance == "reject"
+    assert (await rep.respond(_counter(5900))).analysis.rejects
     reply = await rep.respond(_counter(6000))
-    assert reply.analysis.stance == "accept"
+    assert reply.analysis.accepts
     assert "60%" in reply.text
 
 
@@ -74,13 +74,13 @@ async def test_stallers_never_name_or_take_a_number() -> None:
     ask = CreditorPolicy(_scenario(Haggle("staller", stall_on="ask", steps_bp=())))
     for _ in range(3):
         r = await ask.respond(_ask())
-        assert r.analysis.stance == "other" and r.analysis.settlement_ask_pct is None
+        assert r.analysis.has("stall") and r.analysis.ask_pct is None
         assert not any(ch.isdigit() for ch in r.text)
     counter = CreditorPolicy(_scenario(Haggle("staller", stall_on="counter", steps_bp=())))
-    assert (await counter.respond(_ask())).analysis.settlement_ask_pct == 70.0
+    assert (await counter.respond(_ask())).analysis.ask_pct == 70.0
     for bp in (4000, 6500, 9000):  # even a counter above the floor is not taken
         r = await counter.respond(_counter(bp))
-        assert r.analysis.stance == "other" and r.analysis.settlement_ask_pct is None
+        assert r.analysis.has("stall") and r.analysis.ask_pct is None
 
 
 async def test_easy_rep_is_the_pre_46a_ladder() -> None:
@@ -155,7 +155,7 @@ async def test_readback_answers_are_plain() -> None:
             reason="max_payments",
         )
         reply = await rep.respond(rb)
-        assert reply.analysis.readback_response == "confirm"
+        assert reply.analysis.readback == "confirm"
         # Late fields are revealed first; the answer itself closes the line.
         answer = next(t for t in plain if reply.text.endswith(t))
         spoken.add(answer)

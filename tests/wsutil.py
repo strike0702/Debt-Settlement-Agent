@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Iterable
 from datetime import date, datetime
 from pathlib import Path
@@ -19,6 +20,7 @@ from app.config import Settings
 from app.llm.client import FakeLLM
 from app.main import create_app
 from app.store.audit import AuditLog
+from tests.acts_helpers import acts_reply
 
 
 def offline_settings(**overrides: Any) -> Settings:
@@ -101,7 +103,7 @@ def scripted_easy_deal(ws: Any) -> list[dict]:
     batch = turn(ws)
     frames += batch + ack_all(ws, batch)
     for msg in (_RULES, _ASK, _ACCEPT, _ACCEPT):
-        ws.send_json(msg)
+        ws.send_json(as_acts(msg))
         batch = turn(ws)
         frames += batch + ack_all(ws, batch)
         if any(m.get("type") == "agreement" for m in frames):
@@ -202,3 +204,17 @@ def leaked_private_values(
                     if tok.as_pair() in targets:
                         hits.append((where, tok.raw))
     return hits
+
+
+def as_acts(frame: dict[str, Any]) -> dict[str, Any]:
+    """``frame`` with a keyword-form ``oracle`` turned into the acts (``RepTurn``) JSON.
+
+    WS tests write the rep's ground truth as keywords (``stance``, ``terms``,
+    ``settlement_ask_pct``); the server reads acts. An oracle that already has
+    ``acts`` is sent as it is.
+    """
+    oracle = frame.get("oracle")
+    if not isinstance(oracle, dict) or "acts" in oracle:
+        return frame
+    reply = json.loads(acts_reply(str(frame.get("text", "")), oracle))
+    return {**frame, "oracle": reply}

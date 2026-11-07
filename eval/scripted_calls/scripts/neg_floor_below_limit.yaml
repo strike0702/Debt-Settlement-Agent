@@ -4,11 +4,11 @@ name: neg_floor_below_limit
 scenario: easy_deal
 turns:
   - rep: "Up to eight payments, at least $100 each, even payments."
-    oracle: {stance: info, terms: [{field: max_payments, value: 8, quote: "eight payments"}, {field: min_payment_cents, value: 10000, quote: "$100"}, {field: payment_structure, value: even, quote: "even payments"}]}
+    oracle: {acts: [{type: "state_rule", field: "max_payments", value: 8, quote: "eight payments"}, {type: "state_rule", field: "min_payment_cents", value: 10000, quote: "$100"}, {type: "state_rule", field: "payment_structure", value: "even", quote: "even payments"}]}
     expect: {intent: ASK_SETTLEMENT}
   - rep: "We're asking sixty percent."
-    oracle: {stance: counter, settlement_ask_pct: 60, ask_quote: "sixty percent"}
+    oracle: {acts: [{type: "price_ask", pct: 60, quote: "sixty percent", firmness: "counter"}]}
     expect: {intent: COUNTER, facts: {counter_pct: 4200}}
   - rep: "Look, forty percent is the floor. I can't go under that."
-    oracle: {stance: counter, settlement_ask_pct: 40, ask_quote: "forty percent", firm: true}
+    oracle: {acts: [{type: "price_ask", pct: 40, quote: "forty percent", firmness: "final"}]}
     expect: {intent: CONFIRM_SCHEDULE, facts: {settlement_pct: 4000}}

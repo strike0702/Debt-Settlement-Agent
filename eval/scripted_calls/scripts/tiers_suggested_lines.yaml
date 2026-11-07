@@ -4,21 +4,21 @@ name: tiers_suggested_lines
 scenario: tier_definer
 turns:
   - rep: "Up to eight payments, at least $190 each, and the schedule is flexible."
-    oracle: {stance: info, terms: [{field: max_payments, value: 8, quote: "eight payments"}, {field: min_payment_cents, value: 19000, quote: "$190"}, {field: payment_structure, value: flexible, quote: "schedule is flexible"}]}
+    oracle: {acts: [{type: "state_rule", field: "max_payments", value: 8, quote: "eight payments"}, {type: "state_rule", field: "min_payment_cents", value: 19000, quote: "$190"}, {type: "state_rule", field: "payment_structure", value: "flexible", quote: "schedule is flexible"}]}
     expect: {intent: ASK, reason: optional_sweep}
   - rep: "There are three payment tiers."
     expect: {intent: ASK, reason: min_payment_tiers, facts: {tier_count: 3}}
   - rep: "The first two payments must be at least one hundred ninety dollars."
-    oracle: {stance: info, terms: [{field: min_payment_tiers, value: [[1, 19000]], quote: "The first two payments must be at least one hundred ninety dollars"}]}
+    oracle: {acts: [{type: "state_rule", field: "min_payment_tiers", value: [[1, 19000]], quote: "The first two payments must be at least one hundred ninety dollars"}]}
     expect: {intent: ASK, reason: min_payment_tiers}
   - rep: "Payments three to five must be at least two hundred fifty dollars."
-    oracle: {stance: info, terms: [{field: min_payment_tiers, value: [[3, 25000]], quote: "Payments three to five must be at least two hundred fifty dollars"}]}
+    oracle: {acts: [{type: "state_rule", field: "min_payment_tiers", value: [[3, 25000]], quote: "Payments three to five must be at least two hundred fifty dollars"}]}
     expect: {intent: ASK, reason: min_payment_tiers}
   - rep: "Payments six to eight must be at least three hundred dollars."
-    oracle: {stance: info, terms: [{field: min_payment_tiers, value: [[6, 30000]], quote: "Payments six to eight must be at least three hundred dollars"}]}
+    oracle: {acts: [{type: "state_rule", field: "min_payment_tiers", value: [[6, 30000]], quote: "Payments six to eight must be at least three hundred dollars"}]}
     expect: {intent: READ_BACK, reason: min_payment_tiers}
   - rep: "That's all the tiers."
     expect: {intent: [READ_BACK, ASK_SETTLEMENT]}
   - rep: "Yes, that's right."
-    oracle: {stance: info, readback_response: confirm}
+    oracle: {acts: [{type: "readback_reply", response: "confirm", quote: "Yes, that's right."}]}
   - rep: "At most three payment levels."

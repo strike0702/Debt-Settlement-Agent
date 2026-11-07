@@ -81,7 +81,7 @@ from app.agent.nlu import (
     try_resolve_disputed_value,
 )
 from app.agent.nlu.context import build_call_context
-from app.agent.nlu_types import TurnAnalysis
+from app.agent.nlu.cues import negates_value
 from app.agent.numbers import extract_tokens
 from app.agent.policy import (
     AMOUNT_CLARIFY_KEY,
@@ -118,6 +118,7 @@ from app.config import Settings, get_settings
 from app.domain.belief import BeliefChange, TermStatus
 from app.domain.facts import Fact
 from app.domain.fields import FIELDS_BY_NAME
+from app.domain.nlu_types import RepTurn
 from app.llm.call_audit import llm_call_scope
 from app.llm.client import LLMUnavailable, QueueWait, queue_wait_scope
 from app.llm.prompts import NLG_CONTEXT_TURNS
@@ -437,7 +438,7 @@ class Orchestrator:
         text: str,
         timings: dict[str, float] | None = None,
         *,
-        oracle: TurnAnalysis | None = None,
+        oracle: RepTurn | None = None,
     ) -> Utterance:
         """NLU → belief → afford → decide → NLG.
 
@@ -521,7 +522,7 @@ class Orchestrator:
         text: str,
         timings: dict[str, float],
         *,
-        oracle: TurnAnalysis | None,
+        oracle: RepTurn | None,
     ) -> Utterance:
         """Caller must hold ``self._lock``. Releases it only during NLU await."""
         session = self.session
@@ -555,7 +556,7 @@ class Orchestrator:
                 gen = self._nlu_gen
             t_nlu = time.perf_counter()
             disputed = self._disputed_term()
-            # PUBLIC call state for the acts NLU prompt (ignored by the flat schema).
+            # PUBLIC call state for the NLU prompt; the policy reads it too (what we awaited).
             nlu_context = build_call_context(session.belief, session.neg)
 
             self._lock.release()
@@ -734,12 +735,7 @@ class Orchestrator:
                 )
                 # A closing, private ask, lock-in demand or hostility outranks the
                 # question: drop it and let ``decide`` handle the turn.
-                interrupts = (
-                    verified.wants_to_end
-                    or verified.asks_client_private_info
-                    or verified.demands_commitment
-                    or verified.hostility >= self.settings.hostility_threshold
-                )
+                interrupts = verified.interrupts
                 held_cents = int(pending_amount["cents"])
                 if resolved_amount is None and interrupts:
                     session.neg.pending_amount_clarify = None
@@ -814,7 +810,7 @@ class Orchestrator:
             accepted_term_alt = False
             if (
                 session.neg.pending_terms_alt is not None
-                and verified.stance == "accept"
+                and verified.accepts
             ):
                 pending = session.neg.pending_terms_alt
                 alt_field = str(pending["field"])
@@ -838,10 +834,11 @@ class Orchestrator:
             self._trace_ctx["afford"] = afford
 
             t_pol = time.perf_counter()
-            analysis = verified.to_turn_analysis()
+            # The policy reads the verified acts (``RepTurn``), never flags.
+            rep_turn = verified.to_rep_turn()
             # Loop guard: rep turns in a row that added nothing.
             if rep_turn_progress(
-                analysis, session.neg, belief_changes, accepted_term_alt=accepted_term_alt
+                rep_turn, session.neg, belief_changes, accepted_term_alt=accepted_term_alt
             ):
                 session.neg.no_progress_turns = 0
             else:
@@ -855,8 +852,9 @@ class Orchestrator:
                 action = decide(
                     session.belief,
                     session.neg,
-                    analysis,
+                    rep_turn,
                     afford,
+                    context=nlu_context,
                     settings=self.settings,
                     rescue_within_guardrail=rescue_ok,
                     term_alt=term_alt,
@@ -1037,7 +1035,7 @@ class Orchestrator:
         if queued:
             self._audit("orchestrator", "post_nlu_drain", {"queued": queued[:120]})
             drain_oracle = (
-                TurnAnalysis(stance="other")
+                RepTurn()
                 if self.settings.nlu_mode == "oracle"
                 else None
             )
@@ -1540,7 +1538,10 @@ class Orchestrator:
         # Tiers the rep is listing one by one wait in the policy's draft and reach
         # belief as one set, on the yes to its read-back.
         holding_tiers = (
-            session.neg.tier_draft is not None or verified.defines_field == "min_payment_tiers"
+            session.neg.tier_draft is not None
+            or any(
+                a.type == "announce_rules" and a.field == "min_payment_tiers" for a in verified.acts
+            )
         )
         for term in verified.terms:
             if holding_tiers and term.field == "min_payment_tiers":
@@ -1581,7 +1582,10 @@ class Orchestrator:
                 session.neg.phase in (Phase.CONFIRM, Phase.NEGOTIATE)
                 and (
                     verified.revises_terms
-                    or verified.stance in ("offer", "counter", "reject")
+                    or verified.rejects
+                    or verified.settlement_ask_pct is not None
+                    # "six payments max, not eight": the rep names the value it replaces.
+                    or negates_value(utterance, cur.value, ref=self._ref)
                 )
                 and term.verified
                 and not term.hedged

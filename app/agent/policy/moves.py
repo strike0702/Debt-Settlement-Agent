@@ -445,17 +445,24 @@ _TIER_ASKS: dict[str, str] = {
 
 
 def tier_draft_effect(
-    tiers: list[tuple[int, int]] | None, expected: int | None, *, readback: bool = False
+    tiers: list[tuple[int, int]] | None,
+    expected: int | None,
+    *,
+    readback: bool = False,
+    ends: dict[int, int] | None = None,
 ) -> Effect:
-    """``set_tier_draft``: the tiers merged so far (None ends the collection)."""
-    return Effect(
-        kind="set_tier_draft",
-        data={
-            "tiers": None if tiers is None else [list(t) for t in tiers],
-            "expected": expected,
-            "readback": readback,
-        },
-    )
+    """``set_tier_draft``: the tiers merged so far (None ends the collection).
+
+    ``ends`` maps a drafted tier's first payment to its last, when the rep said it.
+    """
+    data: dict[str, Any] = {
+        "tiers": None if tiers is None else [list(t) for t in tiers],
+        "expected": expected,
+        "readback": readback,
+    }
+    if ends:
+        data["ends"] = {str(k): v for k, v in sorted(ends.items())}
+    return Effect(kind="set_tier_draft", data=data)
 
 
 def tier_ask_action(

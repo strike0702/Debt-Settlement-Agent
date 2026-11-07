@@ -1,14 +1,15 @@
 """Call context for the acts NLU prompt: a PUBLIC summary of where the call stands.
 
 The orchestrator builds one ``CallContext`` per rep turn from the belief and
-negotiation state (``build_call_context``) and passes it to ``analyze``; with
-``NLU_SCHEMA=acts`` it goes into the prompt as a compact JSON block, so the
+negotiation state (``build_call_context``) and passes it to ``analyze``, which
+puts it into the prompt as a compact JSON block, so the
 model knows a bare "seventy three" answers a price and "that's all" closes a
 list. It carries only what both sides already said on the call: the phase,
 what the agent is waiting for, our last spoken offer, the rep's asks, the list
 being collected and the rules the rep stated. Never the client's maximum, the
 accept line, balances, fees, or any PRIVATE fact (a test scans every prompt on
-every scenario for the private blocklist). Not used by the flat schema.
+every scenario for the private blocklist). The policy reads the same context
+(what we were awaiting) to tell an act it can use from one it cannot.
 """
 
 from __future__ import annotations

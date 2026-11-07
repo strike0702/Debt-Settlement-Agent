@@ -1,24 +1,22 @@
-"""NLU v2 acts: parse the model's act list, verify it in code, convert it for the policy.
+"""NLU acts: parse the model's act list and verify it in code.
 
-With ``NLU_SCHEMA=acts`` the ``nlu`` call returns ``{"acts": [...]}``
-(``app.domain.nlu_types.ActList``). This module:
+The ``nlu`` call returns ``{"acts": [...]}`` (``app.domain.nlu_types.ActList``).
+This module:
 
-1. ``parse_acts``: strict validation; any failure becomes one ``unclear`` act
-   (audited by the caller), never a crash.
-2. ``convert_acts``: drops acts whose quote is not in the line, maps the rest
-   onto a raw ``TurnAnalysis`` and runs the same ``verify.post_verify`` as the
-   flat schema (quote / number / range checks, cue repairs). Tier
-   ``rule_item``s skip the model's numbers: code re-reads each from the rep's
-   words (``parse_tier_item``) and checks that ranges in one line are
-   contiguous. Context rules the flat schema could not express: ``list_done``
-   while a list is being collected is never ``wants_to_end``; an ``unclear``
-   act asks the rep to rephrase.
-3. Number accounting: every number in the line (``app.agent.numbers``) must sit
-   inside the quote of a verified act; the rest go to ``unaccounted_numbers``
-   and the policy will not act on an older value that turn.
+1. ``parse_acts``: strict validation; a reply that fails keeps every valid
+   act it holds, and only an empty salvage becomes one ``unclear`` act.
+2. ``verify_acts``: the one verification path for model acts and the
+   simulator's oracle acts. Rules and price go through ``verify.post_verify``
+   (quote / number / range checks); tier ``rule_item``s are re-read by code
+   from the rep's words (``parse_tier_item``) and must be contiguous within
+   the line; every other act goes through ``cues.repair_acts``. Context rule:
+   "that's all" while a list is being collected is never a goodbye.
+3. Number accounting (model acts): every number in the line must sit inside
+   the quote of a verified act; the rest go to ``unaccounted_numbers`` and the
+   policy will not act on an older value that turn.
 
-Does not call the model (``llm_call.analyze`` does) and does not update belief.
-Removed in 71b, when the policy reads acts directly.
+Does not call the model (``llm_call.analyze`` does), does not update belief and
+does not decide (``app.agent.policy`` reads ``VerifiedAnalysis.to_rep_turn()``).
 """
 
 from __future__ import annotations
@@ -40,23 +38,27 @@ from app.agent.nlu.context import CallContext
 from app.agent.nlu.cues import (
     _INJECTION_RE,
     _REVISION_RE,
+    repair_acts,
     repair_stance,
     repair_wants_to_end,
 )
 from app.agent.nlu.fast_paths import _field_for_ask_line
-from app.agent.nlu.models import DroppedTerm, VerifiedAnalysis, VerifiedTerm
+from app.agent.nlu.models import (
+    DroppedTerm,
+    RawReading,
+    RawTerm,
+    VerifiedAnalysis,
+    VerifiedTerm,
+)
 from app.agent.nlu.quotes import normalize_for_quote, quote_in_utterance
 from app.agent.nlu.verify import post_verify
-from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
 from app.agent.numbers import extract_tokens
 from app.domain.nlu_types import (
     Act,
     ActList,
     AnnounceRulesAct,
     AskPrivateInfoAct,
-    DemandCommitmentAct,
     EndCallAct,
-    HostilityAct,
     ListDoneAct,
     PriceAskAct,
     QuestionAct,
@@ -86,8 +88,6 @@ _PER_PAYMENT_RE = re.compile(
     r"|at least|no less than|a payment|(?:payments?|installments?) of)\b",
     re.IGNORECASE,
 )
-# ``hostility`` act level → the 0..1 score the policy compares with its threshold.
-_HOSTILITY_LEVEL = {"mild": 0.4, "strong": 1.0}
 
 
 _ACT_ADAPTER: TypeAdapter[Any] = TypeAdapter(Act)
@@ -225,24 +225,24 @@ def _contiguous(items: list[tuple[int, int | None, int]]) -> bool:
     return True
 
 
-# --- conversion -----------------------------------------------------------
+# --- verification ---------------------------------------------------------
 
 _YES_NO_RE = re.compile(
     r"^\W*(?:yes|yeah|yep|yup|no|nope|nah|sure|correct|right|okay|ok)\b", re.IGNORECASE
 )
 
-# Stance from the acts present, strongest first (one line may carry several).
+# Trace / corpus label from the acts present, strongest first.
 _STANCE_ORDER = ("accept", "price", "reject", "question", "info", "stall")
 
 
 def _stance(kinds: set[str], *, opening: bool, no_acts: bool, utterance: str) -> str:
-    """Flat-schema stance for the acts present (same label definitions as the flat prompt).
+    """Trace / corpus stance label for the acts present (the flat label definitions).
 
-    An injection attempt with no rule or price is ``other``. A price is an
-    ``offer`` only in reply to our opening; a rule given as a change request
-    ("make it eight instead") is a ``counter``; a hedged rule beats a stall; a
-    question mark with no stronger act is a ``question``; a line with no act at
-    all is a plain statement (``info``) unless it closes the call.
+    Reporting only (the policy reads acts). An injection attempt with no rule
+    or price is ``other``. A price is an ``offer`` only in reply to our
+    opening; a rule given as a change request ("make it eight instead") is a
+    ``counter``; a question mark with no stronger act is a ``question``; a line
+    with no act at all is a plain statement (``info``) unless it closes the call.
     """
     if _INJECTION_RE.search(utterance) and not kinds & {"info", "price"}:
         return "other"
@@ -260,8 +260,23 @@ def _stance(kinds: set[str], *, opening: bool, no_acts: bool, utterance: str) ->
     return "other"
 
 
-def convert_acts(
-    acts: ActList,
+def _kind(act: Any) -> str | None:
+    """The label kind an act contributes to ``_stance``."""
+    if isinstance(act, (TermAnswerAct, StateRuleAct, AnnounceRulesAct, RuleItemAct, ListDoneAct)):
+        return "info"
+    if isinstance(act, PriceAskAct):
+        return "price" if act.pct is not None or act.total_cents is not None else None
+    if isinstance(act, RespondToOfferAct):
+        return act.response
+    if isinstance(act, (QuestionAct, AskPrivateInfoAct)):
+        return "question"
+    if isinstance(act, StallAct):
+        return "stall"
+    return None
+
+
+def verify_acts(
+    acts: ActList | list[Any],
     utterance: str,
     *,
     context: CallContext | None = None,
@@ -270,11 +285,30 @@ def convert_acts(
     ref: date | None = None,
     audit: AuditLog | None = None,
     call_id: str | None = None,
+    oracle: bool = False,
+    amount_ambiguous: tuple[int, str | None] | None = None,
 ) -> VerifiedAnalysis:
-    """Verified acts → ``VerifiedAnalysis`` (the policy's input), with number accounting."""
+    """Model or oracle acts → ``VerifiedAnalysis``: checked content plus repaired acts.
+
+    1. Acts whose quote is not in the line are dropped (model acts only).
+    2. Rules and price go through ``verify.post_verify`` (quote / number /
+       range checks); tier ``rule_item``s are re-read from the rep's words
+       and must be contiguous within the line.
+    3. The other acts go through ``cues.repair_acts`` (accept / reject
+       phrases, private-info and commitment cues, hostility floor, closing vs
+       "that's all", schedule, firmness, questions, announcements).
+    4. Model acts only: the amount readers (a dollar total the model left
+       out, a bare amount beside an exact count, a total the code would
+       question) and number accounting (``unaccounted_numbers``). Oracle acts
+       are ground truth for what the rep meant, so nothing second-guesses
+       their reading; the checks in 2 and 3 apply to both, as they always did.
+       ``amount_ambiguous`` is the oracle's own "unclear amount" note
+       (``RepTurn.amount_ambiguous_*``), checked like any amount.
+    """
     ref_d = ref or date.today()
     ctx = context or CallContext()
     dropped: list[DroppedTerm] = []
+    act_list = list(acts.acts) if isinstance(acts, ActList) else list(acts)
 
     def _log(event: str, payload: dict[str, Any]) -> None:
         if audit is not None and call_id is not None:
@@ -282,11 +316,11 @@ def convert_acts(
 
     kept: list[Any] = []
     unclear = False
-    for act in acts.acts:
+    for act in act_list:
         if isinstance(act, UnclearAct):
             unclear = True
             continue
-        if not quote_in_utterance(act.quote, utterance):
+        if not oracle and not quote_in_utterance(act.quote, utterance):
             _log("nlu_act_rejected_quote", {"type": act.type, "quote": act.quote})
             dropped.append(
                 DroppedTerm(field=act.type, reason="act_rejected_quote", quote=act.quote)
@@ -294,30 +328,30 @@ def convert_acts(
             continue
         kept.append(act)
 
-    raw = TurnAnalysis()
+    raw = RawReading()
+    if amount_ambiguous is not None:
+        raw.amount_ambiguous_cents, raw.amount_ambiguous_quote = amount_ambiguous
     kinds: set[str] = set()
-    terms: list[ExtractedTerm] = []
+    intent: list[Any] = []
     items: list[tuple[RuleItemAct, tuple[int, int | None, int]]] = []
-    # Same rule as the flat prompt: a price is an "offer" only after our opening.
     opening = not last_agent_line
     readback_field = pending_readback or (
         ctx.awaiting_field if ctx.awaiting == "readback" else None
     )
     for act in kept:
+        kind = _kind(act)
+        if kind is not None:
+            kinds.add(kind)
         if isinstance(act, (TermAnswerAct, StateRuleAct)):
-            terms.append(
-                ExtractedTerm(field=act.field, value=act.value, quote=act.quote, hedged=act.hedged)
+            raw.terms.append(
+                RawTerm(field=act.field, value=act.value, quote=act.quote, hedged=act.hedged)
             )
-            kinds.add("info")
-        elif isinstance(act, AnnounceRulesAct):
-            if raw.defines_field is None:
-                raw.defines_field, raw.expected_count = act.field, act.count
-            kinds.add("info")
         elif isinstance(act, RuleItemAct):
-            kinds.add("info")
             parsed = parse_tier_item(act.quote, ref=ref_d) or parse_tier_item(
                 _sentence_with(act.quote, utterance), ref=ref_d
             )
+            if parsed is None and oracle and act.from_payment and act.min_cents:
+                parsed = (act.from_payment, act.to_payment, act.min_cents)
             if parsed is None:
                 _log("nlu_rejected_rule_item", {"quote": act.quote})
                 dropped.append(
@@ -325,43 +359,26 @@ def convert_acts(
                 )
                 continue
             items.append((act, parsed))
-        elif isinstance(act, ListDoneAct):
-            raw.list_done = True
-            kinds.add("info")
         elif isinstance(act, PriceAskAct):
-            kinds.add("price")
             if act.pct is not None:
                 raw.settlement_ask_pct, raw.ask_quote = act.pct, act.quote
-            else:
+            elif act.total_cents is not None:
                 raw.settlement_ask_total_cents, raw.ask_total_quote = act.total_cents, act.quote
-            raw.firm = raw.firm or act.firmness == "final"
-        elif isinstance(act, RespondToOfferAct):
-            kinds.add(act.response)
-        elif isinstance(act, ReadbackReplyAct):
-            raw.readback_response = act.response
-            if act.correction is not None and readback_field is not None:
-                terms.append(
-                    ExtractedTerm(field=readback_field, value=act.correction, quote=act.quote)  # type: ignore[arg-type]
+            if act.firmness == "final":
+                # Firmness rides on the verified price (``to_rep_turn``).
+                intent.append(PriceAskAct(type="price_ask", firmness="final", quote=act.quote))
+        else:
+            intent.append(act)
+            if (
+                isinstance(act, ReadbackReplyAct)
+                and act.correction is not None
+                and readback_field is not None
+            ):
+                raw.terms.append(
+                    RawTerm(field=readback_field, value=act.correction, quote=act.quote)
                 )
-        elif isinstance(act, QuestionAct):
-            raw.asks_question, raw.question_topic = True, act.topic
-            kinds.add("question")
-        elif isinstance(act, AskPrivateInfoAct):
-            raw.asks_client_private_info = True
-            kinds.add("question")
-        elif isinstance(act, DemandCommitmentAct):
-            raw.demands_commitment = True
-        elif isinstance(act, HostilityAct):
-            raw.hostility = max(raw.hostility, _HOSTILITY_LEVEL[act.level])
-        elif isinstance(act, EndCallAct):
-            raw.wants_to_end = True
-        elif isinstance(act, StallAct):
-            kinds.add("stall")
-    raw.terms = terms
     no_acts = not kept and not unclear
-    raw.stance = _stance(  # type: ignore[assignment]
-        kinds, opening=opening, no_acts=no_acts, utterance=utterance
-    )
+    label = _stance(kinds, opening=opening, no_acts=no_acts, utterance=utterance)
 
     verified = post_verify(
         raw,
@@ -373,64 +390,49 @@ def convert_acts(
         pending_readback=pending_readback,
     )
     update: dict[str, Any] = {"dropped": [*dropped, *verified.dropped]}
+    terms = list(verified.terms)
+    has_terms = bool(
+        terms
+        or verified.settlement_ask_pct is not None
+        or verified.cents_ambiguity_bare is not None
+        or verified.tiers_ambiguous
+        or verified.settlement_ask_total_cents is not None
+        or verified.amount_ambiguous_cents is not None
+        or items
+    )
+    repaired, levels = repair_acts(
+        intent,
+        utterance,
+        has_terms=has_terms,
+        given_fields={t.field for t in terms},
+        collecting=ctx.collecting is not None,
+        model_ended=any(isinstance(a, EndCallAct) for a in kept),
+    )
+    if levels is not None:
+        # A count of payment levels is the level limit itself, read by code.
+        terms.append(
+            VerifiedTerm(field="max_segments", value=levels, quote=utterance.strip(), verified=True)
+        )
+        _log("nlu_levels_from_count", {"value": levels, "utterance": utterance[:120]})
+    update["terms"] = terms
 
-    # A price act whose number did not verify is not a counter: re-derive the
-    # stance from the acts that remain (then the same code repair).
+    # Trace label: the same cue repair; a price that did not verify is no counter.
     asked = (
         verified.settlement_ask_pct is not None
         or verified.settlement_ask_total_cents is not None
         or verified.amount_ambiguous_cents is not None
     )
     if "price" in kinds and not asked:
-        stance = _stance(kinds - {"price"}, opening=opening, no_acts=False, utterance=utterance)
-        update["stance"] = repair_stance(
-            stance, utterance, has_terms=bool(verified.terms), opening=opening
-        )
+        label = _stance(kinds - {"price"}, opening=opening, no_acts=False, utterance=utterance)
+    update["stance"] = repair_stance(label, utterance, has_terms=has_terms, opening=opening)
+    verified = verified.model_copy(update=update)
+    update = {}
 
-    # 71a-2 amount readers (the flat prompt's ``amount_ambiguous`` / total rules,
-    # which the act set has no field for):
-    # - a dollar total the model left out next to a price act ("Fifty percent,
-    #   which comes to $900 total"): a money figure no act claimed, with a total
-    #   cue in its sentence, becomes the total ask;
-    # - a "minimum" read from a bare amount beside an exact payment count with
-    #   no per-payment cue ("Three payments, $350.") is ambiguous, unless we
-    #   asked for the minimum.
-    # A percent-only price act's quote may run over the total ("Fifty percent,
-    # which comes to $900 total"); its money is not claimed.
-    money_quotes = [
-        a.quote for a in kept if not (isinstance(a, PriceAskAct) and a.total_cents is None)
-    ]
-    found = _unclaimed_total(verified, utterance, money_quotes, ref=ref_d)
-    if found is not None:
-        verified = verified.model_copy(
-            update={"settlement_ask_total_cents": found[0], "ask_total_quote": found[1]}
+    if not oracle:
+        verified, update = _model_amount_readers(
+            verified, kept, utterance, ctx=ctx, last_agent_line=last_agent_line,
+            pending_readback=pending_readback, ref=ref_d,
         )
-    asked_min = _MIN in (
-        pending_readback,
-        ctx.awaiting_field,
-        _field_for_ask_line(last_agent_line),
-    )
-    bare_min = None if asked_min else _bare_min_with_count(verified, utterance)
-    if bare_min is not None and verified.amount_ambiguous_cents is None:
-        update |= {
-            "terms": [t for t in verified.terms if t is not bare_min],
-            "amount_ambiguous_cents": bare_min.value,
-            "amount_ambiguous_quote": bare_min.quote,
-        }
-
-    # A dollar "total" the code would question anyway (an exact payment count or
-    # "pay $X by <date>" beside it, or a bare demanded amount) is the flat
-    # schema's ``amount_ambiguous``: same clarify downstream, same corpus label.
-    total = verified.settlement_ask_total_cents
-    if total is not None and verified.amount_ambiguous_cents is None:
-        bare = bare_amount_ask(utterance)
-        if total_shape_trigger(total, utterance) or (bare is not None and bare[0] == total):
-            update |= {
-                "amount_ambiguous_cents": total,
-                "amount_ambiguous_quote": verified.ask_total_quote,
-                "settlement_ask_total_cents": None,
-                "ask_total_quote": None,
-            }
 
     # Tier items: code-read values, contiguous ranges, one tiers term for the line.
     claimed: list[str] = []
@@ -447,6 +449,7 @@ def convert_acts(
                     verified=False,
                 ),
             ]
+            update["tier_items"] = sorted(ranges)
             # The line gave the tiers themselves, not an ambiguous "first N".
             update["tiers_ambiguous"] = False
             claimed += [_sentence_with(a.quote, utterance) for a, _ in items]
@@ -455,32 +458,86 @@ def convert_acts(
             update["tiers_ambiguous"] = True
             _log("nlu_tiers_noncontiguous", {"items": ranges})
 
-    # Context rule: "that's all" while a list is open closes the list, not the call.
-    list_done = verified.list_done or raw.list_done
-    collecting = ctx.collecting is not None or verified.defines_field == _TIERS
-    ended = any(isinstance(a, EndCallAct) for a in kept)
-    said_list = any(isinstance(a, ListDoneAct) for a in kept)
-    if list_done and (collecting or (said_list and not ended)):
-        update["wants_to_end"] = False
-    update["list_done"] = list_done
-
     final = verified.model_copy(update=update)
-    claimed += _claimed_quotes(kept, final)
-    unaccounted = _unaccounted(utterance, claimed, ref=ref_d)
-    if unaccounted:
-        _log("nlu_unaccounted_numbers", {"numbers": unaccounted, "utterance": utterance[:120]})
+    unaccounted: list[str] = []
+    if not oracle:
+        claimed += _claimed_quotes(kept, final, repaired)
+        unaccounted = _unaccounted(utterance, claimed, ref=ref_d)
+        if unaccounted:
+            _log(
+                "nlu_unaccounted_numbers",
+                {"numbers": unaccounted, "utterance": utterance[:120]},
+            )
     nothing = not kept and not final.terms and final.settlement_ask_pct is None
     # A yes / no is never unintelligible: the code-side readers (read-back, the
     # sweep, list done) handle it, so it is not sent back as "say it again".
     if _YES_NO_RE.match(utterance):
         nothing = False
+    if unclear and nothing:
+        repaired = [*repaired, UnclearAct(type="unclear", quote=utterance.strip()[:300])]
     return final.model_copy(
         update={
+            "acts": repaired,
             "unaccounted_numbers": unaccounted,
-            "unclear": unclear and nothing,
-            "acts": [a.type for a in kept] + (["unclear"] if unclear else []),
+            "model_acts": [a.type for a in kept] + (["unclear"] if unclear else []),
         }
     )
+
+
+def _model_amount_readers(
+    verified: VerifiedAnalysis,
+    kept: list[Any],
+    utterance: str,
+    *,
+    ctx: CallContext,
+    last_agent_line: str,
+    pending_readback: str | None,
+    ref: date,
+) -> tuple[VerifiedAnalysis, dict[str, Any]]:
+    """71a-2 amount readers for model acts (the act set has no ambiguous-amount act).
+
+    - a dollar total the model left out next to a price act ("Fifty percent,
+      which comes to $900 total"): a money figure no act claimed, with a total
+      cue in its sentence, becomes the total ask (money in a percent-only price
+      quote does not count as claimed);
+    - a "minimum" read from a bare amount beside an exact payment count with no
+      per-payment cue ("Three payments, $350.") is ambiguous, unless we asked
+      for the minimum;
+    - a dollar "total" the code would question anyway (an exact payment count
+      or "pay $X by <date>" beside it, or a bare demanded amount) is ambiguous.
+    """
+    update: dict[str, Any] = {}
+    money_quotes = [
+        a.quote for a in kept if not (isinstance(a, PriceAskAct) and a.total_cents is None)
+    ]
+    found = _unclaimed_total(verified, utterance, money_quotes, ref=ref)
+    if found is not None:
+        verified = verified.model_copy(
+            update={"settlement_ask_total_cents": found[0], "ask_total_quote": found[1]}
+        )
+    asked_min = _MIN in (
+        pending_readback,
+        ctx.awaiting_field,
+        _field_for_ask_line(last_agent_line),
+    )
+    bare_min = None if asked_min else _bare_min_with_count(verified, utterance)
+    if bare_min is not None and verified.amount_ambiguous_cents is None:
+        update |= {
+            "terms": [t for t in verified.terms if t is not bare_min],
+            "amount_ambiguous_cents": bare_min.value,
+            "amount_ambiguous_quote": bare_min.quote,
+        }
+    total = verified.settlement_ask_total_cents
+    if total is not None and verified.amount_ambiguous_cents is None:
+        bare = bare_amount_ask(utterance)
+        if total_shape_trigger(total, utterance) or (bare is not None and bare[0] == total):
+            update |= {
+                "amount_ambiguous_cents": total,
+                "amount_ambiguous_quote": verified.ask_total_quote,
+                "settlement_ask_total_cents": None,
+                "ask_total_quote": None,
+            }
+    return verified, update
 
 
 def _unclaimed_total(
@@ -518,14 +575,16 @@ def _bare_min_with_count(v: VerifiedAnalysis, utterance: str) -> VerifiedTerm | 
     return None
 
 
-def _claimed_quotes(kept: list[Any], v: VerifiedAnalysis) -> list[str]:
+def _claimed_quotes(kept: list[Any], v: VerifiedAnalysis, repaired: list[Any]) -> list[str]:
     """Quotes whose numbers a verified act accounts for."""
     out = [t.quote for t in v.terms if t.field != _TIERS]
     out += [q for q in (v.ask_quote, v.ask_total_quote, v.amount_ambiguous_quote) if q]
+    announced = {a.field for a in repaired if isinstance(a, AnnounceRulesAct)}
+    replied = any(isinstance(a, ReadbackReplyAct) for a in repaired)
     for act in kept:
-        if isinstance(act, AnnounceRulesAct) and v.defines_field == act.field:
+        if isinstance(act, AnnounceRulesAct) and act.field in announced:
             out.append(act.quote)
-        elif isinstance(act, ReadbackReplyAct) and v.readback_response is not None:
+        elif isinstance(act, ReadbackReplyAct) and replied:
             out.append(act.quote)
         elif isinstance(act, (TermAnswerAct, StateRuleAct)) and (
             v.cents_ambiguity_field == act.field

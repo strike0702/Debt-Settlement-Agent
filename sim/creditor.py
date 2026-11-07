@@ -7,7 +7,10 @@ styles the line and emits ground-truth ``TurnAnalysis`` for oracle NLU.
 
 Reveal schedule (all 7 ``TrueRules`` fields, like a real rep):
 - opening: the core four (max payments, minimum, structure, first payment date)
-- ``ASK``: the asked field
+- ``ASK``: the asked field; the optional sweep ("any tiers or level limit?"):
+  tiers and payment levels not yet spoken
+- ``defines_tiers`` rep: at the sweep or settlement ask it announces its
+  tiers, then says how many, then gives one tier per guided ask
 - ``READ_BACK`` / schedule read-back (``CONFIRM_SCHEDULE``/``SPEAK_SCHEDULE``):
   any still-unspoken late field (payment levels, token payments, tiers)
 
@@ -146,6 +149,16 @@ _LINES: dict[str, tuple[str, ...]] = {
         "From the {o} payment on, the minimum is {m}.",
         "Starting with the {o} payment, the minimum is {m}.",
     ),
+    "sweep_none": ("No, nothing like that.", "No, none of those.", "No, nothing else."),
+    "define_tiers": (
+        "Before we get to a price, I need to define the payment tiers.",
+        "Hold on, before that I need to define the payment tiers.",
+    ),
+    "tier_count": ("We will have {n} payment tiers.", "There are {n} payment tiers."),
+    "tier_step": (
+        "The {k} tier is from the {o} payment on, at least {m}.",
+        "The {k} tier starts at the {o} payment, at least {m}.",
+    ),
     "readback_yes": ("Yes, that's right.", "Correct.", "That's right.", "Yes, that's correct."),
     "readback_yes_value": ("Correct, {v}.", "Yes, {v}, that's right."),
     "readback_no": ("No, that's not right.", "No, that's not correct.", "No, that's wrong."),
@@ -203,6 +216,10 @@ _LINES: dict[str, tuple[str, ...]] = {
 }
 
 
+_COUNT_WORD = {2: "two", 3: "three", 4: "four", 5: "five"}
+_NTH_WORD = {1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth"}
+
+
 def _spoken_tiers(action: Action, prefix: str) -> list[tuple[int, int]]:
     """Rebuild ``[(from_payment, min_cents)]`` from lettered tier facts on ``action``."""
     out: list[tuple[int, int]] = []
@@ -254,6 +271,9 @@ class CreditorPolicy:
     _spoken_max_payments: int | None = field(default=None, init=False)
     _spoken_min_payment: int | None = field(default=None, init=False)
     _done: bool = field(default=False, init=False)
+    # ``defines_tiers`` rep: 0 nothing said, 1 announced, 2 count said; tiers given.
+    _define_stage: int = field(default=0, init=False)
+    _tiers_given: int = field(default=0, init=False)
     # Accepted COUNTER_TERMS overrides (TrueRules field → value).
     _agreed: dict[str, Any] = field(default_factory=dict, init=False)
     # Haggle state: counters still to answer with a hold, next step, firm yet.
@@ -495,6 +515,63 @@ class CreditorPolicy:
             return text, [self._term(field, tiers, text.rstrip("."))]
         return "I am not sure about that term.", []
 
+    def _define_tiers_reply(self) -> CreditorReply | None:
+        """Next line of a rep who defines its tiers one by one (None once all are given).
+
+        Announces the tiers, then the count, then one tier per ask, as the
+        oracle NLU of a model that reads the rep correctly would.
+        """
+        tiers = list(self.agreed_rules.min_payment_tiers)
+        if not self.scenario.defines_tiers or self._tiers_given >= len(tiers):
+            return None
+        if self._define_stage == 0:
+            self._define_stage = 1
+            return CreditorReply(
+                text=self._say("define_tiers"),
+                analysis=TurnAnalysis(stance="info", defines_field="min_payment_tiers"),
+            )
+        if self._define_stage == 1:
+            self._define_stage = 2
+            n = len(tiers)
+            return CreditorReply(
+                text=self._say("tier_count", n=_COUNT_WORD.get(n, render_count(n))),
+                analysis=TurnAnalysis(
+                    stance="info", defines_field="min_payment_tiers", expected_count=n
+                ),
+            )
+        frm, cents = tiers[self._tiers_given]
+        self._tiers_given += 1
+        self._revealed.add("min_payment_tiers")
+        k = _NTH_WORD.get(self._tiers_given, "next")
+        text = self._say("tier_step", k=k, o=render_ordinal(frm), m=render_money(cents))
+        return CreditorReply(
+            text=text,
+            analysis=TurnAnalysis(
+                stance="info",
+                terms=[self._term("min_payment_tiers", [(frm, cents)], text.rstrip("."))],
+            ),
+        )
+
+    def _sweep_reply(self) -> CreditorReply:
+        """Answer "Any tiered minimums, or a limit on payment levels?"."""
+        defining = self._define_tiers_reply()
+        if defining is not None:
+            return defining
+        texts: list[str] = []
+        terms: list[ExtractedTerm] = []
+        for name in ("min_payment_tiers", "max_segments"):
+            if name not in self._revealed:
+                t, ts = self._reveal_field(name)
+                texts.append(t)
+                terms.extend(ts)
+        if not terms:
+            return CreditorReply(
+                text=self._say("sweep_none"), analysis=TurnAnalysis(stance="info")
+            )
+        return CreditorReply(
+            text=" ".join(texts), analysis=TurnAnalysis(terms=terms, stance="info")
+        )
+
     def _ask_settlement_reply(self) -> CreditorReply:
         if self.scenario.haggle.stall_on == "ask":
             # Staller: never names a number (the agent's repeat-question guard hands off).
@@ -706,6 +783,14 @@ class CreditorPolicy:
                 analysis=TurnAnalysis(terms=terms, stance="info"),
             )
 
+        if intent == Intent.ASK and action.reason == "optional_sweep":
+            return self._sweep_reply()
+
+        if intent == Intent.ASK and action.reason == "min_payment_tiers":
+            defining = self._define_tiers_reply()
+            if defining is not None:
+                return defining
+
         if intent == Intent.ASK:
             # Contradictory persona may flip an already-revealed max/min here.
             field = action.text_slots.get("field") or action.reason or "max_payments"
@@ -716,6 +801,9 @@ class CreditorPolicy:
             )
 
         if intent == Intent.ASK_SETTLEMENT:
+            defining = self._define_tiers_reply()
+            if defining is not None:
+                return defining
             # Opportunity for contradictory flip before stating ask.
             if (
                 self.persona.contradict_once
@@ -768,7 +856,7 @@ class CreditorPolicy:
         if intent == Intent.CLARIFY:
             # Settle on the real (agreed) value; no further flips.
             field = action.text_slots.get("field") or action.reason or "max_payments"
-            if field == "tiers_ambiguous":
+            if field in ("tiers_ambiguous", "tiers_inconsistent"):
                 field = "min_payment_tiers"
             self._contradicted = True
             text, terms = self._reveal_field(field)

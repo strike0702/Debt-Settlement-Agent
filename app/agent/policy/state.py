@@ -74,6 +74,18 @@ class NegotiationState:
     # rep turns in a row that added nothing (``rep_turn_progress``).
     question_counts: dict[str, int] = field(default_factory=dict)
     no_progress_turns: int = 0
+    # Key of the question our last spoken move asked (None: not a question), so
+    # the loop guard never repeats a question verbatim on consecutive turns.
+    last_question_key: str | None = None
+    # Tiers the rep is giving one by one: ``[(from_payment, min_cents)]`` merged
+    # so far (None: not collecting), how many they said there are, and whether
+    # the whole set was read back. Belief gets the set only on the rep's yes
+    # (the orchestrator commits it), so a half-given list never reaches the engine.
+    tier_draft: list[tuple[int, int]] | None = None
+    tier_expected: int | None = None
+    tier_readback: bool = False
+    # The one "any tiers or level limit?" question before the price was asked.
+    optional_sweep_done: bool = False
     # This turn only (set by the orchestrator before ``decide``): fields whose
     # value the model read but the code could not confirm. Their read-back is
     # the fallback for an unclear number, not a repeated question.

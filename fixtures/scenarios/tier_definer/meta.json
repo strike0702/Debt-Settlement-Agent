@@ -1,0 +1,5 @@
+{
+  "title": "Tier definer",
+  "description": "The rep sets three payment tiers one at a time before talking price.",
+  "expected": "deal"
+}

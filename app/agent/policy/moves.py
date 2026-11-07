@@ -4,9 +4,11 @@ Each builder picks the intent, reason code, PUBLIC facts (spoken numbers only
 ever come from these facts) and the state ``effects`` for one kind of move:
 asking a field, reading back or clarifying a value (incl. "dollars or
 cents?" and "total or per payment?"), confirming a schedule, proposing a
-non-price alternative, the opening, and handoffs (``HANDOFF_SPOKEN`` is the
-spoken line per handoff code; the code itself stays operator-only). Builders
-do not decide which move to make: that is ``cascade`` and ``ladder``.
+non-price alternative, the rep-defined tier asks / whole-set read-back /
+tier conflict clarify, the optional-rules sweep, the opening, and handoffs
+(``HANDOFF_SPOKEN`` is the spoken line per handoff code; the code itself stays
+operator-only). Builders do not decide which move to make: that is
+``cascade`` and ``ladder``.
 """
 
 from __future__ import annotations
@@ -417,6 +419,191 @@ def _ask_field(fname: str, effects: list[Effect]) -> Action:
         next_phase=Phase.DISCOVERY,
         reason=fname,
     )
+
+
+def yield_ask_action(fname: str, effects: list[Effect]) -> Action:
+    """ASK a field the rep just said they want to define ("Go ahead." + its question)."""
+    action = _ask_field(fname, effects)
+    # The field's own question stays in the line, so a bare answer still takes
+    # the fast path (``fast_paths._field_for_ask_line``).
+    slots = {**action.text_slots, "ask_text": f"Go ahead. {FIELDS_BY_NAME[fname].ask_text}"}
+    return action.model_copy(update={"text_slots": slots})
+
+
+_TIERS_FIELD = "min_payment_tiers"
+# Guided asks while the rep gives tiers one by one (figure-free).
+_TIER_QUESTION = "from which payment does it start, and what is its minimum?"
+_TIER_ASKS: dict[str, str] = {
+    "first": f"Go ahead. For each tier, {_TIER_QUESTION}",
+    "first_counted": f"Got it. Starting with the first tier: {_TIER_QUESTION}",
+    "next": f"Got it. And the next tier: {_TIER_QUESTION}",
+    "more": f"Got it. Is there another tier? If so, {_TIER_QUESTION}",
+    "again": f"Let us go through the tiers again. For each tier, {_TIER_QUESTION}",
+}
+
+
+def tier_draft_effect(
+    tiers: list[tuple[int, int]] | None, expected: int | None, *, readback: bool = False
+) -> Effect:
+    """``set_tier_draft``: the tiers merged so far (None ends the collection)."""
+    return Effect(
+        kind="set_tier_draft",
+        data={
+            "tiers": None if tiers is None else [list(t) for t in tiers],
+            "expected": expected,
+            "readback": readback,
+        },
+    )
+
+
+def tier_ask_action(
+    *,
+    draft: list[tuple[int, int]],
+    expected: int | None,
+    effects: list[Effect],
+    again: bool = False,
+) -> Action:
+    """ASK for the first / next tier; ``effects`` must carry the ``set_tier_draft``."""
+    if again:
+        stage = "again"
+    elif draft:
+        stage = "next" if expected is not None else "more"
+    else:
+        stage = "first_counted" if expected is not None else "first"
+    spec = FIELDS_BY_NAME["min_payment_tiers"]
+    return Action(
+        intent=Intent.ASK,
+        text_slots={"ask_text": _TIER_ASKS[stage], "field_label": spec.label},
+        effects=effects,
+        next_phase=Phase.DISCOVERY,
+        reason=_TIERS_FIELD,
+        template_override=_TIER_ASKS[stage],
+    )
+
+
+def tier_readback_action(
+    *,
+    tiers: list[tuple[int, int]],
+    max_payments: int | None,
+    effects: list[Effect],
+) -> Action:
+    """READ_BACK the whole tier set once, as payment ranges.
+
+    "So payments {a_from} to {a_to} at least {a_min}, {b_from} to {b_to} at
+    least {b_min}. Is that right?" A tier runs to the payment before the next
+    one starts; the last runs to ``max_payments`` (or "on" when unknown). Ids
+    use the ``readback_value_tier_<letter>`` prefix the sim reads back.
+    """
+    facts: dict[str, Fact] = {}
+    parts: list[str] = []
+    for i, (tag, (frm, cents)) in enumerate(zip(ascii_lowercase, tiers, strict=False)):
+        base = f"readback_value_tier_{tag}"
+        nxt = tiers[i + 1][0] - 1 if i + 1 < len(tiers) else max_payments
+        facts[f"{base}_from"] = Fact(
+            id=f"{base}_from", kind="count", value=frm, visibility="PUBLIC", source="creditor"
+        )
+        facts[f"{base}_min"] = Fact(
+            id=f"{base}_min", kind="money", value=cents, visibility="PUBLIC", source="creditor"
+        )
+        noun = "payments " if i == 0 else ""
+        if nxt is None or nxt < frm:
+            part = f"from payment {{{base}_from}} on"
+        elif nxt == frm:
+            part = f"payment {{{base}_from}}"
+        else:
+            facts[f"{base}_to"] = Fact(
+                id=f"{base}_to", kind="count", value=nxt, visibility="PUBLIC", source="creditor"
+            )
+            part = f"{noun}{{{base}_from}} to {{{base}_to}}"
+        parts.append(f"{part} at least {{{base}_min}}")
+    return Action(
+        intent=Intent.READ_BACK,
+        facts=facts,
+        text_slots={"field_label": FIELDS_BY_NAME["min_payment_tiers"].label},
+        required=set(facts),
+        effects=effects,
+        next_phase=Phase.DISCOVERY,
+        reason=_TIERS_FIELD,
+        template_override=f"So {', '.join(parts)}. Is that right?",
+    )
+
+
+def tier_conflict(
+    tiers: list[tuple[int, int]], *, max_payments: int | None, min_payment_cents: int | None
+) -> tuple[str, tuple[int, int]] | None:
+    """First tier that contradicts a known rule: ``("past_max" | "below_min", tier)``."""
+    for frm, cents in tiers:
+        if max_payments is not None and frm > max_payments:
+            return "past_max", (frm, cents)
+        if min_payment_cents is not None and cents < min_payment_cents:
+            return "below_min", (frm, cents)
+    return None
+
+
+def tier_conflict_clarify_action(
+    kind: str, tier: tuple[int, int], *, rule_value: int, effects: list[Effect]
+) -> Action:
+    """CLARIFY a tier against the max payments / minimum payment the rep gave.
+
+    Counts as a ``min_payment_tiers`` clarify, so the existing two-clarify
+    limit hands off (``tiers_unresolved``). The caller drops the tier from the
+    draft, so the rep's answer re-gives it.
+    """
+    frm, cents = tier
+    if kind == "past_max":
+        old = Fact(id="clarify_old", kind="count", value=rule_value, visibility="PUBLIC",
+                   source="creditor")  # fmt: skip
+        new = Fact(id="clarify_new", kind="count", value=frm, visibility="PUBLIC",
+                   source="creditor")  # fmt: skip
+        template = (
+            "Just to check: you said at most {clarify_old} payments, but that tier starts "
+            "at payment {clarify_new}. Which is right?"
+        )
+    else:
+        old = Fact(id="clarify_old", kind="money", value=rule_value, visibility="PUBLIC",
+                   source="creditor")  # fmt: skip
+        new = Fact(id="clarify_new", kind="money", value=cents, visibility="PUBLIC",
+                   source="creditor")  # fmt: skip
+        template = (
+            "Just to check: you said the minimum payment is {clarify_old}, but that tier's "
+            "minimum is {clarify_new}. Which minimum applies to those payments?"
+        )
+    return Action(
+        intent=Intent.CLARIFY,
+        facts={"clarify_old": old, "clarify_new": new},
+        text_slots={"field_label": FIELDS_BY_NAME["min_payment_tiers"].label},
+        required={"clarify_old", "clarify_new"},
+        effects=effects + [Effect(kind="note_clarify", data={"field": "min_payment_tiers"})],
+        next_phase=Phase.DISCOVERY,
+        reason="tiers_inconsistent",
+        template_override=template,
+    )
+
+
+SWEEP_ASK_TEXT = "Any tiered minimums, or a limit on payment levels?"
+
+
+def sweep_action(effects: list[Effect]) -> Action:
+    """The one optional-rules question before the price (flexible schedules only)."""
+    return Action(
+        intent=Intent.ASK,
+        text_slots={"ask_text": SWEEP_ASK_TEXT, "field_label": "payment tiers or levels"},
+        effects=effects + [Effect(kind="note_sweep", data={})],
+        next_phase=Phase.DISCOVERY,
+        reason="optional_sweep",
+    )
+
+
+def rephrased_ask(action: Action) -> Action:
+    """Same question, other words: never the same line twice when the rep said something else."""
+    if action.intent == Intent.ASK_SETTLEMENT:
+        template = (
+            "Sure, go ahead. When you are ready, what percentage of the balance "
+            "would you settle for?"
+        )
+    else:
+        template = "Sure, go ahead. When you are ready, I still need the {field_label}."
+    return action.model_copy(update={"template_override": template})
 
 
 # What the agent says when it hands off (no digits). The reason code goes to

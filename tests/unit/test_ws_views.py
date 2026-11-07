@@ -11,7 +11,7 @@ import pytest
 from app import autoplay as autoplay_mod
 from app.agent.session import CallSession
 from app.voice import ws as ws_mod
-from tests.wsutil import leaked_private_values, make_client, scripted_easy_deal
+from tests.wsutil import as_acts, leaked_private_values, make_client, scripted_easy_deal
 
 _SESSIONS: list[CallSession] = []
 
@@ -158,7 +158,7 @@ def test_operator_trace_says_why_the_engine_did_not_run(tmp_path: Path) -> None:
         frames = turn(ws)
         frames += ack_all(ws, frames)
         for msg in (_STALL, _RULES):
-            ws.send_json(msg)
+            ws.send_json(as_acts(msg))
             batch = turn(ws)
             frames += batch + ack_all(ws, batch)
     traces = {f["turn"]: f for f in frames if f["type"] == "turn_trace"}

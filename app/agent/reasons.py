@@ -73,6 +73,14 @@ REASON_TEXT: dict[str, str] = {
         "instead of reusing their earlier ask."
     ),
     "unclear": "We could not tell what the rep meant, so we ask them to say it another way.",
+    "act_unusable": (
+        "The rep's reply did not fit what we had asked (for example \"that's all\" with no "
+        "list open), so we ask what they meant instead of ignoring it."
+    ),
+    "tiers_gap": (
+        "The new payment tier leaves a gap or overlaps a tier the rep gave earlier, so we "
+        "ask where each minimum starts."
+    ),
     "tiers_inconsistent": (
         "One of the payment tiers the rep gave does not fit the maximum payments or the "
         "minimum payment they gave earlier, so we ask which is right."
@@ -273,6 +281,8 @@ REASON_SHORT: dict[str, str] = {
     "tiers_inconsistent": "A tier does not fit their other rules.",
     "unaccounted_number": "Their new number was unclear, so we ask for it.",
     "unclear": "We did not understand, so we ask again.",
+    "act_unusable": "Their reply did not fit our question, so we ask.",
+    "tiers_gap": "A new tier does not join up with the earlier ones.",
     "optional_sweep": "Flexible schedule, so we ask about tiers and level limits.",
     "cents_ambiguity": "Dollars or cents? We ask before using it.",
     "amount_meaning": "Total or per payment? We ask before using it.",

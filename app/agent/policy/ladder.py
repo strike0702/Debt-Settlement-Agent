@@ -148,7 +148,7 @@ def _negotiate(t: _Turn, ask_bp: int, afford: Affordability) -> Action:
     counter → firm → ``max_counters`` cap → rep moved (concede half) → hold →
     two equal steps to min(ask, line) → accept at or below the line, else hand off.
     """
-    neg, cfg, a = t.neg, t.cfg, t.analysis
+    neg, cfg, a = t.neg, t.cfg, t.turn
     assert afford.max_bp is not None
     line = accept_line_bp(afford.max_bp, cfg.accept_line_pct_of_max_bp)
     legal = sorted(bp for bp in afford.feasible_bps if bp <= line)

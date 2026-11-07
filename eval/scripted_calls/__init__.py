@@ -7,9 +7,10 @@ list of rep turns; each turn may carry an ``oracle`` analysis (for
 percent facts in bp and money in cents). The runner (``run_script``) drives a
 real ``Orchestrator`` (auto-ack, template NLG) with the chosen NLU:
 
-- ``oracle``: the turn's ``oracle`` TurnAnalysis (default ``{"stance": "info"}``)
-  through ``post_verify`` and the code cues, no model;
-- ``flat`` / ``acts``: the live ``nlu`` role on that schema (Phase 71a A/B).
+- ``oracle``: the turn's ``oracle`` acts (a ``RepTurn``, default ``{}`` = no
+  act) through ``verify_acts`` and the code cues, no model;
+- ``acts``: the live ``nlu`` role (the flat schema was removed in 71b; its
+  frozen records stay under ``docs/eval``).
 
 A script with ``requires: phase69`` is skipped (with a note) until Phase 69's
 operator rules are on main. A script-level ``known_rules`` map seeds

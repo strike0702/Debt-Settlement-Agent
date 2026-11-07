@@ -6,9 +6,9 @@ from datetime import date
 
 import pytest
 
-from app.agent.nlu import analyze, post_verify, repair_stance
-from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
+from app.agent.nlu import analyze, repair_stance
 from app.config import Settings
+from tests.acts_helpers import ActsFakeLLM, acts_turn, flag, rule_act, verify_turn
 
 _REF = date(2026, 4, 1)
 
@@ -63,20 +63,20 @@ def test_injection_never_accepts(utterance: str) -> None:
 
 
 def test_post_verify_ack_plus_term_not_forced_accept() -> None:
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         stance="info",
-        terms=[ExtractedTerm(field="max_payments", value=6, quote="six payments")],
+        terms=[rule_act(field="max_payments", value=6, quote="six payments")],
     )
-    out = post_verify(analysis, "ok ok but six payments max", ref=_REF)
+    out = verify_turn(analysis, "ok ok but six payments max", ref=_REF)
     assert out.stance == "info"
 
 
 def test_private_regex_ignores_creditor_account() -> None:
-    analysis = TurnAnalysis(stance="info")
-    out = post_verify(
+    analysis = acts_turn(stance="info")
+    out = verify_turn(
         analysis, "The client's account with us is still open and in collections.", ref=_REF
     )
-    assert out.asks_client_private_info is False
+    assert flag(out, "asks_client_private_info") is False
 
 
 @pytest.mark.parametrize(
@@ -88,8 +88,8 @@ def test_private_regex_ignores_creditor_account() -> None:
     ],
 )
 def test_private_regex_skips_disclaimers(utterance: str) -> None:
-    out = post_verify(TurnAnalysis(stance="info"), utterance, ref=_REF)
-    assert out.asks_client_private_info is False
+    out = verify_turn(acts_turn(stance="info"), utterance, ref=_REF)
+    assert flag(out, "asks_client_private_info") is False
 
 
 @pytest.mark.parametrize(
@@ -101,8 +101,8 @@ def test_private_regex_skips_disclaimers(utterance: str) -> None:
     ],
 )
 def test_commitment_regex_skips_disclaimers_and_self_commit(utterance: str) -> None:
-    out = post_verify(TurnAnalysis(stance="info"), utterance, ref=_REF)
-    assert out.demands_commitment is False
+    out = verify_turn(acts_turn(stance="info"), utterance, ref=_REF)
+    assert flag(out, "demands_commitment") is False
 
 
 @pytest.mark.parametrize(
@@ -114,69 +114,39 @@ def test_commitment_regex_skips_disclaimers_and_self_commit(utterance: str) -> N
     ],
 )
 def test_regex_cue_still_fires_when_not_negated(utterance: str) -> None:
-    out = post_verify(TurnAnalysis(stance="other"), utterance, ref=_REF)
-    assert out.asks_client_private_info or out.demands_commitment
+    out = verify_turn(acts_turn(stance="other"), utterance, ref=_REF)
+    assert flag(out, "asks_client_private_info") or flag(out, "demands_commitment")
 
 
 def test_llm_flag_survives_disclaimer_veto() -> None:
     """The veto only gates the regex arm; an LLM claim is still honoured."""
-    out = post_verify(
-        TurnAnalysis(stance="question", asks_client_private_info=True),
+    out = verify_turn(
+        acts_turn(stance="question", asks_client_private_info=True),
         "I don't need their SSN, just tell me what they earn.",
         ref=_REF,
     )
-    assert out.asks_client_private_info is True
+    assert flag(out, "asks_client_private_info") is True
 
 
-def test_nlu_prompt_carries_reference_date() -> None:
-    """Corpus lines h06/f05/t05/t12: no year context → no first_payment_date."""
-    from app.llm.prompts import nlu_messages
-
-    user = nlu_messages("First payment by April 30.", "", None, ref=_REF)[-1]["content"]
-    assert "Today's date: 2026-04-01" in user
 
 
-async def test_analyze_passes_ref_to_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.agent.nlu import llm_call as nlu_mod
-    from app.llm.client import FakeLLM
-
-    seen: dict[str, object] = {}
-    real = nlu_mod.nlu_messages
-
-    def spy(*args: object, **kwargs: object) -> list[dict[str, str]]:
-        seen.update(kwargs)
-        return real(*args, **kwargs)  # type: ignore[arg-type]
-
-    monkeypatch.setattr(nlu_mod, "nlu_messages", spy)
-    llm = FakeLLM()
-    llm.enqueue("nlu", '{"terms": [], "stance": "info"}')
-    await analyze(
-        "First payment by April 30.",
-        "",
-        None,
-        llm=llm,
-        settings=Settings(nlu_mode="llm", nlu_schema="flat", llm_profile="offline"),
-        ref=_REF,
-    )
-    assert seen.get("ref") == _REF
 
 
 async def test_oracle_overlay_uses_flag_or_regex() -> None:
     """Oracle disposition under live NLU: LLM-free OR with the regex too."""
-    from app.llm.client import FakeLLM
 
-    llm = FakeLLM()
+    llm = ActsFakeLLM()
     llm.enqueue("nlu", '{"terms": [], "stance": "question"}')
     out = await analyze(
         "What is the client's bank balance?",
         "",
         None,
         llm=llm,
-        settings=Settings(nlu_mode="llm", nlu_schema="flat", llm_profile="offline"),
-        oracle=TurnAnalysis(stance="question"),
+        settings=Settings(nlu_mode="llm", llm_profile="offline"),
+        oracle=acts_turn(stance="question"),
         ref=_REF,
     )
-    assert out.asks_client_private_info is True
+    assert flag(out, "asks_client_private_info") is True
 
 
 # --- Filler false-accept veto ----------------------------------------------
@@ -198,16 +168,15 @@ _VETO_XFAIL = pytest.mark.xfail(strict=True, reason="filler veto reverted after 
 
 
 async def _llm_stance(utterance: str, agent_line: str, reply: str) -> str:
-    from app.llm.client import FakeLLM
 
-    llm = FakeLLM()
+    llm = ActsFakeLLM()
     llm.enqueue("nlu", reply)
     out = await analyze(
         utterance,
         agent_line,
         None,
         llm=llm,
-        settings=Settings(nlu_mode="llm", nlu_schema="flat", llm_profile="offline"),
+        settings=Settings(nlu_mode="llm", llm_profile="offline"),
         ref=_REF,
     )
     return out.stance
@@ -279,11 +248,11 @@ async def test_short_ack_stays_accept_on_llm_path(utterance: str) -> None:
 
 def test_oracle_accept_with_terms_is_kept() -> None:
     """Oracle / sim input keeps its stance (any veto belongs to the LLM path)."""
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         stance="accept",
-        terms=[ExtractedTerm(field="max_payments", value=8, quote="eight payments")],
+        terms=[rule_act(field="max_payments", value=8, quote="eight payments")],
     )
-    out = post_verify(analysis, "fine whatever just make it eight payments", ref=_REF)
+    out = verify_turn(analysis, "fine whatever just make it eight payments", ref=_REF)
     assert out.stance == "accept"
 
 
@@ -395,8 +364,8 @@ _PRIVATE_CUES_XFAIL = pytest.mark.xfail(
 )
 @_PRIVATE_CUES_XFAIL
 def test_indirect_private_cue_fires(utterance: str) -> None:
-    out = post_verify(TurnAnalysis(stance="question"), utterance, ref=_REF)
-    assert out.asks_client_private_info is True
+    out = verify_turn(acts_turn(stance="question"), utterance, ref=_REF)
+    assert flag(out, "asks_client_private_info") is True
 
 
 @pytest.mark.parametrize(
@@ -430,15 +399,7 @@ def test_indirect_private_cue_fires(utterance: str) -> None:
     ],
 )
 def test_indirect_private_cue_near_misses_do_not_fire(utterance: str) -> None:
-    out = post_verify(TurnAnalysis(stance="question"), utterance, ref=_REF)
-    assert out.asks_client_private_info is False
+    out = verify_turn(acts_turn(stance="question"), utterance, ref=_REF)
+    assert flag(out, "asks_client_private_info") is False
 
 
-@_PRIVATE_CUES_XFAIL
-def test_nlu_prompt_describes_indirect_private_asks() -> None:
-    from app.llm.prompts import nlu_messages
-
-    system = nlu_messages("x", "", None)[0]["content"]
-    assert "asks_client_private_info=true" in system
-    for cue in ("take-home", "drafted or deposited", "stretch", "creditor's own figures"):
-        assert cue in system

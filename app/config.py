@@ -118,11 +118,6 @@ class Settings(BaseSettings):
     # NLG context). Independent of ``nlg_h3``; when both are on, H3 renders.
     nlg_ack: bool = True
     nlu_mode: str = "llm"
-    # NLU output schema (Phase 71a; default since 2026-11-07, DECISIONS D22):
-    # ``acts`` = typed acts + call context (``app.agent.nlu.acts``), converted
-    # to the same ``VerifiedAnalysis`` so the policy is unchanged; ``flat`` = the
-    # older single object of flags, kept for comparison runs.
-    nlu_schema: Literal["flat", "acts"] = "acts"
     # Per-request LLM timeouts (s). A timeout fails over to the next route target.
     llm_timeout_nlu_s: float = 6.0
     llm_timeout_nlg_s: float = 4.0

@@ -4,29 +4,61 @@ scenario: counter_ladder
 turns:
 - rep: We allow up to eight payments, at least $100 each, with even payments.
   oracle:
-    stance: info
-    terms:
-    - {field: max_payments, value: 8, quote: eight payments}
-    - {field: min_payment_cents, value: 10000, quote: $100}
-    - {field: payment_structure, value: even, quote: even payments}
-  expect: {intent: ASK_SETTLEMENT}
+    acts:
+    - type: state_rule
+      field: max_payments
+      value: 8
+      quote: eight payments
+    - type: state_rule
+      field: min_payment_cents
+      value: 10000
+      quote: $100
+    - type: state_rule
+      field: payment_structure
+      value: even
+      quote: even payments
+  expect:
+    intent: ASK_SETTLEMENT
 - rep: We'd settle for ninety five percent of the balance.
-  oracle: {stance: offer, settlement_ask_pct: 95, ask_quote: ninety five percent}
+  oracle:
+    acts:
+    - type: price_ask
+      pct: 95
+      quote: ninety five percent
+      firmness: counter
   expect:
     intent: COUNTER
-    facts: {counter_pct: 5200}
+    facts:
+      counter_pct: 5200
 - rep: We could come down to forty percent.
-  oracle: {stance: counter, settlement_ask_pct: 40, ask_quote: forty percent}
+  oracle:
+    acts:
+    - type: price_ask
+      pct: 40
+      quote: forty percent
+      firmness: counter
   expect:
     intent: CONFIRM_SCHEDULE
     reason: ask_within_offer
-    facts: {settlement_pct: 4000}
+    facts:
+      settlement_pct: 4000
 - rep: Okay, that works for us.
-  oracle: {stance: accept}
+  oracle:
+    acts:
+    - type: respond_to_offer
+      response: accept
+      quote: Okay, that works for us.
   expect:
     intent: PROPOSE_WRAP
     reason: confirmed
-    facts: {settlement_pct: 4000}
+    facts:
+      settlement_pct: 4000
 - rep: Yes, that schedule works.
-  oracle: {stance: accept}
-  expect: {intent: CLOSE, reason: post_wrap}
+  oracle:
+    acts:
+    - type: respond_to_offer
+      response: accept
+      quote: Yes, that schedule works.
+  expect:
+    intent: CLOSE
+    reason: post_wrap

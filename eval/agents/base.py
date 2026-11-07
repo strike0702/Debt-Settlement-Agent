@@ -41,7 +41,6 @@ from app.adapter.engine_adapter import (
 from app.adapter.validator import validate
 from app.agent.nlg import render_action
 from app.agent.nlu import VerifiedAnalysis, analyze
-from app.agent.nlu_types import TurnAnalysis
 from app.agent.numbers import extract_tokens
 from app.agent.orchestrator import Utterance
 from app.agent.policy import (
@@ -57,6 +56,7 @@ from app.domain.actions import Action, Intent, Phase
 from app.domain.belief import BeliefChange, TermStatus
 from app.domain.facts import Fact
 from app.domain.fields import FIELD_REGISTRY, FIELDS_BY_NAME
+from app.domain.nlu_types import RepTurn
 from app.domain.units import parse_money, parse_pct, render_date, render_money, render_pct
 from app.llm.call_audit import llm_call_scope
 from app.llm.client import strip_json_fences
@@ -342,7 +342,7 @@ class LLMArmAgent:
         text: str,
         timings: dict[str, float] | None = None,
         *,
-        oracle: TurnAnalysis | None = None,
+        oracle: RepTurn | None = None,
     ) -> Utterance:
         """Shared NLU → belief → engine context, then ``decide`` → Action."""
         with llm_call_scope(self.session.call_id):

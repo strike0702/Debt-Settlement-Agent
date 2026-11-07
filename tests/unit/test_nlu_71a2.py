@@ -15,11 +15,11 @@ from datetime import date
 
 import pytest
 
-from app.agent.nlu import convert_acts, parse_acts, post_verify
+from app.agent.nlu import parse_acts, verify_acts
 from app.agent.nlu.cues import repair_asks_client_private_info
-from app.agent.nlu_types import TurnAnalysis
 from app.agent.numbers import extract_tokens, words_to_number
 from app.domain.nlu_types import ActList
+from tests.acts_helpers import acts_turn, verify_turn
 
 _REF = date(2026, 4, 1)
 _ASK = "What settlement terms can you accept on this account?"
@@ -31,14 +31,14 @@ def _acts(*acts: dict) -> ActList:
 
 def test_a_price_is_an_offer_only_when_the_rep_speaks_first() -> None:
     line = "We'd settle for $900 total."
-    flat = TurnAnalysis(
+    flat = acts_turn(
         stance="offer", settlement_ask_total_cents=90000, ask_total_quote="$900 total"
     )
-    assert post_verify(flat, line, ref=_REF, last_agent_line=_ASK).stance == "counter"
-    assert post_verify(flat, line, ref=_REF, last_agent_line="").stance == "offer"
+    assert verify_turn(flat, line, ref=_REF, last_agent_line=_ASK).stance == "counter"
+    assert verify_turn(flat, line, ref=_REF, last_agent_line="").stance == "offer"
     price = _acts({"type": "price_ask", "total_cents": 90000, "quote": "$900 total"})
-    assert convert_acts(price, line, last_agent_line=_ASK, ref=_REF).stance == "counter"
-    assert convert_acts(price, line, last_agent_line="", ref=_REF).stance == "offer"
+    assert verify_acts(price, line, last_agent_line=_ASK, ref=_REF).stance == "counter"
+    assert verify_acts(price, line, last_agent_line="", ref=_REF).stance == "offer"
 
 
 def test_bare_amount_beside_an_exact_count_is_ambiguous_not_a_minimum() -> None:
@@ -47,33 +47,33 @@ def test_bare_amount_beside_an_exact_count_is_ambiguous_not_a_minimum() -> None:
         {"type": "state_rule", "field": "max_payments", "value": 3, "quote": "Three payments"},
         {"type": "state_rule", "field": "min_payment_cents", "value": 35000, "quote": "$350"},
     )
-    out = convert_acts(acts, line, last_agent_line=_ASK, ref=_REF)
+    out = verify_acts(acts, line, last_agent_line=_ASK, ref=_REF)
     assert [t.field for t in out.terms] == ["max_payments"]
     assert out.amount_ambiguous_cents == 35000 and out.unaccounted_numbers == []
     # A per-payment cue keeps it a minimum.
     each = _acts(
         {"type": "state_rule", "field": "min_payment_cents", "value": 35000, "quote": "$350"}
     )
-    kept = convert_acts(each, "Three payments, $350 each.", last_agent_line=_ASK, ref=_REF)
+    kept = verify_acts(each, "Three payments, $350 each.", last_agent_line=_ASK, ref=_REF)
     assert [t.field for t in kept.terms] == ["min_payment_cents"]
 
 
 def test_total_next_to_a_percent_is_read_when_the_model_drops_it() -> None:
     line = "Fifty percent, which comes to $900 total."
     acts = _acts({"type": "price_ask", "pct": 50, "quote": "Fifty percent"})
-    out = convert_acts(acts, line, last_agent_line=_ASK, ref=_REF)
+    out = verify_acts(acts, line, last_agent_line=_ASK, ref=_REF)
     assert (out.settlement_ask_pct, out.settlement_ask_total_cents) == (50.0, 90000)
     assert out.unaccounted_numbers == []
     long_quote = _acts({"type": "price_ask", "pct": 50, "quote": line.rstrip(".")})
-    out = convert_acts(long_quote, line, last_agent_line=_ASK, ref=_REF)
+    out = verify_acts(long_quote, line, last_agent_line=_ASK, ref=_REF)
     assert out.settlement_ask_total_cents == 90000
-    balance = convert_acts(
+    balance = verify_acts(
         acts, "Fifty percent of the $4,000 balance in total.", last_agent_line=_ASK, ref=_REF
     )
     assert balance.settlement_ask_total_cents is None
     tiers = _acts({"type": "rule_item", "quote": "the first two payments at least $190"})
     tier_line = "In total, the first two payments at least $190."
-    tier_out = convert_acts(tiers, tier_line, last_agent_line=_ASK, ref=_REF)
+    tier_out = verify_acts(tiers, tier_line, last_agent_line=_ASK, ref=_REF)
     assert tier_out.terms and tier_out.settlement_ask_total_cents is None
 
 

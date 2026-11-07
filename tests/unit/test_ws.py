@@ -11,6 +11,7 @@ from app.config import Settings
 from app.llm.client import FakeLLM
 from app.main import create_app
 from app.store.audit import AuditLog
+from tests.wsutil import as_acts
 
 
 def _settings() -> Settings:
@@ -64,7 +65,7 @@ def test_ws_start_text_say_sentence_done_barge_in(tmp_path: Path) -> None:
             _ack_all_says(ws, opening)
 
             ws.send_json(
-                {
+                as_acts({
                     "type": "text",
                     "text": (
                         "Max eight payments, minimum one hundred dollars, "
@@ -93,7 +94,7 @@ def test_ws_start_text_say_sentence_done_barge_in(tmp_path: Path) -> None:
                         ],
                         "stance": "info",
                     },
-                }
+                })
             )
             turn1 = _recv_until(ws, lambda m: m.get("type") == "turn_done")
             assert any(m["type"] == "transcript" and m["role"] == "creditor" for m in turn1)
@@ -115,7 +116,7 @@ def test_ws_start_text_say_sentence_done_barge_in(tmp_path: Path) -> None:
 
             # Re-send rules after barge (pending dropped); then ask 45%.
             ws.send_json(
-                {
+                as_acts({
                     "type": "text",
                     "text": (
                         "Max eight payments, minimum one hundred dollars, "
@@ -144,13 +145,13 @@ def test_ws_start_text_say_sentence_done_barge_in(tmp_path: Path) -> None:
                         ],
                         "stance": "info",
                     },
-                }
+                })
             )
             turn2 = _recv_until(ws, lambda m: m.get("type") == "turn_done")
             _ack_all_says(ws, turn2)
 
             ws.send_json(
-                {
+                as_acts({
                     "type": "text",
                     "text": "We are looking for a forty five percent settlement.",
                     "oracle": {
@@ -158,7 +159,7 @@ def test_ws_start_text_say_sentence_done_barge_in(tmp_path: Path) -> None:
                         "ask_quote": "forty five percent",
                         "stance": "offer",
                     },
-                }
+                })
             )
             turn3 = _recv_until(ws, lambda m: m.get("type") == "turn_done")
             assert any(m["type"] == "say" for m in turn3)

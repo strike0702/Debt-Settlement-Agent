@@ -3,7 +3,7 @@
 ``run_script`` returns one record per rep turn: the line, the agent's move
 (intent, reason, PUBLIC facts), whether it met the turn's ``expect``, the NLU
 time and the acts the model returned. ``main`` runs every script (or one) with
-``--nlu oracle | flat | acts`` and writes ``<out>/scripted_<nlu>.json`` plus a
+``--nlu oracle | acts`` and writes ``<out>/scripted_<nlu>.json`` plus a
 short table on stdout. Live runs record prompt / completion tokens per call
 through the client's ``on_call`` hook. Eval only.
 """
@@ -24,11 +24,11 @@ from typing import Any
 import yaml
 
 from app.agent.nlu.context import build_call_context
-from app.agent.nlu_types import TurnAnalysis
 from app.agent.orchestrator import Orchestrator
 from app.agent.session import CallSession
 from app.config import Settings, get_settings
 from app.domain.known_rules import parse_known_rules
+from app.domain.nlu_types import RepTurn
 from app.domain.scenario import load_scenario, resolve_scenario_dir
 from app.llm.client import make_client
 
@@ -91,13 +91,13 @@ def check_move(
 
 
 def scripted_settings(nlu: str, base: Settings | None = None, **over: Any) -> Settings:
-    """Settings for one run: template NLG, auto-ack, NLU mode / schema from ``nlu``."""
+    """Settings for one run: template NLG, auto-ack, NLU mode from ``nlu`` (oracle | acts)."""
     s = base or get_settings()
     upd: dict[str, Any] = {"nlg_mode": "template", "db_path": ":memory:", "llm_cache": False}
     if nlu == "oracle":
         upd |= {"nlu_mode": "oracle", "llm_profile": "offline"}
     else:
-        upd |= {"nlu_mode": "llm", "nlu_schema": nlu}
+        upd |= {"nlu_mode": "llm"}
     return s.model_copy(update={**upd, **over})
 
 
@@ -119,7 +119,7 @@ async def run_script(
     for i, turn in enumerate(script["turns"]):
         oracle = None
         if nlu == "oracle":
-            oracle = TurnAnalysis.model_validate(turn.get("oracle") or {"stance": "info"})
+            oracle = RepTurn.model_validate(turn.get("oracle") or {})
         known = build_call_context(orch.session.belief, orch.session.neg).known_rules
         utt = await orch.on_creditor_text(turn["rep"], oracle=oracle)
         verified = orch._trace_ctx.get("verified")
@@ -138,7 +138,10 @@ async def run_script(
                 "ok": check_move(turn.get("expect"), move, known),
                 "known_rules": known,
                 "nlu_ms": utt.timings.get("nlu_ms"),
-                "acts": getattr(verified, "acts", None),
+                "acts": getattr(verified, "model_acts", None),
+                "turn_acts": (
+                    [a.type for a in verified.to_rep_turn().acts] if verified is not None else None
+                ),
                 "unaccounted": getattr(verified, "unaccounted_numbers", None),
             }
         )
@@ -198,7 +201,7 @@ async def _run_all(args: argparse.Namespace) -> list[ScriptResult]:
 def main(argv: list[str] | None = None) -> int:
     """CLI: run scripts, print a table, write JSON; exit 1 if any turn missed."""
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--nlu", choices=("oracle", "flat", "acts"), default="oracle")
+    ap.add_argument("--nlu", choices=("oracle", "acts"), default="oracle")
     ap.add_argument("--providers", type=Path, default=None)
     ap.add_argument("--profile", default="demo")
     ap.add_argument("--script", default=None)

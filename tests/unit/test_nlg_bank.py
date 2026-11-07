@@ -18,7 +18,6 @@ from app.agent.nlg_bank import (
     parse_bank,
     pick_template,
 )
-from app.agent.nlu_types import TurnAnalysis
 from app.agent.policy import NegotiationState, decide
 from app.config import Settings
 from app.domain.actions import Action, Intent, Phase
@@ -26,6 +25,7 @@ from app.domain.belief import BeliefState
 from app.domain.facts import Fact
 from app.domain.scenario import load_scenario
 from app.llm.client import FakeLLM
+from tests.acts_helpers import acts_turn
 from tests.seed7 import slot
 
 REF = date(2026, 4, 1)
@@ -183,7 +183,7 @@ def test_contradiction_clarify_is_spoken_from_the_bank(field: str, old: int, new
     b.observe(field, old, "q", 1, verified=True, hedged=False)
     b.observe(field, new, "q", 2, verified=True, hedged=False)
     action = decide(
-        b, NegotiationState(turn_idx=3), TurnAnalysis(stance="info"), None, settings=Settings()
+        b, NegotiationState(turn_idx=3), acts_turn(stance="info"), None, settings=Settings()
     )
     assert action.intent == Intent.CLARIFY and action.template_override is None
     picked = pick_template(action, call_id="c", turn=3, bank=load_bank())

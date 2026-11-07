@@ -4,11 +4,11 @@ name: neg_rule_change
 scenario: easy_deal
 turns:
   - rep: "Up to eight payments, at least $100 each, even payments."
-    oracle: {stance: info, terms: [{field: max_payments, value: 8, quote: "eight payments"}, {field: min_payment_cents, value: 10000, quote: "$100"}, {field: payment_structure, value: even, quote: "even payments"}]}
+    oracle: {acts: [{type: "state_rule", field: "max_payments", value: 8, quote: "eight payments"}, {type: "state_rule", field: "min_payment_cents", value: 10000, quote: "$100"}, {type: "state_rule", field: "payment_structure", value: "even", quote: "even payments"}]}
     expect: {intent: ASK_SETTLEMENT}
   - rep: "We'd take forty five percent."
-    oracle: {stance: counter, settlement_ask_pct: 45, ask_quote: "forty five percent"}
+    oracle: {acts: [{type: "price_ask", pct: 45, quote: "forty five percent", firmness: "counter"}]}
     expect: {intent: COUNTER, facts: {counter_pct: 3100}}
   - rep: "Actually, I just checked, on this account it's six payments max, not eight."
-    oracle: {stance: counter, terms: [{field: max_payments, value: 6, quote: "six payments max"}]}
+    oracle: {acts: [{type: "state_rule", field: "max_payments", value: 6, quote: "six payments max"}]}
     expect: {intent: COUNTER, reason: hold}

@@ -22,16 +22,17 @@ import pytest
 
 from app.agent.acts import STRUCTURE_ACK_PHRASES, ack_facts, acked_fields
 from app.agent.nlg import ack_template, ack_variants, render_action
-from app.agent.nlu import post_verify, structure_word_ok
-from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
+from app.agent.nlu import structure_word_ok
 from app.agent.orchestrator import Orchestrator
 from app.agent.policy import NegotiationState, decide
 from app.agent.session import CallSession
 from app.domain.actions import Action, Intent, Phase
 from app.domain.belief import BeliefChange, TermStatus
 from app.domain.facts import Fact
+from app.domain.nlu_types import RepTurn, StateRuleAct
 from app.domain.scenario import load_scenario
 from app.store.audit import AuditLog
+from tests.acts_helpers import acts_turn, rule_act, verify_turn
 from tests.unit.test_policy import _afford, _belief
 from tests.wsutil import offline_settings
 
@@ -39,30 +40,30 @@ _REF = date(2026, 10, 9)
 _STRUCTURE_Q = "Do you need even payments, or can you allow a balloon or a flexible schedule?"
 
 
-def _t(field: str, value: Any, quote: str) -> ExtractedTerm:
-    return ExtractedTerm(field=field, value=value, quote=quote, hedged=False)
+def _t(field: str, value: Any, quote: str) -> StateRuleAct:
+    return rule_act(field=field, value=value, quote=quote, hedged=False)
 
 
 # The rep's side of the user's call (live NLU read as below; Haiku's reading of
 # line 5 is the bug: "flexible" as a payment structure).
-_SCRIPT: list[tuple[str, TurnAnalysis]] = [
-    ("4", TurnAnalysis(stance="info", terms=[_t("max_payments", 4, "4")])),
-    ("100$", TurnAnalysis(stance="info", terms=[_t("min_payment_cents", 10000, "100$")])),
+_SCRIPT: list[tuple[str, RepTurn]] = [
+    ("4", acts_turn(stance="info", terms=[_t("max_payments", 4, "4")])),
+    ("100$", acts_turn(stance="info", terms=[_t("min_payment_cents", 10000, "100$")])),
     (
         "balloon works",
-        TurnAnalysis(stance="info", terms=[_t("payment_structure", "balloon", "balloon")]),
+        acts_turn(stance="info", terms=[_t("payment_structure", "balloon", "balloon")]),
     ),
-    ("80%", TurnAnalysis(stance="offer", settlement_ask_pct=80.0, ask_quote="80%")),
+    ("80%", acts_turn(stance="offer", settlement_ask_pct=80.0, ask_quote="80%")),
     (
         "no, we can be flexible on other terms though",
-        TurnAnalysis(stance="reject", terms=[_t("payment_structure", "flexible", "flexible")]),
+        acts_turn(stance="reject", terms=[_t("payment_structure", "flexible", "flexible")]),
     ),
-    ("balloon", TurnAnalysis(stance="info", terms=[_t("payment_structure", "balloon", "balloon")])),
-    ("okay", TurnAnalysis(stance="accept")),
-    ("80%", TurnAnalysis(stance="offer", settlement_ask_pct=80.0, ask_quote="80%")),
-    ("no", TurnAnalysis(stance="reject")),
-    ("sorry", TurnAnalysis(stance="other")),
-    ("no doesn't work", TurnAnalysis(stance="reject")),
+    ("balloon", acts_turn(stance="info", terms=[_t("payment_structure", "balloon", "balloon")])),
+    ("okay", acts_turn(stance="accept")),
+    ("80%", acts_turn(stance="offer", settlement_ask_pct=80.0, ask_quote="80%")),
+    ("no", acts_turn(stance="reject")),
+    ("sorry", acts_turn(stance="other")),
+    ("no doesn't work", acts_turn(stance="reject")),
 ]
 
 
@@ -118,7 +119,7 @@ def _ladder(ask: int, afford: Any, *, stages: int = 4) -> list[tuple[str, int | 
     neg = NegotiationState(ask_bp=ask, phase=Phase.NEGOTIATE, turn_idx=5)
     settings = offline_settings(max_counters=6)
     moves: list[tuple[str, int | None]] = []
-    analysis = TurnAnalysis(stance="offer", settlement_ask_pct=ask / 100)
+    analysis = acts_turn(stance="offer", settlement_ask_pct=ask / 100)
     for _ in range(stages):
         a = decide(b, neg, analysis, afford, settings=settings)
         bp = a.facts["counter_pct"].value if "counter_pct" in a.facts else None
@@ -134,7 +135,7 @@ def _ladder(ask: int, afford: Any, *, stages: int = 4) -> list[tuple[str, int | 
         neg.ask_at_last_counter = data["ask_bp"]
         neg.hold_stage = data["stage"]
         neg.turn_idx += 1
-        analysis = TurnAnalysis(stance="reject")
+        analysis = acts_turn(stance="reject")
     return moves
 
 
@@ -188,7 +189,7 @@ def _alt_move(status: TermStatus) -> Action:
     return decide(
         b,
         NegotiationState(ask_bp=8000, phase=Phase.NEGOTIATE, turn_idx=5),
-        TurnAnalysis(stance="offer", settlement_ask_pct=80.0),
+        acts_turn(stance="offer", settlement_ask_pct=80.0),
         _afford(None, []),
         settings=offline_settings(),
         term_alt=("first_payment_date", date(2026, 12, 31)),
@@ -266,16 +267,16 @@ def test_structure_word_needs_a_payment_cue(value: str, line: str, last: str, ok
 
 
 def test_post_verify_drops_flexible_terms_as_a_structure() -> None:
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         stance="reject", terms=[_t("payment_structure", "flexible", "flexible")]
     )
-    out = post_verify(analysis, "no, we can be flexible on other terms though", ref=_REF)
+    out = verify_turn(analysis, "no, we can be flexible on other terms though", ref=_REF)
     assert out.terms == []
     assert [(d.field, d.reason) for d in out.dropped] == [
         ("payment_structure", "rejected_structure")
     ]
-    kept = post_verify(
-        TurnAnalysis(stance="info", terms=[_t("payment_structure", "balloon", "balloon")]),
+    kept = verify_turn(
+        acts_turn(stance="info", terms=[_t("payment_structure", "balloon", "balloon")]),
         "balloon works",
         ref=_REF,
         last_agent_line=_STRUCTURE_Q,
@@ -400,8 +401,8 @@ def test_one_payment_plan_is_spoken_singular() -> None:
 
 def test_paraphrased_structure_stays_unverified_and_is_read_back() -> None:
     """No structure word in the line: the rule does not apply."""
-    out = post_verify(
-        TurnAnalysis(stance="info", terms=[_t("payment_structure", "even", "equal installments")]),
+    out = verify_turn(
+        acts_turn(stance="info", terms=[_t("payment_structure", "even", "equal installments")]),
         "We only do equal installments on these accounts.",
         ref=_REF,
     )
@@ -412,13 +413,13 @@ def test_paraphrased_structure_stays_unverified_and_is_read_back() -> None:
 # ----- read-back fallback for unconfirmed numbers (Phase 65, user decision 2026-10-29) -----
 
 
-def _min_pay(quote: str, *, slot: bool = False) -> TurnAnalysis:
+def _min_pay(quote: str, *, slot: bool = False) -> RepTurn:
     """The model's reading of a spoken amount: 12000 with a quote the reader cannot confirm."""
     if slot:
-        return TurnAnalysis(
+        return acts_turn(
             stance="info", amount_ambiguous_cents=12000, amount_ambiguous_quote=quote
         )
-    return TurnAnalysis(stance="info", terms=[_t("min_payment_cents", 12000, quote)])
+    return acts_turn(stance="info", terms=[_t("min_payment_cents", 12000, quote)])
 
 
 @pytest.mark.parametrize("slot", [False, True])
@@ -443,7 +444,7 @@ async def test_unconfirmed_amount_is_read_back_not_handed_off(tmp_path: Path, sl
     assert rows and rows[0]["payload"]["value"] == 12000
     # A "no" clears it and asks again.
     utt = await orch.on_creditor_text(
-        "no", oracle=TurnAnalysis(stance="reject", readback_response="deny")
+        "no", oracle=acts_turn(stance="reject", readback_response="deny")
     )
     assert utt.action.intent == Intent.ASK
     assert session.belief.get("min_payment_cents").status == TermStatus.UNKNOWN

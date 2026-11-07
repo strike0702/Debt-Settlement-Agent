@@ -420,30 +420,66 @@ and mic (the harness's `afplay` lines were mostly not heard;
 [client run](eval/voice_client_20261029/summary.md)), other devices, and the
 hosted demo, which needs a TURN server.
 
-## ADR 10 (draft). NLU v2: acts and call context
+## ADR 10. NLU v2: acts and call context
 
-*Draft from Phase 71a; Phase 71b finishes it. Decision D19.*
+*Phases 71a, 71a-2 and 71b. Decisions D19, D21, D22, D23.*
 
 **Context.** The flat NLU schema (about 20 flags filled every turn, conflicts settled
 by a priority order in the policy) failed two live Haiku calls: a firm "seventy three"
 with no number read was accepted as the older 75%, and "that's all the tiers" ended
 the call. The model also saw nothing of the call state.
 
-**Decision (behind `NLU_SCHEMA=acts`).** The model returns a short list of typed acts
-from a closed set (`app.domain.nlu_types.Act`). Each act has only its own fields and a
-verbatim quote. A strict validation failure becomes one `unclear` act. The prompt
-gets a PUBLIC `CallContext` (phase, what we await, offers on the table, the list
-being collected, the rules stated and who stated them), never a client figure.
-Code still owns every number: acts are quote-checked, mapped to a `TurnAnalysis` and
-run through the same `post_verify`. Tier items are re-read from the rep's words.
-Every number in the line must be claimed by a verified act; on a firm line with an
-unclaimed number the policy asks instead of reusing an older ask. In 71a a
-converter keeps the policy unchanged.
+**Decision.** The model returns a short list of typed acts from a closed set
+(`app.domain.nlu_types.Act`: `answer`, `state_rule`, `announce_rules`, `rule_item`,
+`list_done`, `price_ask`, `respond_to_offer`, `readback_reply`, `question`,
+`ask_private_info`, `demand_commitment`, `hostility`, `end_call`, `stall`,
+`backchannel`, `unclear`). Each act has only its own fields and a verbatim quote; a
+reply that fails validation keeps its valid acts, else is one `unclear`. The prompt
+gets a PUBLIC `CallContext` (phase, what we await, offers on the table, the list being
+collected, the rules stated and who stated them), never a client figure.
 
-**Result so far.** On Haiku, acts passed every scripted call (63/63 turns vs 49/63
-flat), cut output tokens from about 210 to 65 per line and p50 latency from 1262 to
-1008 ms. It missed one private-info line, so the pre-registered rule failed and the
-flag stays off (`docs/eval/nlu_v2_20261107/summary.md`).
+Code owns every number. `acts.verify_acts` is the one verification path for model
+acts and the simulator's oracle acts: rules and price are quote- and number-checked
+(`verify.post_verify`), tier items are re-read from the rep's words, and every other
+act is repaired by code cues (accept / reject phrases, never accept on an injection,
+private-info and commitment cues, the hostility floor, "that's all" while a list is
+open is not a goodbye, firmness, schedule questions, rule announcements). Every number
+in the line must be claimed by a verified act; the rest are `unaccounted_numbers`.
+
+The policy reads the verified acts directly (71b). `decide(belief, neg, RepTurn,
+afford, context=CallContext)` walks `DISPATCH_ORDER`, an order by meaning, not a flag
+priority: the turn cap; safety acts (strong hostility, a private-info ask, a
+commitment demand); the call state (after a proposal, a stalled call); acts that
+answer themselves (a schedule question after a proposal, an explicit `end_call`, a
+`final` price whose number went unread → ask for it, `unclear` → ask to rephrase);
+then every other act is folded into belief or the tier draft and the phase flow
+(clarify, rules being defined, confirm, discovery, the ladder of ADR 7) answers the
+whole line. A line made only of acts the phase cannot use (`list_done` with no list,
+a read-back reply with nothing read back) gets a clarify (`act_unusable`), never a
+silent drop. Conflicts are written once in `app/agent/policy/cascade.py`: an accept
+outranks a goodbye or a schedule cue in the same line; "that's all" closes the open
+list, not the call; an accept with a new number is that number; of two prices the
+later one stands. Every negotiation rule of ADR 7 (accept line, steps, holds,
+hand-offs, reason codes) and every safety guard is unchanged; a grid test checks
+every phase × act type and the empty line for a legal move with a documented reason.
+
+A rule change after a proposal that names the value it replaces ("six payments max,
+not eight") revises the rule and re-plans instead of asking which value is right.
+Tier ranges keep their end across turns, so a later tier that leaves a gap or
+overlaps is asked again.
+
+**Consequences.** One schema and one path: the flat schema, its prompt, the
+acts→flat converter and the flat flags are gone (frozen flat records stay in
+`docs/eval`). The orchestrator still keeps `VerifiedAnalysis` as the turn's checked
+record (amount and unit clarifies, belief updates); the policy sees only
+`to_rep_turn()`. The stance label survives for the turn trace and corpus scores only.
+
+**Result.** On Haiku (pinned), acts held every scripted turn after 71b (92/92 against
+77/92 for the flat schema in 71a-2), with about 60 output tokens per line against
+about 205 and an NLU p50 near 1.0 s against 1.25 s. The offline oracle eval makes the
+same decisions as before on every turn
+([`nlu_v2_20261108_policy`](eval/nlu_v2_20261108_policy/summary.md),
+[`nlu_v2_20261107_r2`](eval/nlu_v2_20261107_r2/summary.md)).
 
 ## One voice turn, annotated
 
@@ -466,7 +502,7 @@ sequenceDiagram
     V->>W: final transcript (shown as the rep's line)
     W->>O: creditor turn
     O->>L: NLU
-    L-->>O: TurnAnalysis
+    L-->>O: acts
     O->>G: verify, belief, affordability, decide(), template, guards
     G-->>O: line (final → reply p50 1946, mostly NLU)
     O->>W: say (UI) and the sentence to TTS

@@ -329,24 +329,6 @@ _GUARD_REPLIES = {
 }
 
 
-async def test_records_keep_raw_and_repaired_stance() -> None:
-    from eval.nlu_corpus import run_corpus
-
-    records, _ = await run_corpus(
-        _GUARD_LINES, profile="offline", llm=_stance_llm(_GUARD_REPLIES), retry_backoff_s=0
-    )
-    by = {r["id"]: r for r in records}
-    assert (by["g01"]["predicted"]["stance_raw"], by["g01"]["predicted"]["stance"]) == (
-        "question", "accept")
-    assert by["g01"]["stance_rule"] == "accept_phrase"
-    assert (by["g02"]["predicted"]["stance_raw"], by["g02"]["predicted"]["stance"]) == (
-        "accept", "reject")
-    assert by["g02"]["stance_rule"] == "reject_phrase"
-    assert by["g03"]["predicted"]["stance_raw"] == by["g03"]["predicted"]["stance"] == "stall"
-    assert by["g03"]["stance_rule"] == "none"
-    assert by["g04"]["predicted"]["stance_raw"] == "info"
-    assert by["g04"]["stance_rule"] == "short_ack"
-    assert all(r["stance_source"] == "llm" for r in records)
 
 
 async def test_fast_path_line_has_raw_equal_to_repaired() -> None:
@@ -361,36 +343,8 @@ async def test_fast_path_line_has_raw_equal_to_repaired() -> None:
     assert r["predicted"]["stance_raw"] == r["predicted"]["stance"]
 
 
-async def test_unparseable_reply_counts_as_raw_other() -> None:
-    from app.llm.client import FakeLLM
-    from eval.nlu_corpus import run_corpus
-
-    class Junk(FakeLLM):
-        async def chat_text(self, role, messages, max_tokens, *, json_mode=False):
-            return "not json"
-
-    line = {"id": "j01", "tags": [], "text": "Sounds good to me.", "stance": "accept"}
-    records, _ = await run_corpus([line], profile="offline", llm=Junk(), retry_backoff_s=0)
-    assert records[0]["predicted"]["stance_raw"] == "other"
-    assert records[0]["predicted"]["stance"] == "accept"  # the phrase rule still fires
 
 
-async def test_raw_stance_scoring_differs_only_in_stance() -> None:
-    from eval.nlu_corpus import raw_stance_records, run_corpus
-
-    records, _ = await run_corpus(
-        _GUARD_LINES, profile="offline", llm=_stance_llm(_GUARD_REPLIES), retry_backoff_s=0
-    )
-    raw = raw_stance_records(records)
-    guarded, unguarded = score(records), score(raw)
-    assert guarded["stance"]["accept"]["fp_ids"] == ["g01"]
-    assert unguarded["stance"]["accept"]["fp_ids"] == []
-    assert guarded["stance"]["reject"]["fp_ids"] == ["g02"]
-    assert unguarded["stance"]["reject"]["fp_ids"] == []
-    assert unguarded["stance"]["accept"]["fn_ids"] == ["g04"]
-    assert guarded["flags"] == unguarded["flags"] and guarded["terms"] == unguarded["terms"]
-    # The input records are not mutated by the raw view.
-    assert records[0]["predicted"]["stance"] == "accept"
 
 
 def test_raw_stance_records_require_raw_field() -> None:
@@ -448,32 +402,6 @@ def test_run_corpus_passes_providers_path_to_make_client(monkeypatch, tmp_path) 
     assert nc.unanswered(records) == []
 
 
-def test_cli_no_repair_stance_rescores_saved_records(tmp_path: Path, monkeypatch) -> None:
-    """--from-records + --no-repair-stance: second variant from the same replies, no LLM."""
-    import asyncio
-    import json
-
-    import eval.nlu_corpus as nc
-
-    records, _ = asyncio.run(nc.run_corpus(
-        _GUARD_LINES, profile="offline", llm=_stance_llm(_GUARD_REPLIES), retry_backoff_s=0
-    ))
-    saved = tmp_path / "saved.jsonl"
-    saved.write_text("".join(json.dumps(r) + "\n" for r in records))
-    report = tmp_path / "report.md"
-    monkeypatch.setattr(nc, "REPORT_PATH", report)
-
-    async def no_llm(*a, **kw):
-        raise AssertionError("rescoring must not call the LLM")
-
-    monkeypatch.setattr(nc, "run_corpus", no_llm)
-    rc = nc.main(["--label", "RAW", "--from-records", str(saved), "--no-repair-stance"])
-    assert rc == 0
-    text = report.read_text()
-    assert "stance: raw LLM" in text
-    saved_raw = (tmp_path / "records" / "nlu_corpus_raw.jsonl").read_text()
-    out = [json.loads(ln) for ln in saved_raw.splitlines()]
-    assert [r["predicted"]["stance"] for r in out] == ["question", "accept", "stall", "info"]
 
 
 # --- One labelled row = one answering model -------------------------------
@@ -766,62 +694,5 @@ def test_context_corpus_schema() -> None:
         assert ln["context"][-1]["text"].endswith(line_agent_text(ln))
 
 
-async def test_context_is_opt_in_and_eval_only() -> None:
-    from app.llm.client import FakeLLM
-    from eval.nlu_corpus import run_corpus
-
-    seen: list[tuple[str, str]] = []
-
-    class Rec(FakeLLM):
-        async def chat_text(self, role, messages, max_tokens, *, json_mode=False):
-            seen.append((messages[0]["content"], messages[-1]["content"]))
-            return '{"terms": [], "stance": "info"}'
-
-    line = {
-        "id": "c1",
-        "text": "Can you change it to $250?",
-        "stance": "counter",
-        "context": [
-            {"role": "rep", "text": "$180."},
-            {"role": "agent", "text": "Got it. Do you need even payments?"},
-        ],
-    }
-    plain = {"id": "c2", "text": "Six payments.", "stance": "info"}
-    # Default: the shipped prompt, no turns, same agent line.
-    records, _ = await run_corpus([line, plain], profile="offline", llm=Rec())
-    assert "Earlier turns" not in seen[0][1]
-    assert "earlier turns" not in seen[0][0].lower()
-    assert "Agent last said: Do you need even payments?" in seen[0][1]
-    assert [r["context_turns"] for r in records] == [0, 0]
-    seen.clear()
-    records, _ = await run_corpus(
-        [line, plain], profile="offline", llm=Rec(), use_context=True
-    )
-    assert "Earlier turns" in seen[0][1] and "Rep: $180." in seen[0][1]
-    assert "Use earlier turns only" in seen[0][0]
-    assert "Earlier turns" not in seen[1][1]  # a line without context is unchanged
-    assert AGENT_LINES["default"] in seen[1][1]
-    assert [r["context_turns"] for r in records] == [2, 0]
 
 
-def test_with_context_reproduces_the_measured_p54_prompt() -> None:
-    from app.llm.prompts import nlu_messages
-    from eval.nlu_corpus import REF, _with_context
-
-    msgs = _with_context(
-        nlu_messages("$250.", "Which is it?", None, ref=REF),
-        [("agent", "A."), ("creditor", "R."), ("agent", "Which is it?")],
-    )
-    assert msgs[1]["content"] == (
-        f"Today's date: {REF.isoformat()}\n"
-        "Earlier turns (context only, do not extract from them):\n"
-        "Agent: A.\nRep: R.\nAgent: Which is it?\n"
-        "Agent last said: Which is it?\n"
-        "Pending read-back field: (none)\n"
-        "Rep utterance: $250.\n"
-        "Reply with JSON only."
-    )
-    assert (
-        "substring of the utterance.\nUse earlier turns only to understand references"
-        in msgs[0]["content"]
-    )

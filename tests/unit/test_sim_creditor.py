@@ -37,7 +37,7 @@ async def test_speak_schedule_validates_like_confirm() -> None:
     creditor = _creditor()
     reply = await creditor.respond(_action(Intent.SPEAK_SCHEDULE), agent_text="here is a schedule")
     # Missing settlement facts → reject (same path as CONFIRM_SCHEDULE).
-    assert reply.analysis.stance == "reject"
+    assert reply.analysis.rejects
 
 
 @pytest.mark.asyncio
@@ -86,7 +86,7 @@ async def test_counter_terms_rejects_outside_hidden_rules() -> None:
     tr = creditor.scenario.true_rules
     lower_min = _fact("alt_min_payment_cents", "money", tr.min_payment_cents - 1000)
     reply = await creditor.respond(_action(Intent.COUNTER_TERMS, {lower_min.id: lower_min}))
-    assert reply.analysis.stance == "reject"
+    assert reply.analysis.rejects
     assert reply.analysis.terms == []
     assert creditor.agreed_rules == tr
 
@@ -97,7 +97,7 @@ async def test_counter_terms_accepts_inside_hidden_rules_and_records_agreement()
     tr = creditor.scenario.true_rules
     fewer = _fact("alt_max_payments", "count", tr.max_payments - 1)
     reply = await creditor.respond(_action(Intent.COUNTER_TERMS, {fewer.id: fewer}))
-    assert reply.analysis.stance == "accept"
+    assert reply.analysis.accepts
     assert creditor.agreed_rules.max_payments == tr.max_payments - 1
     assert creditor.rules.max_payments == tr.max_payments - 1
 
@@ -108,8 +108,8 @@ async def test_counter_terms_later_start_rejected_earlier_accepted() -> None:
     fpd = creditor.scenario.true_rules.first_payment_date
     later = _fact("alt_first_payment_date", "date", date(fpd.year, fpd.month + 1, 28))
     reply = await creditor.respond(_action(Intent.COUNTER_TERMS, {later.id: later}))
-    assert reply.analysis.stance == "reject"
+    assert reply.analysis.rejects
     earlier = _fact("alt_first_payment_date", "date", fpd.replace(day=fpd.day - 1))
     reply = await creditor.respond(_action(Intent.COUNTER_TERMS, {earlier.id: earlier}))
-    assert reply.analysis.stance == "accept"
+    assert reply.analysis.accepts
     assert creditor.agreed_rules.first_payment_date == earlier.value

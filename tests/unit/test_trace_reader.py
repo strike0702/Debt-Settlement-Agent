@@ -21,7 +21,7 @@ from app.domain.actions import Action, Intent, Phase
 from app.llm.client import FakeLLM
 from app.schemas.events import SERVER_EVENT_ADAPTER
 from app.voice.ws import turn_notes, turn_reader
-from tests.wsutil import ack_all, make_client, offline_settings, turn
+from tests.wsutil import ack_all, as_acts, make_client, offline_settings, turn
 
 
 def _row(rid: int, actor: str, event: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -189,7 +189,7 @@ def _play(ws: Any, *msgs: dict[str, Any]) -> list[dict[str, Any]]:
     batch = turn(ws)
     frames += batch + ack_all(ws, batch)
     for m in msgs:
-        ws.send_json(m)
+        ws.send_json(as_acts(m))
         batch = turn(ws)
         frames += batch + ack_all(ws, batch)
     return frames

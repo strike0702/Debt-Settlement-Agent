@@ -1,27 +1,25 @@
 """Pure synchronous negotiation policy: one ``Action`` per rep turn.
 
-``decide`` maps belief + TurnAnalysis + Affordability to one ``Action``. No I/O,
-no LLM; spoken figures ride in PUBLIC ``Action.facts`` and side effects in
-``Action.effects`` (the orchestrator applies them on speech ack). The cascade
-is first-match and its order is load-bearing:
+``decide`` maps belief + the rep's verified acts (``RepTurn``) + the PUBLIC
+call context + Affordability to one ``Action``. No I/O, no LLM; spoken
+figures ride in PUBLIC ``Action.facts`` and side effects in ``Action.effects``
+(the orchestrator applies them on speech ack). Acts are read in
+``cascade.DISPATCH_ORDER``, an order by meaning (safety acts, the call state,
+acts that answer themselves, then acts folded into belief / the tier draft),
+and the phase flow answers the rest:
 
-1. ``_decide_interruptions``: turn cap, hostility, private ask, commitment
-   demand, post-proposal phases (``_decide_wrap``), no-progress loop guard,
-   schedule request, end.
-1b. ``_decide_unread`` (acts NLU only): a firm line whose new number no act
-   claimed, or an ``unclear`` reply → number-free CLARIFY, never the old ask.
-2. ``_decide_clarify``: "first N payments" tiers / CONTRADICTED → CLARIFY (escalate
+1. clarify: tiers that cannot be placed / CONTRADICTED → CLARIFY (escalate
    after two); TENTATIVE → READ_BACK.
-3. ``_decide_rep_rules``: the rep announced a rule (``defines_field``) → ask
-   it ("Go ahead. ..."); tiers given one by one → ask the next, clarify one
-   that contradicts max payments / minimum, read the whole set back once.
-4. ``_decide_confirm``: accept of the unchanged CONFIRM on the table → PROPOSE_WRAP.
-5. ``_decide_discovery``: ASK a missing required field, the optional sweep
-   (flexible schedules only), then ASK_SETTLEMENT.
-6. ``_decide_negotiate``: empty curve (term alt / rescue / handoff), term alt over
-   an unreachable ask, accepted counter, the price ladder (``_negotiate``).
+2. rep rules: the rep announced a rule → ask it ("Go ahead. ..."); tiers
+   given one by one → ask the next, clarify one that contradicts max payments
+   / minimum or leaves a gap, read the whole set back once.
+3. confirm: accept of the unchanged CONFIRM on the table → PROPOSE_WRAP.
+4. discovery: ASK a missing required field, the optional sweep (flexible
+   schedules only), then ASK_SETTLEMENT.
+5. negotiate: empty curve (term alt / rescue / handoff), term alt over an
+   unreachable ask, accepted counter, the price ladder (``_negotiate``).
 
-After the cascade, ``loop_guard`` turns a question asked twice already into a
+After the move, ``loop_guard`` turns a question asked twice already into a
 handoff (``repeated_question``) and rewords a question the rep just did not
 answer, so no line is spoken twice in a row.
 
@@ -31,11 +29,17 @@ taking over). ``decide`` never emits NO_DEAL_WRAP.
 
 Modules: ``state`` (NegotiationState, Agreement, bp helpers), ``moves`` (Action
 builders), ``ladder`` (the price ladder, described in its docstring),
-``cascade`` (``decide`` and the loop guard). Every public name is importable
-from ``app.agent.policy``.
+``cascade`` (``decide``, the act dispatch and the loop guard). Every public
+name is importable from ``app.agent.policy``.
 """
 
-from app.agent.policy.cascade import decide, loop_guard, question_key, rep_turn_progress
+from app.agent.policy.cascade import (
+    DISPATCH_ORDER,
+    decide,
+    loop_guard,
+    question_key,
+    rep_turn_progress,
+)
 from app.agent.policy.ladder import anchor_bp, step_bp
 from app.agent.policy.moves import (
     amount_meaning_clarify_action,
@@ -57,6 +61,7 @@ from app.domain.actions import Action, Effect, Intent, Phase
 __all__ = [
     "Action",
     "Agreement",
+    "DISPATCH_ORDER",
     "Effect",
     "Intent",
     "NegotiationState",

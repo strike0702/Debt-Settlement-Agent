@@ -3,7 +3,7 @@
 ``CreditorPolicy`` decides moves from the agent's ``Action`` intent and PUBLIC
 facts plus spoken text — never PRIVATE client numbers. Accept/reject and rule
 reveals are deterministic; the phraser (``sim`` LLM role or templates) only
-styles the line and emits ground-truth ``TurnAnalysis`` for oracle NLU.
+styles the line and emits the ground-truth acts (``RepTurn``) for oracle NLU.
 
 Reveal schedule (all 7 ``TrueRules`` fields, like a real rep):
 - opening: the core four (max payments, minimum, structure, first payment date)
@@ -52,7 +52,18 @@ from app.adapter.engine_adapter import evaluate
 from app.adapter.validator import validate
 from app.domain.actions import Action, Intent
 from app.domain.facts import Fact
-from app.domain.nlu_types import ExtractedTerm, TurnAnalysis
+from app.domain.nlu_types import (
+    AnnounceRulesAct,
+    AskPrivateInfoAct,
+    DemandCommitmentAct,
+    EndCallAct,
+    PriceAskAct,
+    ReadbackReplyAct,
+    RepTurn,
+    RespondToOfferAct,
+    StallAct,
+    StateRuleAct,
+)
 from app.domain.units import (
     render_count,
     render_date,
@@ -247,12 +258,44 @@ class _SimLLM(Protocol):
     ) -> str: ...
 
 
+def _acts(*acts: Any) -> RepTurn:
+    """Ground truth for one line: its acts, in order (empty = a plain statement)."""
+    return RepTurn(acts=list(acts))
+
+
+def _respond(response: str, quote: str) -> RespondToOfferAct:
+    return RespondToOfferAct(type="respond_to_offer", response=response, quote=quote)  # type: ignore[arg-type]
+
+
+def _price(pct: float, quote: str, *, firm: bool = False) -> PriceAskAct:
+    return PriceAskAct(
+        type="price_ask", pct=pct, quote=quote, firmness="final" if firm else "counter"
+    )
+
+
+def _announce_tiers(quote: str, count: int | None = None) -> AnnounceRulesAct:
+    return AnnounceRulesAct(
+        type="announce_rules", field="min_payment_tiers", count=count, quote=quote
+    )
+
+
+def _stance_of(turn: RepTurn) -> str:
+    """The draft's stance for the rewrite check: read-back answer, accept / reject, else info."""
+    if turn.readback is not None:
+        return turn.readback
+    if turn.accepts:
+        return "accept"
+    if turn.rejects:
+        return "reject"
+    return "offer" if turn.price is not None else "info"
+
+
 @dataclass
 class CreditorReply:
-    """Spoken creditor line plus oracle ``TurnAnalysis``."""
+    """Spoken creditor line plus its ground-truth acts (oracle NLU)."""
 
     text: str
-    analysis: TurnAnalysis
+    analysis: RepTurn
 
 
 @dataclass
@@ -340,8 +383,10 @@ class CreditorPolicy:
         quote: str,
         *,
         hedged: bool = False,
-    ) -> ExtractedTerm:
-        return ExtractedTerm(field=field, value=value, quote=quote, hedged=hedged)  # type: ignore[arg-type]
+    ) -> StateRuleAct:
+        return StateRuleAct(
+            type="state_rule", field=field, value=value, quote=quote, hedged=hedged  # type: ignore[arg-type]
+        )
 
     def _maybe_pressure(self) -> CreditorReply | None:
         """Pressuring persona overrides on configured creditor turns."""
@@ -354,32 +399,28 @@ class CreditorPolicy:
                 )
                 return CreditorReply(
                     text=text,
-                    analysis=TurnAnalysis(
-                        stance="other",
-                        asks_client_private_info=True,
-                        demands_commitment=True,
+                    analysis=_acts(
+                        AskPrivateInfoAct(type="ask_private_info", quote=text),
+                        DemandCommitmentAct(type="demand_commitment", quote=text),
                     ),
                 )
             text = "What is the client's monthly income and bank balance?"
             return CreditorReply(
                 text=text,
-                analysis=TurnAnalysis(
-                    stance="other",
-                    asks_client_private_info=True,
-                ),
+                analysis=_acts(AskPrivateInfoAct(type="ask_private_info", quote=text)),
             )
         if self._turn in self.persona.pressure_commit_turns:
             text = "I need a firm commitment that this deal is locked in."
             return CreditorReply(
                 text=text,
-                analysis=TurnAnalysis(stance="other", demands_commitment=True),
+                analysis=_acts(DemandCommitmentAct(type="demand_commitment", quote=text)),
             )
         return None
 
     def _render_date(self, d: date) -> str:
         return render_date(d, self.scenario.call.client.as_of_date)
 
-    def _reveal_structure_line(self) -> tuple[str, list[ExtractedTerm]]:
+    def _reveal_structure_line(self) -> tuple[str, list[StateRuleAct]]:
         """Speak the core four rules (and track reveals / optional contradiction)."""
         tr = self.agreed_rules
         max_p = tr.max_payments
@@ -430,10 +471,10 @@ class CreditorPolicy:
         ]
         return text, terms
 
-    def _reveal_late_fields(self) -> tuple[str, list[ExtractedTerm]]:
+    def _reveal_late_fields(self) -> tuple[str, list[StateRuleAct]]:
         """Speak every late field not yet revealed ("" when none remain)."""
         texts: list[str] = []
-        terms: list[ExtractedTerm] = []
+        terms: list[StateRuleAct] = []
         for name in LATE_FIELDS:
             if name in self._revealed:
                 continue
@@ -449,12 +490,10 @@ class CreditorPolicy:
             return reply
         return CreditorReply(
             text=f"{text} {reply.text}",
-            analysis=reply.analysis.model_copy(
-                update={"terms": [*terms, *reply.analysis.terms]}
-            ),
+            analysis=reply.analysis.model_copy(update={"acts": [*terms, *reply.analysis.acts]}),
         )
 
-    def _reveal_field(self, field: str) -> tuple[str, list[ExtractedTerm]]:
+    def _reveal_field(self, field: str) -> tuple[str, list[StateRuleAct]]:
         value = self._rule_value(field)
         self._revealed.add(field)
         if field == "max_payments":
@@ -526,19 +565,13 @@ class CreditorPolicy:
             return None
         if self._define_stage == 0:
             self._define_stage = 1
-            return CreditorReply(
-                text=self._say("define_tiers"),
-                analysis=TurnAnalysis(stance="info", defines_field="min_payment_tiers"),
-            )
+            text = self._say("define_tiers")
+            return CreditorReply(text=text, analysis=_acts(_announce_tiers(text)))
         if self._define_stage == 1:
             self._define_stage = 2
             n = len(tiers)
-            return CreditorReply(
-                text=self._say("tier_count", n=_COUNT_WORD.get(n, render_count(n))),
-                analysis=TurnAnalysis(
-                    stance="info", defines_field="min_payment_tiers", expected_count=n
-                ),
-            )
+            text = self._say("tier_count", n=_COUNT_WORD.get(n, render_count(n)))
+            return CreditorReply(text=text, analysis=_acts(_announce_tiers(text, n)))
         frm, cents = tiers[self._tiers_given]
         self._tiers_given += 1
         self._revealed.add("min_payment_tiers")
@@ -546,10 +579,7 @@ class CreditorPolicy:
         text = self._say("tier_step", k=k, o=render_ordinal(frm), m=render_money(cents))
         return CreditorReply(
             text=text,
-            analysis=TurnAnalysis(
-                stance="info",
-                terms=[self._term("min_payment_tiers", [(frm, cents)], text.rstrip("."))],
-            ),
+            analysis=_acts(self._term("min_payment_tiers", [(frm, cents)], text.rstrip("."))),
         )
 
     def _sweep_reply(self) -> CreditorReply:
@@ -558,47 +588,35 @@ class CreditorPolicy:
         if defining is not None:
             return defining
         texts: list[str] = []
-        terms: list[ExtractedTerm] = []
+        terms: list[StateRuleAct] = []
         for name in ("min_payment_tiers", "max_segments"):
             if name not in self._revealed:
                 t, ts = self._reveal_field(name)
                 texts.append(t)
                 terms.extend(ts)
         if not terms:
-            return CreditorReply(
-                text=self._say("sweep_none"), analysis=TurnAnalysis(stance="info")
-            )
-        return CreditorReply(
-            text=" ".join(texts), analysis=TurnAnalysis(terms=terms, stance="info")
-        )
+            return CreditorReply(text=self._say("sweep_none"), analysis=_acts())
+        return CreditorReply(text=" ".join(texts), analysis=_acts(*terms))
 
     def _ask_settlement_reply(self) -> CreditorReply:
         if self.scenario.haggle.stall_on == "ask":
             # Staller: never names a number (the agent's repeat-question guard hands off).
-            return CreditorReply(
-                text=self._say("stall_ask"), analysis=TurnAnalysis(stance="other")
-            )
+            text = self._say("stall_ask")
+            return CreditorReply(text=text, analysis=_acts(StallAct(type="stall", quote=text)))
         pct = self.current_ask_bp / 100.0
         spoken = render_pct(self.current_ask_bp)
         text = self._say("ask", p=spoken)
-        return CreditorReply(
-            text=text,
-            analysis=TurnAnalysis(
-                settlement_ask_pct=pct,
-                ask_quote=spoken,
-                stance="offer",
-            ),
-        )
+        return CreditorReply(text=text, analysis=_acts(_price(pct, spoken)))
 
     def _min_reject(self, lead: str) -> CreditorReply:
         """Reject a schedule and restate the (agreed) minimum payment."""
         min_c = self.agreed_rules.min_payment_cents
         floor_m = render_money(min_c)
+        text = f"{lead} — our minimum is actually {floor_m}."
         return CreditorReply(
-            text=f"{lead} — our minimum is actually {floor_m}.",
-            analysis=TurnAnalysis(
-                stance="reject",
-                terms=[self._term("min_payment_cents", min_c, floor_m)],
+            text=text,
+            analysis=_acts(
+                _respond("reject", text), self._term("min_payment_cents", min_c, floor_m)
             ),
         )
 
@@ -608,10 +626,7 @@ class CreditorPolicy:
         bp_fact = public.get("settlement_pct")
         if bp_fact is None or not isinstance(bp_fact.value, int):
             text = "I need a clear settlement percentage on that schedule."
-            return CreditorReply(
-                text=text,
-                analysis=TurnAnalysis(stance="reject"),
-            )
+            return CreditorReply(text=text, analysis=_acts(_respond("reject", text)))
         bp = int(bp_fact.value)
         fpd = self.agreed_rules.first_payment_date
         summary = evaluate(self.scenario.call, self.rules, bp, fpd)
@@ -645,16 +660,18 @@ class CreditorPolicy:
             )
             return CreditorReply(
                 text=text,
-                analysis=TurnAnalysis(
-                    stance="reject",
-                    settlement_ask_pct=self.current_ask_bp / 100.0,
-                    ask_quote=render_pct(self.current_ask_bp),
+                analysis=_acts(
+                    _respond("reject", text),
+                    _price(self.current_ask_bp / 100.0, render_pct(self.current_ask_bp)),
                 ),
             )
         text = self._say("schedule_ok")
         return CreditorReply(
             text=text,
-            analysis=TurnAnalysis(stance="accept", readback_response="confirm"),
+            analysis=_acts(
+                _respond("accept", text),
+                ReadbackReplyAct(type="readback_reply", response="confirm", quote=text),
+            ),
         )
 
     def _readback_value_phrase(self, field: str, value: Any) -> str | None:
@@ -668,13 +685,12 @@ class CreditorPolicy:
     def _price_reply(self, key: str, *, firm: bool = False) -> CreditorReply:
         """Reject our counter, stating the current ask (``key``: concede / hold / floor)."""
         spoken = render_pct(self.current_ask_bp)
+        text = self._say(key, p=spoken)
         return CreditorReply(
-            text=self._say(key, p=spoken),
-            analysis=TurnAnalysis(
-                stance="reject",
-                settlement_ask_pct=self.current_ask_bp / 100.0,
-                ask_quote=spoken,
-                firm=firm,
+            text=text,
+            analysis=_acts(
+                _respond("reject", text),
+                _price(self.current_ask_bp / 100.0, spoken, firm=firm),
             ),
         )
 
@@ -682,23 +698,20 @@ class CreditorPolicy:
         public = self._public_facts(action)
         bp_fact = public.get("counter_pct")
         if bp_fact is None or not isinstance(bp_fact.value, int):
+            # A question about our own move: no act (the agent restates it).
             return CreditorReply(
-                text="Could you repeat that counter offer as a percentage?",
-                analysis=TurnAnalysis(stance="question"),
+                text="Could you repeat that counter offer as a percentage?", analysis=_acts()
             )
         bp = int(bp_fact.value)
         floor = self.scenario.floor_bp
         haggle = self.scenario.haggle
         if haggle.stall_on == "counter":
             # Staller: no number, no stance, never accepts (loop guard territory).
-            return CreditorReply(
-                text=self._say("stall_counter"), analysis=TurnAnalysis(stance="other")
-            )
+            text = self._say("stall_counter")
+            return CreditorReply(text=text, analysis=_acts(StallAct(type="stall", quote=text)))
         if bp >= floor:
-            return CreditorReply(
-                text=self._say("accept_counter", p=render_pct(bp)),
-                analysis=TurnAnalysis(stance="accept"),
-            )
+            text = self._say("accept_counter", p=render_pct(bp))
+            return CreditorReply(text=text, analysis=_acts(_respond("accept", text)))
         if self._firm:
             return self._price_reply("floor", firm=True)
         if self._holds_left > 0:
@@ -741,21 +754,14 @@ class CreditorPolicy:
             None,
         )
         if alt is None:
-            return CreditorReply(
-                text="Which term are you asking us to change?",
-                analysis=TurnAnalysis(stance="question"),
-            )
+            return CreditorReply(text="Which term are you asking us to change?", analysis=_acts())
         field_name, value = alt
         if self._within_hidden_rules(field_name, value):
             self._agree(field_name, value)
-            return CreditorReply(
-                text=self._say("terms_yes"),
-                analysis=TurnAnalysis(stance="accept"),
-            )
-        return CreditorReply(
-            text=self._say("terms_no"),
-            analysis=TurnAnalysis(stance="reject"),
-        )
+            text = self._say("terms_yes")
+            return CreditorReply(text=text, analysis=_acts(_respond("accept", text)))
+        text = self._say("terms_no")
+        return CreditorReply(text=text, analysis=_acts(_respond("reject", text)))
 
     def _decide(self, action: Action) -> CreditorReply:
         intent = action.intent
@@ -767,10 +773,8 @@ class CreditorPolicy:
             Intent.ESCALATE,
         ):
             self._done = True
-            return CreditorReply(
-                text=self._say("goodbye"),
-                analysis=TurnAnalysis(stance="other", wants_to_end=True),
-            )
+            text = self._say("goodbye")
+            return CreditorReply(text=text, analysis=_acts(EndCallAct(type="end_call", quote=text)))
 
         pressure = self._maybe_pressure()
         if pressure is not None:
@@ -780,7 +784,7 @@ class CreditorPolicy:
             text, terms = self._reveal_structure_line()
             return CreditorReply(
                 text=text,
-                analysis=TurnAnalysis(terms=terms, stance="info"),
+                analysis=_acts(*terms),
             )
 
         if intent == Intent.ASK and action.reason == "optional_sweep":
@@ -797,7 +801,7 @@ class CreditorPolicy:
             text, terms = self._reveal_field(field)
             return CreditorReply(
                 text=text,
-                analysis=TurnAnalysis(terms=terms, stance="info"),
+                analysis=_acts(*terms),
             )
 
         if intent == Intent.ASK_SETTLEMENT:
@@ -813,7 +817,7 @@ class CreditorPolicy:
                 text, terms = self._reveal_structure_line()
                 return CreditorReply(
                     text=text,
-                    analysis=TurnAnalysis(terms=terms, stance="info"),
+                    analysis=_acts(*terms),
                 )
             return self._ask_settlement_reply()
 
@@ -846,9 +850,8 @@ class CreditorPolicy:
             return self._with_late_fields(
                 CreditorReply(
                     text=text,
-                    analysis=TurnAnalysis(
-                        stance="info",
-                        readback_response=rb,  # type: ignore[arg-type]
+                    analysis=_acts(
+                        ReadbackReplyAct(type="readback_reply", response=rb, quote=text)  # type: ignore[arg-type]
                     ),
                 )
             )
@@ -862,7 +865,7 @@ class CreditorPolicy:
             text, terms = self._reveal_field(field)
             return CreditorReply(
                 text=text,
-                analysis=TurnAnalysis(terms=terms, stance="info"),
+                analysis=_acts(*terms),
             )
 
         if intent == Intent.COUNTER:
@@ -881,14 +884,14 @@ class CreditorPolicy:
                 text, terms = self._reveal_structure_line()
                 return CreditorReply(
                     text=text,
-                    analysis=TurnAnalysis(terms=terms, stance="info"),
+                    analysis=_acts(*terms),
                 )
             return self._ask_settlement_reply()
 
         text, terms = self._reveal_structure_line()
         return CreditorReply(
             text=text,
-            analysis=TurnAnalysis(terms=terms, stance="info"),
+            analysis=_acts(*terms),
         )
 
     async def _phrase(self, draft: CreditorReply, agent_text: str) -> CreditorReply:
@@ -929,8 +932,7 @@ class CreditorPolicy:
         if _COMMIT_PHRASE_RE.search(line) and not _COMMIT_PHRASE_RE.search(draft.text):
             reason = "commit"
         else:
-            stance = draft.analysis.readback_response or draft.analysis.stance
-            reason = rewrite_problem(draft.text, line, stance=stance)
+            reason = rewrite_problem(draft.text, line, stance=_stance_of(draft.analysis))
         if reason is not None:
             # Free models change figures and flip stances: speak the code-built draft.
             self.rewrite_fallbacks[reason] += 1
@@ -941,8 +943,7 @@ class CreditorPolicy:
         """Produce the next creditor utterance + oracle analysis for ``action``."""
         if self._done:
             return CreditorReply(
-                text="Goodbye.",
-                analysis=TurnAnalysis(stance="other", wants_to_end=True),
+                text="Goodbye.", analysis=_acts(EndCallAct(type="end_call", quote="Goodbye."))
             )
         self._turn += 1
         # Strip non-public facts defensively (sim must not rely on PRIVATE).

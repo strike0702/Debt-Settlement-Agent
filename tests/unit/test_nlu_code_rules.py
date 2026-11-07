@@ -28,15 +28,14 @@ from app.agent.nlu import (
     balance_statement_amount,
     bare_amount_ask,
     hostility_floor_hit,
-    post_verify,
     resolve_amounts,
 )
-from app.agent.nlu_types import TurnAnalysis
 from app.agent.orchestrator import Orchestrator
 from app.agent.session import CallSession
 from app.domain.actions import Intent
 from app.domain.scenario import load_scenario
 from app.store.audit import AuditLog
+from tests.acts_helpers import acts_turn, flag, verify_turn
 from tests.wsutil import offline_settings
 
 _REF = date(2026, 3, 1)
@@ -44,9 +43,8 @@ _BALANCE = 125000
 
 
 def _private(utterance: str) -> bool:
-    return post_verify(
-        TurnAnalysis(stance="question"), utterance, ref=_REF
-    ).asks_client_private_info
+    out = verify_turn(acts_turn(stance="question"), utterance, ref=_REF)
+    return flag(out, "asks_client_private_info")
 
 
 # ----- private finance shapes -----
@@ -101,10 +99,10 @@ def test_public_debt_questions_do_not_fire(utterance: str) -> None:
     ],
 )
 def test_hostility_floor_reaches_the_threshold_when_the_model_misses(utterance: str) -> None:
-    out = post_verify(TurnAnalysis(stance="other", hostility=0.0), utterance, ref=_REF)
+    out = verify_turn(acts_turn(stance="other", hostility=0.0), utterance, ref=_REF)
     assert hostility_floor_hit(utterance)
-    assert out.hostility == HOSTILITY_FLOOR
-    assert out.hostility >= offline_settings().hostility_threshold
+    assert flag(out, "hostility") == HOSTILITY_FLOOR
+    assert flag(out, "hostility") >= offline_settings().hostility_threshold
 
 
 @pytest.mark.parametrize(
@@ -122,8 +120,8 @@ def test_hostility_floor_reaches_the_threshold_when_the_model_misses(utterance: 
 )
 def test_hostility_floor_near_misses(utterance: str) -> None:
     assert not hostility_floor_hit(utterance)
-    out = post_verify(TurnAnalysis(stance="other", hostility=0.0), utterance, ref=_REF)
-    assert out.hostility == 0.0
+    out = verify_turn(acts_turn(stance="other", hostility=0.0), utterance, ref=_REF)
+    assert flag(out, "hostility") == 0.0
 
 
 # ----- balance statements never get the amount question -----
@@ -231,7 +229,7 @@ async def test_bare_amount_question_end_to_end(tmp_path: Path) -> None:
         auto_ack=True,
     )
     await orch.start()
-    u: Any = await orch.on_creditor_text(_AM10, oracle=TurnAnalysis(stance="offer"))
+    u: Any = await orch.on_creditor_text(_AM10, oracle=acts_turn(stance="offer"))
     assert u.action.intent == Intent.CLARIFY
     text = " ".join(t for _, t in u.sentences)
     assert "$600" in text and "total" in text
@@ -248,13 +246,13 @@ async def test_bare_amount_question_end_to_end(tmp_path: Path) -> None:
 def test_spoken_money_fast_path_and_verify(utterance: str) -> None:
     from app.agent.nlu import try_fast_field_answer
     from app.domain.fields import FIELDS_BY_NAME
-    from app.domain.nlu_types import ExtractedTerm
+    from tests.acts_helpers import rule_act
 
     ask = FIELDS_BY_NAME["min_payment_cents"].ask_text
     fast = try_fast_field_answer(utterance, ask, ref=_REF)
     assert fast is not None and [(t.field, t.value) for t in fast.terms] == [
         ("min_payment_cents", 12000)
     ]
-    term = ExtractedTerm(field="min_payment_cents", value=12000, quote=utterance.rstrip("."))
-    out = post_verify(TurnAnalysis(stance="info", terms=[term]), utterance, ref=_REF)
+    term = rule_act(field="min_payment_cents", value=12000, quote=utterance.rstrip("."))
+    out = verify_turn(acts_turn(stance="info", terms=[term]), utterance, ref=_REF)
     assert [(t.field, t.value) for t in out.terms] == [("min_payment_cents", 12000)]

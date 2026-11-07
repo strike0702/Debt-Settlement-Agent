@@ -10,9 +10,9 @@ question topic, revision) are the model's flag OR an un-negated regex cue.
 define the tiers", "there are three tiers") only with that field's word in
 the line; ``repair_list_done`` reads "that's all" at the end of a list.
 ``hostility_floor_hit`` lifts clear insults / threats to ``HOSTILITY_FLOOR``.
-``_repair_dispositions`` applies them all in a fixed order; called from
-``verify.post_verify`` and the oracle path of ``llm_call.analyze``. Regex
-only: no LLM, no term values.
+``repair_acts`` applies them all to a turn's acts in a fixed order (model and
+oracle acts alike, from ``acts.verify_acts``). Regex only: no LLM, no term
+values.
 """
 
 from __future__ import annotations
@@ -21,7 +21,6 @@ import re
 from typing import Any
 
 from app.agent.nlu.quotes import normalize_for_quote
-from app.agent.nlu_types import TurnAnalysis
 from app.agent.numbers import extract_tokens
 from app.domain.nlu_types import QUESTION_TOPICS
 
@@ -516,6 +515,31 @@ def repair_question(
     return True, topic
 
 
+# "six payments max, not eight", "$200 now instead of $150": a negator right
+# before a value names the value being replaced.
+_NEGATED_VALUE_RE = re.compile(
+    r"\b(?:not|no longer|instead of|rather than|isn'?t)\s+"
+    r"((?:[\w$'-]+(?:[.,]\d+)*\s+){0,3}[\w$'-]+(?:[.,]\d+)*)",
+    re.IGNORECASE,
+)
+
+
+def negates_value(utterance: str, value: Any, *, ref: Any = None) -> bool:
+    """True when the line negates ``value`` itself ("..., not eight" with value 8).
+
+    A rule change after a proposal that names the old value it replaces is a
+    revision, not a contradiction to clarify (71a-2 held-out
+    ``neg_rule_change`` #2). Code reads the numbers (``extract_tokens``); a
+    value that is not a number or date never matches.
+    """
+    if value is None or isinstance(value, (bool, list, dict)):
+        return False
+    for m in _NEGATED_VALUE_RE.finditer(utterance):
+        if any(tok.value == value for tok in extract_tokens(m.group(1), ref=ref)):
+            return True
+    return False
+
+
 def repair_revises_terms(utterance: str) -> bool:
     """True when the utterance cues a post-proposal term change."""
     return _REVISION_RE.search(utterance) is not None
@@ -686,19 +710,172 @@ def repair_list_done(utterance: str) -> bool:
     return _LIST_DONE_RE.search(utterance) is not None
 
 
-def _repair_dispositions(
-    src: TurnAnalysis, utterance: str, *, has_terms: bool, opening: bool | None = None
-) -> dict[str, Any]:
-    """Repaired stance + side-channel flags from an LLM or oracle analysis."""
-    return {
-        "stance": repair_stance(src.stance, utterance, has_terms=has_terms, opening=opening),
-        "readback_response": _verify_readback_response(src.readback_response, utterance),
-        "asks_client_private_info": repair_asks_client_private_info(
-            src.asks_client_private_info, utterance
-        ),
-        "demands_commitment": repair_demands_commitment(src.demands_commitment, utterance),
-        "hostility": repair_hostility(src.hostility, utterance),
-        "wants_to_end": repair_wants_to_end(src.wants_to_end, utterance),
-        "asks_for_schedule": repair_asks_for_schedule(src.asks_for_schedule, utterance),
-        "firm": repair_firm(src.firm, utterance),
-    }
+def _cue_quote(utterance: str) -> str:
+    """Quote for an act code adds from a cue: the line itself (acts need a quote)."""
+    return (utterance.strip() or "-")[:300]
+
+
+
+
+def repair_acts(
+    acts: list[Any],
+    utterance: str,
+    *,
+    has_terms: bool,
+    given_fields: set[str],
+    collecting: bool,
+    model_ended: bool,
+) -> tuple[list[Any], int | None]:
+    """The turn's non-content acts after the code-side cue rules, and a level count.
+
+    The code-side cue rules, applied to acts (order matters):
+
+    1. accept / reject: an injection drops every accept; else an unguarded
+       reject phrase makes the line a reject, an unguarded accept phrase (or a
+       short ack that dominates a line with no terms) an accept.
+    2. read-back reply: kept only with a matching yes / no phrase.
+    3. private-info ask, commitment demand: the model's act OR an un-negated cue.
+    4. hostility: kept only with a hostile cue; a floor phrase makes it strong.
+    5. closing: the model's ``end_call`` OR a thanks / bye cue; dropped when the
+       line finishes a list being collected ("that's all the tiers").
+    6. schedule detail: a schedule cue adds ``question`` topic ``schedule``.
+    7. firmness: a firm cue makes the price act ``final`` (a number-free final
+       price act when the line has none).
+    8. off-script questions (``repair_question``), rule announcements
+       (``repair_defines_field``) and "that's all" (``list_done``).
+
+    Returns ``(acts, levels)``: ``levels`` is a count of payment levels said as
+    the level limit itself ("at most two payment levels"), which the caller
+    turns into the ``max_segments`` rule.
+    """
+    from app.domain.nlu_types import (
+        HOSTILITY_LEVEL,
+        AnnounceRulesAct,
+        AskPrivateInfoAct,
+        DemandCommitmentAct,
+        EndCallAct,
+        HostilityAct,
+        ListDoneAct,
+        PriceAskAct,
+        QuestionAct,
+        RespondToOfferAct,
+    )
+
+    q = _cue_quote(utterance)
+    out = list(acts)
+
+    def _without(type_name: str, **match: Any) -> list[Any]:
+        return [
+            a
+            for a in out
+            if not (a.type == type_name and all(getattr(a, k) == v for k, v in match.items()))
+        ]
+
+    def _respond(kind: str) -> None:
+        nonlocal out
+        other = "reject" if kind == "accept" else "accept"
+        out = _without("respond_to_offer", response=other)
+        if not any(a.type == "respond_to_offer" for a in out):
+            out.append(RespondToOfferAct(type="respond_to_offer", response=kind, quote=q))  # type: ignore[arg-type]
+
+    # 1. accept / reject
+    if _INJECTION_RE.search(utterance):
+        out = _without("respond_to_offer", response="accept")
+    elif _has_unguarded_reject_phrase(utterance):
+        _respond("reject")
+    elif _has_unguarded_accept_phrase(utterance) or (
+        not has_terms and _ack_dominant(utterance)
+    ):
+        _respond("accept")
+
+    # 2. read-back reply
+    kept: list[Any] = []
+    for a in out:
+        if a.type == "readback_reply" and _verify_readback_response(a.response, utterance) is None:
+            continue
+        kept.append(a)
+    out = kept
+
+    # 3. private info / commitment
+    private = any(a.type == "ask_private_info" for a in out) or repair_asks_client_private_info(
+        False, utterance
+    )
+    if private and not any(a.type == "ask_private_info" for a in out):
+        out.append(AskPrivateInfoAct(type="ask_private_info", quote=q))
+    if not any(a.type == "demand_commitment" for a in out) and repair_demands_commitment(
+        False, utterance
+    ):
+        out.append(DemandCommitmentAct(type="demand_commitment", quote=q))
+
+    # 4. hostility
+    score = max((HOSTILITY_LEVEL[a.level] for a in out if a.type == "hostility"), default=0.0)
+    repaired = repair_hostility(score, utterance)
+    out = _without("hostility")
+    if repaired > 0:
+        level = "strong" if repaired >= HOSTILITY_LEVEL["strong"] else "mild"
+        out.append(HostilityAct(type="hostility", level=level, quote=q))  # type: ignore[arg-type]
+
+    # 8 (part). "that's all": needed before the closing rule.
+    list_done = any(a.type == "list_done" for a in out) or repair_list_done(utterance)
+    if list_done and not any(a.type == "list_done" for a in out):
+        out.append(ListDoneAct(type="list_done", quote=q))
+
+    # 8 (part). Rule announcement, re-read by code.
+    ann = next((a for a in out if a.type == "announce_rules"), None)
+    field, count = repair_defines_field(
+        ann.field if ann is not None else None,
+        ann.count if ann is not None else None,
+        utterance,
+        given_fields=given_fields,
+    )
+    out = _without("announce_rules")
+    levels: int | None = None
+    if field == "max_segments" and count is not None:
+        levels = count  # the level limit itself, not a list still to come
+    elif field is not None:
+        out.append(
+            AnnounceRulesAct(
+                type="announce_rules",
+                field=field,  # type: ignore[arg-type]
+                count=count,
+                quote=ann.quote if ann is not None else q,
+            )
+        )
+    collecting = collecting or field == "min_payment_tiers"
+
+    # 5. closing
+    said_list = any(a.type == "list_done" for a in acts)
+    ends = model_ended or repair_wants_to_end(False, utterance)
+    if list_done and (collecting or (said_list and not model_ended)):
+        ends = False
+    out = _without("end_call")
+    if ends:
+        kind = next((a for a in acts if a.type == "end_call"), None)
+        out.append(kind or EndCallAct(type="end_call", quote=q))
+
+    # 6. schedule detail
+    if repair_asks_for_schedule(False, utterance) and not any(
+        a.type == "question" and a.topic == "schedule" for a in out
+    ):
+        out.append(QuestionAct(type="question", topic="schedule", quote=q))
+
+    # 7. firmness
+    if not any(a.type == "price_ask" and a.firmness == "final" for a in out) and repair_firm(
+        False, utterance
+    ):
+        out.append(PriceAskAct(type="price_ask", firmness="final", quote=q))
+
+    # 8. off-script question (not the code's schedule topic)
+    asked = [a for a in out if a.type == "question" and a.topic != "schedule"]
+    topic = asked[0].topic if asked else None
+    asks, topic = repair_question(bool(asked), topic, utterance, asks_private=private)
+    out = [a for a in out if not (a.type == "question" and a.topic != "schedule")]
+    if asks:
+        out.append(
+            QuestionAct(
+                type="question",
+                topic=topic or "other",  # type: ignore[arg-type]
+                quote=asked[0].quote if asked else q,
+            )
+        )
+    return out, levels

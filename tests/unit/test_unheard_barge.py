@@ -17,25 +17,26 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
 from app.agent.orchestrator import Orchestrator
 from app.agent.policy import Intent
 from app.agent.session import CallSession
 from app.config import Settings
+from app.domain.nlu_types import RepTurn
 from app.domain.scenario import load_scenario
 from app.llm.client import FakeLLM
 from app.main import create_app
 from app.store.audit import AuditLog
+from tests.acts_helpers import acts_turn, rule_act
 
-_ASK = TurnAnalysis(settlement_ask_pct=70.0, ask_quote="seventy percent", stance="counter")
-_FRAGMENT = TurnAnalysis(stance="other")
+_ASK = acts_turn(settlement_ask_pct=70.0, ask_quote="seventy percent", stance="counter")
+_FRAGMENT = acts_turn(stance="other")
 _TERMS_TEXT = "Max six payments, minimum payment twenty five dollars, even payments."
-_TERMS = TurnAnalysis(
+_TERMS = acts_turn(
     stance="info",
     terms=[
-        ExtractedTerm(field="max_payments", value=6, quote="six"),
-        ExtractedTerm(field="min_payment_cents", value=2500, quote="twenty five dollars"),
-        ExtractedTerm(field="payment_structure", value="even", quote="even"),
+        rule_act(field="max_payments", value=6, quote="six"),
+        rule_act(field="min_payment_cents", value=2500, quote="twenty five dollars"),
+        rule_act(field="payment_structure", value="even", quote="even"),
     ],
 )
 
@@ -67,7 +68,7 @@ def _events(orch: Orchestrator, kind: str) -> list[dict[str, Any]]:
     return [e for e in orch.audit.for_call(orch.session.call_id) if e["type"] == kind]
 
 
-async def _heard(orch: Orchestrator, text: str, oracle: TurnAnalysis) -> Any:
+async def _heard(orch: Orchestrator, text: str, oracle: RepTurn) -> Any:
     u = await orch.on_creditor_text(text, oracle=oracle)
     await orch.on_sentence_done([sid for sid, _ in u.sentences])
     return u
@@ -184,7 +185,7 @@ def _recv_until(ws: Any, kind: str, *, limit: int = 120) -> list[dict[str, Any]]
     return got
 
 
-def _send(ws: Any, text: str, oracle: TurnAnalysis) -> list[dict[str, Any]]:
+def _send(ws: Any, text: str, oracle: RepTurn) -> list[dict[str, Any]]:
     ws.send_json({"type": "text", "text": text, "oracle": oracle.model_dump(mode="json")})
     return _recv_until(ws, "turn_done")
 

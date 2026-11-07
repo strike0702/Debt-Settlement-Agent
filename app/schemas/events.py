@@ -516,7 +516,7 @@ class TextEvent(_Model):
     type: Literal["text"]
     text: str
     source: str | None = None
-    # Ground-truth TurnAnalysis, honoured only when the server runs nlu_mode=oracle.
+    # Ground-truth RepTurn (verified acts), honoured only when the server runs nlu_mode=oracle.
     oracle: dict[str, Any] | None = None
 
 

@@ -7,7 +7,6 @@ from datetime import date
 from app.adapter.engine_adapter import Affordability
 from app.agent import policy as policy_mod
 from app.agent.nlg import render_action
-from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
 from app.agent.policy import (
     Intent,
     NegotiationState,
@@ -24,6 +23,7 @@ from app.domain.belief import BeliefState, TermStatus
 from app.domain.facts import Fact
 from app.domain.scenario import load_scenario
 from app.store.audit import AuditLog
+from tests.acts_helpers import acts_turn, rule_act
 
 
 def _key(belief: BeliefState, ask_bp: int) -> tuple:
@@ -72,7 +72,7 @@ def test_rule1_max_turns() -> None:
     action = decide(
         _belief(max_payments=6, min_payment_cents=10000, payment_structure="even"),
         _neg(turn_idx=25, ask_bp=5000, phase=Phase.NEGOTIATE),
-        TurnAnalysis(stance="other"),
+        acts_turn(stance="other"),
         _afford(6000),
         settings=_SETTINGS,
     )
@@ -86,7 +86,7 @@ def test_rule2_hostility_escalates() -> None:
     action = decide(
         _belief(),
         _neg(turn_idx=1),
-        TurnAnalysis(hostility=0.9),
+        acts_turn(hostility=0.9),
         None,
         settings=_SETTINGS,
     )
@@ -99,7 +99,7 @@ def test_rule3_private_first_refuse_then_escalate() -> None:
     a1 = decide(
         b,
         _neg(turn_idx=1, private_ask_count=0),
-        TurnAnalysis(asks_client_private_info=True),
+        acts_turn(asks_client_private_info=True),
         None,
         settings=_SETTINGS,
     )
@@ -107,7 +107,7 @@ def test_rule3_private_first_refuse_then_escalate() -> None:
     a2 = decide(
         b,
         _neg(turn_idx=2, private_ask_count=1),
-        TurnAnalysis(asks_client_private_info=True),
+        acts_turn(asks_client_private_info=True),
         None,
         settings=_SETTINGS,
     )
@@ -120,7 +120,7 @@ def test_rule4_commitment_first_refuse_then_escalate() -> None:
     a1 = decide(
         b,
         _neg(turn_idx=1, commit_demand_count=0),
-        TurnAnalysis(demands_commitment=True),
+        acts_turn(demands_commitment=True),
         None,
         settings=_SETTINGS,
     )
@@ -128,7 +128,7 @@ def test_rule4_commitment_first_refuse_then_escalate() -> None:
     a2 = decide(
         b,
         _neg(turn_idx=2, commit_demand_count=1),
-        TurnAnalysis(demands_commitment=True),
+        acts_turn(demands_commitment=True),
         None,
         settings=_SETTINGS,
     )
@@ -148,7 +148,7 @@ def test_rule5_contradiction_before_readback_before_ask() -> None:
     action = decide(
         b,
         _neg(turn_idx=3),
-        TurnAnalysis(stance="info"),
+        acts_turn(stance="info"),
         None,
         settings=_SETTINGS,
     )
@@ -164,7 +164,7 @@ def test_rule5_contradiction_unresolved_escalates() -> None:
     action = decide(
         b,
         _neg(turn_idx=5, clarify_counts={"max_payments": 2}),
-        TurnAnalysis(stance="info"),
+        acts_turn(stance="info"),
         None,
         settings=_SETTINGS,
     )
@@ -178,7 +178,7 @@ def test_rule6_tentative_readback_before_ask() -> None:
     action = decide(
         b,
         _neg(turn_idx=1),
-        TurnAnalysis(stance="info"),
+        acts_turn(stance="info"),
         None,
         settings=_SETTINGS,
     )
@@ -192,7 +192,7 @@ def test_rule7_ask_missing_required_registry_order() -> None:
     action = decide(
         b,
         _neg(turn_idx=1),
-        TurnAnalysis(stance="info"),
+        acts_turn(stance="info"),
         None,
         settings=_SETTINGS,
     )
@@ -205,7 +205,7 @@ def test_rule8_ask_settlement_when_rules_known() -> None:
     action = decide(
         b,
         _neg(turn_idx=1, ask_bp=None, phase=Phase.DISCOVERY),
-        TurnAnalysis(stance="info"),
+        acts_turn(stance="info"),
         _afford(5000),
         settings=_SETTINGS,
     )
@@ -217,7 +217,7 @@ def test_rule9_rescue_escalates_without_speaking_amounts() -> None:
     action = decide(
         b,
         _neg(turn_idx=2, ask_bp=6000, phase=Phase.NEGOTIATE),
-        TurnAnalysis(stance="offer", settlement_ask_pct=60.0),
+        acts_turn(stance="offer", settlement_ask_pct=60.0),
         _afford(None),
         settings=_SETTINGS,
         rescue_within_guardrail=True,
@@ -236,7 +236,7 @@ def test_rule9_infeasible_no_rescue_no_deal() -> None:
     action = decide(
         b,
         _neg(turn_idx=2, ask_bp=6000),
-        TurnAnalysis(stance="offer"),
+        acts_turn(stance="offer"),
         _afford(None),
         settings=_SETTINGS,
         rescue_within_guardrail=False,
@@ -252,7 +252,7 @@ def test_rule9_infeasible_with_alt_date_counters_terms() -> None:
     action = decide(
         b,
         _neg(turn_idx=3, ask_bp=4500),
-        TurnAnalysis(stance="info"),
+        acts_turn(stance="info"),
         _afford(None),
         settings=_SETTINGS,
         rescue_within_guardrail=False,
@@ -268,7 +268,7 @@ def test_rule9_infeasible_with_alt_date_counters_terms() -> None:
             ask_bp=4500,
             terms_countered=[f"first_payment_date:{alt.isoformat()}"],
         ),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         _afford(None),
         settings=_SETTINGS,
         rescue_within_guardrail=False,
@@ -285,7 +285,7 @@ def test_rule9_alt_date_beats_rescue_escalate() -> None:
     action = decide(
         b,
         _neg(turn_idx=5, ask_bp=8000, phase=Phase.NEGOTIATE),
-        TurnAnalysis(stance="offer", settlement_ask_pct=80.0),
+        acts_turn(stance="offer", settlement_ask_pct=80.0),
         _afford(None),
         settings=_SETTINGS,
         rescue_within_guardrail=True,
@@ -306,7 +306,7 @@ def test_rule9_alt_min_payment_beats_rescue() -> None:
             phase=Phase.NEGOTIATE,
             terms_countered=["first_payment_date:2027-01-31"],
         ),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         _afford(None),
         settings=_SETTINGS,
         rescue_within_guardrail=True,
@@ -332,7 +332,7 @@ def test_ask_above_ceiling_prefers_further_term_alt() -> None:
                 "min_payment_cents:5000",
             ],
         ),
-        TurnAnalysis(stance="reject", settlement_ask_pct=50.0),
+        acts_turn(stance="reject", settlement_ask_pct=50.0),
         _afford(800, [800]),
         settings=_SETTINGS,
         term_alt=("min_payment_cents", 3000),
@@ -358,7 +358,7 @@ def test_rule9_reject_terms_cascades_to_next_alt() -> None:
                 "value": "2027-01-31",
             },
         ),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         _afford(None),
         settings=_SETTINGS,
         rescue_within_guardrail=True,
@@ -382,7 +382,7 @@ def test_rule9_alt_max_payments_beats_rescue() -> None:
                 "min_payment_cents:5000",
             ],
         ),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         _afford(None),
         settings=_SETTINGS,
         rescue_within_guardrail=True,
@@ -406,7 +406,7 @@ def test_readback_uses_field_label_not_raw_name() -> None:
     action = decide(
         b,
         _neg(turn_idx=2, ask_bp=4500),
-        TurnAnalysis(stance="info"),
+        acts_turn(stance="info"),
         _afford(10000),
         settings=_SETTINGS,
     )
@@ -422,7 +422,7 @@ def test_readback_empty_tiers_speaks_natural_copy() -> None:
     action = decide(
         b,
         _neg(turn_idx=2, ask_bp=4500),
-        TurnAnalysis(stance="info"),
+        acts_turn(stance="info"),
         _afford(10000),
         settings=_SETTINGS,
     )
@@ -451,7 +451,7 @@ def test_readback_during_confirm_keeps_phase_and_notes_accept() -> None:
             last_confirm_key=key,
             phase=Phase.CONFIRM,
         ),
-        TurnAnalysis(stance="accept"),
+        acts_turn(stance="accept"),
         _afford(10000),
         settings=_SETTINGS,
     )
@@ -476,7 +476,7 @@ def test_readback_yes_after_accepted_confirm_wraps() -> None:
             accepted_confirm_key=key,
             phase=Phase.CONFIRM,
         ),
-        TurnAnalysis(stance="info", readback_response="confirm"),
+        acts_turn(stance="info", readback_response="confirm"),
         _afford(10000),
         settings=_SETTINGS,
     )
@@ -499,7 +499,7 @@ def test_readback_yes_after_accept_with_revised_terms_reconfirms() -> None:
             accepted_confirm_key=key,
             phase=Phase.CONFIRM,
         ),
-        TurnAnalysis(stance="info", readback_response="confirm"),
+        acts_turn(stance="info", readback_response="confirm"),
         _afford(10000),
         settings=_SETTINGS,
     )
@@ -522,7 +522,7 @@ def test_readback_deny_after_accepted_confirm_does_not_wrap() -> None:
             accepted_confirm_key=key,
             phase=Phase.CONFIRM,
         ),
-        TurnAnalysis(stance="info", readback_response="deny"),
+        acts_turn(stance="info", readback_response="deny"),
         _afford(10000),
         settings=_SETTINGS,
     )
@@ -535,7 +535,7 @@ def test_rule9_affordable_ask_counters_at_anchor() -> None:
     action = decide(
         b,
         _neg(turn_idx=3, ask_bp=4500, phase=Phase.NEGOTIATE),
-        TurnAnalysis(stance="offer"),
+        acts_turn(stance="offer"),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
@@ -554,7 +554,7 @@ def test_negotiate_ask_within_offer_confirms() -> None:
             counters_offered=[3100, 4200],
             phase=Phase.NEGOTIATE,
         ),
-        TurnAnalysis(stance="offer", settlement_ask_pct=40.0),
+        acts_turn(stance="offer", settlement_ask_pct=40.0),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
@@ -570,7 +570,7 @@ def test_negotiate_rep_firm_confirms_ask() -> None:
     final = decide(
         b,
         _neg(turn_idx=5, ask_bp=4500, counters_offered=[3100], phase=Phase.NEGOTIATE),
-        TurnAnalysis(stance="reject", firm=True),
+        acts_turn(stance="reject", firm=True),
         afford,
         settings=_SETTINGS,
     )
@@ -588,7 +588,7 @@ def test_negotiate_rep_firm_confirms_ask() -> None:
             final_counter_ask=4500,
             phase=Phase.NEGOTIATE,
         ),
-        TurnAnalysis(stance="reject", firm=True),
+        acts_turn(stance="reject", firm=True),
         afford,
         settings=_SETTINGS,
     )
@@ -603,7 +603,7 @@ def test_negotiate_firm_first_turn_still_counters() -> None:
     action = decide(
         b,
         _neg(turn_idx=3, ask_bp=4500, phase=Phase.NEGOTIATE),
-        TurnAnalysis(stance="reject", firm=True),
+        acts_turn(stance="reject", firm=True),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
@@ -624,7 +624,7 @@ def test_negotiate_counters_exhausted_confirms() -> None:
     action = decide(
         b,
         _neg(ask_bp=4500, **neg),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
@@ -633,7 +633,7 @@ def test_negotiate_counters_exhausted_confirms() -> None:
     above = decide(
         b,
         _neg(ask_bp=5000, **neg),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
@@ -647,7 +647,7 @@ def test_negotiate_no_lower_counter_confirms() -> None:
     action = decide(
         b,
         _neg(turn_idx=3, ask_bp=4500, phase=Phase.NEGOTIATE),
-        TurnAnalysis(stance="offer"),
+        acts_turn(stance="offer"),
         _afford(6000, [4500]),
         settings=_SETTINGS,
     )
@@ -670,7 +670,7 @@ def test_never_counter_below_confirmed_bp_on_restate() -> None:
             counters_offered=[3100],
             confirm_rejects=0,
         ),
-        TurnAnalysis(stance="other"),
+        acts_turn(stance="other"),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
@@ -691,7 +691,7 @@ def test_terms_revised_reconfirms_at_confirmed_bp() -> None:
             phase=Phase.CONFIRM,
             last_confirm_key=old_key,
         ),
-        TurnAnalysis(stance="offer"),
+        acts_turn(stance="offer"),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
@@ -713,7 +713,7 @@ def test_accept_with_changed_key_does_not_wrap() -> None:
             phase=Phase.CONFIRM,
             last_confirm_key=old_key,
         ),
-        TurnAnalysis(stance="accept"),
+        acts_turn(stance="accept"),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
@@ -732,7 +732,7 @@ def test_rule9_accept_last_counter_confirms() -> None:
             counters_offered=[4000, 5000],
             phase=Phase.NEGOTIATE,
         ),
-        TurnAnalysis(stance="accept"),
+        acts_turn(stance="accept"),
         _afford(7000),  # line 5250
         settings=_SETTINGS,
         confirm_facts={
@@ -761,7 +761,7 @@ def test_rule10_confirm_phase_accept_propose_wrap() -> None:
             phase=Phase.CONFIRM,
             last_confirm_key=key,
         ),
-        TurnAnalysis(stance="accept"),
+        acts_turn(stance="accept"),
         _afford(6000),
         settings=_SETTINGS,
     )
@@ -783,7 +783,7 @@ def test_confirm_accept_with_corrected_pct_does_not_wrap() -> None:
             phase=Phase.CONFIRM,
             last_confirm_key=key,
         ),
-        TurnAnalysis(stance="accept", settlement_ask_pct=71.0, ask_quote="71%"),
+        acts_turn(stance="accept", settlement_ask_pct=71.0, ask_quote="71%"),
         _afford(10000),
         settings=_SETTINGS,
     )
@@ -804,7 +804,7 @@ def test_term_alt_accept_does_not_lock_stale_low_counter() -> None:
             counters_offered=[800],
             phase=Phase.NEGOTIATE,
         ),
-        TurnAnalysis(stance="accept"),
+        acts_turn(stance="accept"),
         _afford(7700, feasible),
         settings=_SETTINGS,
         accepted_term_alt=True,
@@ -831,7 +831,7 @@ def test_low_confirm_reject_reopens_ladder_when_ask_affordable() -> None:
     action = decide(
         b,
         _neg(**base),
-        TurnAnalysis(stance="reject", settlement_ask_pct=60.0, ask_quote="sixty percent"),
+        acts_turn(stance="reject", settlement_ask_pct=60.0, ask_quote="sixty percent"),
         _afford(7700, feasible),
         settings=_SETTINGS,
     )
@@ -840,7 +840,7 @@ def test_low_confirm_reject_reopens_ladder_when_ask_affordable() -> None:
     climb = decide(
         b,
         _neg(**{**base, "hold_stage": 1, "ask_at_last_counter": 6000}),
-        TurnAnalysis(stance="reject", settlement_ask_pct=60.0, ask_quote="sixty percent"),
+        acts_turn(stance="reject", settlement_ask_pct=60.0, ask_quote="sixty percent"),
         _afford(7700, feasible),
         settings=_SETTINGS,
     )
@@ -867,7 +867,7 @@ def test_low_confirm_other_stance_does_not_repeat_eight_percent() -> None:
             hold_stage=1,
             ask_at_last_counter=6000,
         ),
-        TurnAnalysis(stance="other"),
+        acts_turn(stance="other"),
         _afford(7700, feasible),
         settings=_SETTINGS,
     )
@@ -887,7 +887,7 @@ def test_accept_confirms_last_counter() -> None:
             counters_offered=[6300, 7100],
             phase=Phase.NEGOTIATE,
         ),
-        TurnAnalysis(stance="accept"),
+        acts_turn(stance="accept"),
         _afford(10000),
         settings=_SETTINGS,
     )
@@ -901,7 +901,7 @@ def test_counter_via_decide_snaps_and_records_effect() -> None:
     action = decide(
         b,
         _neg(turn_idx=3, ask_bp=7000, counters_offered=[], phase=Phase.NEGOTIATE),
-        TurnAnalysis(stance="offer"),
+        acts_turn(stance="offer"),
         _afford(5000, feasible),
         settings=_SETTINGS,
         counter_offer_total_cents=40_000,
@@ -927,7 +927,7 @@ def test_no_deal_after_max_counters_at_max_bp() -> None:
             hold_stage=1,
             phase=Phase.NEGOTIATE,
         ),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         _afford(5000, list(range(100, 5100, 100))),  # line 3750 → best legal 3700
         settings=_SETTINGS,
     )
@@ -943,7 +943,7 @@ def test_no_deal_after_max_counters_at_max_bp() -> None:
             ask_at_last_counter=8000,
             phase=Phase.NEGOTIATE,
         ),
-        TurnAnalysis(stance="other"),
+        acts_turn(stance="other"),
         _afford(5000, list(range(100, 5100, 100))),
         settings=_SETTINGS,
     )
@@ -966,7 +966,7 @@ def test_confirm_reject_asks_assumed_field_not_same_schedule() -> None:
             last_confirm_key=key,
             confirm_rejects=0,
         ),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
@@ -996,7 +996,7 @@ def test_confirm_assumed_asked_skips_to_next_or_no_deal() -> None:
             confirm_rejects=1,
             assumed_asked=asked,
         ),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
@@ -1018,7 +1018,7 @@ def test_confirm_identical_key_accept_wraps_not_soft_retry() -> None:
             last_confirm_key=key,
             confirm_rejects=0,
         ),
-        TurnAnalysis(stance="accept"),
+        acts_turn(stance="accept"),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
@@ -1040,7 +1040,7 @@ def test_confirm_identical_key_without_reject_stance_soft_retries() -> None:
             last_confirm_key=key,
             confirm_rejects=1,
         ),
-        TurnAnalysis(stance="other"),
+        acts_turn(stance="other"),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
@@ -1061,7 +1061,7 @@ def test_confirm_unacked_after_max_soft_retries() -> None:
             last_confirm_key=key,
             confirm_rejects=4,
         ),
-        TurnAnalysis(stance="other"),
+        acts_turn(stance="other"),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
@@ -1093,7 +1093,7 @@ def test_confirm_reject_no_assumed_no_deal_after_max() -> None:
             last_confirm_key=key,
             confirm_rejects=4,
         ),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
@@ -1118,7 +1118,7 @@ def test_max_segments_change_invalidates_confirm_key() -> None:
             last_confirm_key=old_key,
             confirm_rejects=1,
         ),
-        TurnAnalysis(stance="other"),
+        acts_turn(stance="other"),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
         confirm_facts={
@@ -1142,7 +1142,7 @@ def test_readback_response_does_not_wrap_in_confirm() -> None:
     action = decide(
         b,
         _neg(turn_idx=5, ask_bp=4500, phase=Phase.CONFIRM),
-        TurnAnalysis(stance="other", readback_response="confirm"),
+        acts_turn(stance="other", readback_response="confirm"),
         _afford(6000),
         settings=_SETTINGS,
     )
@@ -1154,7 +1154,7 @@ def test_wants_to_end_no_deal() -> None:
     action = decide(
         b,
         _neg(turn_idx=3, ask_bp=4500, phase=Phase.NEGOTIATE),
-        TurnAnalysis(stance="other", wants_to_end=True),
+        acts_turn(stance="other", wants_to_end=True),
         _afford(6000),
         settings=_SETTINGS,
     )
@@ -1171,7 +1171,7 @@ def test_thanks_after_confirm_closes_as_deal() -> None:
     action = decide(
         b,
         neg,
-        TurnAnalysis(stance="other", wants_to_end=True),
+        acts_turn(stance="other", wants_to_end=True),
         _afford(6000),
         settings=_SETTINGS,
         confirm_facts={
@@ -1196,7 +1196,7 @@ def test_asks_for_schedule_after_confirm() -> None:
     action = decide(
         b,
         neg,
-        TurnAnalysis(stance="question", asks_for_schedule=True),
+        acts_turn(stance="question", asks_for_schedule=True),
         _afford(6000),
         settings=_SETTINGS,
     )
@@ -1210,7 +1210,7 @@ def test_post_wrap_thanks_closes() -> None:
     action = decide(
         b,
         _neg(turn_idx=6, ask_bp=4500, phase=Phase.WRAP),
-        TurnAnalysis(stance="other", wants_to_end=True),
+        acts_turn(stance="other", wants_to_end=True),
         _afford(6000),
         settings=_SETTINGS,
     )
@@ -1224,7 +1224,7 @@ def test_post_wrap_any_followup_closes() -> None:
     action = decide(
         b,
         _neg(turn_idx=6, ask_bp=4500, phase=Phase.WRAP),
-        TurnAnalysis(stance="info"),
+        acts_turn(stance="info"),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
     )
@@ -1245,7 +1245,7 @@ def test_post_wrap_renegotiate_new_ask() -> None:
             phase=Phase.WRAP,
             last_confirm_key=key,
         ),
-        TurnAnalysis(stance="offer", settlement_ask_pct=70.0, ask_quote="seventy"),
+        acts_turn(stance="offer", settlement_ask_pct=70.0, ask_quote="seventy"),
         _afford(8000),
         settings=_SETTINGS,
     )
@@ -1268,10 +1268,10 @@ def test_post_wrap_renegotiate_new_terms() -> None:
             phase=Phase.WRAP,
             last_confirm_key=key,
         ),
-        TurnAnalysis(
+        acts_turn(
             stance="info",
             terms=[
-                ExtractedTerm(
+                rule_act(
                     field="max_payments",
                     value=3,
                     quote="three payments",
@@ -1291,7 +1291,7 @@ def test_post_wrap_schedule_detail_stays_wrap() -> None:
     action = decide(
         b,
         _neg(turn_idx=6, ask_bp=4500, phase=Phase.WRAP, last_confirm_key=("x",)),
-        TurnAnalysis(stance="question", asks_for_schedule=True),
+        acts_turn(stance="question", asks_for_schedule=True),
         _afford(6000),
         settings=_SETTINGS,
     )
@@ -1312,7 +1312,7 @@ def test_confirm_records_key_on_firm_accept() -> None:
             final_counter_ask=4500,
             phase=Phase.NEGOTIATE,
         ),
-        TurnAnalysis(stance="reject", firm=True),
+        acts_turn(stance="reject", firm=True),
         _afford(6000, list(range(100, 6100, 100))),
         settings=_SETTINGS,
         confirm_facts={
@@ -1338,7 +1338,7 @@ def test_ask_known_but_rules_unbuildable_asks_settlement() -> None:
     action = decide(
         b,
         _neg(turn_idx=3, ask_bp=4500, phase=Phase.DISCOVERY),
-        TurnAnalysis(stance="info"),
+        acts_turn(stance="info"),
         None,
         settings=_SETTINGS,
     )
@@ -1358,7 +1358,7 @@ def test_ask_above_ceiling_fpd_already_countered_ladders() -> None:
             phase=Phase.NEGOTIATE,
             terms_countered=["first_payment_date:2026-11-30"],
         ),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         _afford(5000, list(range(100, 5100, 100))),
         settings=_SETTINGS,
         term_alt=("first_payment_date", date(2026, 12, 31)),
@@ -1371,7 +1371,7 @@ def test_clarify_enum_field_uses_text_slots() -> None:
     b = _belief()
     b.observe("payment_structure", "even", "even", 1, verified=True, hedged=False)
     b.observe("payment_structure", "balloon", "balloon", 2, verified=True, hedged=False)
-    action = decide(b, _neg(turn_idx=3), TurnAnalysis(stance="info"), None, settings=_SETTINGS)
+    action = decide(b, _neg(turn_idx=3), acts_turn(stance="info"), None, settings=_SETTINGS)
     assert action.intent == Intent.CLARIFY
     assert action.facts == {}
     assert action.text_slots["clarify_old"] == "even"
@@ -1409,7 +1409,7 @@ def test_negotiate_firm_above_line_hands_off_at_once() -> None:
         action = decide(
             b,
             _neg(turn_idx=5, ask_bp=5000, counters_offered=counters, phase=Phase.NEGOTIATE),
-            TurnAnalysis(stance="reject", firm=True),
+            acts_turn(stance="reject", firm=True),
             _afford(6000, list(range(100, 6100, 100))),  # line 4500 < 5000 ≤ max
             settings=_SETTINGS,
         )
@@ -1423,7 +1423,7 @@ def test_negotiate_first_number_never_accepted_when_a_counter_exists() -> None:
     action = decide(
         b,
         _neg(turn_idx=3, ask_bp=4500, phase=Phase.NEGOTIATE),
-        TurnAnalysis(stance="offer"),
+        acts_turn(stance="offer"),
         _afford(6000, [4400, 4500]),
         settings=_SETTINGS,
     )
@@ -1439,7 +1439,7 @@ def test_negotiate_hold_then_two_steps_then_accept_or_hand_off() -> None:
     hold = decide(
         b,
         _neg(ask_bp=4500, counters_offered=[3000], hold_stage=0, **base),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         afford,
         settings=_SETTINGS,
     )
@@ -1449,7 +1449,7 @@ def test_negotiate_hold_then_two_steps_then_accept_or_hand_off() -> None:
     step1 = decide(
         b,
         _neg(ask_bp=4500, counters_offered=[3000], hold_stage=1, **base),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         afford,
         settings=_SETTINGS,
     )
@@ -1458,7 +1458,7 @@ def test_negotiate_hold_then_two_steps_then_accept_or_hand_off() -> None:
     step2 = decide(
         b,
         _neg(ask_bp=4500, counters_offered=[3000, 3700], hold_stage=2, **base),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         afford,
         settings=_SETTINGS,
     )
@@ -1467,7 +1467,7 @@ def test_negotiate_hold_then_two_steps_then_accept_or_hand_off() -> None:
     done = decide(
         b,
         _neg(ask_bp=4500, counters_offered=[3000, 3700, 4500], hold_stage=3, **base),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         afford,
         settings=_SETTINGS,
     )
@@ -1478,7 +1478,7 @@ def test_negotiate_hold_then_two_steps_then_accept_or_hand_off() -> None:
     held = decide(
         b,
         _neg(ask_bp=4500, counters_offered=[3000], hold_stage=1, **base),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         _afford(6000, [3000, 4500]),
         settings=_SETTINGS,
     )
@@ -1493,7 +1493,7 @@ def test_negotiate_hold_then_two_steps_then_accept_or_hand_off() -> None:
             ask_at_last_counter=5000,
             phase=Phase.NEGOTIATE,
         ),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         afford,
         settings=_SETTINGS,
     )
@@ -1513,7 +1513,7 @@ def test_negotiate_rep_moves_we_concede_half_and_reset() -> None:
             hold_stage=2,
             phase=Phase.NEGOTIATE,
         ),
-        TurnAnalysis(stance="reject"),
+        acts_turn(stance="reject"),
         _afford(8000, list(range(100, 8100, 100))),  # line 6000
         settings=_SETTINGS,
     )
@@ -1543,7 +1543,7 @@ def test_counters_never_exceed_the_accept_line() -> None:
                                 hold_stage=stage,
                                 phase=Phase.NEGOTIATE,
                             ),
-                            TurnAnalysis(stance="reject", firm=firm),
+                            acts_turn(stance="reject", firm=firm),
                             afford,
                             settings=_SETTINGS,
                         )
@@ -1575,7 +1575,7 @@ def test_accept_with_a_new_number_is_their_ask_not_a_deal() -> None:
     action = decide(
         b,
         _neg(turn_idx=2, phase=Phase.DISCOVERY),
-        TurnAnalysis(stance="accept", settlement_ask_pct=100.0, ask_quote="100%"),
+        acts_turn(stance="accept", settlement_ask_pct=100.0, ask_quote="100%"),
         _afford(10000),
         settings=_SETTINGS,
     )
@@ -1586,7 +1586,7 @@ def test_accept_with_a_new_number_is_their_ask_not_a_deal() -> None:
     later = decide(
         b,
         _neg(turn_idx=4, ask_bp=10000, counters_offered=[5200], phase=Phase.NEGOTIATE),
-        TurnAnalysis(stance="accept", settlement_ask_pct=10.0, ask_quote="10%"),
+        acts_turn(stance="accept", settlement_ask_pct=10.0, ask_quote="10%"),
         _afford(10000),
         settings=_SETTINGS,
     )
@@ -1597,17 +1597,17 @@ def test_accept_with_a_new_number_is_their_ask_not_a_deal() -> None:
 def test_same_question_third_time_hands_off() -> None:
     """Loop guard (B): ASK for one field twice already → hand off, not a third ask."""
     b = _belief(max_payments=6)
-    first = decide(b, _neg(turn_idx=2), TurnAnalysis(stance="info"), None, settings=_SETTINGS)
+    first = decide(b, _neg(turn_idx=2), acts_turn(stance="info"), None, settings=_SETTINGS)
     assert first.intent == Intent.ASK
     note = next(e for e in first.effects if e.kind == "note_question")
     key = note.data["key"]
     again = decide(
-        b, _neg(turn_idx=3, question_counts={key: 1}), TurnAnalysis(stance="info"), None,
+        b, _neg(turn_idx=3, question_counts={key: 1}), acts_turn(stance="info"), None,
         settings=_SETTINGS,
     )
     assert again.intent == Intent.ASK
     third = decide(
-        b, _neg(turn_idx=4, question_counts={key: 2}), TurnAnalysis(stance="info"), None,
+        b, _neg(turn_idx=4, question_counts={key: 2}), acts_turn(stance="info"), None,
         settings=_SETTINGS,
     )
     assert (third.intent, third.reason) == (Intent.ESCALATE, "repeated_question")
@@ -1619,7 +1619,7 @@ def test_no_progress_turns_hand_off() -> None:
     action = decide(
         b,
         _neg(turn_idx=8, ask_bp=4500, phase=Phase.NEGOTIATE, no_progress_turns=4),
-        TurnAnalysis(stance="other"),
+        acts_turn(stance="other"),
         _afford(6000),
         settings=_SETTINGS,
     )
@@ -1628,24 +1628,24 @@ def test_no_progress_turns_hand_off() -> None:
 
 def test_rep_turn_progress_definition() -> None:
     neg = _neg(ask_bp=4500)
-    assert not rep_turn_progress(TurnAnalysis(stance="other"), neg, [])
-    assert not rep_turn_progress(TurnAnalysis(stance="offer", settlement_ask_pct=45.0), neg, [])
-    assert rep_turn_progress(TurnAnalysis(stance="offer", settlement_ask_pct=40.0), neg, [])
-    assert rep_turn_progress(TurnAnalysis(stance="reject"), neg, [])
-    assert rep_turn_progress(TurnAnalysis(stance="info", readback_response="confirm"), neg, [])
+    assert not rep_turn_progress(acts_turn(stance="other"), neg, [])
+    assert not rep_turn_progress(acts_turn(stance="offer", settlement_ask_pct=45.0), neg, [])
+    assert rep_turn_progress(acts_turn(stance="offer", settlement_ask_pct=40.0), neg, [])
+    assert rep_turn_progress(acts_turn(stance="reject"), neg, [])
+    assert rep_turn_progress(acts_turn(stance="info", readback_response="confirm"), neg, [])
     b = _belief()
     change = b.observe("max_payments", 6, "six", 1, verified=True, hedged=False)
-    assert rep_turn_progress(TurnAnalysis(stance="info"), neg, [change])
+    assert rep_turn_progress(acts_turn(stance="info"), neg, [change])
     same = b.observe("max_payments", 6, "six", 2, verified=True, hedged=False)
     if same.old_value == same.new_value and same.old_status == same.new_status:
-        assert not rep_turn_progress(TurnAnalysis(stance="info"), neg, [same])
+        assert not rep_turn_progress(acts_turn(stance="info"), neg, [same])
 
 
 def test_decide_never_emits_no_deal_wrap() -> None:
     """Deal-or-handoff (A): sweep stances / flags / curves; NO_DEAL_WRAP never appears."""
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
     analyses = [
-        TurnAnalysis(stance=s, firm=f, wants_to_end=w)  # type: ignore[arg-type]
+        acts_turn(stance=s, firm=f, wants_to_end=w)  # type: ignore[arg-type]
         for s in ("accept", "reject", "other", "offer")
         for f in (False, True)
         for w in (False, True)

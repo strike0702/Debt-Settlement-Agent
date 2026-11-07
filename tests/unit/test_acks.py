@@ -36,14 +36,14 @@ from app.agent.nlu import (
     resolve_amounts,
     total_shape_trigger,
 )
-from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
 from app.agent.orchestrator import Orchestrator
 from app.agent.session import CallSession
 from app.domain.actions import Action, Intent, Phase
 from app.domain.belief import BeliefChange, TermStatus
+from app.domain.nlu_types import StateRuleAct
 from app.domain.scenario import load_scenario
-from app.llm.client import FakeLLM
 from app.store.audit import AuditLog
+from tests.acts_helpers import ActsFakeLLM, acts_turn, rule_act
 from tests.wsutil import offline_settings
 
 _REF = date(2026, 3, 1)
@@ -64,7 +64,6 @@ def _orch(
 ) -> Orchestrator:
     if llm is not None:
         kw.setdefault("nlu_mode", "llm")
-        kw.setdefault("nlu_schema", "flat")  # fakes reply in the flat schema
     session = CallSession(scenario=load_scenario(fixture))
     return Orchestrator(
         session,
@@ -84,8 +83,8 @@ def _events(orch: Orchestrator, kind: str) -> list[dict[str, Any]]:
     return [e for e in orch.audit.for_call(orch.session.call_id) if e["type"] == kind]
 
 
-def _terms(*pairs: tuple[str, Any, str]) -> list[ExtractedTerm]:
-    return [ExtractedTerm(field=f, value=v, quote=q) for f, v, q in pairs]
+def _terms(*pairs: tuple[str, Any, str]) -> list[StateRuleAct]:
+    return [rule_act(field=f, value=v, quote=q) for f, v, q in pairs]
 
 
 # ----- ack wording -----
@@ -198,7 +197,7 @@ def test_code_ack_renders_total_then_terms() -> None:
 # ----- orchestrator: ack on / off, order, privacy -----
 
 
-_FIRST_TERMS = TurnAnalysis(
+_FIRST_TERMS = acts_turn(
     stance="info",
     terms=_terms(
         ("max_payments", 8, "eight"),
@@ -238,7 +237,7 @@ async def test_private_figure_said_by_the_rep_is_never_acked(tmp_path: Path) -> 
     # $440 is on easy_deal's private blocklist.
     u = await orch.on_creditor_text(
         "Minimum is $440, up to 8 payments.",
-        oracle=TurnAnalysis(
+        oracle=acts_turn(
             stance="info",
             terms=_terms(("min_payment_cents", 44000, "$440"), ("max_payments", 8, "8")),
         ),
@@ -255,7 +254,7 @@ async def test_verified_total_ask_is_acked(tmp_path: Path) -> None:
     await orch.on_creditor_text(_FIRST_LINE, oracle=_FIRST_TERMS)
     u = await orch.on_creditor_text(
         "We can settle for $1,000 total.",
-        oracle=TurnAnalysis(
+        oracle=acts_turn(
             stance="offer", settlement_ask_total_cents=100000, ask_total_quote="$1,000 total"
         ),
     )
@@ -273,7 +272,7 @@ async def _acked_five(tmp_path: Path, **kw: Any) -> Orchestrator:
     await orch.start()
     u = await orch.on_creditor_text(
         "Up to five payments.",
-        oracle=TurnAnalysis(stance="info", terms=_terms(("max_payments", 5, "five"))),
+        oracle=acts_turn(stance="info", terms=_terms(("max_payments", 5, "five"))),
     )
     if kw.get("nlg_ack", True):
         assert "5 payments" in _lines(u)[0]
@@ -290,7 +289,7 @@ async def test_i_said_six_replaces_the_acked_value(tmp_path: Path) -> None:
     orch = await _acked_five(tmp_path)
     u = await orch.on_creditor_text(
         "No, I said six payments.",
-        oracle=TurnAnalysis(stance="info", terms=_terms(("max_payments", 6, "six"))),
+        oracle=acts_turn(stance="info", terms=_terms(("max_payments", 6, "six"))),
     )
     term = orch.session.belief.get("max_payments")
     assert (term.status, term.value) == (TermStatus.KNOWN, 6)
@@ -315,7 +314,7 @@ async def test_bare_no_with_a_new_value_clarifies(tmp_path: Path, line: str) -> 
     orch = await _acked_five(tmp_path)
     quote = "6" if "6" in line else "six"
     u = await orch.on_creditor_text(
-        line, oracle=TurnAnalysis(stance="info", terms=_terms(("max_payments", 6, quote)))
+        line, oracle=acts_turn(stance="info", terms=_terms(("max_payments", 6, quote)))
     )
     assert u.action.intent == Intent.CLARIFY and u.action.reason == "max_payments"
     assert orch.session.belief.get("max_payments").status == TermStatus.CONTRADICTED
@@ -332,7 +331,7 @@ async def test_bare_no_with_a_new_value_clarifies(tmp_path: Path, line: str) -> 
 async def test_misreading_cues_replace_the_acked_value(tmp_path: Path, line: str) -> None:
     orch = await _acked_five(tmp_path)
     await orch.on_creditor_text(
-        line, oracle=TurnAnalysis(stance="info", terms=_terms(("max_payments", 6, "six")))
+        line, oracle=acts_turn(stance="info", terms=_terms(("max_payments", 6, "six")))
     )
     term = orch.session.belief.get("max_payments")
     assert (term.status, term.value) == (TermStatus.KNOWN, 6)
@@ -344,7 +343,7 @@ async def test_rep_changing_their_own_term_still_clarifies(tmp_path: Path) -> No
     orch = await _acked_five(tmp_path)
     u = await orch.on_creditor_text(
         "Actually the maximum is 7 payments.",
-        oracle=TurnAnalysis(stance="info", terms=_terms(("max_payments", 7, "7"))),
+        oracle=acts_turn(stance="info", terms=_terms(("max_payments", 7, "7"))),
     )
     assert u.action.intent == Intent.CLARIFY and u.action.reason == "max_payments"
     assert orch.session.belief.get("max_payments").status == TermStatus.CONTRADICTED
@@ -355,7 +354,7 @@ async def test_correction_without_an_ack_uses_the_clarify_path(tmp_path: Path) -
     orch = await _acked_five(tmp_path, nlg_ack=False)
     u = await orch.on_creditor_text(
         "No, it's six payments.",
-        oracle=TurnAnalysis(stance="info", terms=_terms(("max_payments", 6, "six"))),
+        oracle=acts_turn(stance="info", terms=_terms(("max_payments", 6, "six"))),
     )
     assert u.action.intent == Intent.CLARIFY
     assert not _events(orch, "ack_corrected")
@@ -364,7 +363,7 @@ async def test_correction_without_an_ack_uses_the_clarify_path(tmp_path: Path) -
 @pytest.mark.asyncio
 async def test_thats_not_what_i_said_reads_the_acked_term_back(tmp_path: Path) -> None:
     orch = await _acked_five(tmp_path)
-    u = await orch.on_creditor_text("That's not what I said.", oracle=TurnAnalysis(stance="other"))
+    u = await orch.on_creditor_text("That's not what I said.", oracle=acts_turn(stance="other"))
     assert u.action.intent == Intent.READ_BACK and u.action.reason == "max_payments"
     assert u.action.ack == {}
     assert orch.session.belief.get("max_payments").status == TermStatus.TENTATIVE
@@ -372,7 +371,7 @@ async def test_thats_not_what_i_said_reads_the_acked_term_back(tmp_path: Path) -
     # The rep then gives the right number: it replaces the tentative value.
     await orch.on_creditor_text(
         "Six payments.",
-        oracle=TurnAnalysis(stance="info", terms=_terms(("max_payments", 6, "Six"))),
+        oracle=acts_turn(stance="info", terms=_terms(("max_payments", 6, "Six"))),
     )
     term = orch.session.belief.get("max_payments")
     assert (term.status, term.value) == (TermStatus.KNOWN, 6)
@@ -380,7 +379,7 @@ async def test_thats_not_what_i_said_reads_the_acked_term_back(tmp_path: Path) -
 
 @pytest.mark.asyncio
 async def test_live_nlu_correction_end_to_end(tmp_path: Path) -> None:
-    llm = FakeLLM()
+    llm = ActsFakeLLM()
     reply = {
         "stance": "info",
         "terms": [{"field": "max_payments", "value": 5, "quote": "five", "hedged": False}],
@@ -417,7 +416,7 @@ def test_correction_cues() -> None:
 # ----- pending questions answered with new terms -----
 
 
-_AMB_600 = TurnAnalysis(stance="offer", amount_ambiguous_cents=60000, amount_ambiguous_quote="$600")
+_AMB_600 = acts_turn(stance="offer", amount_ambiguous_cents=60000, amount_ambiguous_quote="$600")
 
 
 async def _pending_amount(tmp_path: Path) -> Orchestrator:
@@ -433,7 +432,7 @@ async def test_amount_question_unanswered_but_new_terms_falls_through(tmp_path: 
     orch = await _pending_amount(tmp_path)
     u = await orch.on_creditor_text(
         "We could do 40%, up to 6 payments.",
-        oracle=TurnAnalysis(
+        oracle=acts_turn(
             stance="counter",
             settlement_ask_pct=40.0,
             ask_quote="40%",
@@ -453,7 +452,7 @@ async def test_amount_answer_plus_new_terms_applies_both(tmp_path: Path) -> None
     orch = await _pending_amount(tmp_path)
     u = await orch.on_creditor_text(
         "That's the total, and up to 6 payments.",
-        oracle=TurnAnalysis(stance="info", terms=_terms(("max_payments", 6, "6 payments"))),
+        oracle=acts_turn(stance="info", terms=_terms(("max_payments", 6, "6 payments"))),
     )
     assert u.action.reason != "amount_meaning"
     assert orch.session.neg.ask_bp == 4800  # 600 / 1250
@@ -465,7 +464,7 @@ async def test_amount_answer_with_its_own_pct_ask_keeps_the_pct(tmp_path: Path) 
     orch = await _pending_amount(tmp_path)
     u = await orch.on_creditor_text(
         "That's the total, but we could do 40%.",
-        oracle=TurnAnalysis(stance="counter", settlement_ask_pct=40.0, ask_quote="40%"),
+        oracle=acts_turn(stance="counter", settlement_ask_pct=40.0, ask_quote="40%"),
     )
     assert u.action.reason != "amount_meaning"
     assert orch.session.neg.ask_bp == 4000
@@ -474,7 +473,7 @@ async def test_amount_answer_with_its_own_pct_ask_keeps_the_pct(tmp_path: Path) 
 @pytest.mark.asyncio
 async def test_amount_question_unclear_reply_is_still_asked_again(tmp_path: Path) -> None:
     orch = await _pending_amount(tmp_path)
-    u = await orch.on_creditor_text("Hmm.", oracle=TurnAnalysis(stance="other"))
+    u = await orch.on_creditor_text("Hmm.", oracle=acts_turn(stance="other"))
     assert u.action.reason == "amount_meaning"
 
 
@@ -488,7 +487,7 @@ async def test_cents_answer_plus_new_terms_applies_both(tmp_path: Path) -> None:
     orch.session.neg.pending_cents_clarify = dict(_CENTS_PENDING)
     u = await orch.on_creditor_text(
         "Dollars, and up to 6 payments.",
-        oracle=TurnAnalysis(stance="info", terms=_terms(("max_payments", 6, "6 payments"))),
+        oracle=acts_turn(stance="info", terms=_terms(("max_payments", 6, "6 payments"))),
     )
     assert u.action.reason != "cents_ambiguity"
     assert orch.session.neg.pending_cents_clarify is None
@@ -503,7 +502,7 @@ async def test_cents_unanswered_but_new_terms_falls_through(tmp_path: Path) -> N
     orch.session.neg.pending_cents_clarify = dict(_CENTS_PENDING)
     u = await orch.on_creditor_text(
         "Up to 6 payments.",
-        oracle=TurnAnalysis(stance="info", terms=_terms(("max_payments", 6, "6 payments"))),
+        oracle=acts_turn(stance="info", terms=_terms(("max_payments", 6, "6 payments"))),
     )
     assert u.action.reason != "cents_ambiguity"
     assert orch.session.neg.pending_cents_clarify is None
@@ -516,7 +515,7 @@ async def test_cents_unclear_reply_is_still_asked_again(tmp_path: Path) -> None:
     orch = _orch(tmp_path)
     await orch.start()
     orch.session.neg.pending_cents_clarify = dict(_CENTS_PENDING)
-    u = await orch.on_creditor_text("Hmm.", oracle=TurnAnalysis(stance="other"))
+    u = await orch.on_creditor_text("Hmm.", oracle=acts_turn(stance="other"))
     assert u.action.reason == "cents_ambiguity"
 
 
@@ -605,7 +604,7 @@ def test_total_with_agreeing_pct_does_not_ask() -> None:
 
 @pytest.mark.asyncio
 async def test_groq_style_total_reading_of_am09_asks_end_to_end(tmp_path: Path) -> None:
-    llm = FakeLLM()
+    llm = ActsFakeLLM()
     llm.enqueue(
         "nlu",
         json.dumps(
@@ -636,5 +635,6 @@ async def test_groq_style_total_reading_of_am09_asks_end_to_end(tmp_path: Path) 
     assert u.action.intent == Intent.CLARIFY and u.action.reason == "amount_meaning"
     assert orch.session.neg.ask_bp is None
     assert orch.session.neg.pending_amount_clarify is not None
-    assert orch.session.neg.pending_amount_clarify["trigger"] == "total_pay_by"
+    # The acts reader already marks a total beside "pay $X by <date>" as ambiguous.
+    assert orch.session.neg.pending_amount_clarify["trigger"] == "nlu_flag"
     assert orch.session.belief.get("max_payments").value == 3

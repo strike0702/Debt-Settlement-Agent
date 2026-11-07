@@ -4,14 +4,14 @@ name: neg_voice_fillers
 scenario: haggling_rep
 turns:
   - rep: "um yeah so uh it's up to eight payments and uh at least a hundred dollars each even payments"
-    oracle: {stance: info, terms: [{field: max_payments, value: 8, quote: "eight payments"}, {field: min_payment_cents, value: 10000, quote: "a hundred dollars"}, {field: payment_structure, value: even, quote: "even payments"}]}
+    oracle: {acts: [{type: "state_rule", field: "max_payments", value: 8, quote: "eight payments"}, {type: "state_rule", field: "min_payment_cents", value: 10000, quote: "a hundred dollars"}, {type: "state_rule", field: "payment_structure", value: "even", quote: "even payments"}]}
     expect: {intent: ASK_SETTLEMENT}
   - rep: "okay so uh we we'd be looking at like seventy percent you know"
-    oracle: {stance: counter, settlement_ask_pct: 70, ask_quote: "seventy percent"}
+    oracle: {acts: [{type: "price_ask", pct: 70, quote: "seventy percent", firmness: "counter"}]}
     expect: {intent: COUNTER, facts: {counter_pct: 4900}}
   - rep: "hmm I mean I could do sixty five that's uh that's really the lowest I can go"
-    oracle: {stance: counter, settlement_ask_pct: 65, ask_quote: "sixty five", firm: true}
+    oracle: {acts: [{type: "price_ask", pct: 65, quote: "sixty five", firmness: "final"}]}
     expect: {intent: COUNTER, reason: final_counter, facts: {counter_pct: 5700}}
   - rep: "yeah okay yeah that works"
-    oracle: {stance: accept}
+    oracle: {acts: [{type: "respond_to_offer", response: "accept", quote: "yeah okay yeah that works"}]}
     expect: {intent: CONFIRM_SCHEDULE, facts: {settlement_pct: 5700}}

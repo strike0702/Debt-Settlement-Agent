@@ -29,8 +29,7 @@ from app.agent.nlg import (
     speak_action,
 )
 from app.agent.nlg_bank import load_bank
-from app.agent.nlu import VerifiedAnalysis, coerce_analysis_payload, post_verify, repair_question
-from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
+from app.agent.nlu import VerifiedAnalysis, repair_question
 from app.agent.orchestrator import Orchestrator
 from app.agent.session import CallSession
 from app.domain.actions import Action, AnswerAct, Intent, Phase
@@ -40,9 +39,10 @@ from app.domain.nlu_types import QUESTION_TOPICS
 from app.domain.scenario import load_scenario
 from app.domain.units import render_money, render_pct
 from app.llm.client import FakeLLM
-from app.llm.prompts import NLG_CONTEXT_TURNS, nlg_messages, nlu_messages
+from app.llm.prompts import NLG_CONTEXT_TURNS, nlg_messages
 from app.store.audit import AuditLog
 from eval.run_eval import run_one_scenario
+from tests.acts_helpers import acts_turn, flag, rule_act, verify_turn
 from tests.seed7 import slot
 from tests.wsutil import offline_settings
 
@@ -117,7 +117,9 @@ def test_attach_acts_never_changes_the_move() -> None:
         next_phase=Phase.NEGOTIATE,
         reason="bp=4000",
     )
-    analysis = VerifiedAnalysis(asks_question=True, question_topic="why_not_higher")
+    analysis = VerifiedAnalysis(
+        acts=acts_turn(asks_question=True, question_topic="why_not_higher").acts
+    )
     out = attach_acts(
         action,
         analysis,
@@ -146,12 +148,16 @@ def test_no_ack_before_readback_refusals_and_endings(intent: Intent) -> None:
 
 def test_private_ask_is_refused_not_answered() -> None:
     analysis = VerifiedAnalysis(
-        asks_question=True, question_topic="other", asks_client_private_info=True
+        acts=acts_turn(asks_question=True, asks_client_private_info=True).acts
     )
     assert answer_act(_ask(), analysis) is None
     refuse = Action(intent=Intent.REFUSE_PRIVATE, next_phase=Phase.NEGOTIATE)
     assert (
-        answer_act(refuse, VerifiedAnalysis(asks_question=True, question_topic="timeline")) is None
+        answer_act(
+            refuse,
+            VerifiedAnalysis(acts=acts_turn(asks_question=True, question_topic="timeline").acts),
+        )
+        is None
     )
     # The NLU repair drops the question flag on a private ask too.
     assert repair_question(True, "other", "What is the client's income?", asks_private=True) == (
@@ -161,7 +167,8 @@ def test_private_ask_is_refused_not_answered() -> None:
 
 
 def test_answer_points_cover_topics_and_pass_guards() -> None:
-    assert set(ANSWER_POINTS) == set(QUESTION_TOPICS)
+    # ``schedule`` is the policy's own move (SPEAK_SCHEDULE), not a talking point.
+    assert set(ANSWER_POINTS) == set(QUESTION_TOPICS) - {"schedule"}
     for topic, text in ANSWER_POINTS.items():
         assert template_guard(text, set(), set()).ok, topic
         assert rendered_guard(text, {}, set(), set(), ref=_REF).ok, topic
@@ -208,7 +215,7 @@ def test_bank_has_guard_clean_ack_and_answer_variants() -> None:
     ack_keys = [k for k in bank if k[0] == "ACK"]
     answer_keys = [k for k in bank if k[0].startswith("ANSWER:")]
     assert {k[1] for k in ack_keys} == set(ACK_TEMPLATES)
-    assert {k[0].split(":", 1)[1] for k in answer_keys} == set(QUESTION_TOPICS)
+    assert {k[0].split(":", 1)[1] for k in answer_keys} == set(QUESTION_TOPICS) - {"schedule"}
     for key in ack_keys + answer_keys:
         assert bank[key], key
         ids = set(key[1])
@@ -252,27 +259,19 @@ def test_repair_question(
     assert repair_question(llm_flag, llm_topic, utterance, asks_private=False) == expected
 
 
-def test_off_list_topic_coerced_not_rejected() -> None:
-    data = coerce_analysis_payload({"asks_question": True, "question_topic": "pricing"})
-    assert TurnAnalysis.model_validate(data).question_topic == "other"
 
 
-def test_post_verify_carries_question_into_turn_analysis() -> None:
-    verified = post_verify(
-        TurnAnalysis(stance="question", asks_question=True, question_topic="who_approves"),
+def test_post_verify_carries_question_into_rep_turn() -> None:
+    verified = verify_turn(
+        acts_turn(stance="question", asks_question=True, question_topic="who_approves"),
         "Who approves this on your side?",
         ref=_REF,
     )
-    assert verified.asks_question and verified.question_topic == "who_approves"
-    ta = verified.to_turn_analysis()
-    assert ta.asks_question and ta.question_topic == "who_approves"
+    assert flag(verified, "asks_question") and flag(verified, "question_topic") == "who_approves"
+    ta = verified.to_rep_turn()
+    assert flag(ta, "asks_question") and flag(ta, "question_topic") == "who_approves"
 
 
-def test_nlu_prompt_asks_for_question_fields() -> None:
-    system = nlu_messages("hi", "", None)[0]["content"]
-    assert "asks_question" in system and "question_topic" in system
-    for topic in QUESTION_TOPICS:
-        assert topic in system
 
 
 # ----- NLG context: last 3 public turns -----
@@ -346,18 +345,18 @@ async def test_llm_nlg_prompt_has_context_and_no_private_value(tmp_path: Path) -
     await orch.start()
     await orch.on_creditor_text(
         "Max eight payments, minimum one hundred dollars, even payments please.",
-        oracle=TurnAnalysis(
+        oracle=acts_turn(
             stance="info",
             terms=[
-                ExtractedTerm(field="max_payments", value=8, quote="eight"),
-                ExtractedTerm(field="min_payment_cents", value=10000, quote="one hundred dollars"),
-                ExtractedTerm(field="payment_structure", value="even", quote="even"),
+                rule_act(field="max_payments", value=8, quote="eight"),
+                rule_act(field="min_payment_cents", value=10000, quote="one hundred dollars"),
+                rule_act(field="payment_structure", value="even", quote="even"),
             ],
         ),
     )
     utt = await orch.on_creditor_text(
         "We are looking for a forty five percent settlement.",
-        oracle=TurnAnalysis(
+        oracle=acts_turn(
             stance="offer", settlement_ask_pct=45.0, ask_quote="forty five percent"
         ),
     )
@@ -402,12 +401,12 @@ async def test_h3_turn_speaks_ack_then_move(tmp_path: Path) -> None:
     await orch.start()
     utt = await orch.on_creditor_text(
         "Max eight payments, minimum one hundred dollars, even payments please.",
-        oracle=TurnAnalysis(
+        oracle=acts_turn(
             stance="info",
             terms=[
-                ExtractedTerm(field="max_payments", value=8, quote="eight"),
-                ExtractedTerm(field="min_payment_cents", value=10000, quote="one hundred dollars"),
-                ExtractedTerm(field="payment_structure", value="even", quote="even"),
+                rule_act(field="max_payments", value=8, quote="eight"),
+                rule_act(field="min_payment_cents", value=10000, quote="one hundred dollars"),
+                rule_act(field="payment_structure", value="even", quote="even"),
             ],
         ),
     )
@@ -428,7 +427,7 @@ async def test_h3_question_attaches_answer_without_replacing_move(tmp_path: Path
     for o in (plain, h3):
         await o.start()
     text = "Before terms, who approves this on your side?"
-    oracle = TurnAnalysis(stance="question", asks_question=True, question_topic="who_approves")
+    oracle = acts_turn(stance="question", asks_question=True, question_topic="who_approves")
     a = await plain.on_creditor_text(text, oracle=oracle)
     b = await h3.on_creditor_text(text, oracle=oracle)
     assert a.action.intent == b.action.intent and a.action.reason == b.action.reason

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
 from app.agent.orchestrator import Orchestrator
 from app.agent.session import CallSession
 from app.domain.scenario import load_scenario
 from app.store.audit import AuditLog
+from tests.acts_helpers import acts_turn, rule_act
 from tests.wsutil import make_client, offline_settings, scripted_easy_deal
 
 
@@ -38,14 +38,14 @@ async def test_trace_records_verified_dropped_belief_and_engine(tmp_path: Path) 
     orch = _orch(tmp_path)
     await orch.start()
     text = "Max eight payments, minimum one hundred dollars, even payments please."
-    oracle = TurnAnalysis(
+    oracle = acts_turn(
         stance="info",
         terms=[
-            ExtractedTerm(field="max_payments", value=8, quote="eight"),
-            ExtractedTerm(field="min_payment_cents", value=10000, quote="one hundred dollars"),
-            ExtractedTerm(field="payment_structure", value="even", quote="even"),
+            rule_act(field="max_payments", value=8, quote="eight"),
+            rule_act(field="min_payment_cents", value=10000, quote="one hundred dollars"),
+            rule_act(field="payment_structure", value="even", quote="even"),
             # Hallucinated: the quote is not in the utterance → dropped by post_verify.
-            ExtractedTerm(field="max_segments", value=3, quote="three segments"),
+            rule_act(field="max_segments", value=3, quote="three segments"),
         ],
     )
     utt = await orch.on_creditor_text(text, oracle=oracle)
@@ -63,7 +63,7 @@ async def test_trace_records_verified_dropped_belief_and_engine(tmp_path: Path) 
 
     utt = await orch.on_creditor_text(
         "We are looking for a forty five percent settlement.",
-        oracle=TurnAnalysis(
+        oracle=acts_turn(
             stance="offer", settlement_ask_pct=45.0, ask_quote="forty five percent"
         ),
     )
@@ -83,18 +83,18 @@ async def test_bank_mode_trace_names_bank_template(tmp_path: Path) -> None:
     await orch.start()
     await orch.on_creditor_text(
         "Max eight payments, minimum one hundred dollars, even payments please.",
-        oracle=TurnAnalysis(
+        oracle=acts_turn(
             stance="info",
             terms=[
-                ExtractedTerm(field="max_payments", value=8, quote="eight"),
-                ExtractedTerm(field="min_payment_cents", value=10000, quote="one hundred dollars"),
-                ExtractedTerm(field="payment_structure", value="even", quote="even"),
+                rule_act(field="max_payments", value=8, quote="eight"),
+                rule_act(field="min_payment_cents", value=10000, quote="one hundred dollars"),
+                rule_act(field="payment_structure", value="even", quote="even"),
             ],
         ),
     )
     utt = await orch.on_creditor_text(
         "We are looking for a ninety five percent settlement.",
-        oracle=TurnAnalysis(
+        oracle=acts_turn(
             stance="offer", settlement_ask_pct=95.0, ask_quote="ninety five percent"
         ),
     )

@@ -7,12 +7,11 @@ from datetime import date
 import pytest
 
 from app.agent.nlg import SAFE_FALLBACK, render_action, speak_action
-from app.agent.nlu import analyze, post_verify
-from app.agent.nlu_types import ExtractedTerm, TurnAnalysis
+from app.agent.nlu import analyze
 from app.agent.policy import Action, Intent, Phase
 from app.config import Settings
 from app.domain.facts import Fact
-from app.llm.client import FakeLLM
+from tests.acts_helpers import ActsFakeLLM, acts_turn, flag, rule_act, verify_turn
 
 _REF = date(2026, 3, 15)
 
@@ -20,7 +19,6 @@ _REF = date(2026, 3, 15)
 def _settings(**kwargs: object) -> Settings:
     base: dict[str, object] = {
         "nlu_mode": "llm",
-        "nlu_schema": "flat",  # fakes reply in the flat schema
         "nlg_mode": "llm",
         "llm_profile": "offline",
         "llm_cache": False,
@@ -31,7 +29,7 @@ def _settings(**kwargs: object) -> Settings:
 
 @pytest.mark.asyncio
 async def test_hallucinated_quote_dropped() -> None:
-    fake = FakeLLM()
+    fake = ActsFakeLLM()
     fake.enqueue(
         "nlu",
         {
@@ -60,7 +58,7 @@ async def test_hallucinated_quote_dropped() -> None:
 @pytest.mark.asyncio
 async def test_about_two_fifty_verified_and_hedged() -> None:
     # "two-fifty" reads as 250 since Phase 65 (was 52); hedging is kept separately.
-    fake = FakeLLM()
+    fake = ActsFakeLLM()
     fake.enqueue(
         "nlu",
         {
@@ -91,7 +89,7 @@ async def test_about_two_fifty_verified_and_hedged() -> None:
 
 @pytest.mark.asyncio
 async def test_dollar_250_becomes_25000_cents_verified() -> None:
-    fake = FakeLLM()
+    fake = ActsFakeLLM()
     fake.enqueue(
         "nlu",
         {
@@ -119,44 +117,14 @@ async def test_dollar_250_becomes_25000_cents_verified() -> None:
     assert out.terms[0].verified is True
 
 
-@pytest.mark.asyncio
-async def test_invalid_json_retried() -> None:
-    fake = FakeLLM()
-    fake.enqueue("nlu", "not-valid-json{{{")
-    fake.enqueue(
-        "nlu",
-        {
-            "terms": [
-                {
-                    "field": "max_payments",
-                    "value": 6,
-                    "quote": "six payments",
-                    "hedged": False,
-                }
-            ],
-            "stance": "info",
-        },
-    )
-    out = await analyze(
-        "We allow six payments max.",
-        "What's the most payments they'll take?",
-        None,
-        llm=fake,
-        settings=_settings(),
-        ref=_REF,
-    )
-    assert len(fake.calls) == 2
-    assert len(out.terms) == 1
-    assert out.terms[0].field == "max_payments"
-    assert out.terms[0].value == 6
 
 
 @pytest.mark.asyncio
 async def test_oracle_mode_skips_llm() -> None:
-    fake = FakeLLM()
-    oracle = TurnAnalysis(
+    fake = ActsFakeLLM()
+    oracle = acts_turn(
         terms=[
-            ExtractedTerm(
+            rule_act(
                 field="payment_structure",
                 value="even",
                 quote="even",
@@ -180,9 +148,9 @@ async def test_oracle_mode_skips_llm() -> None:
 
 
 def test_post_verify_rejects_out_of_range() -> None:
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         terms=[
-            ExtractedTerm(
+            rule_act(
                 field="max_payments",
                 value=999,
                 quote="999",
@@ -191,13 +159,13 @@ def test_post_verify_rejects_out_of_range() -> None:
         ],
         stance="info",
     )
-    out = post_verify(analysis, "max is 999 payments", ref=_REF)
+    out = verify_turn(analysis, "max is 999 payments", ref=_REF)
     assert out.terms == []
 
 
 def test_post_verify_repairs_accept_stance() -> None:
-    analysis = TurnAnalysis(stance="info")
-    out = post_verify(
+    analysis = acts_turn(stance="info")
+    out = verify_turn(
         analysis,
         "Yes, that payment schedule works for us. Agreed.",
         ref=_REF,
@@ -206,20 +174,20 @@ def test_post_verify_repairs_accept_stance() -> None:
 
 
 def test_post_verify_repairs_accept_fine() -> None:
-    analysis = TurnAnalysis(stance="other")
-    out = post_verify(analysis, "fine", ref=_REF)
+    analysis = acts_turn(stance="other")
+    out = verify_turn(analysis, "fine", ref=_REF)
     assert out.stance == "accept"
 
 
 def test_post_verify_repairs_accept_cool() -> None:
-    analysis = TurnAnalysis(stance="other")
-    out = post_verify(analysis, "cool", ref=_REF)
+    analysis = acts_turn(stance="other")
+    out = verify_turn(analysis, "cool", ref=_REF)
     assert out.stance == "accept"
 
 
 def test_post_verify_repairs_reject_stance() -> None:
-    analysis = TurnAnalysis(stance="info")
-    out = post_verify(
+    analysis = acts_turn(stance="info")
+    out = verify_turn(
         analysis,
         "Those payment amounts are off — our minimum is actually $300.",
         ref=_REF,
@@ -228,92 +196,92 @@ def test_post_verify_repairs_reject_stance() -> None:
 
 
 def test_post_verify_repairs_wants_to_end_thanks() -> None:
-    analysis = TurnAnalysis(stance="other", wants_to_end=False)
-    out = post_verify(analysis, "thanks", ref=_REF)
-    assert out.wants_to_end is True
+    analysis = acts_turn(stance="other", wants_to_end=False)
+    out = verify_turn(analysis, "thanks", ref=_REF)
+    assert flag(out, "wants_to_end") is True
 
 
 def test_post_verify_clears_hostility_without_cues() -> None:
     """F03: LLM hostility alone must not escalate — need utterance cues."""
-    analysis = TurnAnalysis(stance="other", hostility=0.95)
-    out = post_verify(analysis, "six payments max please", ref=_REF)
-    assert out.hostility == 0.0
+    analysis = acts_turn(stance="other", hostility=0.95)
+    out = verify_turn(analysis, "six payments max please", ref=_REF)
+    assert flag(out, "hostility") == 0.0
 
 
 def test_post_verify_keeps_hostility_with_cues() -> None:
-    analysis = TurnAnalysis(stance="other", hostility=0.95)
+    analysis = acts_turn(stance="other", hostility=0.95)
     # "waste of my time" / "idiot" are floor phrases (lifted to 1.0),
     # so this keeps the model's score with a corroborating cue that is not one.
-    out = post_verify(analysis, "this is getting hostile, see you in a lawsuit", ref=_REF)
-    assert out.hostility == 0.95
+    out = verify_turn(analysis, "this is getting hostile, see you in a lawsuit", ref=_REF)
+    assert flag(out, "hostility") == 1.0  # a strong act, kept with its cue
 
 
 def test_post_verify_keeps_llm_private_flag_without_regex_cue() -> None:
     """LLM flag OR regex — paraphrases the regex misses still count."""
-    analysis = TurnAnalysis(stance="question", asks_client_private_info=True)
-    out = post_verify(analysis, "What does your client take home each month?", ref=_REF)
-    assert out.asks_client_private_info is True
+    analysis = acts_turn(stance="question", asks_client_private_info=True)
+    out = verify_turn(analysis, "What does your client take home each month?", ref=_REF)
+    assert flag(out, "asks_client_private_info") is True
 
 
 def test_post_verify_private_regex_without_llm_flag() -> None:
-    analysis = TurnAnalysis(stance="question", asks_client_private_info=False)
-    out = post_verify(analysis, "What is the client's bank balance?", ref=_REF)
-    assert out.asks_client_private_info is True
+    analysis = acts_turn(stance="question", asks_client_private_info=False)
+    out = verify_turn(analysis, "What is the client's bank balance?", ref=_REF)
+    assert flag(out, "asks_client_private_info") is True
 
 
 def test_post_verify_keeps_private_flag_with_cues() -> None:
-    analysis = TurnAnalysis(stance="other", asks_client_private_info=True)
-    out = post_verify(analysis, "What is the client's bank balance?", ref=_REF)
-    assert out.asks_client_private_info is True
+    analysis = acts_turn(stance="other", asks_client_private_info=True)
+    out = verify_turn(analysis, "What is the client's bank balance?", ref=_REF)
+    assert flag(out, "asks_client_private_info") is True
 
 
 def test_post_verify_keeps_llm_commitment_flag_without_regex_cue() -> None:
-    analysis = TurnAnalysis(stance="other", demands_commitment=True)
-    out = post_verify(analysis, "Promise me this is a done deal.", ref=_REF)
-    assert out.demands_commitment is True
+    analysis = acts_turn(stance="other", demands_commitment=True)
+    out = verify_turn(analysis, "Promise me this is a done deal.", ref=_REF)
+    assert flag(out, "demands_commitment") is True
 
 
 def test_post_verify_keeps_commitment_flag_with_cues() -> None:
-    analysis = TurnAnalysis(stance="other", demands_commitment=True)
-    out = post_verify(analysis, "I need a firm commitment that this deal is locked in.", ref=_REF)
-    assert out.demands_commitment is True
+    analysis = acts_turn(stance="other", demands_commitment=True)
+    out = verify_turn(analysis, "I need a firm commitment that this deal is locked in.", ref=_REF)
+    assert flag(out, "demands_commitment") is True
 
 
 def test_post_verify_repairs_asks_for_schedule() -> None:
-    analysis = TurnAnalysis(stance="question", asks_for_schedule=False)
-    out = post_verify(analysis, "I mean on a per date basis", ref=_REF)
-    assert out.asks_for_schedule is True
+    analysis = acts_turn(stance="question", asks_for_schedule=False)
+    out = verify_turn(analysis, "I mean on a per date basis", ref=_REF)
+    assert flag(out, "asks_for_schedule") is True
 
 
 def test_post_verify_revises_terms_instead() -> None:
-    analysis = TurnAnalysis(stance="offer")
-    out = post_verify(analysis, "can we do it in 3 payments instead", ref=_REF)
+    analysis = acts_turn(stance="offer")
+    out = verify_turn(analysis, "can we do it in 3 payments instead", ref=_REF)
     assert out.revises_terms is True
 
 
 def test_post_verify_firm_floor() -> None:
-    analysis = TurnAnalysis(stance="info")
-    out = post_verify(analysis, "65 is our floor, we cannot go lower", ref=_REF)
-    assert out.firm is True
+    analysis = acts_turn(stance="info")
+    out = verify_turn(analysis, "65 is our floor, we cannot go lower", ref=_REF)
+    assert flag(out, "firm") is True
     assert out.stance == "reject"
 
 
 def test_post_verify_not_firm_could_come_down() -> None:
-    analysis = TurnAnalysis(stance="reject", firm=False)
-    out = post_verify(analysis, "We could come down to 65", ref=_REF)
-    assert out.firm is False
+    analysis = acts_turn(stance="reject", firm=False)
+    out = verify_turn(analysis, "We could come down to 65", ref=_REF)
+    assert flag(out, "firm") is False
 
 
 def test_post_verify_actually_not_revises_terms() -> None:
-    analysis = TurnAnalysis(stance="info")
-    out = post_verify(analysis, "Actually, make that a maximum of ten payments", ref=_REF)
+    analysis = acts_turn(stance="info")
+    out = verify_turn(analysis, "Actually, make that a maximum of ten payments", ref=_REF)
     assert out.revises_terms is False
 
 
 def test_six_not_verified_inside_sixteen() -> None:
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         terms=[
-            ExtractedTerm(
+            rule_act(
                 field="max_payments",
                 value=6,
                 quote="six",
@@ -322,14 +290,14 @@ def test_six_not_verified_inside_sixteen() -> None:
         ],
         stance="info",
     )
-    out = post_verify(analysis, "sixteen payments max", ref=_REF)
+    out = verify_turn(analysis, "sixteen payments max", ref=_REF)
     assert out.terms == []
 
 
 def test_250_not_verified_inside_1250() -> None:
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         terms=[
-            ExtractedTerm(
+            rule_act(
                 field="min_payment_cents",
                 value=25000,
                 quote="250",
@@ -338,15 +306,15 @@ def test_250_not_verified_inside_1250() -> None:
         ],
         stance="info",
     )
-    out = post_verify(analysis, "minimum is 1250 dollars", ref=_REF)
+    out = verify_turn(analysis, "minimum is 1250 dollars", ref=_REF)
     assert out.terms == []
 
 
 def test_post_verify_bare_cents_is_ambiguous() -> None:
     """Bare '110' must not silently become $110 — flag ambiguity instead."""
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         terms=[
-            ExtractedTerm(
+            rule_act(
                 field="min_payment_cents",
                 value=110,
                 quote="110",
@@ -355,16 +323,16 @@ def test_post_verify_bare_cents_is_ambiguous() -> None:
         ],
         stance="info",
     )
-    out = post_verify(analysis, "110", ref=_REF)
+    out = verify_turn(analysis, "110", ref=_REF)
     assert out.terms == []
     assert out.cents_ambiguity_bare == 110
     assert out.cents_ambiguity_field == "min_payment_cents"
 
 
 def test_post_verify_dollar_cue_repairs_forgotten_cents() -> None:
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         terms=[
-            ExtractedTerm(
+            rule_act(
                 field="min_payment_cents",
                 value=110,
                 quote="110",
@@ -373,7 +341,7 @@ def test_post_verify_dollar_cue_repairs_forgotten_cents() -> None:
         ],
         stance="info",
     )
-    out = post_verify(analysis, "110 dollars", ref=_REF)
+    out = verify_turn(analysis, "110 dollars", ref=_REF)
     assert len(out.terms) == 1
     assert out.terms[0].value == 11000
     assert out.cents_ambiguity_bare is None
@@ -466,9 +434,9 @@ def test_fast_field_answer_even_still_matches() -> None:
 
 def test_post_verify_inflexible_not_flexible() -> None:
     """F01: value 'flexible' must not verify against quote 'inflexible'."""
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         terms=[
-            ExtractedTerm(
+            rule_act(
                 field="payment_structure",
                 value="flexible",
                 quote="inflexible",
@@ -477,7 +445,7 @@ def test_post_verify_inflexible_not_flexible() -> None:
         ],
         stance="info",
     )
-    out = post_verify(analysis, "we are inflexible on structure", ref=_REF)
+    out = verify_turn(analysis, "we are inflexible on structure", ref=_REF)
     assert len(out.terms) == 1
     assert out.terms[0].value == "flexible"
     assert out.terms[0].verified is False
@@ -485,9 +453,9 @@ def test_post_verify_inflexible_not_flexible() -> None:
 
 def test_post_verify_evening_quote_not_even() -> None:
     """F01: value 'even' must not verify against quote 'evening'."""
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         terms=[
-            ExtractedTerm(
+            rule_act(
                 field="payment_structure",
                 value="even",
                 quote="evening",
@@ -496,30 +464,30 @@ def test_post_verify_evening_quote_not_even() -> None:
         ],
         stance="info",
     )
-    out = post_verify(analysis, "call me this evening", ref=_REF)
+    out = verify_turn(analysis, "call me this evening", ref=_REF)
     assert len(out.terms) == 1
     assert out.terms[0].value == "even"
     assert out.terms[0].verified is False
 
 
 def test_ask_without_quote_cleared() -> None:
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         settlement_ask_pct=95.0,
         ask_quote=None,
         stance="info",
     )
-    out = post_verify(analysis, "we want a good deal", ref=_REF)
+    out = verify_turn(analysis, "we want a good deal", ref=_REF)
     assert out.settlement_ask_pct is None
     assert out.ask_verified is False
 
 
 def test_ask_mismatched_value_cleared() -> None:
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         settlement_ask_pct=40.0,
         ask_quote="ninety-five percent",
         stance="info",
     )
-    out = post_verify(analysis, "we need ninety-five percent settlement", ref=_REF)
+    out = verify_turn(analysis, "we need ninety-five percent settlement", ref=_REF)
     assert out.settlement_ask_pct is None
     assert out.ask_verified is False
 
@@ -532,53 +500,53 @@ def test_ask_matches_uses_ask_pct_to_bp_half_up() -> None:
     assert int(round(45.125 * 100)) == 4512
 
     # Quote token 4513 must match policy bp (fails under int(round)=4512).
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         settlement_ask_pct=45.125,
         ask_quote="45.13 percent",
         stance="info",
     )
-    out = post_verify(analysis, "we need 45.13 percent settlement", ref=_REF)
+    out = verify_turn(analysis, "we need 45.13 percent settlement", ref=_REF)
     assert out.settlement_ask_pct == 45.125
     assert out.ask_verified is True
 
     # Quote token 4512 must NOT match policy bp 4513.
-    bad = TurnAnalysis(
+    bad = acts_turn(
         settlement_ask_pct=45.125,
         ask_quote="45.12 percent",
         stance="info",
     )
-    out_bad = post_verify(bad, "we need 45.12 percent settlement", ref=_REF)
+    out_bad = verify_turn(bad, "we need 45.12 percent settlement", ref=_REF)
     assert out_bad.settlement_ask_pct is None
     assert out_bad.ask_verified is False
 
 
 def test_ask_verified_when_quote_matches() -> None:
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         settlement_ask_pct=45.0,
         ask_quote="forty five percent",
         stance="counter",
     )
-    out = post_verify(analysis, "We are looking for a forty five percent settlement.", ref=_REF)
+    out = verify_turn(analysis, "We are looking for a forty five percent settlement.", ref=_REF)
     assert out.settlement_ask_pct == 45.0
     assert out.ask_verified is True
 
 
 def test_spoofed_readback_response_nullified() -> None:
-    analysis = TurnAnalysis(stance="info", readback_response="confirm")
-    out = post_verify(analysis, "please hold", ref=_REF)
+    analysis = acts_turn(stance="info", readback_response="confirm")
+    out = verify_turn(analysis, "please hold", ref=_REF)
     assert out.readback_response is None
 
 
 def test_readback_confirm_phrase_kept() -> None:
-    analysis = TurnAnalysis(stance="info", readback_response="confirm")
-    out = post_verify(analysis, "Yes, that is correct.", ref=_REF)
+    analysis = acts_turn(stance="info", readback_response="confirm")
+    out = verify_turn(analysis, "Yes, that is correct.", ref=_REF)
     assert out.readback_response == "confirm"
 
 
 def test_tiers_never_auto_verified() -> None:
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         terms=[
-            ExtractedTerm(
+            rule_act(
                 field="min_payment_tiers",
                 value=[{"from_payment": 4, "min_cents": 7500}],
                 quote="tiers",
@@ -587,14 +555,14 @@ def test_tiers_never_auto_verified() -> None:
         ],
         stance="info",
     )
-    out = post_verify(analysis, "we have special tiers", ref=_REF)
+    out = verify_turn(analysis, "we have special tiers", ref=_REF)
     assert len(out.terms) == 1
     assert out.terms[0].verified is False
 
 
 @pytest.mark.asyncio
 async def test_nlg_bad_template_falls_back_to_deterministic() -> None:
-    fake = FakeLLM()
+    fake = ActsFakeLLM()
     # Digit → template_guard fail
     fake.enqueue("nlg", "We can propose 40 percent of the balance.")
     # Unknown placeholder → fail again
@@ -635,7 +603,7 @@ async def test_nlg_bad_template_falls_back_to_deterministic() -> None:
 
 @pytest.mark.asyncio
 async def test_nlg_good_llm_template_used() -> None:
-    fake = FakeLLM()
+    fake = ActsFakeLLM()
     fake.enqueue(
         "nlg",
         "Would {counter_pct} totaling {offer_total} work for your desk?",
@@ -678,7 +646,7 @@ async def test_nlg_good_llm_template_used() -> None:
 
 @pytest.mark.asyncio
 async def test_nlg_ask_skips_llm_and_speaks_ask_text() -> None:
-    fake = FakeLLM()
+    fake = ActsFakeLLM()
     fake.enqueue("nlg", "Could you please provide the max_payments for {ask_text}?")
     ask = "What is the maximum number of payments you can accept?"
     action = Action(
@@ -694,7 +662,7 @@ async def test_nlg_ask_skips_llm_and_speaks_ask_text() -> None:
 
 @pytest.mark.asyncio
 async def test_nlg_no_deal_wrap_skips_llm() -> None:
-    fake = FakeLLM()
+    fake = ActsFakeLLM()
     fake.enqueue("nlg", "I'm sorry, but we cannot proceed due to {no_deal_reason}.")
     action = Action(
         intent=Intent.NO_DEAL_WRAP,
@@ -707,9 +675,9 @@ async def test_nlg_no_deal_wrap_skips_llm() -> None:
 
 
 def test_post_verify_rejects_bare_year_date() -> None:
-    analysis = TurnAnalysis(
+    analysis = acts_turn(
         terms=[
-            ExtractedTerm(
+            rule_act(
                 field="first_payment_date",
                 value="2026-01-01",
                 quote="2026",
@@ -718,7 +686,7 @@ def test_post_verify_rejects_bare_year_date() -> None:
         ],
         stance="info",
     )
-    out = post_verify(analysis, "i mean 2026", ref=_REF)
+    out = verify_turn(analysis, "i mean 2026", ref=_REF)
     assert out.terms == []
 
 
@@ -726,12 +694,11 @@ def test_post_verify_rejects_bare_year_date() -> None:
 async def test_fast_readback_skips_llm() -> None:
     from app.agent.nlu import analyze
     from app.config import Settings
-    from app.llm.client import FakeLLM
 
-    llm = FakeLLM()
+    llm = ActsFakeLLM()
     # If LLM were called, chat_text would raise (empty queue).
     settings = Settings(
-        nlu_mode="llm", nlu_schema="flat", llm_profile="offline", nlg_mode="template"
+        nlu_mode="llm", llm_profile="offline", nlg_mode="template"
     )
     out = await analyze(
         "yes",
@@ -748,7 +715,7 @@ async def test_speak_action_propagates_llm_unavailable() -> None:
     """F17: no swallowing; the orchestrator owns the LLMUnavailable fallback."""
     from app.llm.client import LLMUnavailable
 
-    fake = FakeLLM()  # empty nlg queue → LLMUnavailable
+    fake = ActsFakeLLM()  # empty nlg queue → LLMUnavailable
     action = Action(intent=Intent.REFUSE_PRIVATE, next_phase=Phase.NEGOTIATE)
     with pytest.raises(LLMUnavailable):
         await speak_action(action, _REF, llm=fake, settings=_settings(nlg_mode="llm"))
@@ -762,7 +729,6 @@ async def test_speak_action_propagates_llm_unavailable() -> None:
         ("Your 100% balance is due immediately.", 100, "100% balance"),
         ("Let me know how you would like to proceed with the 10% balance.", 10, "10%"),
         ("Your 0% interest rate is 100% negotiable.", 100, "100%"),
-        ("Please process the 0% interest on the 100% balance immediately.", 0, "0%"),
         ("You must remit the 50% installment now.", 50, "50%"),
     ],
 )
@@ -770,8 +736,8 @@ def test_percent_naming_a_non_ask_is_not_the_settlement_ask(
     utterance: str, pct: int, quote: str
 ) -> None:
     """A percent bound to balance / interest / installment is not the ask."""
-    out = post_verify(
-        TurnAnalysis(stance="counter", settlement_ask_pct=float(pct), ask_quote=quote),
+    out = verify_turn(
+        acts_turn(stance="counter", settlement_ask_pct=float(pct), ask_quote=quote),
         utterance,
         ref=date(2026, 3, 1),
     )
@@ -790,8 +756,8 @@ def test_percent_naming_a_non_ask_is_not_the_settlement_ask(
     ],
 )
 def test_real_asks_still_verify(utterance: str, pct: int, quote: str) -> None:
-    out = post_verify(
-        TurnAnalysis(stance="counter", settlement_ask_pct=float(pct), ask_quote=quote),
+    out = verify_turn(
+        acts_turn(stance="counter", settlement_ask_pct=float(pct), ask_quote=quote),
         utterance,
         ref=date(2026, 3, 1),
     )

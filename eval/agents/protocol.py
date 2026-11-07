@@ -19,11 +19,11 @@ from __future__ import annotations
 
 from typing import Any, Literal, Protocol, get_args, runtime_checkable
 
-from app.agent.nlu_types import TurnAnalysis
 from app.agent.orchestrator import Orchestrator, Utterance
 from app.agent.policy import Agreement
 from app.agent.session import CallSession
 from app.config import Settings
+from app.domain.nlu_types import RepTurn
 from app.store.audit import AuditLog
 
 AgentName = Literal["policy", "policy_h3", "react", "llm_only"]
@@ -45,7 +45,7 @@ class AgentUnderTest(Protocol):
         text: str,
         timings: dict[str, float] | None = None,
         *,
-        oracle: TurnAnalysis | None = None,
+        oracle: RepTurn | None = None,
     ) -> Utterance:
         """React to one creditor utterance; ``oracle`` is the sim ground truth for NLU."""
         ...
@@ -82,7 +82,7 @@ class PolicyAgent:
         text: str,
         timings: dict[str, float] | None = None,
         *,
-        oracle: TurnAnalysis | None = None,
+        oracle: RepTurn | None = None,
     ) -> Utterance:
         """Delegate to ``Orchestrator.on_creditor_text``."""
         return await self.orchestrator.on_creditor_text(text, timings, oracle=oracle)

@@ -9,8 +9,8 @@ requires: phase69
 known_rules: {max_payments: 8, min_payment_cents: 15000}
 turns:
   - rep: "No, it's six payments now. The minimum is $100 each."
-    oracle: {stance: info, terms: [{field: max_payments, value: 6, quote: "six payments"}, {field: min_payment_cents, value: 10000, quote: "$100"}]}
+    oracle: {acts: [{type: "state_rule", field: "max_payments", value: 6, quote: "six payments"}, {type: "state_rule", field: "min_payment_cents", value: 10000, quote: "$100"}]}
     expect: {intent: [ASK, ASK_SETTLEMENT], known_rules: {max_payments: operator, min_payment_cents: operator}}
   - rep: "Yes, that's right, even payments."
-    oracle: {stance: info, terms: [{field: payment_structure, value: even, quote: "even payments"}]}
+    oracle: {acts: [{type: "state_rule", field: "payment_structure", value: "even", quote: "even payments"}]}
     expect: {intent: [ASK, ASK_SETTLEMENT], known_rules: {max_payments: rep, min_payment_cents: rep}}

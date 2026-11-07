@@ -53,13 +53,14 @@ form that was measured (``_with_context``: the "Earlier turns" block plus one
 system sentence), so ``CONTEXT_ON_P54`` can be reproduced. Lines without
 ``context`` run exactly as before either way.
 
-``--schema acts`` (Phase 71a) runs the NLU v2 acts prompt (``NLU_SCHEMA=acts``)
-with a PUBLIC call context built from the line's ``agent`` alias
-(``line_call_context``); the metrics are the same for both schemas, plus the
-act-type set against each line's ``acts`` label (``answer`` / ``state_rule`` /
-``rule_item`` count as one). Every run records per-line NLU latency and
-prompt / completion tokens of its live calls; ``--no-cache`` makes every call
-live so two schemas' latencies compare.
+The NLU reads acts (the flat schema and ``--schema`` were removed in 71b; the
+frozen flat records under ``docs/eval`` stay as they are and still rescore).
+Each line gets a PUBLIC call context built from its ``agent`` alias and
+``pending`` read-back (``line_call_context``). Flags and the stance label are
+read off the verified acts; the act-type set is scored against each line's
+``acts`` label (``answer`` / ``state_rule`` / ``rule_item`` count as one). Every
+run records per-line NLU latency and prompt / completion tokens of its live
+calls; ``--no-cache`` makes every call live.
 
 Not the policy eval (``eval.run_eval``): no orchestrator, no simulator.
 CLI: ``python -m eval.nlu_corpus --label BEFORE [--profile demo] [--corpus PATH]
@@ -95,18 +96,17 @@ from app.agent.nlu import (
     _ack_dominant,
     _has_unguarded_accept_phrase,
     _has_unguarded_reject_phrase,
-    _parse_analysis,
     analyze,
     hostility_floor_hit,
-    post_verify,
     repair_asks_client_private_info,
     repair_firm,
     repair_stance,
     resolve_amounts,
+    verify_acts,
 )
-from app.agent.nlu_types import TurnAnalysis
 from app.config import get_settings
 from app.domain.fields import FIELDS_BY_NAME
+from app.domain.nlu_types import HOSTILITY_LEVEL
 from app.llm.call_audit import audit_llm_calls, llm_call_scope
 from app.llm.client import LLMUnavailable, make_client
 from app.llm.prompts import format_recent_turns
@@ -205,8 +205,15 @@ _ALIAS_CONTEXT: dict[str, dict[str, Any]] = {
 
 
 def line_call_context(line: dict[str, Any]) -> CallContext:
-    """PUBLIC call context for a corpus line (acts schema), from its ``agent`` alias."""
-    return CallContext(**_ALIAS_CONTEXT.get(line.get("agent", "default"), {}))
+    """PUBLIC call context for a corpus line, from its ``agent`` alias.
+
+    A line with a ``pending`` read-back awaits that read-back (as live: the
+    orchestrator's context says ``awaiting=readback`` while one is pending).
+    """
+    ctx = dict(_ALIAS_CONTEXT.get(line.get("agent", "default"), {}))
+    if line.get("pending"):
+        ctx |= {"awaiting": "readback", "awaiting_field": line["pending"]}
+    return CallContext(**ctx)
 
 
 # Act types scored as one: a rule value however it was offered.
@@ -242,13 +249,16 @@ def expected_flags(line: dict[str, Any]) -> dict[str, bool]:
 
 
 def predicted_flags(out: VerifiedAnalysis, hostility_threshold: float) -> dict[str, bool]:
-    """Policy-relevant booleans; hostility binarized at the escalation threshold."""
+    """The labelled flags read off the verified acts; hostility at the escalation threshold."""
+    hostility = max(
+        (HOSTILITY_LEVEL[a.level] for a in out.acts if a.type == "hostility"), default=0.0
+    )
     return {
-        "asks_client_private_info": out.asks_client_private_info,
-        "demands_commitment": out.demands_commitment,
-        "firm": out.firm,
-        "wants_to_end": out.wants_to_end,
-        "hostility": out.hostility >= hostility_threshold,
+        "asks_client_private_info": out.has("ask_private_info"),
+        "demands_commitment": out.has("demand_commitment"),
+        "firm": any(a.type == "price_ask" and a.firmness == "final" for a in out.acts),
+        "wants_to_end": out.has("end_call"),
+        "hostility": hostility >= hostility_threshold,
     }
 
 
@@ -284,15 +294,16 @@ def predicted_terms(out: VerifiedAnalysis) -> dict[str, Any]:
         terms["ask_total_cents"] = out.settlement_ask_total_cents
     if out.amount_ambiguous_cents is not None:
         terms["amount_ambiguous"] = out.amount_ambiguous_cents
-    if out.defines_field is not None:
-        terms["defines_field"] = out.defines_field
-    if out.expected_count is not None:
-        terms["expected_count"] = out.expected_count
+    ann = out.first("announce_rules")
+    if ann is not None:
+        terms["defines_field"] = ann.field
+        if ann.count is not None:
+            terms["expected_count"] = ann.count
     return terms
 
 
 def has_terms(out: VerifiedAnalysis) -> bool:
-    """Same ``has_terms`` that ``post_verify`` hands to ``repair_stance``."""
+    """Same ``has_terms`` that ``verify_acts`` hands to ``repair_stance``."""
     return (
         bool(out.terms)
         or out.settlement_ask_pct is not None
@@ -358,22 +369,6 @@ class _NluReplyRecorder:
         if role == "nlu":
             self.last[tid] = text
         return text
-
-
-def _raw_stance(reply: str) -> str:
-    """Stance the LLM reply carries before repair; unparseable ⇒ ``other`` (as analyze)."""
-    try:
-        return _parse_analysis(reply).stance
-    except Exception:  # noqa: BLE001 - analyze falls back to an empty analysis
-        return "other"
-
-
-def _raw_firm(reply: str) -> bool:
-    """``firm`` flag the LLM reply carries before ``repair_firm``; unparseable ⇒ False."""
-    try:
-        return bool(_parse_analysis(reply).firm)
-    except Exception:  # noqa: BLE001 - analyze falls back to an empty analysis
-        return False
 
 
 def rescore_guards(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -459,13 +454,13 @@ def rules_only_records(
 ) -> list[dict[str, Any]]:
     """Records for a model that flags nothing: only the code-side rules decide.
 
-    Each line goes through ``post_verify`` with an empty ``TurnAnalysis``
-    (stance ``other``, every flag off, no terms), so the scores are the rules'
-    own recall and precision (like the ``REGEX_ONLY_P32`` row). No LLM call.
+    Each line goes through ``verify_acts`` with an empty act list (no rule,
+    price or flag from a model), so the scores are the rules' own recall and
+    precision (like the ``REGEX_ONLY_P32`` row). No LLM call.
     """
     records: list[dict[str, Any]] = []
     for line in corpus:
-        out = post_verify(TurnAnalysis(stance="other"), line["text"], ref=REF)
+        out = verify_acts([], line["text"], ref=REF)
         records.append({
             "id": line["id"],
             "tags": line.get("tags", []),
@@ -724,7 +719,6 @@ async def run_corpus(
     providers_path: Path | None = None,
     allow_budgeted: bool = False,
     use_context: bool = False,
-    schema: str = "flat",
     use_cache: bool = True,
 ) -> tuple[list[dict[str, Any]], Counter[str]]:
     """Analyze every line; returns per-line records and answering-model counts.
@@ -746,7 +740,6 @@ async def run_corpus(
             "llm_cache": use_cache,
             "llm_cache_path": CACHE_PATH,
             "nlu_mode": "llm",
-            "nlu_schema": schema,
         }
     )
     models: Counter[str] = Counter()
@@ -835,22 +828,12 @@ async def run_corpus(
             rec["error"] = (kind + str(e))[:200]
             return rec
         reply = recorder.last.pop(tid, None)
-        if reply is not None and schema == "acts":
-            # Acts: the converter's stance is the one scored; no flat-reply replay.
-            reply = None
+        # The verified acts' trace label is the one scored (no flat-reply replay).
+        firm_raw = any(a.type == "price_ask" and a.firmness == "final" for a in out.acts)
+        if reply is not None:
             raw, rule, source = out.stance, "acts", "llm"
-            firm_raw = out.firm
-        elif reply is None:  # fast path: no LLM call, no stance repair
+        else:  # fast path: no LLM call, no stance repair
             raw, rule, source = out.stance, "fast_path", "fast_path"
-            firm_raw = out.firm
-        else:
-            raw, source = _raw_stance(reply), "llm"
-            firm_raw = _raw_firm(reply)
-            rule = stance_rule(line["text"], terms=has_terms(out))
-            # Guard against this mirror drifting from the shipped repair.
-            replay = repair_stance(raw, line["text"], has_terms=has_terms(out), opening=not agent)
-            if replay != out.stance:
-                raise RuntimeError(f"{line['id']}: raw stance does not replay to the repaired one")
         rec["predicted"] = {
             **predicted_flags(out, settings.hostility_threshold),
             "stance": out.stance,
@@ -858,9 +841,8 @@ async def run_corpus(
             "firm_raw": firm_raw,
             "terms": predicted_terms(out),
         }
-        if schema == "acts":
-            rec["expected"]["acts"] = act_set(line.get("acts", []))
-            rec["predicted"]["acts"] = act_set(out.acts)
+        rec["expected"]["acts"] = act_set(line.get("acts", []))
+        rec["predicted"]["acts"] = act_set(out.model_acts)
         rec["usage"] = line_usage.get(line["id"])
         rec["has_terms"] = has_terms(out)
         rec["stance_rule"] = rule
@@ -968,14 +950,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument(
         "--rules-only", action="store_true",
-        help="no LLM: an empty analysis through post_verify, so only code-side rules decide",
+        help="no LLM: an empty act list through verify_acts, so only code-side rules decide",
     )
     ap.add_argument(
         "--with-context", action="store_true",
         help="add each line's `context` turns to the NLU prompt (eval only; not shipped)",
     )
-    ap.add_argument("--schema", choices=("flat", "acts"), default="flat",
-                    help="NLU output schema (Phase 71a A/B)")
     ap.add_argument("--no-cache", action="store_true",
                     help="every call live (latency comparison)")
     ap.add_argument(
@@ -1014,7 +994,6 @@ def main(argv: list[str] | None = None) -> int:
                     providers_path=args.providers,
                     allow_budgeted=args.allow_budgeted,
                     use_context=args.with_context,
-                    schema=args.schema,
                     use_cache=not args.no_cache,
                 )
             )
@@ -1067,8 +1046,6 @@ def main(argv: list[str] | None = None) -> int:
         meta["mixed"] = True
     if args.with_context:
         meta["stance_variant"] += "; line `context` turns added (--with-context, eval only)"
-    if args.schema == "acts":
-        meta["stance_variant"] += "; NLU v2 acts schema (`--schema acts`)"
     if args.from_records is not None:
         meta["stance_variant"] += f"; rescored from `{args.from_records}`"
     if args.rescore_guards:
@@ -1076,7 +1053,7 @@ def main(argv: list[str] | None = None) -> int:
             "; stance/firm guards, private-info cue and hostility floor re-run with current code"
         )
     if args.rules_only:
-        meta["stance_variant"] = "rules only (empty analysis through post_verify, no LLM)"
+        meta["stance_variant"] = "rules only (empty act list through verify_acts, no LLM)"
     if args.amount_view:
         meta["stance_variant"] += "; amounts scored as the agent acts (resolve_amounts replayed)"
     write_report(REPORT_PATH, args.label, render_section(args.label, summary, meta))

@@ -11,7 +11,7 @@ acts that are spoken *before* it, without changing the move:
   if ``rendered_guard`` would already allow it (it is in ``creditor_numbers``)
   and it never collides with the private blocklist.
 - ``answer``: a policy-supplied, number-free talking point for an off-script
-  question the NLU flagged (``asks_question`` / ``question_topic``). A private
+  question the NLU verified (a ``question`` act and its topic). A private
   info ask is never answered: the policy refuses it first (REFUSE_PRIVATE).
 
 ``records_facts`` builds the third act, ``records``: the operator-entered rules
@@ -325,14 +325,20 @@ def is_ack_dispute(utterance: str) -> bool:
 
 
 def answer_act(action: Action, analysis: Any) -> AnswerAct | None:
-    """Talking point for the NLU-flagged question, or None when it should not attach."""
-    if not getattr(analysis, "asks_question", False):
+    """Talking point for the line's ``question`` act, or None when it should not attach.
+
+    The ``schedule`` topic is the policy's own move (SPEAK_SCHEDULE), never a
+    talking point; a private-info ask is refused, never answered.
+    """
+    acts = getattr(analysis, "acts", [])
+    questions = [a for a in acts if a.type == "question" and a.topic != "schedule"]
+    if not questions:
         return None
-    if getattr(analysis, "asks_client_private_info", False):
+    if any(a.type == "ask_private_info" for a in acts):
         return None
     if action.intent in NO_ANSWER_INTENTS:
         return None
-    topic = getattr(analysis, "question_topic", None) or "other"
+    topic = questions[0].topic or "other"
     if topic not in ANSWER_POINTS:
         topic = "other"
     if (topic, action.intent) in _REDUNDANT_ANSWERS:

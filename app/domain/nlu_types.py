@@ -1,31 +1,35 @@
-"""TurnAnalysis / ExtractedTerm, and the NLU v2 act models — shared by NLU, policy, sim.
+"""NLU acts: the closed act set and ``RepTurn``, shared by NLU, policy and sim.
 
-The simulator emits ground-truth ``TurnAnalysis`` for oracle NLU and must not
-import ``app.agent``. Agent NLU re-exports these from ``app.agent.nlu_types``.
-
-NLU v2 (Phase 71a, ``NLU_SCHEMA=acts``): the model returns ``ActList``, a
-short list of typed acts from a closed set (``Act``, discriminated on
-``type``), each with only its own fields and a verbatim ``quote``. Validation
-is strict (unknown type or field fails); ``app.agent.nlu.acts`` turns a
-failure into one ``unclear`` act and converts verified acts back into a
-``TurnAnalysis`` so the policy runs unchanged. No checks against the
-utterance live here.
+The NLU model returns ``ActList``: a short list of typed acts from a closed
+set (``Act``, discriminated on ``type``), each with only its own fields and a
+verbatim ``quote``. Validation is strict (unknown type or field fails).
+``RepTurn`` is one rep line as the policy reads it: the verified acts, with
+code-checked values in the term and price acts, plus two code notes
+(numbers no act claimed, tiers that cannot be placed). The simulator emits a
+ground-truth ``RepTurn`` for oracle NLU (it must not import ``app.agent``);
+``app.agent.nlu`` verifies model and oracle acts alike. No checks against
+the utterance live here, and no decisions (``app.agent.policy`` dispatches).
 """
 
 from __future__ import annotations
 
 from datetime import date
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Off-script question topics. Anything else the rep asks is "other".
-QuestionTopic = Literal["why_not_higher", "next_steps", "who_approves", "timeline", "other"]
+# Off-script question topics; ``schedule`` (payment dates / schedule detail)
+# is set by code and answered by the policy, the rest by ``app.agent.acts``.
+QuestionTopic = Literal[
+    "why_not_higher", "next_steps", "who_approves", "timeline", "schedule", "other"
+]
 QUESTION_TOPICS: tuple[str, ...] = (
     "why_not_higher",
     "next_steps",
     "who_approves",
     "timeline",
+    "schedule",
     "other",
 )
 
@@ -41,57 +45,11 @@ RuleField = Literal[
 ]
 
 
-class ExtractedTerm(BaseModel):
-    field: RuleField
-    value: int | str | date | dict | list
-    quote: str  # verbatim span from the utterance
-    hedged: bool = False
+# --- acts -----------------------------------------------------------------
 
-
-class TurnAnalysis(BaseModel):
-    terms: list[ExtractedTerm] = Field(default_factory=list)
-    settlement_ask_pct: float | None = None  # percent points, e.g. 45.0 = 45%
-    ask_quote: str | None = None
-    # Settlement ask stated as a dollar total, integer cents. Code,
-    # never the LLM, converts it to basis points of the account balance.
-    settlement_ask_total_cents: int | None = None
-    ask_total_quote: str | None = None
-    # A dollar amount that may be the total to settle or the minimum per
-    # payment. The agent asks which one instead of guessing.
-    amount_ambiguous_cents: int | None = None
-    amount_ambiguous_quote: str | None = None
-    stance: Literal[
-        "offer", "counter", "accept", "reject", "stall", "info", "question", "other"
-    ] = "other"
-    readback_response: Literal["confirm", "deny"] | None = None
-    asks_client_private_info: bool = False
-    demands_commitment: bool = False
-    hostility: float = 0.0
-    wants_to_end: bool = False
-    asks_for_schedule: bool = False
-    # True when the rep says the number is final / their floor / cannot go lower.
-    firm: bool = False
-    # Tiers phrased as "first N payments": dropped by NLU, policy asks to rephrase.
-    tiers_ambiguous: bool = False
-    # Off-script process question (not a term, price, schedule or private ask).
-    # NLU-sourced only; ``decide()`` ignores it, ``app.agent.acts`` answers it.
-    asks_question: bool = False
-    question_topic: QuestionTopic | None = None
-    # The rep announced a rule without giving it yet ("before that I need to
-    # define the payment tiers", "there are three tiers"): the field, and how
-    # many tiers / levels they said there will be. Code-checked in the NLU.
-    defines_field: RuleField | None = None
-    expected_count: int | None = None
-    # "That's all" / "no more": the rep finished a list (tiers given one by one).
-    list_done: bool = False
-    # Numbers the rep said that no verified act claimed (raw spans, acts schema
-    # only). The policy never acts on an older value on such a turn.
-    unaccounted_numbers: list[str] = Field(default_factory=list)
-    # The acts model could not map the line (``unclear`` act): ask to rephrase.
-    unclear: bool = False
-
-
-# --- NLU v2 acts ------------------------------------------------------------
+# A rule's value: the model sends JSON (int, str, tier list); after code
+# verification a date is a ``date`` and tiers are ``[(from_payment, min_cents)]``.
+RuleValue = int | str | date | list[Any]
 
 ACT_TYPES: tuple[str, ...] = (
     "answer",
@@ -124,7 +82,7 @@ class TermAnswerAct(_ActBase):
 
     type: Literal["answer"]
     field: RuleField
-    value: int | str | list[dict[str, int]]
+    value: RuleValue
     hedged: bool = False
 
 
@@ -133,7 +91,7 @@ class StateRuleAct(_ActBase):
 
     type: Literal["state_rule"]
     field: RuleField
-    value: int | str | list[dict[str, int]]
+    value: RuleValue
     hedged: bool = False
 
 
@@ -163,7 +121,13 @@ class ListDoneAct(_ActBase):
 
 
 class PriceAskAct(_ActBase):
-    """A settlement price: percent of the balance or a dollar total, with firmness."""
+    """A settlement price: percent of the balance or a dollar total, with firmness.
+
+    Exactly one of ``pct`` / ``total_cents``. The one exception is a ``final``
+    with neither: "that's the lowest I can go" restates the rep's standing ask
+    as final (code sets it from a firm cue; the policy never reuses that ask
+    while the line holds a number no act claimed).
+    """
 
     type: Literal["price_ask"]
     pct: float | None = Field(default=None, gt=0, le=100)
@@ -172,7 +136,9 @@ class PriceAskAct(_ActBase):
 
     @model_validator(mode="after")
     def _one_amount(self) -> PriceAskAct:
-        if (self.pct is None) == (self.total_cents is None):
+        both = self.pct is not None and self.total_cents is not None
+        neither = self.pct is None and self.total_cents is None
+        if both or (neither and self.firmness != "final"):
             raise ValueError("price_ask needs exactly one of pct / total_cents")
         return self
 
@@ -216,6 +182,10 @@ class HostilityAct(_ActBase):
 
     type: Literal["hostility"]
     level: Literal["mild", "strong"] = "mild"
+
+
+# ``hostility`` level → the 0..1 score the policy compares with ``hostility_threshold``.
+HOSTILITY_LEVEL: dict[str, float] = {"mild": 0.4, "strong": 1.0}
 
 
 class EndCallAct(_ActBase):
@@ -271,3 +241,111 @@ class ActList(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     acts: list[Act] = Field(default_factory=list, max_length=8)
+
+
+_TIERS = "min_payment_tiers"
+_TERM_ACTS = (TermAnswerAct, StateRuleAct)
+
+
+class RepTurn(BaseModel):
+    """One rep line as the policy reads it: verified acts plus two code notes.
+
+    ``acts`` keep the rep's order. Term acts carry code-verified values (dates
+    as ``date``, tiers as ``[(from_payment, min_cents)]``); a ``price_ask``
+    carries the verified percent (a dollar total is already converted). The
+    readers below are views over ``acts``, not separate flags.
+    """
+
+    acts: list[Act] = Field(default_factory=list)
+    # Numbers in the line that no verified act claimed (raw spans): the policy
+    # will not act on an older value this turn.
+    unaccounted_numbers: list[str] = Field(default_factory=list)
+    # Tiers that cannot be placed ("the first N payments" with no range, or
+    # ranges with a gap / overlap): the policy asks for them again.
+    tiers_ambiguous: bool = False
+    # Oracle ground truth only: a dollar amount whose meaning (total or per
+    # payment) is unclear. The orchestrator asks about it before the policy
+    # runs; for model acts code derives it (``app.agent.nlu.acts``).
+    amount_ambiguous_cents: int | None = None
+    amount_ambiguous_quote: str | None = None
+
+    def of(self, kind: type[Any]) -> list[Any]:
+        """Acts of one model class, in line order."""
+        return [a for a in self.acts if isinstance(a, kind)]
+
+    def has(self, type_name: str) -> bool:
+        return any(a.type == type_name for a in self.acts)
+
+    @property
+    def price(self) -> PriceAskAct | None:
+        """The last price act with a number (a self-correction keeps the later one)."""
+        priced = [a for a in self.of(PriceAskAct) if a.pct is not None]
+        return priced[-1] if priced else None
+
+    @property
+    def ask_pct(self) -> float | None:
+        p = self.price
+        return p.pct if p is not None else None
+
+    @property
+    def firm(self) -> bool:
+        return any(a.firmness == "final" for a in self.of(PriceAskAct))
+
+    @property
+    def accepts(self) -> bool:
+        return any(a.response == "accept" for a in self.of(RespondToOfferAct))
+
+    @property
+    def rejects(self) -> bool:
+        return not self.accepts and any(
+            a.response == "reject" for a in self.of(RespondToOfferAct)
+        )
+
+    @property
+    def readback(self) -> str | None:
+        """``confirm`` / ``deny`` from the last read-back reply, else None."""
+        rb = self.of(ReadbackReplyAct)
+        return rb[-1].response if rb else None
+
+    @property
+    def terms(self) -> list[TermAnswerAct | StateRuleAct]:
+        return [a for a in self.acts if isinstance(a, _TERM_ACTS)]
+
+    @property
+    def announced(self) -> AnnounceRulesAct | None:
+        ann = self.of(AnnounceRulesAct)
+        return ann[0] if ann else None
+
+    @property
+    def list_done(self) -> bool:
+        return self.has("list_done")
+
+    @property
+    def ends(self) -> bool:
+        return self.has("end_call")
+
+    def hostility(self) -> float:
+        """Highest hostility score in the line (0 when none)."""
+        return max((HOSTILITY_LEVEL[a.level] for a in self.of(HostilityAct)), default=0.0)
+
+    @property
+    def unclear(self) -> bool:
+        return self.has("unclear")
+
+    def asks(self, topic: str) -> bool:
+        """True when a ``question`` act of ``topic`` is present."""
+        return any(a.topic == topic for a in self.of(QuestionAct))
+
+    def tier_items(self) -> list[tuple[int, int | None, int]]:
+        """Tiers stated this turn: ``(from_payment, to_payment | None, min_cents)``.
+
+        From ``rule_item`` acts (code-read, with their end) and from a tiers
+        ``answer`` / ``state_rule`` (a whole set, no ends).
+        """
+        out: list[tuple[int, int | None, int]] = []
+        for a in self.acts:
+            if isinstance(a, RuleItemAct) and a.from_payment and a.min_cents:
+                out.append((a.from_payment, a.to_payment, a.min_cents))
+            elif isinstance(a, _TERM_ACTS) and a.field == _TIERS and isinstance(a.value, list):
+                out.extend((int(x[0]), None, int(x[1])) for x in a.value)
+        return out

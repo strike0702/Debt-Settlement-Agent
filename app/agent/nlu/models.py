@@ -71,6 +71,10 @@ class VerifiedAnalysis(BaseModel):
     # Off-script question; answered by ``app.agent.acts``, not policy.
     asks_question: bool = False
     question_topic: str | None = None
+    # Rule announced but not given yet (``cues.repair_defines_field``).
+    defines_field: str | None = None
+    expected_count: int | None = None
+    list_done: bool = False
 
     def to_turn_analysis(self) -> TurnAnalysis:
         """Drop verified flags for ``policy.decide``."""
@@ -97,4 +101,7 @@ class VerifiedAnalysis(BaseModel):
             tiers_ambiguous=self.tiers_ambiguous,
             asks_question=self.asks_question,
             question_topic=self.question_topic,  # type: ignore[arg-type]
+            defines_field=self.defines_field,  # type: ignore[arg-type]
+            expected_count=self.expected_count,
+            list_done=self.list_done,
         )

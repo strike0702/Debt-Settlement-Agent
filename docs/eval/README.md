@@ -24,7 +24,8 @@ original [build plan](../history/PLAN.md).
 | [`nlu_guard_20261008/`](nlu_guard_20261008/summary.md), [`nlu_phrase_guards_20261009/`](nlu_phrase_guards_20261009/summary.md), [`nlu_rules_20261009/`](nlu_rules_20261009/summary.md) | The code-side stance guards and reading rules, measured on and off |
 | [`haiku_nlu_demo_20261008/`](haiku_nlu_demo_20261008/summary.md), [`claude_nlu_demo_20261008/`](claude_nlu_demo_20261008/summary.md) | Live latency and cost probes of the demo's NLU route |
 | [`latency_20261007.md`](latency_20261007.md), [`latency_20261007/`](latency_20261007/) | Stage-by-stage latency before and after the template bank and key pool |
-| [`voice_tuned_20261029/`](voice_tuned_20261029/summary.md) | Voice after turn-taking and interruption tuning (Phase 65), plus a long call and the less sensitive pause check; the README's voice numbers |
+| [`voice_tuned_20261029/`](voice_tuned_20261029/summary.md) | Voice after turn-taking and interruption tuning (Phase 65), plus a long call and the less sensitive pause check (free Groq NLU) |
+| [`voice_haiku_20261107/`](voice_haiku_20261107/summary.md) | The same voice run with Claude Haiku reading the rep, as on the demo; the README's voice numbers |
 | [`voice_pipeline_20261029/`](voice_pipeline_20261029/summary.md) | First run of the server voice pipeline with real turns (Phase 63) |
 | [`voice_hosting_20261030/`](voice_hosting_20261030/summary.md) | One relay-forced call through Cloudflare TURN (Phase 66): connect time, RTT, server peak RSS |
 | [`voice_client_20261029/`](voice_client_20261029/summary.md) | The product UI's WebRTC client on laptop speakers (Phase 64): connects and plays, but `afplay` rep lines were mostly not recognized |

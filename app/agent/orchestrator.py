@@ -97,6 +97,7 @@ from app.agent.policy import (
     loop_guard,
     opening_action,
     parse_pending_terms_value,
+    question_key,
     rep_turn_progress,
     speak_schedule_action,
 )
@@ -943,6 +944,8 @@ class Orchestrator:
     def _commit_pending(self, pending: PendingSpeech) -> Agreement | None:
         """Apply effects + deferred eval; draft agreement or fail WRAP to a handoff."""
         apply_effects(self.session, pending.action.effects)
+        # What the rep just heard us ask (None: not a question), for the loop guard.
+        self.session.neg.last_question_key = question_key(pending.action)
         if pending.pending_eval is not None:
             self.session.last_eval = pending.pending_eval
         if pending.pending_agreed_bp is not None:
@@ -1216,6 +1219,11 @@ class Orchestrator:
             pending_agreed_bp=self._turn_agreed_bp,
             rollback=rollback,
         )
+        # The tier draft is plain bookkeeping: set it now, so the rep's next line
+        # (even before the speech ack) merges into it and its read-back can commit.
+        tier_draft = [e for e in action.effects if e.kind == "set_tier_draft"]
+        if tier_draft:
+            apply_effects(self.session, tier_draft)
         # Eager READ_BACK pending so barge-in doesn't lose the field before ack.
         if action.intent == Intent.READ_BACK:
             field = action.reason
@@ -1495,7 +1503,10 @@ class Orchestrator:
         )
         correcting = bool(acked) and cue is not None
 
-        if session.neg.pending_readback and verified.readback_response in (
+        tier_answer = self._answer_tier_readback(verified, turn)
+        if tier_answer is not None:
+            changes.append(tier_answer)
+        elif session.neg.pending_readback and verified.readback_response in (
             "confirm",
             "deny",
         ):
@@ -1510,7 +1521,14 @@ class Orchestrator:
             except ValueError:
                 pass
 
+        # Tiers the rep is listing one by one wait in the policy's draft and reach
+        # belief as one set, on the yes to its read-back.
+        holding_tiers = (
+            session.neg.tier_draft is not None or verified.defines_field == "min_payment_tiers"
+        )
         for term in verified.terms:
+            if holding_tiers and term.field == "min_payment_tiers":
+                continue
             cur = session.belief.get(term.field)
             if (
                 correcting
@@ -1567,6 +1585,41 @@ class Orchestrator:
                 self._audit("belief", "ack_disputed", ch.model_dump(mode="json"))
 
         return changes
+
+    def _answer_tier_readback(
+        self, verified: VerifiedAnalysis, turn: int
+    ) -> BeliefChange | None:
+        """Yes / no to the read-back of a tier set the rep listed one by one.
+
+        Yes: the whole set becomes KNOWN (``accept_alternative``: the rep
+        confirmed it, so a previous value is replaced, not contradicted) and
+        collecting ends. A plain no clears the draft so the policy asks again;
+        a no that restates tiers keeps the draft for the policy to merge.
+        Returns the belief change on a yes, else None.
+        """
+        neg = self.session.neg
+        if not (
+            neg.tier_readback
+            and neg.tier_draft is not None
+            and neg.pending_readback == "min_payment_tiers"
+            and verified.readback_response in ("confirm", "deny")
+        ):
+            return None
+        neg.pending_readback = None
+        neg.tier_readback = False
+        if verified.readback_response == "deny":
+            if not any(t.field == "min_payment_tiers" for t in verified.terms):
+                neg.tier_draft = []
+            self._audit("belief", "tier_readback_denied", {"turn": turn})
+            return None
+        tiers = list(neg.tier_draft)
+        neg.tier_draft = None
+        neg.tier_expected = None
+        ch = self.session.belief.accept_alternative(
+            "min_payment_tiers", tiers, "confirmed tier read-back", turn
+        )
+        self._audit("belief", "tier_readback_confirmed", ch.model_dump(mode="json"))
+        return ch
 
     def _ingest_creditor_numbers(self, text: str) -> None:
         for tok in extract_tokens(text, ref=self._ref):

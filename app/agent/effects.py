@@ -6,7 +6,8 @@ alternative, ...). ``apply_effects`` commits them to ``CallSession.neg``. The
 orchestrator calls it once the move has been heard (speech ack), and eagerly
 on emit for its bookkeeping kinds so a fast accept sees the offer; a
 barge-in drops the other effects of words the rep never heard.
-``offer_counter`` and ``note_terms_countered`` tolerate a second apply.
+``offer_counter``, ``note_terms_countered`` and ``set_tier_draft`` tolerate a
+second apply.
 """
 
 from __future__ import annotations
@@ -90,5 +91,15 @@ def apply_effects(session: CallSession, effects: list[Effect]) -> None:
             session.neg.pending_cents_clarify = dict(data)
         elif kind == "clear_pending_cents_clarify":
             session.neg.pending_cents_clarify = None
+        elif kind == "set_tier_draft":
+            # Plain set (applied eagerly on emit and again on ack).
+            tiers = data.get("tiers")
+            session.neg.tier_draft = (
+                None if tiers is None else [(int(a), int(b)) for a, b in tiers]
+            )
+            session.neg.tier_expected = data.get("expected")
+            session.neg.tier_readback = bool(data.get("readback", False))
+        elif kind == "note_sweep":
+            session.neg.optional_sweep_done = True
         elif kind == "set_phase":
             session.neg.phase = Phase(str(data["phase"]))

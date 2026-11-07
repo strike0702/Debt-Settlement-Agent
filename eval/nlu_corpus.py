@@ -220,7 +220,8 @@ def predicted_flags(out: VerifiedAnalysis, hostility_threshold: float) -> dict[s
 
 
 def expected_terms(line: dict[str, Any]) -> dict[str, Any]:
-    """Term labels: field values, ask %, cents clarify, dollar-total ask, ambiguous amount."""
+    """Term labels: field values, ask %, cents clarify, dollar-total ask, ambiguous amount,
+    and a rule announcement (``defines_field`` / ``expected_count``)."""
     out: dict[str, Any] = dict(line.get("terms", {}))
     if line.get("ask_pct") is not None:
         out["settlement_ask_pct"] = float(line["ask_pct"])
@@ -230,6 +231,10 @@ def expected_terms(line: dict[str, Any]) -> dict[str, Any]:
         out["ask_total_cents"] = int(line["ask_total_cents"])
     if line.get("amount_ambiguous") is not None:
         out["amount_ambiguous"] = int(line["amount_ambiguous"])
+    if line.get("defines_field") is not None:
+        out["defines_field"] = str(line["defines_field"])
+    if line.get("expected_count") is not None:
+        out["expected_count"] = int(line["expected_count"])
     return out
 
 
@@ -246,6 +251,10 @@ def predicted_terms(out: VerifiedAnalysis) -> dict[str, Any]:
         terms["ask_total_cents"] = out.settlement_ask_total_cents
     if out.amount_ambiguous_cents is not None:
         terms["amount_ambiguous"] = out.amount_ambiguous_cents
+    if out.defines_field is not None:
+        terms["defines_field"] = out.defines_field
+    if out.expected_count is not None:
+        terms["expected_count"] = out.expected_count
     return terms
 
 

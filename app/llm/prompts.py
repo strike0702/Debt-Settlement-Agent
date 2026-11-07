@@ -103,7 +103,9 @@ Reply with JSON only in this exact shape (no other top-level keys):
   "asks_for_schedule":false,
   "firm":false,
   "asks_question":false,
-  "question_topic":null
+  "question_topic":null,
+  "defines_field":null,
+  "expected_count":null
 }
 Field names for terms[].field (only these):
 max_payments, min_payment_cents, payment_structure, first_payment_date,
@@ -167,6 +169,11 @@ why the offer is not higher, next steps, who approves, or how long things take.
 Not for questions about terms, percentages, schedules, or the client's finances.
 question_topic: why_not_higher | next_steps | who_approves | timeline | other
 (null when asks_question is false).
+defines_field: when the rep announces a rule but does not give it yet ("before that,
+I need to define the payment tiers", "there are three tiers", "let me tell you the
+payment levels"), the field name from the list above; else null. Still extract any
+rule the line does give. expected_count: how many tiers or levels they say there
+will be ("three tiers" → 3), else null.
 Omit unknown fields; use [] / null when nothing extracted.
 """
 

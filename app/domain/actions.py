@@ -73,6 +73,8 @@ class Effect(BaseModel):
         "clear_wrap",
         "set_pending_cents_clarify",
         "clear_pending_cents_clarify",
+        "set_tier_draft",
+        "note_sweep",
         "set_phase",
     ]
     data: dict[str, Any] = Field(default_factory=dict)

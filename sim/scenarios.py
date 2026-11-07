@@ -86,6 +86,9 @@ class Scenario:
     should_escalate: bool
     stratum: Stratum
     haggle: Haggle = EASY
+    # The rep insists on defining its tiers one by one before any price
+    # (``sim.creditor``: announce, then the count, then one tier per ask).
+    defines_tiers: bool = False
 
 
 def to_creditor_rules(

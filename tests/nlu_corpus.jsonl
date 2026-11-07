@@ -181,3 +181,13 @@
 {"id": "k04", "tags": ["ask_neg"], "text": "Your 100% balance is due immediately.", "stance": "other"}
 {"id": "k05", "tags": ["ask_neg"], "text": "You must remit the 50% installment now.", "stance": "other"}
 {"id": "k06", "tags": ["ask"], "text": "We can settle for 80% of the balance.", "stance": "counter", "ask_pct": 80}
+{"id": "rd01", "tags": ["defines"], "text": "Uh, before that, I need to define the payment tiers.", "stance": "info", "defines_field": "min_payment_tiers"}
+{"id": "rd02", "tags": ["defines"], "text": "So we will have three payment tiers.", "stance": "info", "defines_field": "min_payment_tiers", "expected_count": 3}
+{"id": "rd03", "tags": ["defines"], "text": "Let me tell you the payment levels.", "stance": "info", "defines_field": "max_segments"}
+{"id": "rd04", "tags": ["defines"], "text": "There are two tiers on this account.", "stance": "info", "defines_field": "min_payment_tiers", "expected_count": 2}
+{"id": "rd05", "tags": ["defines"], "text": "Before we talk price, I want to go over the token payments.", "stance": "info", "defines_field": "max_token_pays"}
+{"id": "rd06", "tags": ["defines"], "text": "Hold on, I need to give you the start date first.", "stance": "stall", "defines_field": "first_payment_date"}
+{"id": "rd07", "tags": ["defines_neg"], "text": "There are no tiered minimums.", "stance": "info", "terms": {"min_payment_tiers": []}}
+{"id": "rd08", "tags": ["defines_neg"], "text": "We allow up to three payment levels.", "stance": "info", "terms": {"max_segments": 3}}
+{"id": "rd09", "tags": ["defines_neg"], "text": "No tiers, the minimum is the same throughout.", "stance": "info", "terms": {"min_payment_tiers": []}}
+{"id": "rd10", "tags": ["defines_neg"], "text": "I need a flexible schedule. I will define the payment structure.", "stance": "info", "terms": {"payment_structure": "flexible"}}

@@ -1992,6 +1992,39 @@ Misses (line ids):
 - terms: f16, f17, d04, d07
 - filler false accept: -
 
+## GROQ_P68
+
+- git: `a9679f2`  profile=`groq_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_groq_20261009/providers_groq.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 193  skipped (LLM unavailable): 0
+- model share: groq/openai/gpt-oss-120b=188, fast_path=5
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 34 | 34 | 0 | 0 | 1.000 | 1.000 |
+| demands_commitment | 13 | 12 | 2 | 1 | 0.857 | 0.923 |
+| firm | 6 | 6 | 2 | 0 | 0.750 | 1.000 |
+| wants_to_end | 6 | 6 | 7 | 0 | 0.462 | 1.000 |
+| hostility | 5 | 5 | 0 | 0 | 1.000 | 1.000 |
+| stance=accept | 11 | 11 | 1 | 0 | 0.917 | 1.000 |
+| stance=reject | 9 | 9 | 0 | 0 | 1.000 | 1.000 |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.876 |
+| term exact-match (all lines) | 0.979 |
+| term exact-match (lines with terms, n=76) | 0.947 |
+| filler false accepts (n=31) | 1 |
+
+Misses (line ids):
+
+- demands_commitment: FP f27, k05; FN c10
+- firm: FP i10, k05; FN -
+- wants_to_end: FP c05, c06, i07, x02, e06, e07, e10; FN -
+- stance=accept: FP f23; FN -
+- terms: f16, f17, d04, rd03
+- filler false accept: f23
+
 ## Notes
 
 - Both runs used the same model and prompt (Groq `gpt-oss-120b`, temperature 0).

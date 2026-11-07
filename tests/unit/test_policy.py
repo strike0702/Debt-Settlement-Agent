@@ -1232,58 +1232,29 @@ def test_post_wrap_any_followup_closes() -> None:
     assert action.intent != Intent.CONFIRM_SCHEDULE
 
 
-def test_post_wrap_renegotiate_new_ask() -> None:
-    """New settlement ask after WRAP reopens negotiation (does not CLOSE)."""
-    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
-    key = _key(b, 4500)
-    action = decide(
-        b,
-        _neg(
-            turn_idx=6,
-            ask_bp=4500,
-            confirmed_bp=4500,
-            phase=Phase.WRAP,
-            last_confirm_key=key,
-        ),
-        acts_turn(stance="offer", settlement_ask_pct=70.0, ask_quote="seventy"),
-        _afford(8000),
-        settings=_SETTINGS,
+def _wrap_neg(b: BeliefState) -> NegotiationState:
+    return _neg(
+        turn_idx=6, ask_bp=4500, confirmed_bp=4500, phase=Phase.WRAP, last_confirm_key=_key(b, 4500)
     )
-    assert action.intent != Intent.CLOSE
-    assert action.intent != Intent.PROPOSE_WRAP
-    assert any(e.kind == "clear_wrap" for e in action.effects)
-    assert action.next_phase in (Phase.CONFIRM, Phase.NEGOTIATE)
 
 
-def test_post_wrap_renegotiate_new_terms() -> None:
-    """Revised creditor terms after WRAP reopen; do not CLOSE."""
+def test_post_wrap_new_ask_hands_off_never_reopens() -> None:
+    """71c: a new price after the proposal hands off (clears the draft); never NEGOTIATE."""
     b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
-    key = _key(b, 4500)
-    action = decide(
-        b,
-        _neg(
-            turn_idx=6,
-            ask_bp=4500,
-            confirmed_bp=4500,
-            phase=Phase.WRAP,
-            last_confirm_key=key,
-        ),
-        acts_turn(
-            stance="info",
-            terms=[
-                rule_act(
-                    field="max_payments",
-                    value=3,
-                    quote="three payments",
-                    hedged=False,
-                )
-            ],
-        ),
-        _afford(6000),
-        settings=_SETTINGS,
-    )
-    assert action.intent != Intent.CLOSE
+    turn = acts_turn(stance="offer", settlement_ask_pct=70.0, ask_quote="seventy")
+    action = decide(b, _wrap_neg(b), turn, _afford(8000), settings=_SETTINGS)
+    assert (action.intent, action.reason) == (Intent.ESCALATE, "changed_after_proposal")
     assert any(e.kind == "clear_wrap" for e in action.effects)
+
+
+def test_post_wrap_new_terms_hand_off_same_terms_close() -> None:
+    b = _belief(max_payments=6, min_payment_cents=10000, payment_structure="even")
+    changed = acts_turn(terms=[rule_act(field="max_payments", value=3, quote="three payments")])
+    action = decide(b, _wrap_neg(b), changed, _afford(6000), settings=_SETTINGS)
+    assert (action.intent, action.reason) == (Intent.ESCALATE, "changed_after_proposal")
+    same = acts_turn(terms=[rule_act(field="max_payments", value=6, quote="six payments")])
+    action = decide(b, _wrap_neg(b), same, _afford(6000), settings=_SETTINGS)
+    assert (action.intent, action.reason) == (Intent.CLOSE, "post_wrap")
 
 
 def test_post_wrap_schedule_detail_stays_wrap() -> None:

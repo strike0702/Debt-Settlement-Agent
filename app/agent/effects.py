@@ -103,6 +103,13 @@ def apply_effects(session: CallSession, effects: list[Effect]) -> None:
                 {} if tiers is None else {int(k): int(v) for k, v in ends.items()}
             )
             session.neg.tier_readback = bool(data.get("readback", False))
+            pending = data.get("pending")
+            session.neg.tier_pending = (
+                None
+                if pending is None
+                else (int(pending[0]), None if pending[1] is None else int(pending[1]),
+                      int(pending[2]))
+            )  # fmt: skip
         elif kind == "note_sweep":
             session.neg.optional_sweep_done = True
         elif kind == "set_phase":

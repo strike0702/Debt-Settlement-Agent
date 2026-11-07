@@ -177,6 +177,33 @@ def test_unclear_is_asked_again_in_every_live_phase(state: str) -> None:
     assert (action.intent, action.reason) == (Intent.CLARIFY, "unclear")
 
 
+# 71c: after the proposal only close, read the schedule, ask again, hand off, refuse.
+_WRAP_MOVES = {
+    Intent.CLOSE, Intent.SPEAK_SCHEDULE, Intent.CLARIFY, Intent.ESCALATE,
+    Intent.REFUSE_PRIVATE, Intent.REFUSE_COMMIT,
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("act_type", [*ACT_TYPES, None])
+def test_wrap_never_reopens_discovery_or_the_ladder(act_type: str | None) -> None:
+    action = _decide("WRAP", act_type)
+    assert action.intent in _WRAP_MOVES, (act_type, action.intent)
+    assert action.next_phase in (Phase.WRAP, Phase.END, Phase.ESCALATE), act_type
+    assert not any(e.kind == "set_phase" and e.data["phase"] in ("DISCOVERY", "NEGOTIATE",
+                   "CONFIRM") for e in action.effects)  # fmt: skip
+
+
+def test_no_to_anything_else_closes_and_a_change_hands_off() -> None:
+    """The live call: "No." (read as a reject, or nothing) after the proposal closes."""
+    belief, neg, afford = _states()["WRAP"]
+    reject = RepTurn(acts=[RespondToOfferAct(type="respond_to_offer", response="reject", quote=_Q)])
+    for turn in (reject, RepTurn(acts=[])):
+        action = decide(belief, neg, turn, afford, settings=_SETTINGS)
+        assert (action.intent, action.reason) == (Intent.CLOSE, "post_wrap")
+    price = decide(belief, neg, RepTurn(acts=[_SAMPLES["price_ask"]]), afford, settings=_SETTINGS)
+    assert (price.intent, price.reason) == (Intent.ESCALATE, "changed_after_proposal")
+
+
 @pytest.mark.parametrize("state", ["DISCOVERY", "NEGOTIATE", "CONFIRM"])
 def test_an_act_the_phase_cannot_use_is_clarified_not_dropped(state: str) -> None:
     """"That's all" with no list open is asked about, never silently ignored."""

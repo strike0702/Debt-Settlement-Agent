@@ -10,8 +10,9 @@ than a flag priority:
    (refuse, hand off on repeat), ``demand_commitment`` (same).
 3. Call state: after a proposal (WRAP / END / ESCALATE) the wrap rules
    decide (``_decide_wrap``: after a hand-off or the end every line gets the
-   terminal reply; in WRAP an unreadable line is asked again, a line that
-   reopens price or terms re-enters the ladder, anything else closes); a run
+   terminal reply; in WRAP an unreadable line is asked again, a real change
+   of price or terms hands off, anything else closes — WRAP never goes back
+   to discovery or the ladder); a run
    of turns that added nothing hands off.
 4. Acts that answer themselves: ``question`` (topic ``schedule`` after a
    proposal → read the schedule; other topics are answered by the act layer,
@@ -472,23 +473,30 @@ def _close_after_wrap(effects: list[Effect], *, reason: str) -> Action:
     )
 
 
-def _reopens(turn: RepTurn) -> bool:
-    """A reject or a price: the rep reopens the deal."""
-    return turn.rejects or turn.price is not None
+def _changes_terms(t: _Turn) -> bool:
+    """A real change request after the proposal: a new price, a rule value that
+    differs from belief, tiers, or an announced rule list.
 
-
-def _wrap_should_renegotiate(turn: RepTurn) -> bool:
-    """True when the rep reopens price or terms (or announces a rule) after PROPOSE_WRAP."""
-    return (
-        _reopens(turn)
-        or bool(turn.terms)
-        or bool(turn.tier_items())
-        or turn.announced is not None
-    )
+    A bare reject ("No.") is not one: after "anything else?" it means "nothing".
+    """
+    tu = t.turn
+    if tu.ask_pct is not None:
+        agreed = t.neg.confirmed_bp if t.neg.confirmed_bp is not None else t.neg.ask_bp
+        if agreed is None or round(tu.ask_pct * 100) != agreed:
+            return True
+    if any(a.value != t.belief.get(a.field).value for a in tu.terms):
+        return True
+    return bool(tu.tier_items()) or tu.announced is not None
 
 
 def _decide_wrap(t: _Turn) -> Action:
-    """Post-proposal phases: stay terminal, or reopen price/terms from WRAP."""
+    """Post-proposal phases: never reopen discovery or the ladder (71c).
+
+    WRAP allows only: read the schedule (a question), ask again on an
+    unreadable line, hand off on a real change request (the proposal no longer
+    matches the rep's terms), else CLOSE ("No", empty, a reject, a goodbye).
+    The safety refusals run before this step.
+    """
     tu, neg = t.turn, t.neg
     if neg.phase == Phase.ESCALATE:
         return Action(
@@ -516,29 +524,10 @@ def _decide_wrap(t: _Turn) -> Action:
             reason="unclear",
             template_override=_UNCLEAR_TEMPLATE,
         )
-    if not _wrap_should_renegotiate(tu):
-        return _close_after_wrap(t.effects, reason="post_wrap")
-    # Re-enter as CONFIRM/NEGOTIATE; the drafted agreement clears on ack.
-    reopen = Phase.CONFIRM if neg.confirmed_bp is not None else Phase.NEGOTIATE
-    action = decide(
-        t.belief,
-        replace(neg, phase=reopen),
-        tu,
-        t.afford,
-        context=t.ctx,
-        settings=t.cfg,
-        rescue_within_guardrail=t.rescue_within_guardrail,
-        confirm_facts=t.confirm_facts,
-        counter_offer_total_cents=t.counter_offer_total_cents,
-        term_alt=t.term_alt,
-        accepted_term_alt=t.accepted_term_alt,
-    )
-    return action.model_copy(
-        update={
-            "effects": [Effect(kind="clear_wrap", data={}), *action.effects],
-            "reason": action.reason or "wrap_renegotiate",
-        }
-    )
+    if _changes_terms(t):
+        # The drafted agreement no longer matches the rep's terms.
+        return _handoff(t.effects + [Effect(kind="clear_wrap", data={})], "changed_after_proposal")
+    return _close_after_wrap(t.effects, reason="post_wrap")
 
 
 # --- phase flow -------------------------------------------------------------------
@@ -686,6 +675,8 @@ def _with_tier_draft(t: _Turn) -> _Turn:
     if neg.tier_draft is None and not starting:
         return t
     items = tu.tier_items()
+    if not items and neg.tier_pending is not None:
+        items = _pending_tier_answer(tu, neg.tier_pending)
     new = [(frm, cents) for frm, _, cents in items]
     merged = dict(neg.tier_draft or [])
     merged.update(new)  # a tier restated from the same payment replaces the old one
@@ -728,6 +719,22 @@ def _with_tier_draft(t: _Turn) -> _Turn:
     )
 
 
+def _pending_tier_answer(
+    turn: RepTurn, pending: tuple[int, int | None, int]
+) -> list[tuple[int, int | None, int]]:
+    """The tier a conflict clarify asked about, with the minimum the rep now gives.
+
+    "I mean, one eighty dollars." after "...that tier's minimum is $100. Which
+    minimum applies?" is a minimum (``min_payment_cents``) for that tier, not a
+    new tier list: keep its range and continue with the next tier (71c).
+    """
+    frm, to, _ = pending
+    for act in turn.terms:
+        if act.field == "min_payment_cents" and isinstance(act.value, int) and act.value > 0:
+            return [(frm, to, act.value)]
+    return []
+
+
 def _rule_value(belief: BeliefState, field: str) -> int | None:
     value = belief.get(field).value
     return value if isinstance(value, int) else None
@@ -756,8 +763,11 @@ def _decide_rep_rules(t: _Turn) -> Action | None:
             kind, tier = conflict
             rest = [x for x in draft if x != tier]
             ends = {k: v for k, v in neg.tier_ends.items() if k != tier[0]}
+            pending = (tier[0], neg.tier_ends.get(tier[0]), tier[1])
             effects = [e for e in t.effects if e.kind != "set_tier_draft"]
-            effects.append(tier_draft_effect(rest, neg.tier_expected, ends=ends))
+            effects.append(
+                tier_draft_effect(rest, neg.tier_expected, ends=ends, pending=pending)
+            )
             rule = max_p if kind == "past_max" else min_c
             assert rule is not None
             return tier_conflict_clarify_action(kind, tier, rule_value=rule, effects=effects)
@@ -818,7 +828,7 @@ def _decide_confirm(t: _Turn) -> Action | None:
         tu.readback == "confirm"
         and neg.accepted_confirm_key == neg.last_confirm_key
         and tu.ask_pct is None
-        and not _reopens(tu)
+        and not (tu.rejects or tu.price is not None)
     ):
         if _confirm_key(t.belief, neg.confirmed_bp) == neg.last_confirm_key:
             return _propose_wrap(t)

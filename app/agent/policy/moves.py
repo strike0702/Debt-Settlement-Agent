@@ -450,10 +450,12 @@ def tier_draft_effect(
     *,
     readback: bool = False,
     ends: dict[int, int] | None = None,
+    pending: tuple[int, int | None, int] | None = None,
 ) -> Effect:
     """``set_tier_draft``: the tiers merged so far (None ends the collection).
 
     ``ends`` maps a drafted tier's first payment to its last, when the rep said it.
+    ``pending`` is the tier a conflict clarify took out (the next line corrects it).
     """
     data: dict[str, Any] = {
         "tiers": None if tiers is None else [list(t) for t in tiers],
@@ -462,6 +464,8 @@ def tier_draft_effect(
     }
     if ends:
         data["ends"] = {str(k): v for k, v in sorted(ends.items())}
+    if pending is not None:
+        data["pending"] = list(pending)
     return Effect(kind="set_tier_draft", data=data)
 
 
@@ -656,6 +660,9 @@ HANDOFF_SPOKEN: dict[str, str] = {
         "We keep coming back to the same question, so a specialist will sort it out."
     ),
     "no_progress": "We do not seem to be moving forward, so a specialist will take this over.",
+    "changed_after_proposal": (
+        "The terms changed after the proposal went to the client, so a specialist will review it."
+    ),
 }
 # The rep is leaving: no "I need to involve someone" lead-in, just the follow-up.
 _FOLLOW_UP_TEMPLATE = "Understood. A specialist from our side will follow up with you."

@@ -90,6 +90,10 @@ class NegotiationState:
     tier_ends: dict[int, int] = field(default_factory=dict)
     tier_expected: int | None = None
     tier_readback: bool = False
+    # The tier a ``tiers_inconsistent`` clarify took out of the draft
+    # ``(from, to | None, min_cents)``; the rep's next line corrects it (71c).
+    # Lives one turn: every ``set_tier_draft`` without it clears it.
+    tier_pending: tuple[int, int | None, int] | None = None
     # The one "any tiers or level limit?" question before the price was asked.
     optional_sweep_done: bool = False
     # This turn only (set by the orchestrator before ``decide``): fields whose

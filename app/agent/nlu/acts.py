@@ -3,8 +3,10 @@
 The ``nlu`` call returns ``{"acts": [...]}`` (``app.domain.nlu_types.ActList``).
 This module:
 
-1. ``parse_acts``: strict validation; a reply that fails keeps every valid
-   act it holds, and only an empty salvage becomes one ``unclear`` act.
+1. ``parse_acts``: strict validation; a reply with several JSON objects
+   (the model corrected itself) uses the LAST one that validates; otherwise a
+   reply that fails keeps every valid act it holds, and only an empty salvage
+   becomes one ``unclear`` act.
 2. ``verify_acts``: the one verification path for model acts and the
    simulator's oracle acts. Rules and price go through ``verify.post_verify``
    (quote / number / range checks); tier ``rule_item``s are re-read by code
@@ -53,6 +55,7 @@ from app.agent.nlu.models import (
 from app.agent.nlu.quotes import normalize_for_quote, quote_in_utterance
 from app.agent.nlu.verify import post_verify
 from app.agent.numbers import extract_tokens
+from app.agent.policy.moves import SWEEP_ASK_TEXT
 from app.domain.nlu_types import (
     Act,
     ActList,
@@ -99,16 +102,52 @@ def parse_acts(text: str) -> tuple[ActList, str | None]:
     A reply that fails as a whole keeps every complete, valid act object it
     holds (71a-2: a reply cut at the token cap, or one malformed act, used to
     turn the whole line into ``unclear``); only when none survives is it one
-    ``unclear``. The error is still returned so the caller audits it.
+    ``unclear``. A reply with several top-level objects uses the last one that
+    validates as a whole (error "used object k of n"). The error is still
+    returned so the caller audits it.
     """
     try:
         data = json.loads(strip_json_fences(text))
         return ActList.model_validate(data), None
     except (ValidationError, ValueError, TypeError) as e:
+        # 71c: a reply like `{...} Wait, that's not right. {...}` is the model
+        # correcting itself; the last object that validates is its answer.
+        objects = _top_objects(text)
+        lists = _act_lists(objects)
+        if lists:
+            idx, last = lists[-1]
+            return last, f"used object {idx + 1} of {len(objects)}: " + str(e)[:240]
         salvaged = _salvage_acts(text)
         if salvaged:
             return ActList(acts=salvaged), f"salvaged {len(salvaged)}: " + str(e)[:280]
         return ActList(acts=[UnclearAct(type="unclear")]), str(e)[:300]
+
+
+def _top_objects(text: str) -> list[Any]:
+    """Every complete top-level JSON object in ``text``, in order."""
+    decoder = json.JSONDecoder()
+    out: list[Any] = []
+    i = text.find("{")
+    while i >= 0:
+        try:
+            obj, end = decoder.raw_decode(text, i)
+        except ValueError:
+            i = text.find("{", i + 1)
+            continue
+        out.append(obj)
+        i = text.find("{", end)
+    return out
+
+
+def _act_lists(objects: list[Any]) -> list[tuple[int, ActList]]:
+    """``(object index, ActList)`` for each top-level object that validates."""
+    out: list[tuple[int, ActList]] = []
+    for idx, obj in enumerate(objects):
+        try:
+            out.append((idx, ActList.model_validate(obj)))
+        except ValidationError:
+            continue
+    return out
 
 
 def _salvage_acts(text: str) -> list[Any]:
@@ -320,6 +359,12 @@ def verify_acts(
         if isinstance(act, UnclearAct):
             unclear = True
             continue
+        if not oracle and _empty_sweep_tiers(act, last_agent_line):
+            # "No, nothing like that." to the sweep: Haiku sometimes says
+            # ``min_payment_tiers: []``, which would be read back; the sweep's
+            # own "no" path already records none (71c).
+            _log("nlu_empty_sweep_tiers_dropped", {"quote": act.quote})
+            continue
         if not oracle and not quote_in_utterance(act.quote, utterance):
             _log("nlu_act_rejected_quote", {"type": act.type, "quote": act.quote})
             dropped.append(
@@ -481,6 +526,16 @@ def verify_acts(
             "unaccounted_numbers": unaccounted,
             "model_acts": [a.type for a in kept] + (["unclear"] if unclear else []),
         }
+    )
+
+
+def _empty_sweep_tiers(act: Any, last_agent_line: str) -> bool:
+    """An empty tier list (model act) given as the reply to the optional-rules sweep."""
+    return (
+        isinstance(act, (TermAnswerAct, StateRuleAct))
+        and act.field == "min_payment_tiers"
+        and act.value == []
+        and SWEEP_ASK_TEXT in last_agent_line
     )
 
 

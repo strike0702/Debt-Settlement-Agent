@@ -88,7 +88,7 @@ _INTENT_INSTRUCTION: dict[Intent, str] = {
 # NLU: typed acts plus a PUBLIC call context block.
 _NLU_ACTS_SYSTEM = """\
 You read one line a creditor's rep said on a debt-settlement call and list the acts in it.
-Reply with JSON only: {"acts":[...]}. Include every act the line contains, in order,
+Reply with one JSON object only: {"acts":[...]}. Include every act the line contains, in order,
 each with only its own keys and "quote": the shortest verbatim span that holds it.
 A statement with no rule, price or request (the balance, small talk, "take it to the
 client", "no rush") is {"acts":[]}. Only rules the rep states: never infer a rule

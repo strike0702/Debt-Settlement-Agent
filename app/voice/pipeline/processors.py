@@ -28,6 +28,14 @@ where it paused. Waiting for words alone stopped the agent about 1.4 s late.
 takes effect at once, and trims the leading silence Aura-2 puts before the
 first sentence of a reply (about 0.25 s of the reply latency).
 
+Instant ack (Phase 70, DECISIONS D18). When a rep turn is still without a
+reply ``ACK_AFTER_S`` after Flux's committed end of turn (so it went to the
+model; a code fast path has replied by then), the agent says a short neutral
+"Mm-hm." / "Right." (``ACKS``, rotated). It is pushed straight to TTS: no
+sentence id, never acked, not in the transcript, no rollback effect. It is not
+"the agent talking" for barge or pause rules, so the rep can speak over it as
+over silence, and the reply queues behind it (it is never cut for the reply).
+
 The TTS service keeps data frames in order behind the audio before them, and
 the output transport pushes a data frame on only after the audio before it was
 written, so ``Tap("out")`` sees ``SentenceEndFrame``
@@ -83,6 +91,12 @@ TRIM_MAX_S = 0.3
 FILLER_AFTER_S = 3.0
 # Spoken while a late reply is computed; never acked, never part of a turn.
 FILLERS = ("One moment.", "Let me check.", "Okay, just a second.", "Let me see.")
+# Instant ack: a rep turn still without a reply this long after the final went
+# to the model (fast paths reply within about 50 ms; model turns take over 1 s).
+ACK_AFTER_S = 0.15
+# Neutral sounds only: never "Okay", "Sure" or "Got it", which can sound like
+# agreeing to a price (premature-commitment guard; DECISIONS D18).
+ACKS = ("Mm-hm.", "Right.")
 # A pause with no barge resumes this long after the rep's speech stops, and
 # never lasts longer than PAUSE_MAX_S.
 RESUME_AFTER_S = 0.6
@@ -311,11 +325,25 @@ class OrchestratorProcessor(FrameProcessor):
         self.filler_after_s: float | None = FILLER_AFTER_S
         self._filler_task: asyncio.Task[None] | None = None
         self._fillers = 0
+        # Instant ack: None is off (the session sets ACK_AFTER_S under voice_ack).
+        self.ack_after_s: float | None = None
+        self.call_over: Callable[[], bool] = lambda: False
+        self._ack_task: asyncio.Task[None] | None = None
+        self._acks = 0
+        self._acked = False  # an ack went out for the turn waiting for its reply
+        self._ack_only = False  # the audio now playing is an ack, not a reply
+        self._replied = False  # the opening (first reply) was queued
+        self._turn_tasks: set[asyncio.Task[None]] = set()
+        # Sentence ids queued for TTS, by text, to name them in the TTS audit.
+        self._pending_sids: dict[str, deque[str]] = {}
+        self.tts_cache_hits = 0
+        self.on_tts_cache_hit: Callable[[str | None], None] | None = None
 
     @property
     def agent_talking(self) -> bool:
-        """The agent is playing audio or has sentences waiting to play."""
-        return (self.bot_speaking or self.tracker.speaking) and not self._barged
+        """The agent is playing a reply or has sentences waiting to play (an ack is not)."""
+        playing = self.bot_speaking and not self._ack_only
+        return (playing or self.tracker.speaking) and not self._barged
 
     def _show(self, state: str, text: str = "") -> None:
         """Send the browser's call state once per change (``voice_state``)."""
@@ -331,7 +359,7 @@ class OrchestratorProcessor(FrameProcessor):
             return
         # Only while agent audio is actually playing: a reply still queued for
         # TTS is not something the rep can talk over yet.
-        if speaking and self.bot_speaking and not self._barged and not gate.paused:
+        if speaking and self.agent_talking and self.bot_speaking and not gate.paused:
             gate.pause()
             self.log("pause")
             self._resume_later(PAUSE_MAX_S, "max")
@@ -358,11 +386,12 @@ class OrchestratorProcessor(FrameProcessor):
             if reason != "barge":
                 self.log("resume", reason=reason)
 
-    def _spawn(self, coro: Any) -> None:
+    def _spawn(self, coro: Any) -> asyncio.Task[None]:
         # Turns run beside the pipeline so frames keep flowing while NLU runs.
         task = asyncio.get_running_loop().create_task(coro)
         self._spawned.add(task)
         task.add_done_callback(self._spawned.discard)
+        return task
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
@@ -376,10 +405,13 @@ class OrchestratorProcessor(FrameProcessor):
             return
         if isinstance(frame, BotStartedSpeakingFrame):
             self.bot_speaking = True
-            self._show("agent_speaking")
+            if not self._ack_only:
+                self._show("agent_speaking")
         elif isinstance(frame, BotStoppedSpeakingFrame):
             self.bot_speaking = False
-            self._show("listening")
+            # After an ack the model is still working on the reply.
+            self._show("thinking" if self._ack_only else "listening")
+            self._ack_only = False
         await self.push_frame(frame, direction)
 
     async def _final(self, text: str) -> None:
@@ -396,10 +428,64 @@ class OrchestratorProcessor(FrameProcessor):
             await self.interrupt(reason="final", text=text)
         self.log("final", text=text)
         self._show("thinking")
-        self._spawn(self.turns.on_final(text))
+        if not self._turn_tasks:
+            self._acked = False  # a new turn, not more words for the one waiting
+        task = self._spawn(self.turns.on_final(text))
+        self._turn_tasks.add(task)
+        task.add_done_callback(self._turn_tasks.discard)
+        if self.ack_after_s is not None and not self._acked:
+            self._cancel_ack()
+            self._ack_task = asyncio.get_running_loop().create_task(self._ack(self.ack_after_s))
         if self.filler_after_s is not None:
             self._cancel_filler()
             self._filler_task = asyncio.get_running_loop().create_task(self._filler())
+
+    def _may_ack(self) -> bool:
+        """No ack before the opening, after the call's end, twice, or over agent audio.
+
+        Nor in a turn that interrupted the agent (``_barged`` until the next
+        reply): the rep is usually still talking ("Hold on. That is too low...").
+        """
+        gate_paused = self.gate is not None and self.gate.paused
+        busy = self.bot_speaking or self.tracker.speaking or gate_paused or self._barged
+        return self._replied and not self._acked and not busy and not self.call_over()
+
+    async def _ack(self, delay: float) -> None:
+        """Say a neutral ack if the turn has no reply ``delay`` after the final."""
+        await asyncio.sleep(delay)
+        if not self._may_ack():
+            return
+        text = ACKS[self._acks % len(ACKS)]
+        self._acks += 1
+        self._acked = True
+        self._ack_only = True
+        self.log("ack", text=text)
+        await self.push_frame(TTSSpeakFrame(text))
+
+    def _cancel_ack(self) -> None:
+        if self._ack_task is not None:
+            self._ack_task.cancel()
+            self._ack_task = None
+
+    def synthesized(self, text: str, hit: bool) -> None:
+        """The TTS service sent ``text`` live or played it from the cache; count it.
+
+        The voice budget counts live characters only; a hit is audited as a
+        count (``tts_cache_hit``), a live sentence as ``tts_request``.
+        """
+        text = text.strip()  # Pipecat appends a space before synthesis
+        sids = self._pending_sids.get(text)
+        sid = sids.popleft() if sids else None
+        if sids is not None and not sids:
+            del self._pending_sids[text]
+        if hit:
+            self.tts_cache_hits += 1
+            if self.on_tts_cache_hit is not None:
+                self.on_tts_cache_hit(sid)
+            return
+        self.tts_chars += len(text)
+        if self.on_tts_request is not None and sid is not None:
+            self.on_tts_request(sid, text)
 
     async def _filler(self) -> None:
         """Say a short filler if the reply is still not out after ``filler_after_s``."""
@@ -409,7 +495,6 @@ class OrchestratorProcessor(FrameProcessor):
             return
         text = FILLERS[self._fillers % len(FILLERS)]
         self._fillers += 1
-        self.tts_chars += len(text)
         self.log("filler", text=text)
         await self.push_frame(TTSSpeakFrame(text))
 
@@ -422,6 +507,7 @@ class OrchestratorProcessor(FrameProcessor):
         """Stop the agent's audio; with ``barge`` tell the orchestrator what was heard."""
         split = self.tracker.interrupt()
         self._barged = True
+        self._pending_sids.clear()
         self._resume("barge")  # the interruption below drops what the gate held
         # Pushed by hand, not broadcast_interruption(): that resets this
         # processor's own task, which may be the one running this handler.
@@ -439,7 +525,13 @@ class OrchestratorProcessor(FrameProcessor):
     async def speak(self, sentences: list[tuple[str, str]]) -> None:
         """Queue reply sentences for TTS, each followed by its end marker."""
         self._cancel_filler()
+        self._cancel_ack()
         self._barged = False
+        if sentences:
+            self._replied = True
+            if self._ack_only and self.bot_speaking:
+                self._show("agent_speaking")  # the reply queues behind the ack
+            self._ack_only = False
         if sentences:
             self.log(
                 "reply",
@@ -451,9 +543,7 @@ class OrchestratorProcessor(FrameProcessor):
             await self.push_frame(ReplyStartFrame())
         for sid, text in sentences:
             self.tracker.queued(sid)
-            self.tts_chars += len(text)
-            if self.on_tts_request is not None:
-                self.on_tts_request(sid, text)
+            self._pending_sids.setdefault(text.strip(), deque()).append(sid)
             await self.push_frame(TTSSpeakFrame(text))
             await self.push_frame(SentenceEndFrame(sid))
 
@@ -472,6 +562,8 @@ class OrchestratorProcessor(FrameProcessor):
         """Wait for turns still running (cancelled at session end)."""
         if self._resume_task is not None:
             self._resume_task.cancel()
+        self._cancel_ack()
+        self._cancel_filler()
         for task in list(self._spawned):
             task.cancel()
         await asyncio.gather(*self._spawned, return_exceptions=True)

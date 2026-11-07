@@ -304,6 +304,28 @@ server's own ICE is STUN only (`VOICE_SERVER_TURN=false`): it has a public IP, a
 TURN channel bind against Cloudflare failed with 401. Render stays as a text-only mirror.
 Details: [`docs/DEPLOY_AWS.md`](../DEPLOY_AWS.md).
 
+## D18. Instant ack in a neutral word; cache only number-free sentences (Phase 70, 2026-11-07)
+
+**Question.** With Claude Haiku reading the rep, the first reply audio was 2.5 s p50 after the
+rep stopped (end of turn 0.5 s, NLU 1.3 s, TTS first byte 0.35 s, playback 0.3 s). How to make
+the agent sound present sooner without letting a model or a canned line decide anything?
+
+**Chosen (user, 2026-11-07).** (1) An instant ack on model turns: a short pre-rendered sound in
+the agent's own Aura-2 voice, "Mm-hm." or "Right.", never "Okay", "Sure" or "Got it": after a
+price those can sound like agreeing to it (the premature-commitment guard exists for that). It
+commits nothing: no sentence id, no heard tracking, no transcript line, no rollback effect. (2)
+An exact-text audio cache for sentences with no digits and no number words. Sentences with
+numbers always go to live TTS; no splicing of cached words around a live number.
+
+**Why.** The ack moves the first sound to about 0.75 s (warm p50, was 2.5 s) without touching
+what the agent decides or says. Number splicing would save more on these calls but joins two
+recordings mid-sentence (audible seams, prosody that no longer fits) on exactly the words that
+matter most; the cache only serves lines that are word-for-word repeats.
+
+**Rules added while measuring.** No ack in a turn that interrupted the agent (the rep is usually
+still talking: "Hold on. That is too low..."). Evidence:
+[`docs/eval/voice_ack_20261107/summary.md`](../eval/voice_ack_20261107/summary.md).
+
 ## Process choices
 
 - Each phase runs in its own git worktree with a paste-ready prompt; phases that touch the

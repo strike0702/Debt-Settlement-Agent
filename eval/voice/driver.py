@@ -116,6 +116,9 @@ async def serve(
 # "0" = the budgeted Claude NLU target counts as exhausted and is skipped (free
 # chain only); ``--claude-nlu`` raises it so Claude Haiku reads the rep first.
 CLAUDE_NLU_BUDGET_USD = "0"
+# Sentence audio cache directory (``--tts-cache``); None: beside the run's temp DB,
+# so every run starts cold. Set it to keep the cache between runs (warm run).
+TTS_CACHE_DIR: Path | None = None
 
 
 def app_server(port: int, log: Path, db: Path) -> contextlib.AbstractAsyncContextManager[str]:
@@ -138,6 +141,8 @@ def app_server(port: int, log: Path, db: Path) -> contextlib.AbstractAsyncContex
         "--port",
         str(port),
     ]
+    if TTS_CACHE_DIR is not None:
+        env["VOICE_TTS_CACHE_DIR"] = str(TTS_CACHE_DIR)
     return serve(cmd, port=port, cwd=ROOT, env=env, log=log)
 
 
@@ -255,6 +260,23 @@ async def _wait_idle(s: Session, target: Target, *, since: float, timeout: float
 
 
 async def _spoke_since(s: Session, target: Target, since: float) -> bool:
+    """The agent's reply started playing after ``since``.
+
+    On the app (Phase 70) an instant ack ("Mm-hm.") plays before the reply and
+    sends no ``say``: only audio after the reply's ``say`` counts, or the 1.2 s
+    of quiet between ack and reply would read as the turn's end.
+    """
+    if target != "spike":
+        says = [
+            e["t"]
+            for e in s.run.page
+            if e["kind"] == "ws_in" and e.get("type") == "say" and e["t"] >= since
+        ]
+        if not says:
+            return False
+        if await s.speaking(target):
+            return True  # the reply joined the ack's audio without a gap
+        since = says[0]
     return any(e["kind"] == "agent_audio_on" and e["t"] >= since for e in s.run.page)
 
 
@@ -543,20 +565,27 @@ def _normalize_pipecat(run: CallRun) -> list[dict[str, Any]]:
     led = [p for p in pauses if any(0 <= b - p <= 3000 for b in barges)]
     for p in pauses:
         out.append({"t": p, "kind": "pause"})
-    # A filler's audio is not the reply's: relabel it, and take the reply's
-    # first audio from the server when it follows the filler without a gap.
+    # A filler's or an instant ack's audio is not the reply's: relabel it, and
+    # take the reply's first audio from the server when it follows without a gap.
     fillers = [e["t"] for e in run.server if e["kind"] == "filler"]
+    acks = [e["t"] for e in run.server if e["kind"] == "ack"]
     replies = [e["t"] for e in run.server if e["kind"] == "reply_audio"]
     on = [e["t"] for e in out if e["kind"] == "audio_on"]
     for e in out:
-        if e["kind"] == "audio_on" and any(
-            0 <= e["t"] - f <= 1500 and not any(f <= r <= e["t"] + 50 for r in replies)
-            for f in fillers
-        ):
-            e["kind"] = "filler_on"
+        for label, starts in (("filler_on", fillers), ("ack_on", acks)):
+            if e["kind"] == "audio_on" and any(
+                0 <= e["t"] - f <= 1500 and not any(f <= r <= e["t"] + 50 for r in replies)
+                for f in starts
+            ):
+                e["kind"] = label
+    # Server reply audio leaves before the page hears it: shift a reply taken
+    # from the server by the run's median server → page delay (Phase 70).
+    lags = sorted(t - r for r in replies for t in on if -50 <= t - r <= 400)
+    lag = lags[len(lags) // 2] if lags else 0.0
     for r in replies:
-        if any(0 <= r - f <= 8000 for f in fillers) and not any(-50 <= t - r <= 400 for t in on):
-            out.append({"t": r, "kind": "audio_on"})
+        after = any(0 <= r - f <= 8000 for f in fillers + acks)
+        if after and not any(-50 <= t - r <= 400 for t in on):
+            out.append({"t": r + lag, "kind": "audio_on", "from_server": True})
     for e in list(out):
         if e["kind"] == "audio_off" and any(0 <= e["t"] - t <= 1500 for t in barges + led):
             out.append({"t": e["t"], "kind": "stop"})

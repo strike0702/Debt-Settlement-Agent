@@ -1,0 +1,45 @@
+{
+ "target": "pipecat",
+ "audio": "inject",
+ "date": "2026-11-07 15:18",
+ "summary": {
+  "reply_turns": 13,
+  "replied": 13,
+  "first_audio_p50_ms": 2596.3,
+  "first_audio_p95_ms": 3569.2,
+  "any_audio_p50_ms": 2596.3,
+  "first_sound_p50_ms": 745.4,
+  "first_sound_p95_ms": 2570.0,
+  "eot_p50_ms": 440.5,
+  "eager_eot_p50_ms": 256.4,
+  "final_p50_ms": 440.7,
+  "wer_mean": 0.013,
+  "number_recall": 1.0,
+  "numbers": "12/12",
+  "first_word_lost": 0,
+  "lines_scored": 15,
+  "split_turns": 1,
+  "phantom_finals": 0,
+  "false_barges": 2,
+  "backchannels_barged": "0/3",
+  "backchannels_paused": "0/3",
+  "interrupts_over_agent": "2/2",
+  "interrupts_barged": "2/2",
+  "barge_stop_p50_ms": 839.8,
+  "barge_stop_max_ms": 975.2
+ },
+ "phantoms": [],
+ "false_barges": [
+  {
+   "call": "numbers_easy#1",
+   "t": 1794044755678.998,
+   "kind": "barge"
+  },
+  {
+   "call": "numbers_haggle#1",
+   "t": 1794044852925.58,
+   "kind": "barge"
+  }
+ ],
+ "notes": []
+}

@@ -394,9 +394,7 @@ def post_verify(
                 bare = value // 100 if value >= 1000 and value % 100 == 0 else value
             if bare is not None and bare > 0:
                 dollars = bare * 100
-                if _in_prior_range(term.field, dollars) or _in_prior_range(
-                    term.field, bare
-                ):
+                if _in_prior_range(term.field, dollars) or _in_prior_range(term.field, bare):
                     cents_ambiguity_bare = bare
                     cents_ambiguity_field = term.field
                     _drop(
@@ -447,11 +445,7 @@ def post_verify(
                     {"field": term.field, "value": term.value},
                 )
                 continue
-        if (
-            spec is not None
-            and spec.kind == "date"
-            and _quote_is_bare_year(term.quote)
-        ):
+        if spec is not None and spec.kind == "date" and _quote_is_bare_year(term.quote):
             _drop(
                 "nlu_rejected_bare_year",
                 term.field,
@@ -570,6 +564,24 @@ def post_verify(
         ):
             _unconfirmed(asked, cents, quote, slot)
 
+    defines_field, expected_count = repair_defines_field(
+        analysis.defines_field,
+        analysis.expected_count,
+        utterance,
+        given_fields={t.field for t in verified_terms},
+    )
+    # A count of payment levels is the level limit itself ("at most two payment
+    # levels", "we have three levels"), not a list still to come as with tiers.
+    # The count was read from the line by code, so the term is verified.
+    if defines_field == "max_segments" and expected_count is not None:
+        verified_terms.append(
+            VerifiedTerm(
+                field="max_segments", value=expected_count, quote=utterance.strip(), verified=True
+            )
+        )
+        _log("nlu_levels_from_count", {"value": expected_count, "utterance": utterance[:120]})
+        defines_field, expected_count = None, None
+
     has_terms = (
         bool(verified_terms)
         or ask_pct is not None
@@ -584,12 +596,6 @@ def post_verify(
         analysis.question_topic,
         utterance,
         asks_private=dispositions["asks_client_private_info"],
-    )
-    defines_field, expected_count = repair_defines_field(
-        analysis.defines_field,
-        analysis.expected_count,
-        utterance,
-        given_fields={t.field for t in verified_terms},
     )
     if analysis.readback_response and dispositions["readback_response"] is None:
         _log(

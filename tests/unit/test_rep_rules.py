@@ -237,3 +237,23 @@ def test_tier_definer_card_matches_its_autoplay_truth() -> None:
             cents = next(t.value for t in toks if t.kind == "money")
             said.append([frm, cents])
     assert said == truth["rules"]["min_payment_tiers"]
+
+
+def test_a_count_of_payment_levels_is_the_limit_not_an_announcement() -> None:
+    # Haiku (2026-11-07 corpus t06) read this as tiers = 2 plus "levels to come".
+    claimed = TurnAnalysis(
+        stance="info",
+        terms=[
+            ExtractedTerm(field="min_payment_tiers", value=2, quote="At most two payment levels")
+        ],
+        defines_field="max_segments",
+        expected_count=2,
+    )
+    out = post_verify(claimed, "At most two payment levels.", ref=_REF)
+    assert [(t.field, t.value, t.verified) for t in out.terms] == [("max_segments", 2, True)]
+    assert out.defines_field is None and out.expected_count is None
+    # Tiers keep their meaning: "three tiers" is a list still to come.
+    tiers = post_verify(
+        TurnAnalysis(stance="info"), "So we will have three payment tiers.", ref=_REF
+    )
+    assert tiers.defines_field == "min_payment_tiers" and tiers.expected_count == 3

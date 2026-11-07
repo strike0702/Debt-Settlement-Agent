@@ -18,6 +18,17 @@
  * server; Render's ingress needs the TURN relay). If that fails the connection
  * still tries without them.
  *
+ * Pre-connect (Phase 72): on Start call, `preconnect(callId)` opens the peer
+ * connection with no mic track (`POST /voice/offer?…&warm=1`); the server
+ * only holds it, so no Deepgram socket is open and no voice time is counted.
+ * Turn voice on then asks for the mic, puts its track on the idle sender
+ * (`replaceTrack`, no renegotiation) and calls `POST /voice/live`, which
+ * answers once the server's Flux and TTS are open. Any failure there (no
+ * pre-connection, a closed link, credentials past their ttl) falls back to the
+ * full connect without showing an error. The idle link closes after
+ * `PRECONNECT_IDLE_MS`, on a new call, or via `closeWarm` (tab hidden, call
+ * over). The click → live time goes to the server timeline as `connect_ms`.
+ *
  * `useWebRtcVoice` wraps it for React; tests pass fake `RtcDeps`.
  * Failures go to `RtcIO.onError` as raw messages that `callErrorText` turns
  * into the visible error line; refusals the server already put on the call
@@ -66,6 +77,10 @@ export const RECONNECT_DELAY_MS = 1500;
 export const ECHO_TAIL_MS = 1500;
 /** After the call is over, wait at most this long for the server's `ended`. */
 export const FINISH_TIMEOUT_MS = 25000;
+/** An unused pre-connection closes after this long (server: `voice_preconnect_idle_s`). */
+export const PRECONNECT_IDLE_MS = 600_000;
+/** TURN credentials' life (server: `voice_turn_ttl_s`); an older pre-connection is not used. */
+export const TURN_TTL_MS = 3_600_000;
 
 export const MIC_BLOCKED = "mic blocked";
 export const MIC_UNAVAILABLE = "mic unavailable";
@@ -79,15 +94,32 @@ export interface PeerLike {
   localDescription: { sdp: string; type: string } | null;
   onconnectionstatechange: (() => void) | null;
   ontrack: ((ev: { streams: readonly MediaStream[]; track: MediaStreamTrack }) => void) | null;
+  /** A mic track, or `"audio"` for a pre-connection with no track yet. */
   addTransceiver(
-    track: MediaStreamTrack,
+    track: MediaStreamTrack | "audio",
     init: { direction: "sendrecv" },
-  ): { sender: { replaceTrack(track: MediaStreamTrack | null): Promise<void> } };
+  ): { sender: Sender };
   createOffer(): Promise<{ sdp?: string; type: string }>;
   setLocalDescription(d: { sdp?: string; type: string }): Promise<void>;
   setRemoteDescription(d: { sdp: string; type: string }): Promise<void>;
   addEventListener(type: "icegatheringstatechange", fn: () => void): void;
   close(): void;
+}
+
+export interface Sender {
+  replaceTrack(track: MediaStreamTrack | null): Promise<void>;
+}
+
+/** The idle pre-connection held for one call. */
+interface Warm {
+  callId: string;
+  pc: PeerLike;
+  sender: Sender;
+  pcId: string;
+  at: number;
+  timer: ReturnType<typeof setTimeout> | null;
+  /** The agent's audio track, handed to the player again on Turn voice on. */
+  remote: { stream: MediaStream | null; track: MediaStreamTrack } | null;
 }
 
 export interface FetchResponse {
@@ -175,6 +207,14 @@ function micError(err: unknown): string {
   return `${MIC_UNAVAILABLE}: ${name || msg}`.slice(0, 160);
 }
 
+function closeQuietly(pc: PeerLike | null): void {
+  try {
+    pc?.close();
+  } catch {
+    /* ignore */
+  }
+}
+
 function stopTracks(stream: MediaStream | null): void {
   stream?.getTracks().forEach((t) => t.stop());
 }
@@ -206,7 +246,15 @@ export class WebRtcVoice {
   /** The call is over; the link stays up until the last line has played. */
   private finishing = false;
   private finishTimer: ReturnType<typeof setTimeout> | null = null;
-  private sender: { replaceTrack(track: MediaStreamTrack | null): Promise<void> } | null = null;
+  private sender: Sender | null = null;
+  /** Pre-connection: ready (`warm`) or being made (`warming`, its generation). */
+  private warm: Warm | null = null;
+  private warming: { callId: string; gen: number; done: Promise<void> } | null = null;
+  private warmGen = 0;
+  /** `now()` at Turn voice on, until the link is live (`connect_ms`). */
+  private clickAt: number | null = null;
+  /** The live link came from the pre-connection (for `connect_ms`). */
+  private viaWarm = false;
   private offDevices: (() => void) | null = null;
   /** Text mode: `say` ids shown but not yet acked (the opening, before the rep's first line). */
   private unacked: string[] = [];
@@ -245,6 +293,7 @@ export class WebRtcVoice {
   async connect(callId: string): Promise<void> {
     if (this.snap.link !== "off") return;
     const gen = ++this.gen;
+    this.clickAt = this.deps.now();
     this.callId = callId;
     this.attempts = 0;
     this.agentTexts = [];
@@ -276,7 +325,146 @@ export class WebRtcVoice {
     }
     this.watchMic(gen);
     this.applyMic();
+    // A click during the pre-connect waits for it: the full connect would redo the same work.
+    if (this.warming?.callId === callId) await this.warming.done;
+    if (gen !== this.gen) return;
+    const warm = this.takeWarm(callId);
+    if (warm && (await this.goLive(gen, warm))) return;
+    if (gen !== this.gen) return;
     await this.negotiate(gen);
+  }
+
+  // ------------------------------------------------------------ pre-connect
+
+  /**
+   * Start call: open the link with no mic so Turn voice on is quick. Silent:
+   * a failure only means Turn voice on takes the full path.
+   */
+  async preconnect(callId: string): Promise<void> {
+    if (this.snap.link !== "off") return;
+    if (this.warm?.callId === callId || this.warming?.callId === callId) return;
+    this.closeWarm();
+    const gen = ++this.warmGen;
+    const done = this.warmUp(callId, gen);
+    this.warming = { callId, gen, done };
+    await done;
+  }
+
+  private async warmUp(callId: string, gen: number): Promise<void> {
+    const at = this.deps.now();
+    let pc: PeerLike | null = null;
+    try {
+      const servers = await this.deps.iceServers?.(callId).catch(() => undefined);
+      if (gen !== this.warmGen) return;
+      pc = this.deps.makePeer(servers);
+      const { sender } = pc.addTransceiver("audio", { direction: "sendrecv" });
+      let remote: Warm["remote"] = null;
+      pc.ontrack = (ev) => {
+        remote = { stream: ev.streams[0] ?? null, track: ev.track };
+        this.deps.playRemote(remote.stream, remote.track);
+      };
+      await pc.setLocalDescription(await pc.createOffer());
+      await this.gathered(pc);
+      const local = pc.localDescription;
+      if (gen !== this.warmGen || !local) throw new Error("stale");
+      const res = await this.deps.fetch(`/voice/offer?call_id=${encodeURIComponent(callId)}&warm=1`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sdp: local.sdp, type: local.type }),
+      });
+      const body = ((await res.json().catch(() => ({}))) ?? {}) as { sdp?: string; type?: string; pc_id?: string };
+      if (!res.ok || !body.pc_id || gen !== this.warmGen) throw new Error(`warm ${res.status}`);
+      await pc.setRemoteDescription({ sdp: body.sdp ?? "", type: body.type ?? "answer" });
+      if (gen !== this.warmGen) throw new Error("stale");
+      const warm: Warm = { callId, pc, sender, pcId: body.pc_id, at, timer: null, remote };
+      warm.timer = setTimeout(() => this.closeWarm(), PRECONNECT_IDLE_MS);
+      pc.onconnectionstatechange = () => {
+        if (this.warm === warm && (pc?.connectionState === "failed" || pc?.connectionState === "closed")) this.closeWarm();
+      };
+      this.warm = warm;
+      this.deps.log("[voice] pre-connected", { ms: Math.round(this.deps.now() - at) });
+    } catch (err) {
+      closeQuietly(pc);
+      if (gen === this.warmGen) this.deps.log("[voice] pre-connect failed", String(err));
+    } finally {
+      if (this.warming?.gen === gen) this.warming = null;
+    }
+  }
+
+  /** Drop the idle pre-connection (call over, tab hidden, new call). */
+  closeWarm(): void {
+    this.warmGen += 1;
+    this.warming = null;
+    const warm = this.warm;
+    this.warm = null;
+    if (!warm) return;
+    if (warm.timer != null) clearTimeout(warm.timer);
+    warm.pc.onconnectionstatechange = null;
+    warm.pc.ontrack = null;
+    closeQuietly(warm.pc);
+    const q = `call_id=${encodeURIComponent(warm.callId)}&pc_id=${encodeURIComponent(warm.pcId)}`;
+    void this.deps.fetch(`/voice/warm?${q}`, { method: "DELETE", headers: {}, body: "" }).catch(() => undefined);
+  }
+
+  /** The pre-connection for this call if it can still be used; it is no longer held after this. */
+  private takeWarm(callId: string): Warm | null {
+    const warm = this.warm;
+    if (!warm) return null;
+    const fresh = this.deps.now() - warm.at < TURN_TTL_MS;
+    // "new" / "connecting": ICE is still finishing; the server's transport waits for it.
+    const up = ["new", "connecting", "connected"].includes(warm.pc.connectionState);
+    if (warm.callId !== callId || !fresh || !up) {
+      this.closeWarm();
+      return null;
+    }
+    if (warm.timer != null) clearTimeout(warm.timer);
+    this.warm = null;
+    this.warmGen += 1;
+    return warm;
+  }
+
+  /**
+   * Turn voice on over the pre-connection. True when done (live, or a refusal
+   * already shown); false to fall back to the full connect.
+   */
+  private async goLive(gen: number, warm: Warm): Promise<boolean> {
+    const pc = warm.pc;
+    this.pc = pc;
+    this.sender = warm.sender;
+    this.viaWarm = true;
+    // Not live before the server says so: a `connected` now must not show Listening.
+    pc.onconnectionstatechange = null;
+    let res: FetchResponse;
+    let body: { error?: string };
+    try {
+      await warm.sender.replaceTrack(this.track);
+      if (gen !== this.gen) return true;
+      res = await this.deps.fetch(`/voice/live?call_id=${encodeURIComponent(warm.callId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pc_id: warm.pcId }),
+      });
+      body = ((await res.json().catch(() => ({}))) ?? {}) as typeof body;
+    } catch {
+      res = { ok: false, status: 0, json: async () => ({}) };
+      body = {};
+    }
+    if (gen !== this.gen || this.pc !== pc) return true;
+    if (res.ok) {
+      // Autoplay may have held the idle track back; play it now (a click just happened).
+      if (warm.remote) this.deps.playRemote(warm.remote.stream, warm.remote.track);
+      pc.onconnectionstatechange = () => this.onPeerState(pc, gen);
+      this.onPeerState(pc, gen);
+      return true;
+    }
+    if (SOCKET_REPORTED.has(res.status)) {
+      this.fail(gen, body.error ?? CONNECT_FAILED, true);
+      return true;
+    }
+    this.deps.log("[voice] pre-connection not used", { status: res.status });
+    this.closePeer();
+    this.sender = null;
+    return false;
   }
 
   /** Follow a mic change: the device was unplugged, or the default device changed. */
@@ -320,6 +508,7 @@ export class WebRtcVoice {
     if (gen !== this.gen || this.track !== track) return;
     const pc = this.deps.makePeer(servers);
     this.pc = pc;
+    this.viaWarm = false;
     this.sender = pc.addTransceiver(track, { direction: "sendrecv" }).sender;
     pc.ontrack = (ev) => this.deps.playRemote(ev.streams[0] ?? null, ev.track);
     pc.onconnectionstatechange = () => this.onPeerState(pc, gen);
@@ -381,6 +570,7 @@ export class WebRtcVoice {
       this.attempts = 0;
       this.unacked = []; // the server speaks and acks whatever is still waiting
       this.set({ link: "live" });
+      this.reportConnect(pc);
     } else if (st === "disconnected") {
       // ICE often recovers by itself; restart only if it does not.
       this.set({ link: "reconnecting" });
@@ -389,6 +579,22 @@ export class WebRtcVoice {
     } else if (st === "failed") {
       this.restart(gen);
     }
+  }
+
+  /** Click → live, once per Turn voice on: console and the server's voice timeline. */
+  private reportConnect(pc: PeerLike): void {
+    if (this.clickAt == null) return;
+    const ms = Math.round(this.deps.now() - this.clickAt);
+    this.clickAt = null;
+    const path = this.viaWarm && this.pc === pc ? "warm" : "full";
+    this.deps.log("[voice] connect_ms", { ms, path });
+    void this.deps
+      .fetch(`/voice/connected?call_id=${encodeURIComponent(this.callId ?? "")}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connect_ms: ms, path }),
+      })
+      .catch(() => undefined);
   }
 
   /** New peer connection after a drop; gives up after `MAX_RECONNECTS`. */
@@ -422,11 +628,7 @@ export class WebRtcVoice {
     if (!pc) return;
     pc.onconnectionstatechange = null;
     pc.ontrack = null;
-    try {
-      pc.close();
-    } catch {
-      /* ignore */
-    }
+    closeQuietly(pc);
   }
 
   /** Turn voice off: close the peer and release the mic. The call goes on in text. */
@@ -438,6 +640,7 @@ export class WebRtcVoice {
     this.finishTimer = null;
     this.closePeer();
     this.sender = null;
+    this.clickAt = null;
     this.offDevices?.();
     this.offDevices = null;
     if (this.track) this.track.onended = null;
@@ -462,6 +665,7 @@ export class WebRtcVoice {
   /** New call: voice off, and the headphone hint may show again. */
   reset(autoplay = false): void {
     this.hangUp();
+    this.closeWarm();
     this.passive = autoplay;
     this.unacked = [];
     this.repSpoke = false;
@@ -481,6 +685,7 @@ export class WebRtcVoice {
 
   dispose(): void {
     this.hangUp();
+    this.closeWarm();
     this.listeners.clear();
   }
 

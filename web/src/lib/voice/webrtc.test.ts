@@ -2,7 +2,9 @@
  * `WebRtcVoice` with fake browser deps: signaling to `/voice/offer`, the call
  * state machine (server `voice_state`, mute, push to talk), failures routed to
  * the error line, reconnect after a drop, the echo hint, `say` never spoken,
- * and the text-mode acks while voice is off.
+ * the text-mode acks while voice is off, and the Phase 72 pre-connection
+ * (no mic until Turn voice on, upgrade without a new peer, silent fallback,
+ * idle timeout).
  */
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import { callErrorText } from "@/lib/callError";
@@ -15,6 +17,7 @@ import {
   isEcho,
   MAX_RECONNECTS,
   MIC_CONSTRAINTS,
+  PRECONNECT_IDLE_MS,
   RECONNECT_DELAY_MS,
   WebRtcVoice,
   type FetchResponse,
@@ -31,10 +34,10 @@ class FakePeer implements PeerLike {
   ontrack: PeerLike["ontrack"] = null;
   remote: { sdp: string; type: string } | null = null;
   closed = false;
-  added: MediaStreamTrack[] = [];
+  added: (MediaStreamTrack | "audio")[] = [];
   private gather: (() => void) | null = null;
   replaced: (MediaStreamTrack | null)[] = [];
-  addTransceiver(track: MediaStreamTrack) {
+  addTransceiver(track: MediaStreamTrack | "audio") {
     this.added.push(track);
     return { sender: { replaceTrack: async (t: MediaStreamTrack | null) => void this.replaced.push(t) } };
   }
@@ -384,5 +387,73 @@ describe("mic change (Phase 65)", () => {
     expect(track.stopped).toBe(true);
     expect(peers).toHaveLength(1); // no renegotiation
     expect(voice.snapshot().link).toBe("live");
+  });
+});
+
+describe("pre-connect (Phase 72)", () => {
+  const urls = () => deps.fetch.mock.calls.map(([u, init]) => `${init.method} ${u.split("?")[0]}`);
+
+  async function warm() {
+    await voice.preconnect("c1");
+    peers[0]!.state("connected");
+  }
+
+  it("opens the link on Start call without the mic", async () => {
+    await warm();
+    expect(deps.getUserMedia).not.toHaveBeenCalled();
+    expect(deps.fetch.mock.calls[0]![0]).toBe("/voice/offer?call_id=c1&warm=1");
+    expect(peers[0]!.added).toEqual(["audio"]);
+    expect(peers[0]!.remote).toEqual({ sdp: "answer-sdp", type: "answer" });
+    expect(state()).toBe("off");
+  });
+
+  it("Turn voice on attaches the mic to the same peer and goes live via /voice/live", async () => {
+    await warm();
+    deps.fetch.mockClear();
+    deps.fetch.mockImplementation(async () => {
+      clock += 400; // the server opens Flux and TTS
+      return answer(200, { status: "live" });
+    });
+    await voice.connect("c1");
+    expect(peers).toHaveLength(1);
+    expect(peers[0]!.replaced).toEqual([track]);
+    expect(urls()).toEqual(["POST /voice/live", "POST /voice/connected"]);
+    expect(JSON.parse(deps.fetch.mock.calls[0]![1].body)).toEqual({ pc_id: "pc1" });
+    expect(JSON.parse(deps.fetch.mock.calls[1]![1].body)).toEqual({ connect_ms: 400, path: "warm" });
+    expect(state()).toBe("listening");
+  });
+
+  it("a click during the pre-connect waits for it instead of connecting twice", async () => {
+    const warming = voice.preconnect("c1");
+    const on = voice.connect("c1");
+    await warming;
+    peers[0]!.state("connected");
+    await on;
+    expect(peers).toHaveLength(1);
+    expect(urls()).toEqual(["POST /voice/offer", "POST /voice/live", "POST /voice/connected"]);
+  });
+
+  it("falls back to the full connect, with no error, when the pre-connection is gone", async () => {
+    await warm();
+    deps.fetch.mockClear();
+    deps.fetch.mockImplementationOnce(async () => answer(410, { error: "gone" }));
+    await voice.connect("c1");
+    expect(peers[0]!.closed).toBe(true);
+    expect(peers[1]!.added).toEqual([track]);
+    expect(urls()).toEqual(["POST /voice/live", "POST /voice/offer"]);
+    peers[1]!.state("connected");
+    expect(state()).toBe("listening");
+    expect(errors).toEqual([]);
+  });
+
+  it("closes an unused pre-connection after the idle timeout; voice on then connects in full", async () => {
+    vi.useFakeTimers();
+    await warm();
+    await vi.advanceTimersByTimeAsync(PRECONNECT_IDLE_MS);
+    expect(peers[0]!.closed).toBe(true);
+    expect(urls()).toContain("DELETE /voice/warm");
+    deps.fetch.mockClear();
+    await voice.connect("c1");
+    expect(urls()).toEqual(["POST /voice/offer"]);
   });
 });

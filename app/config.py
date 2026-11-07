@@ -171,6 +171,9 @@ class Settings(BaseSettings):
     cloudflare_turn_key_id: str | None = None
     cloudflare_turn_api_token: SecretStr | None = None
     voice_turn_ttl_s: int = Field(default=3600, ge=300, le=86400)
+    # Phase 72: the idle WebRTC link opened on Start call (no mic, no Deepgram)
+    # is closed after this many seconds if voice never turns on.
+    voice_preconnect_idle_s: int = Field(default=600, ge=10, le=3600)
     # TURN for the server's own (aiortc) side. Keep on behind HTTP-only ingress
     # (Render); turn off on a host with a public IP (the AWS demo): the browser
     # still relays through TURN when its network needs it, and aioice's channel

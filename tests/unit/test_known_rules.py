@@ -2,7 +2,8 @@
 
 ``start.known_rules`` is validated like the cushion (error frame, no call); the
 session seeds the rules KNOWN from ``operator`` (audited, private); the agent does
-not ask for them; a different value from the rep is CONTRADICTED; the rep stream
+not ask for them but mentions them once before its first question; the rep's
+value replaces or confirms an entry (never CONTRADICTED); the rep stream
 never carries them until the agent speaks them; ``firm.known_creditor_rules`` is
 the per-creditor default that a call's entry replaces.
 """
@@ -43,6 +44,15 @@ class _RecordingSession(CallSession):
 def _record(monkeypatch: pytest.MonkeyPatch) -> None:
     _SESSIONS.clear()
     monkeypatch.setattr(ws_mod, "CallSession", _RecordingSession)
+
+
+def _play_more(ws: Any, lines: list[dict[str, Any]]) -> list[dict]:
+    frames: list[dict] = []
+    for msg in lines:
+        ws.send_json(msg)
+        batch = turn(ws)
+        frames += batch + ack_all(ws, batch)
+    return frames
 
 
 def _play(
@@ -125,21 +135,98 @@ def test_entered_rules_are_known_from_operator_and_never_asked(tmp_path: Path) -
     assert any(f["type"] == "agreement" for f in frames)
 
 
-def test_rep_stating_a_different_value_contradicts(tmp_path: Path) -> None:
-    six = {
+_HELLO = {"type": "text", "text": "Hi, how can I help?", "oracle": {"stance": "info"}}
+
+
+def _six(text: str = "We can only do six payments.") -> dict[str, Any]:
+    return {
         "type": "text",
-        "text": "We can only do six payments.",
+        "text": text,
         "oracle": {
             "terms": [{"field": "max_payments", "value": 6, "quote": "six", "hedged": False}],
             "stance": "info",
         },
     }
-    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-x") as ws:
-        _play(ws, {"known_rules": _RULES}, [six])
+
+
+def _said(frames: list[dict]) -> list[str]:
+    return [f["text"] for f in frames if f["type"] == "say"]
+
+
+def _audits(frames: list[dict], event: str) -> list[dict]:
+    return [f["payload"] for f in frames if f["type"] == "audit" and f["event"] == event]
+
+
+@pytest.mark.parametrize(
+    ("rules", "line"),
+    [
+        ({"max_payments": 8}, "Our records show up to 8 payments."),
+        (_RULES, "Our records show up to 8 payments of at least $100, even payments."),
+        ({}, None),
+    ],
+)
+def test_first_question_mentions_the_entered_rules_once(
+    tmp_path: Path, rules: dict[str, Any], line: str | None
+) -> None:
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-m") as ws:
+        first = _play(ws, {"known_rules": rules}, [_HELLO])
+        later = _play_more(ws, [_HELLO])
+    intents = [f["intent"] for f in first if f["type"] == "phase" and f.get("intent")]
+    assert intents[-1] in ("ASK", "ASK_SETTLEMENT")
+    records = [s for s in _said(first + later) if s.startswith("Our records show")]
+    assert records == ([line] if line else [])
+    if line:  # the question follows the mention in the same turn
+        said = _said(first)
+        assert said[said.index(line) + 1].endswith("?")
+
+
+def test_a_rule_the_rep_already_stated_is_not_mentioned(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-s") as ws:
+        eight = _six("Hi. We can do eight payments.")
+        eight["oracle"]["terms"][0].update(value=8, quote="eight")
+        frames = _play(ws, {"known_rules": _RULES}, [eight])
+    # Rep said eight (equal): confirmed, so only the other two are mentioned.
     term = _SESSIONS[-1].belief.get("max_payments")
-    assert term.history == [8] and term.value == 6
-    assert term.status == TermStatus.CONTRADICTED
+    assert term.status == TermStatus.KNOWN and term.evidence[-1].source == "rep"
+    assert not any("Our records show up to" in s for s in _said(frames))
+
+
+def test_rep_value_replaces_the_entry_acknowledged_and_audited(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-x") as ws:
+        frames = _play(ws, {"known_rules": _RULES}, [_HELLO, _six()])
+    term = _SESSIONS[-1].belief.get("max_payments")
+    assert (term.value, term.status, term.history) == (6, TermStatus.KNOWN, [8])
     assert term.evidence[-1].source == "rep"
+    assert _audits(frames, "operator_rule_corrected") == [
+        {"field": "max_payments", "old": 8, "new": 6}
+    ]
+    said = _said(frames)
+    assert "Okay, up to 6 payments." in said  # the turn's ack opener rotates
+    assert not any("earlier" in s.lower() for s in said)  # no CONTRADICTED clarify
+    assert "CLARIFY" not in [f.get("intent") for f in frames if f["type"] == "phase"]
+
+
+def test_rep_value_equal_to_the_entry_confirms_it(tmp_path: Path) -> None:
+    eight = _six("Eight payments is right.")
+    eight["oracle"]["terms"][0].update(value=8, quote="Eight")
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-eq") as ws:
+        frames = _play(ws, {"known_rules": _RULES}, [_HELLO, eight])
+    belief = _SESSIONS[-1].belief
+    term = belief.get("max_payments")
+    assert (term.value, term.status) == (8, TermStatus.KNOWN)
+    assert [e.source for e in term.evidence] == ["operator", "rep"]
+    assert not belief.operator_only("max_payments")
+    assert _audits(frames, "operator_rule_corrected") == []
+
+
+def test_a_rep_stated_value_still_contradicts_later(tmp_path: Path) -> None:
+    """Once the rep has replaced the entry, a different value is CONTRADICTED as usual."""
+    nine = _six("Actually we do nine payments.")
+    nine["oracle"]["terms"][0].update(value=9, quote="nine")
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-c") as ws:
+        _play(ws, {"known_rules": _RULES}, [_six(), nine])
+    term = _SESSIONS[-1].belief.get("max_payments")
+    assert term.status == TermStatus.CONTRADICTED and term.history == [8, 6]
 
 
 def test_rep_view_never_gets_the_entered_rules(tmp_path: Path) -> None:

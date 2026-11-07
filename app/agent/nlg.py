@@ -16,7 +16,10 @@ The default agent's code-built ack (``Settings.nlg_ack``) uses
 ``ack_template`` (2–3 wordings per shape, rotated by turn), never the bank or LLM;
 a count of 1 is acked as "up to 1 payment". The ack also covers the
 payment structure from a digit-free ``text`` fact ("Got it, a balloon schedule.",
-or ", with even payments" after the other terms).
+or ", with even payments" after the other terms). A third act, ``records``,
+states operator-entered rules once before the first question ("Our records show
+up to 8 payments of at least $150, even payments."): a ``RECORDS`` bank entry
+when one exists, else ``records_template``.
 A guard-failed act is dropped (audited), never replaced by ``SAFE_FALLBACK``,
 so the primary move is spoken unchanged. ``speak_action`` passes the last few
 public turns (``recent_turns``) to the LLM prompt instead of one rep line.
@@ -223,6 +226,35 @@ ACK_TEMPLATES: dict[tuple[str, ...], str] = {
 }
 ANSWER_TEMPLATE = TEMPLATES[Intent.ANSWER]
 ACK_BANK_INTENT = "ACK"
+RECORDS_BANK_INTENT = "RECORDS"
+
+
+def records_template(ids: set[str] | tuple[str, ...]) -> str | None:
+    """One plain sentence for the ``rec_*`` ids: "Our records show up to {n} payments of at
+    least {m}, {structure}, starting {date}." None when no id is present."""
+    head = " ".join(
+        part
+        for part, fid in (
+            ("up to {rec_max_payments} payments", "rec_max_payments"),
+            (
+                "of at least {rec_min_payment}"
+                if "rec_max_payments" in ids
+                else "a minimum payment of {rec_min_payment}",
+                "rec_min_payment",
+            ),
+        )
+        if fid in ids
+    )
+    parts = [head] if head else []
+    if "rec_payment_structure" in ids:
+        parts.append("{rec_payment_structure}")
+    if "rec_first_payment_date" in ids:
+        parts.append(
+            "starting {rec_first_payment_date}"
+            if parts
+            else "a first payment on {rec_first_payment_date}"
+        )
+    return f"Our records show {', '.join(parts)}." if parts else None
 
 
 def answer_bank_intent(topic: str) -> str:
@@ -435,10 +467,11 @@ def render_acts(
     turn: int = 0,
     code_ack: bool = False,
 ) -> list[str]:
-    """Sentences for ``action.ack`` then ``action.answer`` (empty when neither is set).
+    """Sentences for ``action.ack``, ``action.answer``, then ``action.records`` (empty if none).
 
     Bank / llm modes take a guard-checked bank variant when one exists (no LLM
-    call either way); otherwise ``ACK_TEMPLATES`` / the talking point verbatim.
+    call either way); otherwise ``ACK_TEMPLATES`` / the talking point verbatim /
+    ``records_template``.
     ``code_ack`` (the default agent's ``nlg_ack``) always takes the ack from
     ``ack_template`` (code variants by turn), never the bank.
     Each act runs ``template_guard`` + ``rendered_guard``; a failing act is
@@ -489,6 +522,23 @@ def render_acts(
         else:
             sub = bare.model_copy(update={"text_slots": {"answer_text": action.answer.text}})
             acts.append(("answer", sub, ANSWER_TEMPLATE))
+    if action.records:
+        ids = tuple(sorted(action.records))
+        sub = Action(
+            intent=action.intent,
+            facts=dict(action.records),
+            required=set(ids),
+            next_phase=action.next_phase,
+        )
+        template = (
+            pick_template(
+                sub, call_id=call_id, turn=turn, bank=bank, intent_key=RECORDS_BANK_INTENT
+            )
+            if use_bank
+            else None
+        ) or records_template(ids)
+        if template is not None:
+            acts.append(("records", sub, template))
 
     out: list[str] = []
     for kind, sub, template in acts:

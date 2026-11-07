@@ -14,6 +14,10 @@ acts that are spoken *before* it, without changing the move:
   question the NLU flagged (``asks_question`` / ``question_topic``). A private
   info ask is never answered: the policy refuses it first (REFUSE_PRIVATE).
 
+``records_facts`` builds the third act, ``records``: the operator-entered rules
+the rep has not stated, spoken once before the call's first question ("Our
+records show up to 8 payments.") so the rep can correct them in their answer.
+
 This module also holds the rep-correction cues: ``is_ack_correction`` (the rep
 says we misheard a term we just acknowledged, "I said six payments"; a bare
 "No, it's six" is not enough), ``is_change_request`` (the rep asks to change
@@ -35,7 +39,7 @@ from typing import Any
 
 from app.agent.guards import _cross_match
 from app.domain.actions import Action, AnswerAct, Intent
-from app.domain.belief import BeliefChange, TermStatus
+from app.domain.belief import BeliefChange, BeliefState, TermStatus
 from app.domain.facts import Fact
 
 # Talking points per question topic. Number-free and commitment-free: they go
@@ -74,6 +78,16 @@ STRUCTURE_ACK_PHRASES: dict[str, str] = {
     "balloon": "a balloon schedule",
     "flexible": "a flexible schedule",
 }
+# Operator-entered rule → (records fact id, fact kind). Tiers, levels and token
+# payments are not mentioned (no plain one-sentence wording yet).
+RECORD_FIELDS: dict[str, tuple[str, str]] = {
+    "max_payments": ("rec_max_payments", "count"),
+    "min_payment_cents": ("rec_min_payment", "money"),
+    "payment_structure": ("rec_payment_structure", "text"),
+    "first_payment_date": ("rec_first_payment_date", "date"),
+}
+# The moves that carry the records mention: the call's first discovery question.
+RECORDS_INTENTS: frozenset[Intent] = frozenset({Intent.ASK, Intent.ASK_SETTLEMENT})
 # A verified dollar-total ask (``VerifiedAnalysis.ask_total_bp`` set) is not a
 # belief term; it is acknowledged from the analysis. Spoken first.
 ACK_TOTAL_ID = "ack_total"
@@ -144,6 +158,35 @@ def ack_facts(
             continue
         out[fid] = Fact(id=fid, kind=kind, value=value, visibility="PUBLIC", source="creditor")  # type: ignore[arg-type]
     return {fid: out[fid] for fid, _ in ACK_FIELDS.values() if fid in out}
+
+
+def records_facts(
+    belief: BeliefState, private_blocklist: set[tuple[str, int | date]]
+) -> dict[str, Fact]:
+    """PUBLIC ``rec_*`` facts for the rules still KNOWN from the operator alone.
+
+    A rule the rep has stated (confirmed or corrected) is skipped, and so is a
+    value that collides with the private blocklist. The values are already in
+    ``creditor_numbers`` (seeded at call start), so ``rendered_guard`` allows them.
+    """
+    out: dict[str, Fact] = {}
+    for field, (fid, kind) in RECORD_FIELDS.items():
+        if not belief.operator_only(field):
+            continue
+        value = belief.get(field).value
+        if kind == "text":
+            phrase = STRUCTURE_ACK_PHRASES.get(str(value))
+            if phrase is not None:
+                out[fid] = Fact(
+                    id=fid, kind="text", value=phrase, visibility="PUBLIC", source="creditor"
+                )
+            continue
+        if not isinstance(value, (int, date)) or isinstance(value, bool):
+            continue
+        if _cross_match(kind, value, private_blocklist):
+            continue
+        out[fid] = Fact(id=fid, kind=kind, value=value, visibility="PUBLIC", source="creditor")  # type: ignore[arg-type]
+    return out
 
 
 def ack_total_fact(

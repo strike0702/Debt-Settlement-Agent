@@ -6,7 +6,9 @@ NLU observations and read-back confirmations flow through ``observe`` /
 ``confirm_readback``; ``reopen`` sends a disputed KNOWN term back
 to TENTATIVE so the policy reads it back. ``seed_operator`` (call start only)
 marks a rule the operator entered before the call as KNOWN, with evidence
-``source="operator"``; a different value from the rep later is CONTRADICTED as usual.
+``source="operator"``. The rep is authoritative over the firm's notes: a rep value
+equal to it confirms it, a different one replaces it (KNOWN, not CONTRADICTED),
+as long as the rep has not stated that term themselves (``operator_only``).
 """
 
 from __future__ import annotations
@@ -184,6 +186,23 @@ class BeliefState:
                 quote=quote,
             )
 
+        if old_status == TermStatus.KNOWN and self.operator_only(field):
+            # The rep never said the old value: theirs replaces the operator's entry.
+            term.history.append(old_value)
+            term.value = value
+            term.status = TermStatus.KNOWN if strong else TermStatus.TENTATIVE
+            term.evidence.append(evidence)
+            self._maybe_sync_max_token_pays(field, value)
+            return BeliefChange(
+                field=field,
+                old_value=old_value,
+                new_value=term.value,
+                old_status=old_status,
+                new_status=term.status,
+                turn=turn,
+                quote=quote,
+            )
+
         if old_status == TermStatus.KNOWN:
             term.history.append(old_value)
             term.value = value
@@ -218,6 +237,15 @@ class BeliefState:
             old_status=old_status,
             new_status=TermStatus.KNOWN,
             turn=0,
+        )
+
+    def operator_only(self, field: str) -> bool:
+        """True while ``field`` is KNOWN from the operator's entry alone (no rep evidence)."""
+        term = self.terms[field]
+        return (
+            term.status == TermStatus.KNOWN
+            and bool(term.evidence)
+            and all(e.source == "operator" for e in term.evidence)
         )
 
     def accept_alternative(

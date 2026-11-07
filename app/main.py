@@ -30,15 +30,19 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.types import Scope
 
+from app.autoplay import scenario_rules, sim_rules
 from app.config import Settings, get_settings
+from app.domain.rule_replies import merge_suggestions
 from app.domain.scenario import (
     SCENARIO_TEMPLATE,
     details_from_scenario,
     list_scenario_metas,
     load_rep_card,
+    load_scenario,
     rep_account,
     rep_account_from_payload,
     rep_card_suggestions,
+    resolve_scenario_dir,
     scenario_details,
     scenario_from_payload,
     scenario_payload_errors,
@@ -143,7 +147,10 @@ def create_app(
                 "title": m.title,
                 "description": m.description,
                 "expected": m.expected,
-                "suggested": rep_card_suggestions(load_rep_card(m.id)),
+                # Card lines plus spoken tier / level lines built from the true rules.
+                "suggested": merge_suggestions(
+                    rep_card_suggestions(load_rep_card(m.id)), sim_rules(m.id)
+                ),
             }
             for m in list_scenario_metas()
         ]
@@ -204,7 +211,11 @@ def create_app(
     async def get_scenario(scenario_id: str) -> dict[str, Any]:
         """Operator brief: meta, creditor, PRIVATE client finances, firm fees."""
         try:
-            return scenario_details(scenario_id, rebase_to=date.today())
+            brief = scenario_details(scenario_id, rebase_to=date.today())
+            call = load_scenario(resolve_scenario_dir(scenario_id), rebase_to=date.today())
+            # The scenario's true rules, for the panel's "Fill from scenario" (demo only).
+            brief["scenario_rules"] = scenario_rules(scenario_id, call)
+            return brief
         except (ValueError, FileNotFoundError) as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 

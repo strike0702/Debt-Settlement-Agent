@@ -86,7 +86,17 @@ def test_easy_deal_card_values() -> None:
         "opening_ask_bp": 4500,
         "floor_bp": 4000,
         "first_payment": None,
+        "payment_tiers": None,
+        "payment_levels": None,
     }
+
+
+def test_tier_definer_card_shows_tiers_and_levels() -> None:
+    acct = rep_account_from_card((SCENARIOS_ROOT / "tier_definer" / "rep_card.md").read_text())
+    assert acct["rules"]["payment_tiers"] == (
+        "Payments 1 to 2 at least $190, 3 to 5 at least $250, 6 to 8 at least $300"
+    )
+    assert acct["rules"]["payment_levels"] == "Up to 3"
 
 
 def test_template_card_parses() -> None:
@@ -118,6 +128,8 @@ def test_malformed_and_unknown_rows_are_not_guessed() -> None:
         "opening_ask_bp": None,
         "floor_bp": 4050,
         "first_payment": None,
+        "payment_tiers": None,
+        "payment_levels": None,
     }
 
 

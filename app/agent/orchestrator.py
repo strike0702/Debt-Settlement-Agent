@@ -61,11 +61,13 @@ from app.adapter.engine_adapter import (
 )
 from app.adapter.validator import validate
 from app.agent.acts import (
+    RECORDS_INTENTS,
     acked_fields,
     attach_acts,
     is_ack_correction,
     is_ack_dispute,
     is_change_request,
+    records_facts,
 )
 from app.agent.effects import apply_effects
 from app.agent.guards import _cross_match
@@ -405,6 +407,11 @@ class Orchestrator:
             self._begin_trace(None)
             self._turn_rollback = None
             self._unheard_text = None
+            # Operator-entered rules (private row: the rep sees them only when spoken).
+            for ch in self.session.seeded_changes:
+                self._audit(
+                    "belief", "seed_operator", {**ch.model_dump(mode="json"), "source": "operator"}
+                )
             action = opening_action(settings=self.settings)
             action = action.model_copy(
                 update={
@@ -866,6 +873,14 @@ class Orchestrator:
                     with_answer=self.settings.nlg_h3,
                 )
                 self._last_ack = acked_fields(action.ack)
+            if not session.neg.rules_mentioned and action.intent in RECORDS_INTENTS:
+                # Once per call (eager; an unheard turn's rollback restores the flag):
+                # the operator's rules ride on the first question, so the rep can
+                # correct them in the same answer.
+                session.neg.rules_mentioned = True
+                records = records_facts(session.belief, session.private_blocklist)
+                if records:
+                    action = action.model_copy(update={"records": records})
             timings["policy_ms"] = _ms_since(t_pol)
             decide_payload: dict[str, Any] = {
                 "intent": action.intent.value,
@@ -873,11 +888,13 @@ class Orchestrator:
                 "next_phase": action.next_phase.value,
                 "policy_ms": timings["policy_ms"],
             }
-            if action.ack or action.answer is not None:
+            if action.ack or action.answer is not None or action.records:
                 decide_payload["acts"] = {
                     "ack": sorted(action.ack),
                     "answer": action.answer.topic if action.answer else None,
                 }
+                if action.records:
+                    decide_payload["acts"]["records"] = sorted(action.records)
             self._audit("policy", "decide", decide_payload)
 
             t_nlg = time.perf_counter()
@@ -1303,7 +1320,7 @@ class Orchestrator:
 
     async def _speak(self, action: Action, *, last_rep_line: str) -> list[str]:
         move = await self._speak_move(action, last_rep_line=last_rep_line)
-        if not (action.ack or action.answer):
+        if not (action.ack or action.answer or action.records):
             return move
         return self._speak_acts(action) + move
 
@@ -1525,6 +1542,21 @@ class Orchestrator:
             if holding_tiers and term.field == "min_payment_tiers":
                 continue
             cur = session.belief.get(term.field)
+            if session.belief.operator_only(term.field):
+                # The rep is authoritative over the operator's entry: an equal value
+                # confirms it, a different one replaces it (not CONTRADICTED).
+                ch = session.belief.observe(
+                    term.field,
+                    term.value,
+                    term.quote,
+                    turn,
+                    verified=term.verified,
+                    hedged=term.hedged,
+                )
+                changes.append(ch)
+                self._audit("belief", "observe", ch.model_dump(mode="json"))
+                self._audit_operator_correction(ch)
+                continue
             if (
                 correcting
                 and term.field in acked
@@ -1610,11 +1642,28 @@ class Orchestrator:
         tiers = list(neg.tier_draft)
         neg.tier_draft = None
         neg.tier_expected = None
+        was_operator = self.session.belief.operator_only("min_payment_tiers")
         ch = self.session.belief.accept_alternative(
             "min_payment_tiers", tiers, "confirmed tier read-back", turn
         )
         self._audit("belief", "tier_readback_confirmed", ch.model_dump(mode="json"))
+        if was_operator:
+            self._audit_operator_correction(ch)
         return ch
+
+    def _audit_operator_correction(self, ch: BeliefChange) -> None:
+        """Audit ``operator_rule_corrected`` {field, old, new} when ``ch`` changed the value.
+
+        Call only for a change applied to an operator-only term (``operator_only``
+        checked before the change); an equal value is a confirmation, not audited.
+        """
+        d = ch.model_dump(mode="json")
+        if d["old_value"] != d["new_value"]:
+            self._audit(
+                "belief",
+                "operator_rule_corrected",
+                {"field": ch.field, "old": d["old_value"], "new": d["new_value"]},
+            )
 
     def _ingest_creditor_numbers(self, text: str) -> None:
         for tok in extract_tokens(text, ref=self._ref):

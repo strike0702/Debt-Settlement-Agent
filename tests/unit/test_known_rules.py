@@ -1,0 +1,280 @@
+"""Operator-entered known creditor rules (Phase 69).
+
+``start.known_rules`` is validated like the cushion (error frame, no call); the
+session seeds the rules KNOWN from ``operator`` (audited, private); the agent does
+not ask for them but mentions them once before its first question; the rep's
+value replaces or confirms an entry (never CONTRADICTED); the rep stream
+never carries them until the agent speaks them; ``firm.known_creditor_rules`` is
+the per-creditor default that a call's entry replaces.
+"""
+
+from __future__ import annotations
+
+import copy
+from datetime import date
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from app.agent.session import CallSession
+from app.autoplay import scenario_rules
+from app.domain.belief import TermStatus
+from app.domain.known_rules import parse_known_rules
+from app.domain.scenario import (
+    SCENARIO_TEMPLATE,
+    load_scenario,
+    resolve_scenario_dir,
+    scenario_payload_errors,
+)
+from app.voice import ws as ws_mod
+from tests.wsutil import _ACCEPT, _ASK, ack_all, make_client, turn
+
+_SESSIONS: list[CallSession] = []
+_RULES = {"max_payments": 8, "min_payment_cents": 10_000, "payment_structure": "even"}
+
+
+class _RecordingSession(CallSession):
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        _SESSIONS.append(self)
+
+
+@pytest.fixture(autouse=True)
+def _record(monkeypatch: pytest.MonkeyPatch) -> None:
+    _SESSIONS.clear()
+    monkeypatch.setattr(ws_mod, "CallSession", _RecordingSession)
+
+
+def _play_more(ws: Any, lines: list[dict[str, Any]]) -> list[dict]:
+    frames: list[dict] = []
+    for msg in lines:
+        ws.send_json(msg)
+        batch = turn(ws)
+        frames += batch + ack_all(ws, batch)
+    return frames
+
+
+def _play(
+    ws: Any, start: dict[str, Any], lines: list[dict[str, Any]], scenario_id: str = "easy_deal"
+) -> list[dict]:
+    ws.send_json({"type": "start", "scenario_id": scenario_id, **start})
+    frames = turn(ws)
+    frames += ack_all(ws, frames)
+    for msg in lines:
+        ws.send_json(msg)
+        batch = turn(ws)
+        frames += batch + ack_all(ws, batch)
+    return frames
+
+
+@pytest.mark.parametrize(
+    ("raw", "where"),
+    [
+        ({"min_payment_cents": 10_000,
+          "min_payment_tiers": [{"from_payment": 3, "min_cents": 9_000}]},
+         "less than the minimum payment"),
+        ({"max_payments": 4, "min_payment_tiers": [{"from_payment": 6, "min_cents": 20_000}]},
+         "after the last allowed payment"),
+        ({"min_payment_tiers": [{"from_payment": 4, "min_cents": 30_000},
+                                {"from_payment": 2, "min_cents": 40_000}]}, "later payment"),
+        ({"max_payments": 4, "max_token_pays": 5}, "more than max payments"),
+        ({"min_payment_cents": 99.5}, "whole cents"),
+        ({"payment_structure": "weekly"}, "even, balloon or flexible"),
+        ({"first_payment_date": "12/01/2026"}, "YYYY-MM-DD"),
+        ({"first_payment_date": "2000-01-31"}, "before today's date"),
+        ({"settlement_pct": 45}, "unknown rule"),
+    ],
+)
+def test_invalid_rules_are_refused_with_a_visible_error(
+    tmp_path: Path, raw: dict[str, Any], where: str
+) -> None:
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-bad") as ws:
+        ws.send_json({"type": "start", "scenario_id": "easy_deal", "known_rules": raw})
+        frame = ws.receive_json()
+    assert frame["type"] == "error" and "known_rules" in frame["message"]
+    assert where in frame["message"]
+    assert _SESSIONS == []
+
+
+def test_valid_rules_parse_to_belief_values() -> None:
+    raw = {
+        **_RULES,
+        "min_payment_tiers": [{"from_payment": 3, "min_cents": 15_000}],
+        "max_segments": 3,
+        "max_token_pays": 2,
+        "first_payment_date": "2030-01-31",
+        "max_payments": None,  # null = not known
+    }
+    assert parse_known_rules(raw, as_of=date(2029, 12, 1)) == {
+        "min_payment_cents": 10_000,
+        "payment_structure": "even",
+        "min_payment_tiers": [(3, 15_000)],
+        "max_segments": 3,
+        "max_token_pays": 2,
+        "first_payment_date": date(2030, 1, 31),
+    }
+
+
+def test_entered_rules_are_known_from_operator_and_never_asked(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-op") as ws:
+        frames = _play(ws, {"known_rules": _RULES}, [_ASK, _ACCEPT, _ACCEPT])
+    belief = _SESSIONS[-1].belief
+    for name, value in _RULES.items():
+        term = belief.get(name)
+        assert term.value == value and term.status == TermStatus.KNOWN
+        assert term.evidence[0].source == "operator"
+    # The token limit follows the entered max payments, still a default.
+    assert belief.get("max_token_pays").value == 8
+    seeds = [f for f in frames if f["type"] == "audit" and f["event"] == "seed_operator"]
+    assert {r["payload"]["field"] for r in seeds} == set(_RULES)
+    assert all(r["private"] for r in seeds)
+    intents = [f["intent"] for f in frames if f["type"] == "phase" and f.get("intent")]
+    assert "ASK" not in intents and "READ_BACK" not in intents
+    assert "CONFIRM_SCHEDULE" in intents  # still read back at CONFIRM
+    assert any(f["type"] == "agreement" for f in frames)
+
+
+_HELLO = {"type": "text", "text": "Hi, how can I help?", "oracle": {"stance": "info"}}
+
+
+def _six(text: str = "We can only do six payments.") -> dict[str, Any]:
+    return {
+        "type": "text",
+        "text": text,
+        "oracle": {
+            "terms": [{"field": "max_payments", "value": 6, "quote": "six", "hedged": False}],
+            "stance": "info",
+        },
+    }
+
+
+def _said(frames: list[dict]) -> list[str]:
+    return [f["text"] for f in frames if f["type"] == "say"]
+
+
+def _audits(frames: list[dict], event: str) -> list[dict]:
+    return [f["payload"] for f in frames if f["type"] == "audit" and f["event"] == event]
+
+
+@pytest.mark.parametrize(
+    ("rules", "line"),
+    [
+        ({"max_payments": 8}, "Our records show up to 8 payments."),
+        (_RULES, "Our records show up to 8 payments of at least $100, even payments."),
+        ({}, None),
+    ],
+)
+def test_first_question_mentions_the_entered_rules_once(
+    tmp_path: Path, rules: dict[str, Any], line: str | None
+) -> None:
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-m") as ws:
+        first = _play(ws, {"known_rules": rules}, [_HELLO])
+        later = _play_more(ws, [_HELLO])
+    intents = [f["intent"] for f in first if f["type"] == "phase" and f.get("intent")]
+    assert intents[-1] in ("ASK", "ASK_SETTLEMENT")
+    records = [s for s in _said(first + later) if s.startswith("Our records show")]
+    assert records == ([line] if line else [])
+    if line:  # the question follows the mention in the same turn
+        said = _said(first)
+        assert said[said.index(line) + 1].endswith("?")
+
+
+def test_a_rule_the_rep_already_stated_is_not_mentioned(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-s") as ws:
+        eight = _six("Hi. We can do eight payments.")
+        eight["oracle"]["terms"][0].update(value=8, quote="eight")
+        frames = _play(ws, {"known_rules": _RULES}, [eight])
+    # Rep said eight (equal): confirmed, so only the other two are mentioned.
+    term = _SESSIONS[-1].belief.get("max_payments")
+    assert term.status == TermStatus.KNOWN and term.evidence[-1].source == "rep"
+    assert not any("Our records show up to" in s for s in _said(frames))
+
+
+def test_rep_value_replaces_the_entry_acknowledged_and_audited(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-x") as ws:
+        frames = _play(ws, {"known_rules": _RULES}, [_HELLO, _six()])
+    term = _SESSIONS[-1].belief.get("max_payments")
+    assert (term.value, term.status, term.history) == (6, TermStatus.KNOWN, [8])
+    assert term.evidence[-1].source == "rep"
+    assert _audits(frames, "operator_rule_corrected") == [
+        {"field": "max_payments", "old": 8, "new": 6}
+    ]
+    said = _said(frames)
+    assert "Okay, up to 6 payments." in said  # the turn's ack opener rotates
+    assert not any("earlier" in s.lower() for s in said)  # no CONTRADICTED clarify
+    assert "CLARIFY" not in [f.get("intent") for f in frames if f["type"] == "phase"]
+
+
+def test_rep_value_equal_to_the_entry_confirms_it(tmp_path: Path) -> None:
+    eight = _six("Eight payments is right.")
+    eight["oracle"]["terms"][0].update(value=8, quote="Eight")
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-eq") as ws:
+        frames = _play(ws, {"known_rules": _RULES}, [_HELLO, eight])
+    belief = _SESSIONS[-1].belief
+    term = belief.get("max_payments")
+    assert (term.value, term.status) == (8, TermStatus.KNOWN)
+    assert [e.source for e in term.evidence] == ["operator", "rep"]
+    assert not belief.operator_only("max_payments")
+    assert _audits(frames, "operator_rule_corrected") == []
+
+
+def test_a_rep_stated_value_still_contradicts_later(tmp_path: Path) -> None:
+    """Once the rep has replaced the entry, a different value is CONTRADICTED as usual."""
+    nine = _six("Actually we do nine payments.")
+    nine["oracle"]["terms"][0].update(value=9, quote="nine")
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-c") as ws:
+        _play(ws, {"known_rules": _RULES}, [_six(), nine])
+    term = _SESSIONS[-1].belief.get("max_payments")
+    assert term.status == TermStatus.CONTRADICTED and term.history == [8, 6]
+
+
+def test_rep_view_never_gets_the_entered_rules(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-rep?view=rep") as ws:
+        frames = _play(ws, {"known_rules": _RULES}, [_ASK])
+    assert _SESSIONS[-1].belief.get("max_payments").status == TermStatus.KNOWN
+    for f in frames:
+        if f["type"] == "belief":
+            assert not {t["field"] for t in f["terms"]} & set(_RULES)
+        assert not (f["type"] == "audit" and f["event"] == "seed_operator")
+
+
+def test_firm_default_per_creditor_and_call_override(tmp_path: Path) -> None:
+    payload = copy.deepcopy(SCENARIO_TEMPLATE)
+    creditor = payload["offer"]["creditor"]
+    payload["firm"]["known_creditor_rules"] = {creditor: {"max_payments": 6}, "Other Co": {}}
+    assert scenario_payload_errors(payload) == []
+    for start, expected in (({}, TermStatus.KNOWN), ({"known_rules": {}}, TermStatus.UNKNOWN)):
+        with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-f") as ws:
+            ws.send_json({"type": "start", "scenario_id": "custom", "scenario_payload": payload,
+                          **start})
+            ws.receive_json()
+        assert _SESSIONS[-1].belief.get("max_payments").status == expected
+    payload["firm"]["known_creditor_rules"] = {creditor: {"first_payment_date": "2030-01-31"}}
+    assert [e["path"] for e in scenario_payload_errors(payload)] == ["firm.known_creditor_rules"]
+    assert load_scenario(Path("fixtures/scenarios/easy_deal")).known_rules == {}
+
+
+def test_filled_flexible_scenario_skips_the_sweep_and_every_ask(tmp_path: Path) -> None:
+    """Fill from scenario on ``tier_definer`` (flexible, tiers): no optional sweep, no rule ask."""
+    call = load_scenario(resolve_scenario_dir("tier_definer"), rebase_to=date.today())
+    rules = scenario_rules("tier_definer", call)
+    assert rules and rules["payment_structure"] == "flexible" and rules["min_payment_tiers"]
+    ask = {
+        "type": "text",
+        "text": "We are looking for sixty percent of the balance.",
+        "oracle": {"settlement_ask_pct": 60.0, "ask_quote": "sixty percent", "stance": "offer"},
+    }
+    with make_client(tmp_path) as client, client.websocket_connect("/ws/call/k-flex") as ws:
+        frames = _play(ws, {"known_rules": rules}, [ask], scenario_id="tier_definer")
+    belief = _SESSIONS[-1].belief
+    assert belief.get("min_payment_tiers").status == TermStatus.KNOWN
+    assert belief.get("max_segments").status == TermStatus.KNOWN
+    intents = [f["intent"] for f in frames if f["type"] == "phase" and f.get("intent")]
+    assert "ASK" not in intents and "READ_BACK" not in intents
+    reasons = [
+        f["payload"].get("reason") for f in frames
+        if f["type"] == "audit" and f["actor"] == "policy" and f["event"] == "decide"
+    ]
+    assert reasons and "optional_sweep" not in reasons
+    assert "min_payment_tiers" not in reasons

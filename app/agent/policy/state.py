@@ -39,6 +39,8 @@ class NegotiationState:
     private_ask_count: int = 0
     commit_demand_count: int = 0
     pending_readback: str | None = None
+    # The first ASK / ASK_SETTLEMENT has come (operator rules mentioned, if any).
+    rules_mentioned: bool = False
     phase: Phase = Phase.OPENING
     turn_idx: int = 0
     # Last CONFIRM fingerprint (ask + rules that shape the schedule).

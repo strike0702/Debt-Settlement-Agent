@@ -6,7 +6,7 @@
  * accepted value in `start.min_cushion_cents` (this call only), keeps the last accepted
  * value on an invalid entry, and the decision trace says whether the plan kept it.
  */
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "@/App";
 import { HINT } from "@/components/CushionField";
@@ -159,7 +159,7 @@ describe("Minimum client cushion field", () => {
     fireEvent.keyDown(field()!, { key: "Enter" });
     fireEvent.blur(field()!);
     expect(box()).toHaveAttribute("data-state", "invalid"); // nothing accepted
-    const tip = screen.getByRole("tooltip");
+    const tip = within(screen.getByTestId("cushion-field")).getByRole("tooltip");
     expect(tip).toHaveTextContent("Use $5,000 or less.");
     expect(tip.className).not.toMatch(/\bhidden\b/); // an error stays open
     expect(field()).toHaveAccessibleDescription("Use $5,000 or less.");
@@ -197,7 +197,7 @@ describe("Minimum client cushion field", () => {
     render(<App />);
     await screen.findByDisplayValue("100");
     const input = field()!;
-    const tip = screen.getByRole("tooltip", { hidden: true });
+    const tip = within(screen.getByTestId("cushion-field")).getByRole("tooltip", { hidden: true });
     expect(tip).toHaveTextContent(HINT);
     expect(input).toHaveAttribute("aria-describedby", tip.id);
     expect(input).toHaveAccessibleDescription(HINT);

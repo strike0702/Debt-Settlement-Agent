@@ -88,4 +88,21 @@ describe("YourAccount", () => {
       "First payment: after the last savings draft",
     ]);
   });
+
+  it("shows payment tiers and levels in the card's plain words", () => {
+    const lines = ruleLines({
+      max_payments: 8,
+      min_payment_cents: 19000,
+      structure: "flexible",
+      opening_ask_bp: null,
+      floor_bp: null,
+      first_payment: null,
+      payment_tiers: "Payments 1 to 2 at least $190, 3 to 5 at least $250, 6 to 8 at least $300",
+      payment_levels: "Up to 3",
+    });
+    expect(lines.slice(3)).toEqual([
+      "Payment tiers: Payments 1 to 2 at least $190, 3 to 5 at least $250, 6 to 8 at least $300",
+      "Payment levels: Up to 3",
+    ]);
+  });
 });

@@ -106,3 +106,6 @@ class Action(BaseModel):
     # source="creditor") and an answer. Empty / None = plain one-act turn.
     ack: dict[str, Fact] = Field(default_factory=dict)
     answer: AnswerAct | None = None
+    # Operator-entered rules spoken once before the first question (``rec_*``
+    # ids, PUBLIC): "Our records show up to 8 payments." Empty = none.
+    records: dict[str, Fact] = Field(default_factory=dict)

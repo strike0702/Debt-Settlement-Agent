@@ -87,10 +87,33 @@ class CallSession:
     # Recent changes for CLI / tests / voice UI (also audited).
     last_belief_changes: list[BeliefChange] = field(default_factory=list)
     last_blocked: list[dict[str, Any]] = field(default_factory=list)
+    # Operator-entered rules seeded at construction (``_seed_known_rules``).
+    seeded_changes: list[BeliefChange] = field(init=False, default_factory=list)
 
     def __post_init__(self) -> None:
         self.belief = BeliefState(self.scenario.client)
         self._seed_private_blocklist()
+        self.seeded_changes = self._seed_known_rules()
+
+    def _seed_known_rules(self) -> list[BeliefChange]:
+        """Operator-entered creditor rules → KNOWN; the orchestrator audits the changes.
+
+        They are creditor terms, so their numbers join ``creditor_numbers``: the agent
+        may speak them (read-back, acks) as if the rep had said them.
+        """
+        changes: list[BeliefChange] = []
+        for name, value in self.scenario.known_rules.items():
+            changes.append(self.belief.seed_operator(name, value))
+            if name == "min_payment_tiers":
+                for frm, cents in value:
+                    self.creditor_numbers |= {("count", frm), ("ordinal", frm), ("money", cents)}
+            elif name == "first_payment_date":
+                self.creditor_numbers.add(("date", value))
+            elif name == "min_payment_cents":
+                self.creditor_numbers.add(("money", value))
+            elif isinstance(value, int):
+                self.creditor_numbers.add(("count", value))
+        return changes
 
     @property
     def phase(self) -> Phase:

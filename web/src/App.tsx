@@ -31,6 +31,14 @@
  * firm default. It is never stored. The Creditor rep
  * view never shows it.
  *
+ * Known creditor rules: the Debt negotiator view shows `KnownRulesPanel` at the top of
+ * the side column before a call, pre-filled with the firm's saved rules for the creditor
+ * (`brief.firm.known_rules`, or a custom case's `firm.known_creditor_rules[creditor]`).
+ * What is entered goes as `start.known_rules` when it differs from that default; an
+ * entry the panel marks red blocks Start call and Watch a call until it is fixed.
+ * "Fill from scenario" copies `brief.scenario_rules` (curated scenarios only). The
+ * Creditor rep view never shows the panel or sends the rules.
+ *
  * Custom test cases: "Add a test case" opens `CaseEditor`; saved
  * cases join the cards, persist in `localStorage` and start with
  * `start.scenario_payload` (played by hand: autoplay is curated-only).
@@ -50,6 +58,7 @@ import { CaseEditor } from "@/components/CaseEditor";
 import { ClientLedger } from "@/components/ClientLedger";
 import { Conversation } from "@/components/Conversation";
 import { CushionField } from "@/components/CushionField";
+import { KnownRulesPanel } from "@/components/KnownRulesPanel";
 import { ScenarioBrief } from "@/components/ScenarioBrief";
 import { YourAccount } from "@/components/YourAccount";
 import { Button } from "@/components/ui/button";
@@ -76,10 +85,12 @@ import {
   serverId,
 } from "@/lib/customCases";
 import { formatCushion } from "@/lib/cushion";
+import { formFromRules, parseRules, type RulesForm, sameRules } from "@/lib/knownRules";
 import { type Lens, viewFor } from "@/lib/lens";
 import { endedLine } from "@/lib/outcome";
 import { callErrorText, errorDetailLabel } from "@/lib/callError";
 import { toRepView } from "@/lib/repView";
+import type { KnownRules } from "@/types/protocol";
 
 // Recharts lives in these two; loading them after first paint keeps the shell fast.
 const DecisionTrace = lazy(() => import("@/components/DecisionTrace").then((m) => ({ default: m.DecisionTrace })));
@@ -111,6 +122,9 @@ export const TRACE_GONE_NOTE =
 /** Why "Watch a call" is off for a custom case. */
 export const CUSTOM_WATCH_REASON =
   "The simulated rep only knows the built-in cases. Press Start call to play the rep yourself.";
+
+/** Why Start call and Watch a call are off while a known creditor rule is marked red. */
+export const RULES_BLOCKED_REASON = "Fix the known creditor rules marked in red to start the call.";
 
 /**
  * The decision-trace and state slots for AppShell (lazy: they pull in Recharts).
@@ -210,6 +224,14 @@ function customCushion(payload: Record<string, unknown>): number {
   return typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : 0;
 }
 
+/** A custom case's saved rules for its creditor (`firm.known_creditor_rules[offer.creditor]`). */
+function customKnownRules(payload: Record<string, unknown>): KnownRules | undefined {
+  const firm = payload.firm as { known_creditor_rules?: Record<string, KnownRules> } | undefined;
+  const creditor = (payload.offer as { creditor?: unknown } | undefined)?.creditor;
+  const saved = firm?.known_creditor_rules;
+  return typeof creditor === "string" && saved && typeof saved === "object" ? saved[creditor] : undefined;
+}
+
 const DEFAULT_SCENARIO = "easy_deal";
 const ECHO_HINT = "The mic is picking up the agent's voice from your speakers. Headphones will help.";
 
@@ -298,16 +320,28 @@ function LiveApp() {
   const cushionAccepted = edited ? cushionEdit.accepted : firmCushion;
   const cushionOverride = lens === "operator" && cushionAccepted !== firmCushion ? cushionAccepted : undefined;
 
+  // ------------------------------------------------ known creditor rules (this call only)
+  const [rulesEdit, setRulesEdit] = useState<{ id: string; form: RulesForm } | null>(null);
+  const firmRules = custom ? customKnownRules(custom.payload) : brief?.firm.known_rules;
+  const firmRulesForm = useMemo(() => formFromRules(firmRules), [firmRules]);
+  const rulesForm = rulesEdit?.id === selected ? rulesEdit.form : firmRulesForm;
+  const asOf = brief?.client.as_of_date;
+  const parsedRules = useMemo(() => parseRules(rulesForm, asOf), [rulesForm, asOf]);
+  const rulesBlocked = lens === "operator" && Object.keys(parsedRules.errors).length > 0;
+  const rulesOverride = lens === "operator" && !sameRules(parsedRules.rules, firmRules) ? parsedRules.rules : undefined;
+  const scenarioRules = custom ? null : brief?.scenario_rules;
+
   const { start } = call;
   const startCall = useCallback(
     (autoplay: boolean) => {
-      if (custom && autoplay) return;
+      if ((custom && autoplay) || rulesBlocked) return;
       rtcEngine.reset(autoplay);
       const minCushionCents = cushionOverride;
-      if (custom) start(serverId(custom.payload), { view: viewFor(lens), payload: custom.payload, minCushionCents });
-      else start(selected, { view: viewFor(lens), autoplay, minCushionCents });
+      const knownRules = rulesOverride;
+      if (custom) start(serverId(custom.payload), { view: viewFor(lens), payload: custom.payload, minCushionCents, knownRules });
+      else start(selected, { view: viewFor(lens), autoplay, minCushionCents, knownRules });
     },
-    [start, rtcEngine, selected, lens, custom, cushionOverride],
+    [start, rtcEngine, selected, lens, custom, cushionOverride, rulesOverride, rulesBlocked],
   );
 
   const scenario = scenarios.find((s) => s.id === selected) ?? null;
@@ -335,6 +369,16 @@ function LiveApp() {
     lens === "operator"
       ? brief && (
           <>
+            {!callRunning && (
+              <KnownRulesPanel
+                key={selected}
+                form={rulesForm}
+                errors={parsedRules.errors}
+                asOf={asOf}
+                onForm={(form) => setRulesEdit({ id: selected, form })}
+                onFill={scenarioRules ? () => setRulesEdit({ id: selected, form: formFromRules(scenarioRules) }) : undefined}
+              />
+            )}
             <ScenarioBrief brief={brief} lens={lens} />
             <ClientLedger brief={brief} lens={lens} />
           </>
@@ -407,8 +451,8 @@ function LiveApp() {
         if (!inCall || over) setSelected(id);
       }}
       onWatch={() => startCall(true)}
-      watchDisabled={!scenario || call.status === "connecting" || custom !== null}
-      watchDisabledReason={custom ? CUSTOM_WATCH_REASON : undefined}
+      watchDisabled={!scenario || call.status === "connecting" || custom !== null || rulesBlocked}
+      watchDisabledReason={custom ? CUSTOM_WATCH_REASON : rulesBlocked ? RULES_BLOCKED_REASON : undefined}
       watchLabel={call.autoplay && call.events.length > 0 ? "Watch again" : "Watch a call"}
       playing={call.autoplay && call.events.length > 0}
       lens={lens}
@@ -458,7 +502,11 @@ function LiveApp() {
               <PhoneOff className="h-4 w-4" aria-hidden /> End call
             </Button>
           ) : (
-            <Button onClick={() => startCall(false)} disabled={!scenario}>
+            <Button
+              onClick={() => startCall(false)}
+              disabled={!scenario || rulesBlocked}
+              title={rulesBlocked ? RULES_BLOCKED_REASON : undefined}
+            >
               <PhoneCall className="h-4 w-4" aria-hidden /> Start call
             </Button>
           )}

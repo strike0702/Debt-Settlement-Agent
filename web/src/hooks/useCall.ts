@@ -4,7 +4,8 @@
  * Opens a socket per call (the view is fixed when it connects), sends `start`
  * (plain or autoplay; with `payload`, a custom test case as `scenario_payload`,
  * which the server only plays by hand; with `minCushionCents`, this call's minimum client
- * cushion as `start.min_cushion_cents`), and collects every frame. It does not fold state or
+ * cushion as `start.min_cushion_cents`; with `knownRules`, the creditor rules the operator
+ * entered as `start.known_rules`), and collects every frame. It does not fold state or
  * filter privacy: App folds `events` with `reduceCall` after `eventsForLens`,
  * and the rep view is filtered by the server. Raw frames also go to
  * `subscribe` listeners (the voice engine). `lastCallId` survives the end of
@@ -12,7 +13,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CallEvent } from "@/lib/callState";
-import type { ClientEvent, ServerEvent, View } from "@/types/protocol";
+import type { ClientEvent, KnownRules, ServerEvent, View } from "@/types/protocol";
 
 export type CallStatus = "idle" | "connecting" | "live" | "ending" | "closed";
 
@@ -27,6 +28,8 @@ export interface StartOptions {
   payload?: Record<string, unknown>;
   /** This call's minimum client cushion (cents); omitted = the scenario's firm default. */
   minCushionCents?: number;
+  /** Creditor rules the operator entered (`start.known_rules`); omitted = the firm's saved rules. */
+  knownRules?: KnownRules;
 }
 
 export interface UseCall {
@@ -106,8 +109,11 @@ export function useCall(
           : opts.autoplay
             ? { type: "start", scenario_id: scenarioId, autoplay: true, autoplay_pause_ms: AUTOPLAY_PAUSE_MS }
             : { type: "start", scenario_id: scenarioId };
-        const msg: ClientEvent =
-          opts.minCushionCents === undefined ? base : { ...base, min_cushion_cents: opts.minCushionCents };
+        const msg: ClientEvent = {
+          ...base,
+          ...(opts.minCushionCents === undefined ? {} : { min_cushion_cents: opts.minCushionCents }),
+          ...(opts.knownRules === undefined ? {} : { known_rules: opts.knownRules }),
+        };
         ws.send(JSON.stringify(msg));
         setStatus("live");
       };

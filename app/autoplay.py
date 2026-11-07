@@ -16,6 +16,8 @@ easy rep, so fixtures without the key play exactly as recorded.
 ``"defines_tiers": true`` makes the rep define its tiers one by one before
 any price (``tier_definer``).
 The policy is unchanged; ``sim/`` still never imports ``app.agent``.
+``scenario_rules`` reads the same truth for the operator panel's "Fill from
+scenario" button (Phase 69; operator brief only, never sent to the agent).
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ from app.agent.orchestrator import Orchestrator, Utterance
 from app.agent.session import CallSession
 from app.config import Settings
 from app.domain.actions import Intent, Phase
+from app.domain.known_rules import rules_from_sim
 from app.domain.scenario import CallScenario, resolve_scenario_dir
 from app.schemas.events import AutoplayOutcome
 from app.store.audit import AuditLog
@@ -107,6 +110,28 @@ def parse_haggle(raw: Any, *, where: str = "sim.json") -> Haggle:
         steps_bp=steps,
         stall_on=stall_on,
     )
+
+
+def sim_rules(scenario_id: str) -> dict[str, Any] | None:
+    """The curated scenario's raw ``sim.json`` ``rules`` (creditor terms), or ``None``."""
+    path = resolve_scenario_dir(scenario_id) / SIM_TRUTH_FILE
+    if not path.is_file():
+        return None
+    return dict(json.loads(path.read_text())["rules"])
+
+
+def scenario_rules(scenario_id: str, call: CallScenario) -> dict[str, Any] | None:
+    """The curated scenario's true creditor rules as known-rules wire JSON, or ``None``.
+
+    Feeds the operator panel's "Fill from scenario" (demo convenience; operator brief
+    only). Relative ``sim.json`` dates resolve against ``call``; ``"default"`` is left out.
+    """
+    rules = sim_rules(scenario_id)
+    if rules is None:
+        return None
+    spec = str(rules.get("first_payment_date", "default"))
+    fpd = None if spec == "default" else _first_payment_date(spec, call)
+    return rules_from_sim(rules, fpd)
 
 
 def load_autoplay_scenario(scenario_id: str, call: CallScenario) -> Scenario:

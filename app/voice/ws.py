@@ -22,7 +22,11 @@ balances, rescue data or private audit rows. ``start`` with
 ``"autoplay": true`` runs ``app.autoplay`` (sim creditor, no LLM) over the same
 events; client text is refused while it runs. ``start.min_cushion_cents``
 overrides the firm's minimum client cushion for that call only (validated, not
-stored; PRIVATE: it shows up only in the operator trace and a private audit row). An NLU
+stored; PRIVATE: it shows up only in the operator trace and a private audit row).
+``start.known_rules`` (Phase 69) replaces the firm's saved rules for the creditor with
+what the operator entered (validated like the cushion: an error frame, no call); the
+session seeds them KNOWN from ``operator`` and the rep stream never shows them until
+the agent speaks them (``views``). An NLU
 ``LLMUnavailable`` answers ``error`` + ``turn_done`` and keeps the socket open.
 
 Whatever the socket's view, every ``turn_trace`` / ``audit`` / ``eval`` /
@@ -71,6 +75,7 @@ from app.agent.session import CallSession
 from app.autoplay import clamp_pause_ms, new_autoplay_call, run_autoplay
 from app.config import Settings, get_settings
 from app.domain.fields import REQUIRED_FIELDS
+from app.domain.known_rules import parse_known_rules
 from app.domain.scenario import (
     CallScenario,
     load_scenario,
@@ -130,7 +135,8 @@ def _belief_payload(session: CallSession) -> dict[str, Any]:
                 "value": _ser_value(term.value),
                 "status": term.status.value,
                 "evidence": [
-                    {"turn": e.turn, "quote": e.quote} for e in term.evidence
+                    {"turn": e.turn, "quote": e.quote, "source": e.source}
+                    for e in term.evidence
                 ],
                 "history": [_ser_value(h) for h in term.history],
             }
@@ -611,6 +617,21 @@ def _with_call_cushion(scenario: CallScenario, data: dict[str, Any]) -> CallScen
     return replace(scenario, min_cushion_cents=cushion)
 
 
+def _with_call_known_rules(scenario: CallScenario, data: dict[str, Any]) -> CallScenario:
+    """Apply ``start.known_rules`` (this call only). Absent or null keeps the firm's saved rules.
+
+    Invalid rules raise ``_StartError`` with the plain message the panel shows.
+    """
+    raw = data.get("known_rules")
+    if raw is None:
+        return scenario
+    try:
+        rules = parse_known_rules(raw, as_of=scenario.client.as_of_date)
+    except ValueError as e:
+        raise _StartError(str(e)) from e
+    return replace(scenario, known_rules=rules)
+
+
 class _StartError(Exception):
     """``start`` payload could not be turned into a scenario."""
 
@@ -803,6 +824,7 @@ class _CallConnection:
         try:
             scenario, scenario_id, rebased_as_of = _load_start_scenario(data)
             scenario = _with_call_cushion(scenario, data)
+            scenario = _with_call_known_rules(scenario, data)
         except _StartError as e:
             await self._send_one({"type": "error", "message": str(e)})
             return

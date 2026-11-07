@@ -270,6 +270,9 @@ class SayEvent(_Model):
 class Evidence(_Model):
     turn: int
     quote: str
+    # ``operator``: entered before the call (``start.known_rules`` / firm default), not
+    # heard. The rep stream drops terms whose only evidence is the operator's.
+    source: Literal["rep", "operator"] = "rep"
 
 
 class BeliefTerm(_Model):
@@ -463,6 +466,29 @@ SERVER_EVENT_TYPES: tuple[str, ...] = (
 # ---------------------------------------------------------------- client → server
 
 
+class KnownTier(_Model):
+    """One payment tier: from payment ``from_payment`` (1-based) on, at least ``min_cents``."""
+
+    from_payment: int
+    min_cents: int
+
+
+class KnownRules(_Model):
+    """Creditor rules the operator already knows (all optional; absent = not known).
+
+    Validated server-side by ``app.domain.known_rules.parse_known_rules``: cents
+    ints, ISO date, tiers that rise and fit the minimum payment and max payments.
+    """
+
+    max_payments: int | None = None
+    min_payment_cents: int | None = None
+    payment_structure: Literal["even", "balloon", "flexible"] | None = None
+    min_payment_tiers: list[KnownTier] | None = None
+    max_segments: int | None = None
+    max_token_pays: int | None = None
+    first_payment_date: str | None = None
+
+
 class StartEvent(_Model):
     """Start a call. ``autoplay`` lets the sim creditor drive it (curated ids only)."""
 
@@ -477,6 +503,9 @@ class StartEvent(_Model):
     # This call's minimum client cushion in cents (operator setting, PRIVATE). Absent:
     # the scenario's firm default. 0..500000; the server rejects anything else.
     min_cushion_cents: int | None = None
+    # Creditor rules known before the call (operator panel). Absent: the firm's saved
+    # rules for this creditor; present (even ``{}``): replaces them for this call.
+    known_rules: KnownRules | None = None
 
 
 class EndEvent(_Model):

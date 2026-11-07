@@ -662,6 +662,15 @@
           "title": "Quote",
           "type": "string"
         },
+        "source": {
+          "default": "rep",
+          "enum": [
+            "rep",
+            "operator"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
         "turn": {
           "title": "Turn",
           "type": "integer"
@@ -808,6 +817,126 @@
       ],
       "title": "Intent",
       "type": "string"
+    },
+    "KnownRules": {
+      "additionalProperties": false,
+      "description": "Creditor rules the operator already knows (all optional; absent = not known).\n\nValidated server-side by ``app.domain.known_rules.parse_known_rules``: cents\nints, ISO date, tiers that rise and fit the minimum payment and max payments.",
+      "properties": {
+        "first_payment_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "First Payment Date"
+        },
+        "max_payments": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Payments"
+        },
+        "max_segments": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Segments"
+        },
+        "max_token_pays": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Token Pays"
+        },
+        "min_payment_cents": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Payment Cents"
+        },
+        "min_payment_tiers": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/KnownTier"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Payment Tiers"
+        },
+        "payment_structure": {
+          "anyOf": [
+            {
+              "enum": [
+                "even",
+                "balloon",
+                "flexible"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payment Structure"
+        }
+      },
+      "title": "KnownRules",
+      "type": "object"
+    },
+    "KnownTier": {
+      "additionalProperties": false,
+      "description": "One payment tier: from payment ``from_payment`` (1-based) on, at least ``min_cents``.",
+      "properties": {
+        "from_payment": {
+          "title": "From Payment",
+          "type": "integer"
+        },
+        "min_cents": {
+          "title": "Min Cents",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "from_payment",
+        "min_cents"
+      ],
+      "title": "KnownTier",
+      "type": "object"
     },
     "LatencyEvent": {
       "additionalProperties": false,
@@ -1173,6 +1302,17 @@
           ],
           "default": null,
           "title": "Autoplay Pause Ms"
+        },
+        "known_rules": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KnownRules"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "min_cushion_cents": {
           "anyOf": [

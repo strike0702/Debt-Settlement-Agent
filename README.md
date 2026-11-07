@@ -19,7 +19,7 @@ One representative turn, left to right. Language goes in and comes out through a
 ```mermaid
 flowchart LR
   Rep["Rep speaks or types"] --> STT["Speech-to-text<br/>(Deepgram Flux over WebRTC)"]
-  STT --> NLU["NLU: Claude Haiku 5.5<br/>(free fallbacks: Groq, Cerebras)<br/>terms + stance + flags as JSON"]
+  STT --> NLU["NLU: Claude Haiku 5.5<br/>(free fallbacks: Groq, Cerebras)<br/>the rep's intents as JSON,<br/>given a summary of the call"]
   NLU --> Check["Code-side checks<br/>quote in the line? number parses?<br/>phrase rules"]
   Check --> Policy["Policy decide()<br/>picks one move"]
   Policy <--> Engine["Feasibility engine<br/>can the client fund X%?<br/>payment schedule"]
@@ -34,12 +34,12 @@ The rules that hold on every turn:
 - **Money is integer cents; percentages are integer basis points** (4500 = 45%). No floating point touches money.
 - **The model never speaks a digit.** It writes templates like `We can offer {offer_pct}.`; code fills each placeholder from `Fact.render()`. `template_guard` rejects digits, `$`, `%` and number words in the template; `rendered_guard` rejects any figure in the final sentence that is neither a public fact nor a number the representative said, any private value, and premature commitment phrasing. A blocked line becomes a fixed safe sentence.
 - **Private facts never reach the model.** The reply prompt sees PUBLIC facts only; the client's maximum, balances and fees stay in code.
-- **The model's reading is untrusted input.** A quote that is not in the line is dropped, a hedged number stays tentative, and a short "yeah" only counts as acceptance when it is most of the line.
+- **The model's reading is untrusted input.** The model names what the rep did (asked a price, stated a rule, accepted, asked a question…) as a short list of typed intents, each with a quote from the line. A quote that is not in the line is dropped, a hedged number stays tentative, a short "yeah" only counts as acceptance when it is most of the line, and every number the rep says must belong to a checked intent: otherwise the agent asks rather than acting on an older figure.
 - **Everything is audited.** Belief changes, blocked sentences, hand-offs, each policy decision and every model call are written to an append-only SQLite log (triggers reject updates and deletes).
 
 ### Voice
 
-Voice runs on the server: the browser sends the mic over WebRTC and plays the agent's audio, Pipecat inside the FastAPI app streams it to Deepgram Flux (speech-to-text with model-based end of turn) and speaks replies with Deepgram Aura-2. Flux's final transcript goes through the same turn as a typed line, and a sentence counts as heard only once its audio has been played, so an interrupted offer is never booked. When the rep talks over the agent, the agent pauses at once and the rep's words decide: two real words stop it, a "mm-hm" lets it go on. On scripted rep audio injected into Chrome, every reply turn got a reply, all 12 spoken numbers were heard, and first reply audio was [2484 / 3348 ms p50 / p95](docs/eval/voice_haiku_20261107/summary.md) with Claude Haiku reading the line. With the same free Groq model on both, the new pipeline's [3185 / 4829 ms](docs/eval/voice_tuned_20261029/summary.md) compares with 4463 / 5172 ms for the earlier browser-speech client ([baseline](docs/eval/voice_baseline_20261028/legacy-server-inject/summary.md)). Voice needs `DEEPGRAM_API_KEY` and is capped by `VOICE_DAILY_BUDGET_USD`, `VOICE_DAILY_MINUTES` and `VOICE_SESSION_MAX_S`; without a key, text still works. On networks that block direct audio, calls connect through a Cloudflare TURN relay. Why it is built this way: [ADR 9](docs/DESIGN.md#adr-9-voice-on-pipecat--deepgram-over-webrtc).
+Voice runs on the server: the browser sends the mic over WebRTC and plays the agent's audio, Pipecat inside the FastAPI app streams it to Deepgram Flux (speech-to-text with model-based end of turn) and speaks replies with Deepgram Aura-2. Flux's final transcript goes through the same turn as a typed line, and a sentence counts as heard only once its audio has been played, so an interrupted offer is never booked. When the rep talks over the agent, the agent pauses at once and the rep's words decide: two real words stop it, a "mm-hm" lets it go on. While the model reads a line, the agent says a short "Mm-hm." so the rep is not left in silence, and questions without numbers play from an audio cache. Turning voice on during a call takes about 1.2 s, because the connection is prepared when the call starts. On scripted rep audio injected into Chrome, every reply turn got a reply, all 12 spoken numbers were heard, and first reply audio was [2484 / 3348 ms p50 / p95](docs/eval/voice_haiku_20261107/summary.md) with Claude Haiku reading the line. With the same free Groq model on both, the new pipeline's [3185 / 4829 ms](docs/eval/voice_tuned_20261029/summary.md) compares with 4463 / 5172 ms for the earlier browser-speech client ([baseline](docs/eval/voice_baseline_20261028/legacy-server-inject/summary.md)). Voice needs `DEEPGRAM_API_KEY` and is capped by `VOICE_DAILY_BUDGET_USD`, `VOICE_DAILY_MINUTES` and `VOICE_SESSION_MAX_S`; without a key, text still works. On networks that block direct audio, calls connect through a Cloudflare TURN relay. Why it is built this way: [ADR 9](docs/DESIGN.md#adr-9-voice-on-pipecat--deepgram-over-webrtc).
 
 By default the demo's replies come from a bank of templates built and guard-checked offline (`NLG_MODE=bank`), so no model call sits on the reply path. The design decisions behind each rule, and one voice turn annotated stage by stage, are in [`docs/DESIGN.md`](docs/DESIGN.md).
 
@@ -48,8 +48,8 @@ By default the demo's replies come from a bank of templates built and guard-chec
 | Start here | What it is |
 |---|---|
 | `app/agent/orchestrator.py` | Runs one turn end to end: NLU, belief update, affordability, policy, reply, and the spoken-sentence acknowledgement. |
-| `app/agent/policy/` | `decide()` (`cascade.py`): the whole negotiation strategy as pure functions. Belief and verified NLU in, one `Action` out. The price ladder is in `ladder.py`. |
-| `app/agent/nlu/` | Asks the model to read the line (`llm_call.py`), then `post_verify` (`verify.py`) checks quotes, numbers and phrase rules (`cues.py`) in code; amount questions are in `amounts.py`. |
+| `app/agent/policy/` | `decide()` (`cascade.py`): the whole negotiation strategy as pure functions. Belief and the rep's checked intents in, one `Action` out. The price ladder is in `ladder.py`. |
+| `app/agent/nlu/` | Asks the model for the rep's intents with a public summary of the call (`llm_call.py`, `context.py`), then checks every intent's quote and numbers in code (`acts.py`, `cues.py`); amount questions are in `amounts.py`. |
 | `app/agent/nlg.py`, `app/agent/guards.py` | Turns an `Action` into a template, fills it from facts, and runs the two guards. |
 | `app/adapter/engine_adapter.py` | The only bridge to the engine: builds creditor rules from belief and scans 1%–100% for affordability. `app/adapter/validator.py` re-checks every drafted schedule independently. |
 | `feasibility/engine.py` | The settlement engine: `evaluate(problem, bp)` returns a payment schedule or the extra money needed; the exact search is in `search.py`. See [`docs/ENGINE.md`](docs/ENGINE.md). |
@@ -108,21 +108,23 @@ Four versions ran on the same 48 seeded scenarios with a live model reading ever
 
 **A stays the default.** B read more naturally but spoke one private figure (the policy accepted a "100%" the simulated creditor invented, which was then fixed) and missed the agreement check. C failed on safety, hand-offs and speed. A fourth arm, a model with no policy, was stopped early and was behind A on every check it reached ([partial results](docs/eval/ab_20261007/partial_D/summary.md)). A's own 0.75 comes from live-model misreadings of creditor rules that every arm shares. A later live re-check of A with Claude Haiku reading the line had [10 of 10 valid agreements and 1.46 s median server time per turn](docs/eval/recheck_20261009/summary.md). I also rated 20 of the B-vs-A pairs blind myself and preferred B in 11 of 15 decisive pairs, against the model judge's 0.80 ([ratings](docs/eval/ab_20261007/summary.md#human-check-of-the-judge-added-in-phase-50)).
 
-### Understanding messy lines (live, needs keys)
+### Understanding the representative (live, Claude Haiku 5.5)
 
-About 180 synthetic representative lines that I labelled by hand, scored after the code-side checks. All rows, per model and per prompt, are in [`docs/eval/nlu_corpus.md`](docs/eval/nlu_corpus.md); the raw per-line answers are in [`docs/eval/records/`](docs/eval/records/).
+Scripted negotiation calls run end to end through the agent with the live model reading every line, plus synthetic representative lines I labelled by hand. Lines and calls marked held out were written and frozen before the prompt and code they test were tuned.
 
-| What the model flags | Precision / recall after the code-side checks | Before them |
+| What I measured | Result | n |
 |---|---|---|
-| [Asks for the client's private information](docs/eval/nlu_corpus.md#after) | 0.971 / 0.971 | [0.667 / 0.235](docs/eval/nlu_corpus.md#before) |
-| [Demands a commitment](docs/eval/nlu_corpus.md#after) | 1.000 / 0.923 | [0.667 / 0.462](docs/eval/nlu_corpus.md#before) |
-| [Accepts the offer](docs/eval/nlu_corpus.md#after) | 1.000 / 1.000 | [0.306 / 1.000](docs/eval/nlu_corpus.md#before) |
+| [Scripted negotiation calls: every agent move as expected](docs/eval/nlu_v2_20261108_policy/summary.md) (haggling, firm floors, totals in dollars, self-corrections, payment tiers, rule changes mid-call) | 92 / 92 turns | 19 calls |
+| [Held-out negotiation lines](docs/eval/nlu_corpus.md#acts_p71b_hneg): what the rep is doing / terms read exactly | 0.905 / 0.935 | 42 |
+| [Main corpus](docs/eval/nlu_corpus.md#acts_p71b_main): what the rep is doing / terms read exactly | 0.896 / 0.908 | 193 |
+| Fillers ("yeah", "uh-huh") wrongly read as accepting the offer | 0 | 31 |
+| Model time to read a line | about 1.0 s p50 | |
 
-That table is the free-tier Groq model with the same prompt in both runs, so the gain is the repair code. The demo now reads the line with Claude Haiku 5.5: stance accuracy [0.869](docs/eval/nlu_corpus.md#haiku_p43_fix) on the corpus and [0.969](docs/eval/nlu_corpus.md#heldout_stance_haiku_p43_fix) on 32 held-out lines, at [1.17 s p50 per request](docs/eval/haiku_nlu_demo_20261008/summary.md) and about $0.0003 per line. The free fallbacks score [0.885 (Groq)](docs/eval/nlu_groq_20261009/summary.md) and [0.891 (Cerebras)](docs/eval/nlu_cerebras_20261009/summary.md) on the same prompt. I wrote both the lines and the rules, so the main corpus is not a blind test set; the held-out sets were written before the rules they test. The model comparison and its history are in [ADR 6](docs/DESIGN.md#adr-6-claude-reads-the-rep-on-the-demo-under-a-daily-cap).
+The model returns the representative's intents as typed JSON and sees a public summary of the call (what the agent just asked, the prices on the table, a list being collected). An earlier version that returned one fixed set of flags per line held [77 of the same 92 turns](docs/eval/nlu_v2_20261107_r2/summary.md); intents plus call context fixed calls such as a rep naming 73% after an earlier 75%, or defining payment tiers one by one, and cut the model's output by about two thirds. All rows and per-line answers are in [`docs/eval/nlu_corpus.md`](docs/eval/nlu_corpus.md) and [`docs/eval/records/`](docs/eval/records/). I wrote the lines, the calls and the rules, so none of this is a blind test set.
 
 ### Latency
 
-With the free Groq model reading the line, a typed turn took [1420 / 2242 ms p50 / p95](docs/eval/latency_20261007.md#after-key-pool-phase-27-2026-10-07) from message to first reply, almost all of it the model reading the line. By voice, from the end of the rep's speech to the agent's first audio took [2484 / 3348 ms p50 / p95](docs/eval/voice_haiku_20261107/summary.md) in Chrome on injected audio with Claude Haiku reading the line, as on the demo ([3185 / 4829 ms](docs/eval/voice_tuned_20261029/summary.md) with the free Groq model), and about 0.8 to 1.1 s when the code reads the line without the model. That is just over the 2 s / 3 s targets; about 1.3 s of it is the model reading the line.
+Reading a line with Claude Haiku takes about [1.0 s p50](docs/eval/nlu_v2_20261108_policy/summary.md), and the rest of a typed turn (policy, engine, reply) takes a few milliseconds. By voice, from the end of the rep's speech to the agent's first audio took [2484 / 3348 ms p50 / p95](docs/eval/voice_haiku_20261107/summary.md) in Chrome on injected audio with Claude Haiku reading the line, as on the demo ([3185 / 4829 ms](docs/eval/voice_tuned_20261029/summary.md) with the free Groq model), and about 0.8 to 1.1 s when the code reads the line without the model; that run predates the faster intent format, which reads a line about 0.25 s sooner. The rep hears the agent's short "Mm-hm." [0.7 s after they stop](docs/eval/voice_ack_20261107/summary.md) while the reply is prepared.
 
 ### What is not measured yet
 

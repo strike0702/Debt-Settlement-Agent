@@ -21,9 +21,14 @@ When the call ends (handoff or close), ``finish`` lets the last sentences
 play out, sends ``voice_state: ended`` and only then stops; the browser keeps
 the link open until that event (the closing line used to be cut).
 
+A session runs on a fresh WebRTC connection (full connect) or on one held
+idle since Start call (``warm``; Phase 72). Either way it starts only when
+voice turns on, so Deepgram and the caps see only voice-on time.
+
 ``events`` is a short timeline (epoch ms) for the voice harness
 (``GET /voice/events``): Flux turn events, finals, replies, first TTS byte,
-bot start/stop, barges and heard sentences. Agent and rep words only; no
+bot start/stop, barges, heard sentences, and ``connect`` (the browser's click
+→ live ``connect_ms`` and which path it took). Agent and rep words only; no
 private facts.
 """
 
@@ -120,6 +125,8 @@ class VoiceSession:
         self.task: PipelineTask | None = None
         self.started = 0.0
         self.connected = asyncio.Event()
+        # The pipeline's StartFrame reached the sink: Flux and TTS are open (Phase 72).
+        self.live = asyncio.Event()
         self._finishing = False
         self._cap_task: asyncio.Task[None] | None = None
 
@@ -211,6 +218,10 @@ class VoiceSession:
             ]
         )
         task = PipelineTask(pipeline, params=PipelineParams(enable_metrics=True))
+
+        @task.event_handler("on_pipeline_started")
+        async def _started(_t: object, _f: object) -> None:
+            self.live.set()
 
         @transport.event_handler("on_client_connected")
         async def _connected(_t: object, _c: object) -> None:

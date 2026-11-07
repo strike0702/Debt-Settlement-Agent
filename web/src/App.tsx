@@ -21,7 +21,9 @@
  * Voice: `useWebRtcVoice` (Pipecat over WebRTC). The server hears and speaks,
  * `say` lines are never spoken here, and voice failures (mic, connection,
  * budget) land on the same visible error line. With voice off the client acks
- * the lines the rep has read (`WebRtcVoice.beforeRepText`).
+ * the lines the rep has read (`WebRtcVoice.beforeRepText`). While a call is
+ * live with voice off, an idle link is pre-connected (no mic, no Deepgram) so
+ * Turn voice on goes live quickly (`WebRtcVoice.preconnect`, Phase 72).
  *
  * Minimum client cushion: the Debt negotiator view shows `CushionField` before a
  * call, pre-filled with the scenario's firm default (`brief.firm.min_cushion_cents`,
@@ -438,6 +440,25 @@ function LiveApp() {
   if (state.autoplay) note("outcome", OUTCOME[state.autoplay.outcome] ?? "The simulated call finished.");
 
   const liveCallId = live ? call.callId : null;
+  // Pre-connect (Phase 72): while a call is live and voice is off, hold an idle
+  // link (no mic, no Deepgram) so Turn voice on is quick. Dropped when the tab
+  // is hidden and remade when it shows; dropped when the call ends.
+  // `?preconnect=0` turns it off (to measure the full connect).
+  const rtcOff = rtc.state === "off";
+  useEffect(() => {
+    if (!liveCallId) {
+      rtcEngine.closeWarm();
+      return;
+    }
+    if (!rtcOff || new URLSearchParams(location.search).get("preconnect") === "0") return;
+    const warmUp = () => {
+      if (document.visibilityState === "hidden") rtcEngine.closeWarm();
+      else void rtcEngine.preconnect(liveCallId);
+    };
+    warmUp();
+    document.addEventListener("visibilitychange", warmUp);
+    return () => document.removeEventListener("visibilitychange", warmUp);
+  }, [liveCallId, rtcOff, rtcEngine]);
   const toggleRtc = liveCallId
     ? () => (rtc.state === "off" ? void rtcEngine.connect(liveCallId) : rtcEngine.hangUp())
     : undefined;

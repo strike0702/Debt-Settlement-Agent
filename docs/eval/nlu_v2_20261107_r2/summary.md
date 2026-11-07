@@ -45,7 +45,7 @@ A later re-run after a converter fix passed, but that re-run came after seeing t
 | 4 | Held-out stance: terms (n=16) | 0.875 | 1.000 | ≥ 0.855 | PASS |
 | 4 | Filler false accepts (all files) | 0 | 0 | 0 | PASS |
 | 5 | NLU p50 ms (main / amounts / h-stance / h-neg) | 1251 / 1316 / 1258 / 1220 | 1006 / 1042 / 998 / 1024 | ≤ flat | PASS |
-| 5 | Offline oracle eval | — | PASS, `eval_20261107_164627_s7`, turns_to_proposal 6.714, turns_to_outcome 5.390 (unchanged) | PASS | PASS |
+| 5 | Offline oracle eval | — | PASS, `eval_20261107_174038_s7` (final tree), turns_to_proposal 6.714, turns_to_outcome 5.390 (unchanged) | PASS | PASS |
 
 Private-info recall (reported, not a blocker since D21): flat 40/40, acts 39/40 (main f25
 "right right, and the client pays how much each month?"; hs27 now caught). Output tokens per

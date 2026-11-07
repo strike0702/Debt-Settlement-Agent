@@ -4,13 +4,15 @@ Tracks per-field status (UNKNOWN → TENTATIVE/KNOWN/…), evidence quotes, and
 history. Engine adapters only consume fields that are ``usable_for_engine``.
 NLU observations and read-back confirmations flow through ``observe`` /
 ``confirm_readback``; ``reopen`` sends a disputed KNOWN term back
-to TENTATIVE so the policy reads it back.
+to TENTATIVE so the policy reads it back. ``seed_operator`` (call start only)
+marks a rule the operator entered before the call as KNOWN, with evidence
+``source="operator"``; a different value from the rep later is CONTRADICTED as usual.
 """
 
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -29,6 +31,8 @@ class TermStatus(StrEnum):
 class Evidence(BaseModel):
     turn: int
     quote: str
+    # ``operator``: entered before the call, not heard from the rep.
+    source: Literal["rep", "operator"] = "rep"
 
 
 class TermBelief(BaseModel):
@@ -196,6 +200,25 @@ class BeliefState:
             )
 
         raise RuntimeError(f"unhandled status {old_status} for field {field}")
+
+    def seed_operator(self, field: str, value: Any) -> BeliefChange:
+        """Operator-entered rule → KNOWN before turn 0 (``source="operator"``, empty quote)."""
+        if field not in self.terms or field not in FIELDS_BY_NAME:
+            raise KeyError(field)
+        term = self.terms[field]
+        old_value, old_status = term.value, term.status
+        term.value = value
+        term.status = TermStatus.KNOWN
+        term.evidence.append(Evidence(turn=0, quote="", source="operator"))
+        self._maybe_sync_max_token_pays(field, value)
+        return BeliefChange(
+            field=field,
+            old_value=old_value,
+            new_value=value,
+            old_status=old_status,
+            new_status=TermStatus.KNOWN,
+            turn=0,
+        )
 
     def accept_alternative(
         self,

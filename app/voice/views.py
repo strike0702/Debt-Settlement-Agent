@@ -12,8 +12,11 @@ since codes such as ``above_accept_line`` or ``out_of_guardrail`` tell the rep
 why the agent stopped; the rep keeps the spoken ``escalate_reason``. The
 why-infeasible explanation (``infeasible_reason``, Phase 60: the client's
 shortfall and the date it binds) is removed by name from any rep frame that
-carries it, on top of the dropped ``turn_trace``. Returns ``None`` when a frame
-must not be sent at all.
+carries it, on top of the dropped ``turn_trace``. ``belief`` frames drop every
+term whose only evidence is the operator's (Phase 69 known rules entered before
+the call): the rep learns those rules only when the agent speaks them, and the
+term returns once the rep states it. Returns ``None`` when a frame must not be
+sent at all.
 
 Policy, NLG and the audit log are unchanged; this only filters what leaves the
 socket. Tested by running whole calls on the rep view and scanning every frame
@@ -95,6 +98,12 @@ def _rep_rows(rows: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
     return [{k: r[k] for k in _REP_ROW_KEYS if k in r} for r in rows]
 
 
+def _heard(term: dict[str, Any]) -> bool:
+    """False for a term the operator entered and the rep has not stated."""
+    evidence = term.get("evidence") or []
+    return not evidence or any(e.get("source", "rep") != "operator" for e in evidence)
+
+
 def redact_for_view(payload: dict[str, Any], view: View) -> dict[str, Any] | None:
     """Return the frame as ``view`` may see it, or ``None`` to drop it."""
     kind = payload.get("type")
@@ -119,6 +128,8 @@ def redact_for_view(payload: dict[str, Any], view: View) -> dict[str, Any] | Non
         out["rows"] = _rep_rows(out.get("rows"))
     elif kind == "agreement":
         out["rows"] = _rep_rows(out.get("rows")) or []
+    elif kind == "belief":
+        out["terms"] = [t for t in out.get("terms") or [] if _heard(t)]
     elif kind == "blocked":
         out.pop("offending", None)
     elif kind == "escalate":

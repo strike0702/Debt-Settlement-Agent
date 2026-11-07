@@ -8,10 +8,17 @@
  * decision trace, so `turn_trace` is dropped. Components also refuse to render
  * private fields in the creditor lens, so a leak needs both layers to fail.
  * The policy's reason code (handoff `escalate.reason`, `reason` in
- * `policy/decide` audit rows) is dropped too, as on the server.
+ * `policy/decide` audit rows) is dropped too, as on the server. Belief terms the operator
+ * entered before the call (every evidence `source` is `operator`) are dropped until the
+ * rep states them (`enteredOnly`).
  */
 import type { CallEvent } from "@/lib/callState";
-import type { EvalEvent, ScheduleRow } from "@/types/protocol";
+import type { BeliefTerm, EvalEvent, ScheduleRow } from "@/types/protocol";
+
+/** A term the operator entered and the rep has not stated (the server drops it on the rep stream). */
+export function enteredOnly(t: BeliefTerm): boolean {
+  return t.evidence.length > 0 && t.evidence.every((e) => e.source === "operator");
+}
 
 function publicRow(r: ScheduleRow): ScheduleRow {
   return { date: r.date, creditor_payment_cents: r.creditor_payment_cents };
@@ -40,6 +47,8 @@ export function toRepView(ev: CallEvent): CallEvent | null {
     }
     case "turn_trace":
       return null;
+    case "belief":
+      return { ...ev, terms: ev.terms.filter((t) => !enteredOnly(t)) };
     case "escalate":
       return { ...ev, reason: null };
     case "audit": {

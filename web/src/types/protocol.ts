@@ -7,7 +7,7 @@
  * `/scenarios/{id}`, `/scenarios/{id}/rep`, `/scenarios/{id}/rep_card`,
  * `POST /scenarios/preview{,/rep}`, `GET /calls/{id}/operator`).
  */
-import type { AgreementEvent, AuditEvent, BeliefTerm, EvalEvent, TurnTraceEvent } from "./events";
+import type { AgreementEvent, AuditEvent, BeliefTerm, EvalEvent, KnownRules, TurnTraceEvent } from "./events";
 
 export type * from "./events";
 
@@ -62,8 +62,19 @@ export interface ScenarioBrief extends Omit<ScenarioMeta, "suggested"> {
     /** The whole dedicated-account ledger, oldest first; `scheduled` = after `as_of_date`. */
     ledger: (LedgerEntry & { scheduled: boolean })[];
   };
-  /** `min_cushion_cents`: the firm's default minimum client cushion (0 = none; PRIVATE). */
-  firm: { program_fee_bp: number; program_fee_cents: number; bank_fee_cents: number; min_cushion_cents?: number };
+  /**
+   * `min_cushion_cents`: the firm's default minimum client cushion (0 = none; PRIVATE).
+   * `known_rules`: the firm's saved rules for this creditor (the "Known creditor rules" default).
+   */
+  firm: {
+    program_fee_bp: number;
+    program_fee_cents: number;
+    bank_fee_cents: number;
+    min_cushion_cents?: number;
+    known_rules?: KnownRules;
+  };
+  /** The scenario's true creditor rules, for "Fill from scenario" (curated scenarios; demo only). */
+  scenario_rules?: KnownRules | null;
 }
 
 /**

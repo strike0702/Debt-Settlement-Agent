@@ -78,6 +78,7 @@ export interface BeliefTerm {
 }
 export interface Evidence {
   quote: string;
+  source?: "rep" | "operator";
   turn: number;
 }
 export interface EvalEvent {
@@ -375,6 +376,7 @@ export interface VoiceStateEvent {
 export interface StartEvent {
   autoplay?: boolean;
   autoplay_pause_ms?: number | null;
+  known_rules?: KnownRules | null;
   min_cushion_cents?: number | null;
   scenario?: string | null;
   scenario_id?: string | null;
@@ -382,6 +384,28 @@ export interface StartEvent {
     [k: string]: unknown;
   } | null;
   type: "start";
+}
+/**
+ * Creditor rules the operator already knows (all optional; absent = not known).
+ *
+ * Validated server-side by ``app.domain.known_rules.parse_known_rules``: cents
+ * ints, ISO date, tiers that rise and fit the minimum payment and max payments.
+ */
+export interface KnownRules {
+  first_payment_date?: string | null;
+  max_payments?: number | null;
+  max_segments?: number | null;
+  max_token_pays?: number | null;
+  min_payment_cents?: number | null;
+  min_payment_tiers?: KnownTier[] | null;
+  payment_structure?: ("even" | "balloon" | "flexible") | null;
+}
+/**
+ * One payment tier: from payment ``from_payment`` (1-based) on, at least ``min_cents``.
+ */
+export interface KnownTier {
+  from_payment: number;
+  min_cents: number;
 }
 export interface EndEvent {
   type: "end";

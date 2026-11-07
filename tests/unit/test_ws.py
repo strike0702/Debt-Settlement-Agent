@@ -229,7 +229,9 @@ def test_scenario_brief_endpoint(tmp_path: Path) -> None:
             "program_fee_cents": 28_800,
             "bank_fee_cents": 950,
             "min_cushion_cents": 0,
+            "known_rules": {},
         }
+        assert body["scenario_rules"]["max_payments"] == 8  # sim.json truth, operator brief only
         assert "rep_card" not in body
         assert client.get("/scenarios/nope").status_code == 404
 

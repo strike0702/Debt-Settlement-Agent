@@ -404,6 +404,11 @@ class Orchestrator:
             self._begin_trace(None)
             self._turn_rollback = None
             self._unheard_text = None
+            # Operator-entered rules (private row: the rep sees them only when spoken).
+            for ch in self.session.seeded_changes:
+                self._audit(
+                    "belief", "seed_operator", {**ch.model_dump(mode="json"), "source": "operator"}
+                )
             action = opening_action(settings=self.settings)
             action = action.model_copy(
                 update={

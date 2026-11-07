@@ -18,6 +18,11 @@ is their rep-safe "Your account" (reads only ``offer`` and ``rep_card``).
 the firm's minimum client cushion: a soft preference that the engine keeps every
 balance at or above it when some plan at the price can (docs/ENGINE.md). It is
 client-protection policy, PRIVATE: operator brief only, never the rep or NLG.
+
+``firm.known_creditor_rules`` (optional, Phase 69) maps a creditor's name to the
+rules the firm already knows for it (``app.domain.known_rules``; no first payment
+date). The entry for this scenario's creditor is ``CallScenario.known_rules``: the
+operator panel's default, which a call's ``start.known_rules`` replaces.
 """
 
 from __future__ import annotations
@@ -25,12 +30,13 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any
 
+from app.domain.known_rules import known_rules_to_wire, parse_known_rules
 from feasibility.models import Client, LedgerEntry, add_months, load_client
 
 SCENARIOS_ROOT = Path("fixtures/scenarios")
@@ -71,6 +77,9 @@ class CallScenario:
     bank_fee_cents: int
     # Firm's minimum client cushion (soft; PRIVATE). 0 = none. A call may override it.
     min_cushion_cents: int = 0
+    # Creditor rules the operator knows before dialling, as belief values
+    # (``app.domain.known_rules``); seeded KNOWN from ``operator``. Creditor terms, not PRIVATE.
+    known_rules: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -151,7 +160,21 @@ def scenario_from_parts(
         program_fee_pct=float(firm_raw["program_fee_pct"]),
         bank_fee_cents=int(firm_raw["bank_fee_cents"]),
         min_cushion_cents=parse_min_cushion(firm_raw.get("min_cushion_cents")),
+        known_rules=firm_known_rules(firm_raw, str(offer_raw["creditor"])),
     )
+
+
+def firm_known_rules(firm_raw: dict[str, Any], creditor: str) -> dict[str, Any]:
+    """The firm's saved rules for ``creditor`` (belief values); ``{}`` when none.
+
+    Raises ``ValueError`` on a malformed ``known_creditor_rules`` map or entry.
+    """
+    saved = firm_raw.get("known_creditor_rules")
+    if saved is None:
+        return {}
+    if not isinstance(saved, dict):
+        raise ValueError("known_creditor_rules must map a creditor's name to its rules")
+    return parse_known_rules(saved.get(creditor), allow_date=False)
 
 
 def scenario_from_payload(
@@ -373,6 +396,12 @@ def scenario_payload_errors(payload: Any) -> list[dict[str, str]]:
                     "firm.min_cushion_cents",
                     "Optional. Write whole cents from 0 to 500000 ($5,000), e.g. 10000 for $100.",
                 )
+        if firm.get("known_creditor_rules") is not None:
+            creditor = offer.get("creditor") if offer is not None else None
+            try:
+                firm_known_rules(firm, str(creditor))
+            except ValueError as e:
+                err("firm.known_creditor_rules", f"Optional. {e}")
 
     client = section("client")
     if client is not None:
@@ -657,6 +686,8 @@ def details_from_scenario(
             "program_fee_cents": program_fee_cents,
             "bank_fee_cents": sc.bank_fee_cents,
             "min_cushion_cents": sc.min_cushion_cents,
+            # The firm's saved rules for this creditor (the panel's default).
+            "known_rules": known_rules_to_wire(sc.known_rules),
         },
     }
 

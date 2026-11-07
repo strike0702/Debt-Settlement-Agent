@@ -8,7 +8,8 @@
  * chart (ask vs our offers, private ceiling), the belief table, the per-turn
  * latency waterfall and a collapsible audit log. Creditor rep view:
  * only the agreed terms (agreement, schedule without private columns, terms
- * heard); the ladder, latency and audit are the negotiator's tools.
+ * heard); the ladder, latency and audit are the negotiator's tools. A rule the operator
+ * entered before the call shows "Entered" in the belief table (operator view only).
  *
  * A call that ends without a deal is handed off; "Handed off to a
  * specialist" takes the agreement's slot. The Debt negotiator view says why
@@ -37,6 +38,7 @@ import { ladderPoints } from "@/lib/callState";
 import { type CallOutcome, callOutcome } from "@/lib/outcome";
 import { fieldLabel, isoDate, money, ms, pct, termValue } from "@/lib/format";
 import { STATUS_LABEL } from "@/lib/labels";
+import { enteredOnly } from "@/lib/repView";
 import { waterfall } from "@/lib/latency";
 import type { Lens } from "@/lib/lens";
 import type { AuditEvent, BeliefTerm, ScheduleRow, TurnTraceEvent } from "@/types/protocol";
@@ -240,7 +242,11 @@ function BeliefCard({ terms, lens }: { terms: BeliefTerm[]; lens: Lens }) {
                   <td className="py-1.5 pr-3 num">{termValue(t.field, t.value)}</td>
                   <td className="py-1.5 text-right">
                     {lens === "operator" ? (
-                      <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
+                      t.status === "KNOWN" && enteredOnly(t) ? (
+                        <Badge tone="good">Entered</Badge>
+                      ) : (
+                        <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
+                      )
                     ) : (
                       t.status === "ASSUMED" && <span className="text-xs text-muted">Default</span>
                     )}

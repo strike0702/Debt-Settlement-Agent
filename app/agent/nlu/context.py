@@ -86,9 +86,14 @@ def build_call_context(belief: BeliefState, neg: NegotiationState) -> CallContex
     for name, term in belief.terms.items():
         if term.status in _REP_STATED and term.value is not None:
             value = term.value
-            # Phase 69 seeds operator rules with ``source="operator"``; older
-            # beliefs have no source and every stated value came from the rep.
-            source = "operator" if getattr(term, "source", None) == "operator" else "rep"
+            # Phase 69 seeds operator rules with evidence ``source="operator"``; a
+            # rep statement adds rep evidence (and replaces the value), so only a
+            # rule with operator evidence alone is still the firm's note.
+            source = (
+                "operator"
+                if term.evidence and all(e.source == "operator" for e in term.evidence)
+                else "rep"
+            )
             rules[name] = {
                 "value": value.isoformat() if isinstance(value, date) else value,
                 "source": source,

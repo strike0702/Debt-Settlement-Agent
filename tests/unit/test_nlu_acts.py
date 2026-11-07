@@ -164,3 +164,10 @@ def test_thats_all_while_collecting_tiers_closes_the_list_not_the_call() -> None
     # Outside a list, a goodbye still ends the call.
     out = convert_acts(acts, line, context=CallContext(), ref=_REF)
     assert out.wants_to_end
+
+
+def test_call_context_marks_operator_rules_until_the_rep_states_them() -> None:
+    belief = _belief()
+    belief.seed_operator("max_payments", 8)
+    ctx = build_call_context(belief, NegotiationState(phase=Phase.DISCOVERY))
+    assert ctx.known_rules["max_payments"] == {"value": 8, "source": "operator"}

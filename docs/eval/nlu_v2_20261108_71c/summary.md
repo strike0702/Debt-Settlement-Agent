@@ -1,7 +1,7 @@
 # Phase 71c: fixes from the live call of 2026-11-08, on Claude Haiku 5.5
 
-**Result.** Scripted calls **107/107 turns, 20/20 scripts** (71b: 92/92, 19/19), including
-the new `live_20261108_tiers_wrap` (15 turns). Offline oracle eval: thresholds PASS, and
+**Result.** Scripted calls **109/109 turns, 20/20 scripts** (71b: 92/92, 19/19), including
+the new `live_20261108_tiers_wrap` (17 turns, every rep line verbatim). Offline oracle eval: thresholds PASS, and
 `summary.json` matches main's except for latency. Per-scenario records match on every
 intent, outcome and price. The only other differences are timings and one opening line per
 call, whose wording varies by run id.
@@ -37,23 +37,31 @@ call, whose wording varies by run id.
 - Model `anthropic/claude-haiku-5-5`, pinned `docs/eval/nlu_haiku_20261008/providers_haiku.yaml`,
   profile `claude_haiku_nlu`.
 - `python -m eval.scripted_calls.run --nlu acts --profile claude_haiku_nlu --providers <file> --out docs/eval/nlu_v2_20261108_71c`
-  → `scripted_acts.json` here (final run: 105 calls, 194,060 input / 8,069 output tokens,
-  NLU p50 1,064 ms).
-- Oracle scripted calls: 105/107 (the same 2 `tiers_suggested_lines` turns as main,
+  → `scripted_acts.json` here (final run: 106 calls, 196,069 input / 8,829 output tokens,
+  NLU p50 1,068 ms).
+- Oracle scripted calls: 107/109 (the same 2 `tiers_suggested_lines` turns as main,
   by design).
 
 ## The new script
 
-`live_20261108_tiers_wrap` is only partly verbatim. The phase prompt had only an excerpt
-and the demo host's audit log could not be read from this session. These rep lines are
-verbatim: "eight", the tier 1 line, "I mean, one eighty dollars.", "Let's say it.", "No."
-and "No. That's it.". The tier 2 / 3 lines, the read-back yes and the price part are
-reconstructed. The live call agreed at 75%; in the script the rep takes our counter,
-because that is what reaches WRAP on `tier_definer`. Haiku did not repeat the two-object
-reply on "No." in these runs, so the parse fix is pinned by a unit test using the live
-reply text.
+`live_20261108_tiers_wrap` is the live call: every rep line is verbatim and in order, on
+`easy_deal` (our first counter "52% of the balance, or $650" matches it). Expected moves:
+
+- "I mean, one eighty dollars." completes tier 1 (payments 1-2, at least $180) and asks
+  for the next tier. Live, the agent restarted at tier 1.
+- The rep's next live line repeats tier 1 ("It starts from payment one, ... one eighty
+  dollars."). It replaces the same tier, adds no duplicate, and the next tier is asked
+  again. The read-back still says "1 to 2 at least $180".
+- "No." after "anything else?" closes (`post_wrap`). Live, the agent asked for the first
+  payment date. "That's it." then gets `already_ended`.
+- Every other turn pins what the live agent did: the rephrased ask after "Let's say it.",
+  the read-back, the counters at 52% and 63%, the confirm at 75%, and the proposal.
+
+Haiku did not repeat the two-object reply on "No." in these runs, so the parse fix is
+pinned by a unit test using the live reply text.
 
 ## Cost
 
-All runs on Haiku: about 0.71M input / 0.03M output tokens (scripted tries, three full
-runs, single-script repeats for the sweep line), **about $0.10** of the $1.00 cap.
+All runs on Haiku: about 0.93M input / 0.04M output tokens (scripted tries, four full
+runs, single-script repeats for the sweep line and the verbatim script), **about $0.13** of
+the $1.00 cap.

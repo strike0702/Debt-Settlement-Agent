@@ -3,13 +3,13 @@
   "scripts_passed": 20,
   "scripts_run": 20,
   "skipped": {},
-  "turns_ok": 107,
-  "turns": 107,
+  "turns_ok": 109,
+  "turns": 109,
   "failed": [],
-  "nlu_ms_p50": 1064.403375145048,
-  "calls": 105,
-  "prompt_tokens": 194060,
-  "completion_tokens": 8069
+  "nlu_ms_p50": 1067.675624974072,
+  "calls": 106,
+  "prompt_tokens": 196069,
+  "completion_tokens": 8829
  },
  "scripts": [
   {
@@ -30,7 +30,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1192.3876660875976,
+     "nlu_ms": 1148.797791916877,
      "acts": [
       "state_rule",
       "state_rule",
@@ -76,7 +76,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1070.260750129819,
+     "nlu_ms": 1100.8225409314036,
      "acts": [
       "price_ask"
      ],
@@ -118,7 +118,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1250.8186250925064,
+     "nlu_ms": 1490.3312919195741,
      "acts": [
       "price_ask"
      ],
@@ -166,7 +166,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1023.3209999278188,
+     "nlu_ms": 885.125583037734,
      "acts": [
       "respond_to_offer"
      ],
@@ -215,7 +215,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1209.3845000490546,
+     "nlu_ms": 956.3779579475522,
      "acts": [
       "respond_to_offer"
      ],
@@ -231,65 +231,65 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1190.8520830329508,
+     "latency_ms": 1148.1449999846518,
      "prompt_tokens": 1779,
      "completion_tokens": 128,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.0022079329937696457,
+     "queue_ms": 0.002458924427628517,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1068.5241660103202,
+     "latency_ms": 1100.4830000456423,
      "prompt_tokens": 1842,
      "completion_tokens": 54,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.0038330908864736557,
+     "queue_ms": 0.001708976924419403,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1249.1306660231203,
+     "latency_ms": 1489.929375005886,
      "prompt_tokens": 1857,
      "completion_tokens": 51,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.004458008334040642,
+     "queue_ms": 0.0014170072972774506,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1022.3446248564869,
+     "latency_ms": 884.8759159445763,
      "prompt_tokens": 1854,
      "completion_tokens": 39,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006375135853886604,
+     "queue_ms": 0.0018328428268432617,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1208.175583044067,
+     "latency_ms": 956.0629159677774,
      "prompt_tokens": 1853,
      "completion_tokens": 44,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005542067810893059,
+     "queue_ms": 0.001250067725777626,
      "key_id": "anthropic#0"
     }
    ]
@@ -312,7 +312,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1170.857375022024,
+     "nlu_ms": 1069.3042501807213,
      "acts": [
       "state_rule",
       "state_rule",
@@ -358,7 +358,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 988.9341660309583,
+     "nlu_ms": 988.0555418785661,
      "acts": [
       "price_ask"
      ],
@@ -405,7 +405,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1032.8615419566631,
+     "nlu_ms": 903.7015840876848,
      "acts": [
       "price_ask"
      ],
@@ -452,7 +452,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 974.6944999787956,
+     "nlu_ms": 1335.0452920421958,
      "acts": [
       "respond_to_offer"
      ],
@@ -489,7 +489,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1035.1484171114862,
+     "nlu_ms": 2049.67112489976,
      "acts": [
       "respond_to_offer"
      ],
@@ -505,65 +505,65 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1168.4224589262158,
+     "latency_ms": 1068.6637910548598,
      "prompt_tokens": 1774,
      "completion_tokens": 121,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.004541128873825073,
+     "queue_ms": 0.001375097781419754,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 987.2969998978078,
+     "latency_ms": 987.7453751396388,
      "prompt_tokens": 1842,
      "completion_tokens": 56,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.0036670826375484467,
+     "queue_ms": 0.0014579854905605316,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1031.405874993652,
+     "latency_ms": 903.4290839917958,
      "prompt_tokens": 1853,
      "completion_tokens": 49,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005749985575675964,
+     "queue_ms": 0.0013329554349184036,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 973.8505410496145,
+     "latency_ms": 1334.8021670244634,
      "prompt_tokens": 1850,
      "completion_tokens": 39,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006084097549319267,
+     "queue_ms": 0.001250067725777626,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1034.550374839455,
+     "latency_ms": 2049.398292088881,
      "prompt_tokens": 1855,
-     "completion_tokens": 44,
+     "completion_tokens": 307,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006207963451743126,
+     "queue_ms": 0.0014158431440591812,
      "key_id": "anthropic#0"
     }
    ]
@@ -586,7 +586,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1037.446750095114,
+     "nlu_ms": 1145.9015000145882,
      "acts": [
       "state_rule",
       "state_rule",
@@ -632,7 +632,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1031.2542920000851,
+     "nlu_ms": 1014.9280419573188,
      "acts": [
       "price_ask"
      ],
@@ -674,7 +674,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 936.3222501706332,
+     "nlu_ms": 891.4366248063743,
      "acts": [
       "price_ask"
      ],
@@ -720,7 +720,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 927.4972081184387,
+     "nlu_ms": 857.6877498999238,
      "acts": [
       "respond_to_offer"
      ],
@@ -767,7 +767,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1678.7467079702765,
+     "nlu_ms": 1214.0935419593006,
      "acts": [
       "respond_to_offer"
      ],
@@ -783,65 +783,65 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1036.3318750169128,
+     "latency_ms": 1145.461207954213,
      "prompt_tokens": 1774,
      "completion_tokens": 121,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.002749962732195854,
+     "queue_ms": 0.0014170072972774506,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1030.5520831607282,
+     "latency_ms": 1014.5276670809835,
      "prompt_tokens": 1841,
      "completion_tokens": 55,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.00237487256526947,
+     "queue_ms": 0.001958804205060005,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 935.8331251423806,
+     "latency_ms": 891.2026670295745,
      "prompt_tokens": 1853,
      "completion_tokens": 49,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.0023329630494117737,
+     "queue_ms": 0.0015418045222759247,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 926.6468330752105,
+     "latency_ms": 857.5110409874469,
      "prompt_tokens": 1852,
      "completion_tokens": 39,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.0029159709811210632,
+     "queue_ms": 0.0013329554349184036,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1677.7195839677006,
+     "latency_ms": 1213.87775009498,
      "prompt_tokens": 1851,
-     "completion_tokens": 207,
+     "completion_tokens": 107,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005375128239393234,
+     "queue_ms": 0.0014170072972774506,
      "key_id": "anthropic#0"
     }
    ]
@@ -864,7 +864,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1672.4118329584599,
+     "nlu_ms": 1131.736832903698,
      "acts": [
       "state_rule",
       "state_rule",
@@ -910,7 +910,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 993.7620421405882,
+     "nlu_ms": 1154.536249814555,
      "acts": [
       "price_ask"
      ],
@@ -952,7 +952,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1003.2146249432117,
+     "nlu_ms": 1177.3022920824587,
      "acts": [
       "price_ask"
      ],
@@ -998,7 +998,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 928.9746668655425,
+     "nlu_ms": 1023.2031249906868,
      "acts": [
       "respond_to_offer"
      ],
@@ -1045,7 +1045,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 911.4906250033528,
+     "nlu_ms": 1530.194542137906,
      "acts": [
       "respond_to_offer"
      ],
@@ -1061,65 +1061,65 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1670.3800419345498,
+     "latency_ms": 1131.0047500301152,
      "prompt_tokens": 1774,
      "completion_tokens": 121,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.004707835614681244,
+     "queue_ms": 0.0015420373529195786,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 992.1487919054925,
+     "latency_ms": 1154.229125007987,
      "prompt_tokens": 1841,
      "completion_tokens": 55,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.009750016033649445,
+     "queue_ms": 0.001500127837061882,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1001.5779579989612,
+     "latency_ms": 1176.9974580965936,
      "prompt_tokens": 1855,
      "completion_tokens": 51,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.00558304600417614,
+     "queue_ms": 0.0012081582099199295,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 928.136375034228,
+     "latency_ms": 1023.0252500623465,
      "prompt_tokens": 1852,
      "completion_tokens": 39,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005875015631318092,
+     "queue_ms": 0.001291045919060707,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 910.5607089586556,
+     "latency_ms": 1529.9879158847034,
      "prompt_tokens": 1851,
-     "completion_tokens": 44,
+     "completion_tokens": 218,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.00437488779425621,
+     "queue_ms": 0.001291045919060707,
      "key_id": "anthropic#0"
     }
    ]
@@ -1142,7 +1142,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1158.0256670713425,
+     "nlu_ms": 1084.4996669329703,
      "acts": [
       "state_rule",
       "state_rule",
@@ -1188,7 +1188,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1100.884084124118,
+     "nlu_ms": 1106.5198748838156,
      "acts": [
       "price_ask"
      ],
@@ -1230,7 +1230,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 925.7474581245333,
+     "nlu_ms": 1019.7556670755148,
      "acts": [
       "price_ask"
      ],
@@ -1276,7 +1276,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1023.4839578624815,
+     "nlu_ms": 828.8899578619748,
      "acts": [
       "respond_to_offer"
      ],
@@ -1323,7 +1323,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 873.9253329113126,
+     "nlu_ms": 1838.4206250775605,
      "acts": [
       "respond_to_offer"
      ],
@@ -1339,65 +1339,65 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1155.747750075534,
+     "latency_ms": 1084.1071249451488,
      "prompt_tokens": 1774,
      "completion_tokens": 121,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005708076059818268,
+     "queue_ms": 0.0012922100722789764,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1100.196500075981,
+     "latency_ms": 1106.2809170689434,
      "prompt_tokens": 1841,
      "completion_tokens": 55,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.004417030140757561,
+     "queue_ms": 0.001250067725777626,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 925.2624590881169,
+     "latency_ms": 1019.5299170445651,
      "prompt_tokens": 1853,
      "completion_tokens": 49,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.0027918722480535507,
+     "queue_ms": 0.001375097781419754,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1022.7316250093281,
+     "latency_ms": 828.6916250362992,
      "prompt_tokens": 1852,
      "completion_tokens": 39,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.0025408808141946793,
+     "queue_ms": 0.0012919772416353226,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 873.4370411839336,
+     "latency_ms": 1838.2353328634053,
      "prompt_tokens": 1851,
-     "completion_tokens": 44,
+     "completion_tokens": 209,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005792127922177315,
+     "queue_ms": 0.0014579854905605316,
      "key_id": "anthropic#0"
     }
    ]
@@ -1421,7 +1421,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1111.3796669524163,
+     "nlu_ms": 1105.9764588717371,
      "acts": [
       "state_rule",
       "state_rule",
@@ -1462,7 +1462,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1165.8012920524925,
+     "nlu_ms": 909.1073342133313,
      "acts": [
       "unclear"
      ],
@@ -1499,7 +1499,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1152.099708095193,
+     "nlu_ms": 976.3526250608265,
      "acts": [
       "price_ask"
      ],
@@ -1536,7 +1536,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1796.2444999720901,
+     "nlu_ms": 2263.2620420772582,
      "acts": [
       "respond_to_offer"
      ],
@@ -1577,7 +1577,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1064.403375145048,
+     "nlu_ms": 1017.530957935378,
      "acts": [
       "respond_to_offer"
      ],
@@ -1593,65 +1593,65 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1108.4313329774886,
+     "latency_ms": 1105.4293329361826,
      "prompt_tokens": 1777,
      "completion_tokens": 126,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.002959044650197029,
+     "queue_ms": 0.0012919772416353226,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1164.6832078695297,
+     "latency_ms": 906.8101251032203,
      "prompt_tokens": 1850,
      "completion_tokens": 46,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006207963451743126,
+     "queue_ms": 0.001375097781419754,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1150.849999859929,
+     "latency_ms": 976.1180831119418,
      "prompt_tokens": 1842,
      "completion_tokens": 54,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.00595790334045887,
+     "queue_ms": 0.001291045919060707,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1795.412875013426,
+     "latency_ms": 2263.08958302252,
      "prompt_tokens": 1846,
-     "completion_tokens": 157,
+     "completion_tokens": 137,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005749985575675964,
+     "queue_ms": 0.0014170072972774506,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1063.5145001579076,
+     "latency_ms": 1017.345042200759,
      "prompt_tokens": 1885,
      "completion_tokens": 44,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005334150046110153,
+     "queue_ms": 0.001250067725777626,
      "key_id": "anthropic#0"
     }
    ]
@@ -1675,7 +1675,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1213.2255409378558,
+     "nlu_ms": 1130.4392910096794,
      "acts": [
       "state_rule",
       "state_rule",
@@ -1716,7 +1716,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 980.1147500984371,
+     "nlu_ms": 1045.0506249908358,
      "acts": [
       "unclear"
      ],
@@ -1753,7 +1753,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1078.653333010152,
+     "nlu_ms": 1037.4342079740018,
      "acts": [
       "price_ask"
      ],
@@ -1795,7 +1795,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 960.0874581374228,
+     "nlu_ms": 849.0420831367373,
      "acts": [
       "respond_to_offer"
      ],
@@ -1845,7 +1845,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 935.0055840332061,
+     "nlu_ms": 1232.7771668788046,
      "acts": [
       "respond_to_offer"
      ],
@@ -1861,65 +1861,65 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1210.9640408307314,
+     "latency_ms": 1129.9799580592662,
      "prompt_tokens": 1777,
      "completion_tokens": 126,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005667097866535187,
+     "queue_ms": 0.001334119588136673,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 979.1813329793513,
+     "latency_ms": 1044.8414590209723,
      "prompt_tokens": 1850,
      "completion_tokens": 46,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.004458939656615257,
+     "queue_ms": 0.0012922100722789764,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1077.6037080213428,
+     "latency_ms": 1037.1996671892703,
      "prompt_tokens": 1843,
      "completion_tokens": 55,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005583977326750755,
+     "queue_ms": 0.001334119588136673,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 959.2667920514941,
+     "latency_ms": 848.8685828633606,
      "prompt_tokens": 1842,
      "completion_tokens": 39,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005499925464391708,
+     "queue_ms": 0.0013329554349184036,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 934.5258329994977,
+     "latency_ms": 1232.594250002876,
      "prompt_tokens": 1882,
      "completion_tokens": 44,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.0030838418751955032,
+     "queue_ms": 0.001333886757493019,
      "key_id": "anthropic#0"
     }
    ]
@@ -1943,7 +1943,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1117.3467501066625,
+     "nlu_ms": 1126.2023749295622,
      "acts": [
       "state_rule",
       "state_rule",
@@ -1992,7 +1992,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 2385.585832875222,
+     "nlu_ms": 2462.5968751497567,
      "acts": [
       "rule_item",
       "rule_item",
@@ -2049,7 +2049,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1027.9953328426927,
+     "nlu_ms": 1006.1949170194566,
      "acts": [
       "readback_reply"
      ],
@@ -2109,7 +2109,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1021.2181250099093,
+     "nlu_ms": 896.3248329237103,
      "acts": [
       "price_ask"
      ],
@@ -2168,7 +2168,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 871.1514170281589,
+     "nlu_ms": 1053.5819591023028,
      "acts": [
       "price_ask"
      ],
@@ -2232,7 +2232,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1010.8627921435982,
+     "nlu_ms": 1315.896708983928,
      "acts": [
       "respond_to_offer"
      ],
@@ -2297,7 +2297,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1430.1857079844922,
+     "nlu_ms": 1632.302250014618,
      "acts": [
       "respond_to_offer"
      ],
@@ -2313,91 +2313,91 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1114.8330830037594,
+     "latency_ms": 1125.740542076528,
      "prompt_tokens": 1778,
      "completion_tokens": 127,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.0025420449674129486,
+     "queue_ms": 0.001250067725777626,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 2382.1228749584407,
+     "latency_ms": 2461.931833997369,
      "prompt_tokens": 1875,
-     "completion_tokens": 414,
+     "completion_tokens": 460,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005292007699608803,
+     "queue_ms": 0.001291045919060707,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1026.8829169217497,
+     "latency_ms": 1005.9287501499057,
      "prompt_tokens": 1880,
      "completion_tokens": 41,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.00400003045797348,
+     "queue_ms": 0.001375097781419754,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1019.679166842252,
+     "latency_ms": 895.9927910473198,
      "prompt_tokens": 1884,
      "completion_tokens": 55,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006667105481028557,
+     "queue_ms": 0.001541106030344963,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 869.543458102271,
+     "latency_ms": 1053.1760000158101,
      "prompt_tokens": 1898,
      "completion_tokens": 51,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006499933078885078,
+     "queue_ms": 0.001375097781419754,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1009.9933329038322,
+     "latency_ms": 1315.6969170086086,
      "prompt_tokens": 1895,
      "completion_tokens": 39,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006458023563027382,
+     "queue_ms": 0.002084067091345787,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1429.3184999842197,
+     "latency_ms": 1632.1208749432117,
      "prompt_tokens": 1894,
-     "completion_tokens": 173,
+     "completion_tokens": 216,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005667097866535187,
+     "queue_ms": 0.0012081582099199295,
      "key_id": "anthropic#0"
     }
    ]
@@ -2408,37 +2408,59 @@
    "turns": [
     {
      "i": 0,
+     "rep": "Let's say it.",
+     "move": {
+      "intent": "ASK",
+      "reason": "max_payments",
+      "facts": {}
+     },
+     "said": "What is the maximum number of payments you can accept?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "max_payments"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 917.6632498856634,
+     "acts": [
+      "backchannel"
+     ],
+     "turn_acts": [
+      "backchannel"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
      "rep": "eight",
      "move": {
       "intent": "ASK",
       "reason": "min_payment_cents",
       "facts": {}
      },
-     "said": "Understood, a maximum of 8 payments. What's the minimum payment amount?",
+     "said": "Okay, up to 8 payments. What's the minimum payment amount?",
      "expect": {
       "intent": "ASK",
       "reason": "min_payment_cents"
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1124.6068750042468,
-     "acts": [
-      "answer"
-     ],
+     "nlu_ms": 0.01683272421360016,
+     "acts": [],
      "turn_acts": [
       "state_rule"
      ],
      "unaccounted": []
     },
     {
-     "i": 1,
-     "rep": "One eighty dollars.",
+     "i": 2,
+     "rep": "One hundred and eighty dollars.",
      "move": {
       "intent": "ASK",
       "reason": "payment_structure",
       "facts": {}
      },
-     "said": "Okay, a $180 minimum payment. Do you need even payments, or can you allow a balloon or a flexible schedule?",
+     "said": "Got it, at least $180 per payment. Do you need even payments, or can you allow a balloon or a flexible schedule?",
      "expect": {
       "intent": "ASK",
       "reason": "payment_structure"
@@ -2450,7 +2472,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 0.1018329057842493,
+     "nlu_ms": 0.025541987270116806,
      "acts": [],
      "turn_acts": [
       "state_rule"
@@ -2458,17 +2480,17 @@
      "unaccounted": []
     },
     {
-     "i": 2,
-     "rep": "Flexible. I want to define the tiers.",
+     "i": 3,
+     "rep": "I'm fine with the flexible schedule.",
      "move": {
       "intent": "ASK",
-      "reason": "min_payment_tiers",
+      "reason": "optional_sweep",
       "facts": {}
      },
-     "said": "Got it, a flexible schedule it is. Go ahead. For each tier, from which payment does it start, and what is its minimum?",
+     "said": "Understood, a flexible schedule. Any tiered minimums, or a limit on payment levels?",
      "expect": {
       "intent": "ASK",
-      "reason": "min_payment_tiers"
+      "reason": "optional_sweep"
      },
      "ok": true,
      "known_rules": {
@@ -2481,20 +2503,19 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1048.163834027946,
+     "nlu_ms": 1134.0899160131812,
      "acts": [
-      "answer",
-      "announce_rules"
+      "answer"
      ],
      "turn_acts": [
       "state_rule",
-      "announce_rules"
+      "question"
      ],
      "unaccounted": []
     },
     {
-     "i": 3,
-     "rep": "Three tiers.",
+     "i": 4,
+     "rep": "Yeah. I want to define three tiers.",
      "move": {
       "intent": "ASK",
       "reason": "min_payment_tiers",
@@ -2527,7 +2548,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 992.6286248955876,
+     "nlu_ms": 1076.4749580994248,
      "acts": [
       "announce_rules"
      ],
@@ -2537,7 +2558,7 @@
      "unaccounted": []
     },
     {
-     "i": 4,
+     "i": 5,
      "rep": "It starts from one goes on till the second payment, and the minimum is one hundred dollars.",
      "move": {
       "intent": "CLARIFY",
@@ -2571,7 +2592,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 925.6752079818398,
+     "nlu_ms": 981.1147078871727,
      "acts": [
       "rule_item"
      ],
@@ -2581,7 +2602,7 @@
      "unaccounted": []
     },
     {
-     "i": 5,
+     "i": 6,
      "rep": "I mean, one eighty dollars.",
      "move": {
       "intent": "ASK",
@@ -2611,7 +2632,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 2873.0205418542027,
+     "nlu_ms": 2690.116750076413,
      "acts": [
       "answer"
      ],
@@ -2621,8 +2642,48 @@
      "unaccounted": []
     },
     {
-     "i": 6,
-     "rep": "From the third payment till the fifth, the minimum is two hundred fifty dollars.",
+     "i": 7,
+     "rep": "Yeah. It starts from payment one, and the minimum is one eighty dollars.",
+     "move": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {}
+     },
+     "said": "Got it. And the next tier: from which payment does it start, and what is its minimum?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {
+       "tier_position": null
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 18000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 2097.0378327183425,
+     "acts": [
+      "rule_item"
+     ],
+     "turn_acts": [
+      "rule_item"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 8,
+     "rep": "It starts from the third payment, and the minimum is two hundred dollars.",
      "move": {
       "intent": "ASK",
       "reason": "min_payment_tiers",
@@ -2648,7 +2709,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 968.4233330190182,
+     "nlu_ms": 1053.3200418576598,
      "acts": [
       "rule_item"
      ],
@@ -2658,8 +2719,8 @@
      "unaccounted": []
     },
     {
-     "i": 7,
-     "rep": "From the sixth payment on, three hundred dollars.",
+     "i": 9,
+     "rep": "It starts from the sixth payment onwards, and the minimum is two twenty dollars.",
      "move": {
       "intent": "READ_BACK",
       "reason": "min_payment_tiers",
@@ -2668,20 +2729,23 @@
        "readback_value_tier_a_min": 18000,
        "readback_value_tier_a_to": 2,
        "readback_value_tier_b_from": 3,
-       "readback_value_tier_b_min": 25000,
+       "readback_value_tier_b_min": 20000,
        "readback_value_tier_b_to": 5,
        "readback_value_tier_c_from": 6,
-       "readback_value_tier_c_min": 30000,
+       "readback_value_tier_c_min": 22000,
        "readback_value_tier_c_to": 8
       }
      },
-     "said": "So payments 1 to 2 at least $180, 3 to 5 at least $250, 6 to 8 at least $300. Is that right?",
+     "said": "So payments 1 to 2 at least $180, 3 to 5 at least $200, 6 to 8 at least $220. Is that right?",
      "expect": {
       "intent": "READ_BACK",
       "reason": "min_payment_tiers",
       "facts": {
+       "readback_value_tier_a_from": 1,
+       "readback_value_tier_a_to": 2,
        "readback_value_tier_a_min": 18000,
-       "readback_value_tier_a_to": 2
+       "readback_value_tier_b_min": 20000,
+       "readback_value_tier_c_min": 22000
       }
      },
      "ok": true,
@@ -2699,7 +2763,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1356.7870000842959,
+     "nlu_ms": 1011.6383749991655,
      "acts": [
       "rule_item"
      ],
@@ -2709,8 +2773,8 @@
      "unaccounted": []
     },
     {
-     "i": 8,
-     "rep": "Yes.",
+     "i": 10,
+     "rep": "Correct.",
      "move": {
       "intent": "ASK_SETTLEMENT",
       "reason": null,
@@ -2735,7 +2799,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 0.04683295264840126,
+     "nlu_ms": 0.013582874089479446,
      "acts": [],
      "turn_acts": [
       "readback_reply"
@@ -2743,133 +2807,22 @@
      "unaccounted": []
     },
     {
-     "i": 9,
-     "rep": "Let's say it.",
-     "move": {
-      "intent": "ASK_SETTLEMENT",
-      "reason": null,
-      "facts": {}
-     },
-     "said": "Sure, go ahead. When you are ready, what percentage of the balance would you settle for?",
-     "expect": {
-      "intent": "ASK_SETTLEMENT"
-     },
-     "ok": true,
-     "known_rules": {
-      "max_payments": {
-       "value": 8,
-       "source": "rep"
-      },
-      "min_payment_cents": {
-       "value": 18000,
-       "source": "rep"
-      },
-      "payment_structure": {
-       "value": "flexible",
-       "source": "rep"
-      },
-      "min_payment_tiers": {
-       "value": [
-        [
-         1,
-         18000
-        ],
-        [
-         3,
-         25000
-        ],
-        [
-         6,
-         30000
-        ]
-       ],
-       "source": "rep"
-      }
-     },
-     "nlu_ms": 950.9000419639051,
-     "acts": [
-      "backchannel"
-     ],
-     "turn_acts": [
-      "backchannel"
-     ],
-     "unaccounted": []
-    },
-    {
-     "i": 10,
-     "rep": "Seventy five percent.",
+     "i": 11,
+     "rep": "I'm looking at eighty five percent.",
      "move": {
       "intent": "COUNTER",
       "reason": "bp=5200",
       "facts": {
        "counter_pct": 5200,
-       "offer_total": 208000
+       "offer_total": 65000
       }
      },
-     "said": "We can propose 52% of the balance, which is $2,080. Would that work?",
+     "said": "We can propose 52% of the balance, which is $650. Would that work?",
      "expect": {
-      "intent": "COUNTER"
-     },
-     "ok": true,
-     "known_rules": {
-      "max_payments": {
-       "value": 8,
-       "source": "rep"
-      },
-      "min_payment_cents": {
-       "value": 18000,
-       "source": "rep"
-      },
-      "payment_structure": {
-       "value": "flexible",
-       "source": "rep"
-      },
-      "min_payment_tiers": {
-       "value": [
-        [
-         1,
-         18000
-        ],
-        [
-         3,
-         25000
-        ],
-        [
-         6,
-         30000
-        ]
-       ],
-       "source": "rep"
-      }
-     },
-     "nlu_ms": 1297.5803329609334,
-     "acts": [
-      "price_ask"
-     ],
-     "turn_acts": [
-      "price_ask"
-     ],
-     "unaccounted": []
-    },
-    {
-     "i": 11,
-     "rep": "Okay, that works.",
-     "move": {
-      "intent": "CONFIRM_SCHEDULE",
-      "reason": "bp=5200",
+      "intent": "COUNTER",
       "facts": {
-       "settlement_pct": 5200,
-       "offer_total": 208000,
-       "first_payment_date": "2026-10-31",
-       "num_payments": 3,
-       "last_payment": 172000,
-       "payment_level_0": 18000,
-       "payment_level_1": 172000
+       "counter_pct": 5200
       }
-     },
-     "said": "52% works for us. We can do 3 payments totaling $2,080, starting October 31. Would that work?",
-     "expect": {
-      "intent": "CONFIRM_SCHEDULE"
      },
      "ok": true,
      "known_rules": {
@@ -2893,39 +2846,163 @@
         ],
         [
          3,
-         25000
+         20000
         ],
         [
          6,
-         30000
+         22000
         ]
        ],
        "source": "rep"
       }
      },
-     "nlu_ms": 1041.854500072077,
+     "nlu_ms": 1116.3098746910691,
      "acts": [
-      "respond_to_offer"
+      "price_ask"
      ],
      "turn_acts": [
-      "respond_to_offer"
+      "price_ask"
      ],
      "unaccounted": []
     },
     {
      "i": 12,
-     "rep": "Yes, that schedule works.",
+     "rep": "Sorry. I can't go lower than seventy five percent.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "final_counter",
+      "facts": {
+       "counter_pct": 6300,
+       "offer_total": 78750
+      }
+     },
+     "said": "We can meet you partway at 63% of the balance, which is $787.50. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 6300
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 18000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      },
+      "min_payment_tiers": {
+       "value": [
+        [
+         1,
+         18000
+        ],
+        [
+         3,
+         20000
+        ],
+        [
+         6,
+         22000
+        ]
+       ],
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 883.9858747087419,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask",
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 13,
+     "rep": "Sorry. Seventy five percent is my floor.",
+     "move": {
+      "intent": "CONFIRM_SCHEDULE",
+      "reason": "rep_firm",
+      "facts": {
+       "settlement_pct": 7500,
+       "offer_total": 93750,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 4,
+       "last_payment": 28875,
+       "payment_level_0": 18000,
+       "payment_level_1": 28875
+      }
+     },
+     "said": "75% works for us. We can do 4 payments totaling $937.50, starting October 31. Would that work?",
+     "expect": {
+      "intent": "CONFIRM_SCHEDULE",
+      "facts": {
+       "settlement_pct": 7500
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 18000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      },
+      "min_payment_tiers": {
+       "value": [
+        [
+         1,
+         18000
+        ],
+        [
+         3,
+         20000
+        ],
+        [
+         6,
+         22000
+        ]
+       ],
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1042.755541857332,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 14,
+     "rep": "Yeah. That works. Thank you.",
      "move": {
       "intent": "PROPOSE_WRAP",
       "reason": "confirmed",
       "facts": {
-       "offer_total": 208000,
+       "offer_total": 93750,
        "first_payment_date": "2026-10-31",
-       "num_payments": 3,
-       "last_payment": 172000,
+       "num_payments": 4,
+       "last_payment": 28875,
        "payment_level_0": 18000,
-       "payment_level_1": 172000,
-       "settlement_pct": 5200
+       "payment_level_1": 28875,
+       "settlement_pct": 7500
       }
      },
      "said": "I have sent this proposal to the client for approval. Do you need anything else before we end the call?",
@@ -2955,28 +3032,28 @@
         ],
         [
          3,
-         25000
+         20000
         ],
         [
          6,
-         30000
+         22000
         ]
        ],
        "source": "rep"
       }
      },
-     "nlu_ms": 1612.8180418163538,
+     "nlu_ms": 1915.0479170493782,
      "acts": [
       "respond_to_offer"
      ],
      "turn_acts": [
       "respond_to_offer",
-      "question"
+      "end_call"
      ],
      "unaccounted": []
     },
     {
-     "i": 13,
+     "i": 15,
      "rep": "No.",
      "move": {
       "intent": "CLOSE",
@@ -3010,26 +3087,29 @@
         ],
         [
          3,
-         25000
+         20000
         ],
         [
          6,
-         30000
+         22000
         ]
        ],
        "source": "rep"
       }
      },
-     "nlu_ms": 1009.7117079421878,
-     "acts": [],
+     "nlu_ms": 1066.9323750771582,
+     "acts": [
+      "readback_reply"
+     ],
      "turn_acts": [
+      "readback_reply",
       "list_done"
      ],
      "unaccounted": []
     },
     {
-     "i": 14,
-     "rep": "No. That's it.",
+     "i": 16,
+     "rep": "That's it.",
      "move": {
       "intent": "CLOSE",
       "reason": "already_ended",
@@ -3062,23 +3142,20 @@
         ],
         [
          3,
-         25000
+         20000
         ],
         [
          6,
-         30000
+         22000
         ]
        ],
        "source": "rep"
       }
      },
-     "nlu_ms": 914.0442090574652,
-     "acts": [
-      "end_call"
-     ],
+     "nlu_ms": 989.8799168877304,
+     "acts": [],
      "turn_acts": [
-      "list_done",
-      "end_call"
+      "list_done"
      ],
      "unaccounted": []
     }
@@ -3088,169 +3165,182 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1123.782374896109,
-     "prompt_tokens": 1754,
-     "completion_tokens": 39,
+     "latency_ms": 917.4502501264215,
+     "prompt_tokens": 1758,
+     "completion_tokens": 31,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006417045369744301,
+     "queue_ms": 0.001250067725777626,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1046.798458090052,
+     "latency_ms": 1133.832124993205,
      "prompt_tokens": 1839,
-     "completion_tokens": 81,
+     "completion_tokens": 53,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005834037438035011,
+     "queue_ms": 0.001291278749704361,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 991.5343341417611,
-     "prompt_tokens": 1874,
-     "completion_tokens": 49,
+     "latency_ms": 1076.1944581754506,
+     "prompt_tokens": 1856,
+     "completion_tokens": 47,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.004165805876255035,
+     "queue_ms": 0.001375097781419754,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 923.2089999131858,
+     "latency_ms": 980.6492920033634,
      "prompt_tokens": 1906,
      "completion_tokens": 78,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006832880899310112,
+     "queue_ms": 0.001375097781419754,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 2871.529791969806,
+     "latency_ms": 2689.8237080313265,
      "prompt_tokens": 1877,
-     "completion_tokens": 524,
+     "completion_tokens": 472,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005499925464391708,
+     "queue_ms": 0.0014170072972774506,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 966.0633751191199,
+     "latency_ms": 2096.6336661949754,
      "prompt_tokens": 1908,
-     "completion_tokens": 77,
+     "completion_tokens": 352,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005916925147175789,
+     "queue_ms": 0.001291278749704361,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1355.7346248999238,
+     "latency_ms": 1052.888082806021,
      "prompt_tokens": 1904,
-     "completion_tokens": 67,
+     "completion_tokens": 65,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006875023245811462,
+     "queue_ms": 0.0016246922314167023,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 949.9238331336528,
-     "prompt_tokens": 1874,
-     "completion_tokens": 31,
+     "latency_ms": 1011.2344999797642,
+     "prompt_tokens": 1915,
+     "completion_tokens": 78,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.003333901986479759,
+     "queue_ms": 0.0012498348951339722,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1296.4516249485314,
-     "prompt_tokens": 1879,
-     "completion_tokens": 47,
+     "latency_ms": 1116.0215833224356,
+     "prompt_tokens": 1881,
+     "completion_tokens": 52,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005458947271108627,
+     "queue_ms": 0.0013331882655620575,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1040.8865839708596,
-     "prompt_tokens": 1893,
-     "completion_tokens": 37,
+     "latency_ms": 883.6507080122828,
+     "prompt_tokens": 1905,
+     "completion_tokens": 52,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005166046321392059,
+     "queue_ms": 0.001334119588136673,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1611.9164580013603,
-     "prompt_tokens": 1894,
-     "completion_tokens": 208,
+     "latency_ms": 1042.4461248330772,
+     "prompt_tokens": 1919,
+     "completion_tokens": 50,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005666166543960571,
+     "queue_ms": 0.0013336539268493652,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1008.9942079503089,
-     "prompt_tokens": 1890,
+     "latency_ms": 1914.8192079737782,
+     "prompt_tokens": 1913,
+     "completion_tokens": 271,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.0015418045222759247,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1066.7275828309357,
+     "prompt_tokens": 1906,
+     "completion_tokens": 34,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.0012922100722789764,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 989.7197498939931,
+     "prompt_tokens": 1898,
      "completion_tokens": 10,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.007084105163812637,
-     "key_id": "anthropic#0"
-    },
-    {
-     "role": "nlu",
-     "provider": "anthropic",
-     "model": "claude-haiku-5-5",
-     "latency_ms": 912.878958042711,
-     "prompt_tokens": 1884,
-     "completion_tokens": 38,
-     "cache_hit": false,
-     "failover_from": null,
-     "error": null,
-     "queue_ms": 0.006749993190169334,
+     "queue_ms": 0.001416075974702835,
      "key_id": "anthropic#0"
     }
    ]
@@ -3273,7 +3363,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1051.4711251016706,
+     "nlu_ms": 1127.30300007388,
      "acts": [
       "state_rule",
       "state_rule",
@@ -3319,7 +3409,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1036.1608329694718,
+     "nlu_ms": 1080.895165912807,
      "acts": [
       "price_ask"
      ],
@@ -3356,7 +3446,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 966.9025831390172,
+     "nlu_ms": 908.1988339312375,
      "acts": [
       "price_ask"
      ],
@@ -3392,7 +3482,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 931.882084114477,
+     "nlu_ms": 1025.933832861483,
      "acts": [
       "price_ask"
      ],
@@ -3407,52 +3497,52 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1049.2422909010202,
+     "latency_ms": 1126.3640001416206,
      "prompt_tokens": 1771,
      "completion_tokens": 118,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.004125060513615608,
+     "queue_ms": 0.001375097781419754,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1034.8800830543041,
+     "latency_ms": 1080.2636248990893,
      "prompt_tokens": 1833,
      "completion_tokens": 47,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005791895091533661,
+     "queue_ms": 0.003041233867406845,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 965.1333331130445,
+     "latency_ms": 906.594333704561,
      "prompt_tokens": 1867,
      "completion_tokens": 51,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006416812539100647,
+     "queue_ms": 0.0030831433832645416,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 930.3489159792662,
+     "latency_ms": 1025.1096249558032,
      "prompt_tokens": 1872,
      "completion_tokens": 51,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006749993190169334,
+     "queue_ms": 0.006624963134527206,
      "key_id": "anthropic#0"
     }
    ]
@@ -3475,7 +3565,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1282.0671659428626,
+     "nlu_ms": 1117.5931673496962,
      "acts": [
       "state_rule",
       "state_rule",
@@ -3521,7 +3611,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1002.5398337747902,
+     "nlu_ms": 937.7998341806233,
      "acts": [
       "price_ask"
      ],
@@ -3567,7 +3657,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1292.1292081009597,
+     "nlu_ms": 1210.8872910030186,
      "acts": [
       "price_ask"
      ],
@@ -3582,39 +3672,39 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1280.051875161007,
+     "latency_ms": 1115.6104998663068,
      "prompt_tokens": 1771,
      "completion_tokens": 118,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005707843229174614,
+     "queue_ms": 0.003584194928407669,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1001.3489578850567,
+     "latency_ms": 937.4015419743955,
      "prompt_tokens": 1835,
      "completion_tokens": 49,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006332993507385254,
+     "queue_ms": 0.00762520357966423,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1290.6128328759223,
+     "latency_ms": 1210.5717500671744,
      "prompt_tokens": 1862,
      "completion_tokens": 54,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005709007382392883,
+     "queue_ms": 0.0012079253792762756,
      "key_id": "anthropic#0"
     }
    ]
@@ -3637,7 +3727,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1125.9742078837007,
+     "nlu_ms": 1181.045209057629,
      "acts": [
       "state_rule",
       "state_rule",
@@ -3683,7 +3773,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1020.8386657759547,
+     "nlu_ms": 1122.0656670629978,
      "acts": [
       "price_ask"
      ],
@@ -3725,7 +3815,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1072.973207803443,
+     "nlu_ms": 1040.8227499574423,
      "acts": [
       "respond_to_offer",
       "price_ask"
@@ -3769,7 +3859,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1048.453374998644,
+     "nlu_ms": 935.4851669631898,
      "acts": [
       "price_ask"
      ],
@@ -3816,7 +3906,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1074.644667096436,
+     "nlu_ms": 971.2124168872833,
      "acts": [
       "respond_to_offer"
      ],
@@ -3861,7 +3951,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1090.2748750522733,
+     "nlu_ms": 1058.860625140369,
      "acts": [
       "respond_to_offer"
      ],
@@ -3877,78 +3967,78 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1122.783707920462,
+     "latency_ms": 1180.4939173161983,
      "prompt_tokens": 1786,
      "completion_tokens": 128,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005791895091533661,
+     "queue_ms": 0.001375097781419754,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1019.4042918737978,
+     "latency_ms": 1121.7871247790754,
      "prompt_tokens": 1843,
      "completion_tokens": 53,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005707843229174614,
+     "queue_ms": 0.001334119588136673,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1071.429583011195,
+     "latency_ms": 1040.5007912777364,
      "prompt_tokens": 1860,
      "completion_tokens": 80,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005416106432676315,
+     "queue_ms": 0.0012908130884170532,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1047.086999984458,
+     "latency_ms": 935.2245419286191,
      "prompt_tokens": 1864,
      "completion_tokens": 48,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006707850843667984,
+     "queue_ms": 0.001375097781419754,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1073.7164169549942,
+     "latency_ms": 970.642332918942,
      "prompt_tokens": 1856,
      "completion_tokens": 39,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005875015631318092,
+     "queue_ms": 0.0013746321201324463,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1088.9881250914186,
+     "latency_ms": 1057.912708260119,
      "prompt_tokens": 1853,
      "completion_tokens": 46,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006459187716245651,
+     "queue_ms": 0.006875023245811462,
      "key_id": "anthropic#0"
     }
    ]
@@ -3971,7 +4061,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1220.1257499400526,
+     "nlu_ms": 1041.693499777466,
      "acts": [
       "state_rule",
       "state_rule",
@@ -4017,7 +4107,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 986.1052499618381,
+     "nlu_ms": 986.8251658044755,
      "acts": [
       "price_ask"
      ],
@@ -4057,7 +4147,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1060.331708053127,
+     "nlu_ms": 1032.8699997626245,
      "acts": [
       "state_rule"
      ],
@@ -4072,39 +4162,39 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1218.159083975479,
+     "latency_ms": 1039.660417009145,
      "prompt_tokens": 1771,
      "completion_tokens": 118,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005250098183751106,
+     "queue_ms": 0.004708301275968552,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 985.3767920285463,
+     "latency_ms": 985.41095899418,
      "prompt_tokens": 1835,
      "completion_tokens": 49,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.0052908435463905334,
+     "queue_ms": 0.005833804607391357,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1058.5631250869483,
+     "latency_ms": 1032.3635418899357,
      "prompt_tokens": 1866,
      "completion_tokens": 49,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.003125052899122238,
+     "queue_ms": 0.006041955202817917,
      "key_id": "anthropic#0"
     }
    ]
@@ -4127,7 +4217,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1061.8452501948923,
+     "nlu_ms": 1067.675624974072,
      "acts": [
       "state_rule",
       "state_rule",
@@ -4173,7 +4263,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 948.1305831577629,
+     "nlu_ms": 954.0186249651015,
      "acts": [
       "price_ask"
      ],
@@ -4218,7 +4308,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1034.115666989237,
+     "nlu_ms": 1030.9451250359416,
      "acts": [
       "price_ask"
      ],
@@ -4265,7 +4355,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 987.8529158886522,
+     "nlu_ms": 1074.1051668301225,
      "acts": [
       "respond_to_offer"
      ],
@@ -4282,52 +4372,52 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1059.8899167962372,
+     "latency_ms": 1067.3172501847148,
      "prompt_tokens": 1771,
      "completion_tokens": 118,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.004500150680541992,
+     "queue_ms": 0.001416075974702835,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 946.6351671144366,
+     "latency_ms": 953.7304169498384,
      "prompt_tokens": 1850,
      "completion_tokens": 46,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005499925464391708,
+     "queue_ms": 0.0013746321201324463,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1032.4287919793278,
+     "latency_ms": 1030.6242080405354,
      "prompt_tokens": 1867,
      "completion_tokens": 62,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005832873284816742,
+     "queue_ms": 0.001334119588136673,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 986.601292155683,
+     "latency_ms": 1073.824292048812,
      "prompt_tokens": 1871,
      "completion_tokens": 42,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006292015314102173,
+     "queue_ms": 0.001334119588136673,
      "key_id": "anthropic#0"
     }
    ]
@@ -4350,7 +4440,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1198.9196669310331,
+     "nlu_ms": 1012.4282906763256,
      "acts": [
       "state_rule",
       "state_rule",
@@ -4396,7 +4486,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1010.7015001121908,
+     "nlu_ms": 1214.2669167369604,
      "acts": [
       "price_ask"
      ],
@@ -4443,7 +4533,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1204.475583974272,
+     "nlu_ms": 1127.3917080834508,
      "acts": [
       "price_ask"
      ],
@@ -4458,39 +4548,39 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1196.9295828603208,
+     "latency_ms": 1012.0509173721075,
      "prompt_tokens": 1771,
      "completion_tokens": 118,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006332993507385254,
+     "queue_ms": 0.0014579854905605316,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1008.6807499174029,
+     "latency_ms": 1213.8877077959478,
      "prompt_tokens": 1842,
      "completion_tokens": 57,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006708083674311638,
+     "queue_ms": 0.001458916813135147,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1021.1533750407398,
+     "latency_ms": 1127.0250417292118,
      "prompt_tokens": 1861,
      "completion_tokens": 59,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 181.29149987362325,
+     "queue_ms": 0.0013327226042747498,
      "key_id": "anthropic#0"
     }
    ]
@@ -4513,7 +4603,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1397.6833750493824,
+     "nlu_ms": 1154.4231669977307,
      "acts": [
       "state_rule",
       "state_rule",
@@ -4559,7 +4649,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1047.3786247894168,
+     "nlu_ms": 967.2097498551011,
      "acts": [
       "price_ask"
      ],
@@ -4602,7 +4692,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1223.1822500471026,
+     "nlu_ms": 1032.797709107399,
      "acts": [
       "price_ask"
      ],
@@ -4648,7 +4738,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1073.8925840705633,
+     "nlu_ms": 997.4020421504974,
      "acts": [
       "respond_to_offer"
      ],
@@ -4663,52 +4753,52 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1226.601165952161,
+     "latency_ms": 1153.9245420135558,
      "prompt_tokens": 1783,
      "completion_tokens": 123,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 168.33429178223014,
+     "queue_ms": 0.0013331882655620575,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1045.5814581364393,
+     "latency_ms": 966.9691668823361,
      "prompt_tokens": 1846,
-     "completion_tokens": 46,
+     "completion_tokens": 45,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006332993507385254,
+     "queue_ms": 0.0013746321201324463,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1106.100165983662,
+     "latency_ms": 1032.4559579603374,
      "prompt_tokens": 1870,
      "completion_tokens": 57,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 115.4259170871228,
+     "queue_ms": 0.0013327226042747498,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 982.2731660678983,
+     "latency_ms": 997.186082880944,
      "prompt_tokens": 1869,
      "completion_tokens": 45,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 90.57979192584753,
+     "queue_ms": 0.00125030055642128,
      "key_id": "anthropic#0"
     }
    ]
@@ -4747,7 +4837,7 @@
        "source": "operator"
       }
      },
-     "nlu_ms": 1242.8124998696148,
+     "nlu_ms": 1096.3343330658972,
      "acts": [
       "state_rule",
       "state_rule"
@@ -4788,7 +4878,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1254.8896251246333,
+     "nlu_ms": 1063.057083170861,
      "acts": [
       "answer"
      ],
@@ -4803,26 +4893,26 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1030.1010829862207,
+     "latency_ms": 1095.9196668118238,
      "prompt_tokens": 1819,
      "completion_tokens": 89,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 210.43724985793233,
+     "queue_ms": 0.0013331882655620575,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1088.3349580690265,
+     "latency_ms": 1062.829707749188,
      "prompt_tokens": 1837,
      "completion_tokens": 41,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 165.8278750255704,
+     "queue_ms": 0.0012498348951339722,
      "key_id": "anthropic#0"
     }
    ]
@@ -4845,7 +4935,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1212.1349580120295,
+     "nlu_ms": 1160.8385420404375,
      "acts": [
       "state_rule",
       "state_rule",
@@ -4888,7 +4978,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1074.093250092119,
+     "nlu_ms": 1097.75112522766,
      "acts": [
       "price_ask"
      ],
@@ -4928,7 +5018,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1228.4911670722067,
+     "nlu_ms": 948.1654157862067,
      "acts": [
       "price_ask"
      ],
@@ -4976,7 +5066,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1381.0885830316693,
+     "nlu_ms": 1300.1152919605374,
      "acts": [
       "price_ask"
      ],
@@ -4991,52 +5081,52 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1104.1020420379937,
+     "latency_ms": 1160.4784158989787,
      "prompt_tokens": 1771,
      "completion_tokens": 118,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 106.33729188703,
+     "queue_ms": 0.0014584511518478394,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 981.4295419491827,
+     "latency_ms": 1097.548833116889,
      "prompt_tokens": 1831,
      "completion_tokens": 46,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 91.83879080228508,
+     "queue_ms": 0.0014170072972774506,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1012.8830841276795,
+     "latency_ms": 907.3596657253802,
      "prompt_tokens": 1854,
      "completion_tokens": 50,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 214.95412499643862,
+     "queue_ms": 40.49866599962115,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1194.669291144237,
+     "latency_ms": 1008.1749591045082,
      "prompt_tokens": 1873,
      "completion_tokens": 51,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 185.04420877434313,
+     "queue_ms": 291.63779178634286,
      "key_id": "anthropic#0"
     }
    ]
@@ -5060,7 +5150,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1026.6851671040058,
+     "nlu_ms": 1284.6306250430644,
      "acts": [
       "state_rule",
       "state_rule",
@@ -5108,7 +5198,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1052.9994170647115,
+     "nlu_ms": 1034.2136663384736,
      "acts": [
       "announce_rules"
      ],
@@ -5145,7 +5235,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1216.6831251233816,
+     "nlu_ms": 1363.6484579183161,
      "acts": [
       "rule_item"
      ],
@@ -5182,7 +5272,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1312.7563330344856,
+     "nlu_ms": 1228.6192500032485,
      "acts": [
       "rule_item"
      ],
@@ -5229,7 +5319,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1394.3166250828654,
+     "nlu_ms": 1049.8183751478791,
      "acts": [
       "rule_item"
      ],
@@ -5278,7 +5368,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1171.625540824607,
+     "nlu_ms": 1218.8118752092123,
      "acts": [
       "list_done"
      ],
@@ -5312,7 +5402,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 985.8691249974072,
+     "nlu_ms": 1291.2580422125757,
      "acts": [
       "readback_reply"
      ],
@@ -5364,7 +5454,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1107.2772908955812,
+     "nlu_ms": 1205.7663751766086,
      "acts": [
       "state_rule"
      ],
@@ -5379,104 +5469,104 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1024.3348330259323,
+     "latency_ms": 1095.9787499159575,
      "prompt_tokens": 1777,
      "completion_tokens": 125,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.004250090569257736,
+     "queue_ms": 188.20645892992616,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 884.669333929196,
+     "latency_ms": 931.7627092823386,
      "prompt_tokens": 1851,
      "completion_tokens": 47,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 167.38583287224174,
+     "queue_ms": 102.18320786952972,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 902.2697079926729,
+     "latency_ms": 1094.949749764055,
      "prompt_tokens": 1898,
      "completion_tokens": 70,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 312.507624970749,
+     "queue_ms": 268.2198751717806,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1019.4003751967102,
+     "latency_ms": 1124.2583342827857,
      "prompt_tokens": 1902,
      "completion_tokens": 71,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 291.4782501757145,
+     "queue_ms": 103.93241699784994,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1216.4539170917124,
+     "latency_ms": 974.7516247443855,
      "prompt_tokens": 1906,
      "completion_tokens": 69,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 175.92991702258587,
+     "queue_ms": 74.68895940110087,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1170.4514590092003,
+     "latency_ms": 994.2442076280713,
      "prompt_tokens": 1883,
      "completion_tokens": 32,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.009791925549507141,
+     "queue_ms": 224.33170769363642,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 981.5169170033187,
+     "latency_ms": 1086.0080420970917,
      "prompt_tokens": 1883,
      "completion_tokens": 41,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 3.4167920239269733,
+     "queue_ms": 204.97824996709824,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 888.9437080360949,
+     "latency_ms": 1092.4305832013488,
      "prompt_tokens": 1876,
      "completion_tokens": 46,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 216.96250000968575,
+     "queue_ms": 113.03150001913309,
      "key_id": "anthropic#0"
     }
    ]
@@ -5500,7 +5590,7 @@
      },
      "ok": true,
      "known_rules": {},
-     "nlu_ms": 1895.5878331325948,
+     "nlu_ms": 1317.2996249049902,
      "acts": [
       "answer",
       "state_rule"
@@ -5535,7 +5625,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1147.5208329502493,
+     "nlu_ms": 1016.2535831332207,
      "acts": [
       "state_rule"
      ],
@@ -5573,7 +5663,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 978.5126249771565,
+     "nlu_ms": 1346.2318340316415,
      "acts": [
       "announce_rules"
      ],
@@ -5616,7 +5706,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1114.6989171393216,
+     "nlu_ms": 949.1816656664014,
      "acts": [
       "announce_rules"
      ],
@@ -5653,7 +5743,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1125.2740419004112,
+     "nlu_ms": 1474.6268750168383,
      "acts": [
       "rule_item"
      ],
@@ -5690,7 +5780,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1141.8754160404205,
+     "nlu_ms": 984.4774999655783,
      "acts": [
       "rule_item"
      ],
@@ -5737,7 +5827,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1095.6969589460641,
+     "nlu_ms": 1244.620833080262,
      "acts": [
       "rule_item"
      ],
@@ -5786,7 +5876,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 1739.0101249329746,
+     "nlu_ms": 1065.9524998627603,
      "acts": [
       "list_done"
      ],
@@ -5822,7 +5912,7 @@
        "source": "rep"
       }
      },
-     "nlu_ms": 984.5990419853479,
+     "nlu_ms": 1285.9337921254337,
      "acts": [
       "readback_reply"
      ],
@@ -5838,117 +5928,117 @@
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1594.8140830732882,
+     "latency_ms": 1211.3586254417896,
      "prompt_tokens": 1767,
      "completion_tokens": 83,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 299.12895895540714,
+     "queue_ms": 105.6303340010345,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1146.0079168900847,
+     "latency_ms": 1015.4938329942524,
      "prompt_tokens": 1844,
      "completion_tokens": 51,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.0062498729676008224,
+     "queue_ms": 0.0013336539268493652,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 977.0353329367936,
+     "latency_ms": 1175.485750194639,
      "prompt_tokens": 1860,
      "completion_tokens": 49,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.0063749030232429504,
+     "queue_ms": 169.38983369618654,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1113.3522090967745,
+     "latency_ms": 927.6499580591917,
      "prompt_tokens": 1879,
      "completion_tokens": 49,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005250098183751106,
+     "queue_ms": 21.09387516975403,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1123.6990001052618,
+     "latency_ms": 1202.8338750824332,
      "prompt_tokens": 1893,
      "completion_tokens": 65,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.005541834980249405,
+     "queue_ms": 271.4931247755885,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1113.608584040776,
+     "latency_ms": 984.1529577970505,
      "prompt_tokens": 1898,
      "completion_tokens": 65,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 26.656625093892217,
+     "queue_ms": 0.0013327226042747498,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1011.3676250912249,
+     "latency_ms": 1032.373625319451,
      "prompt_tokens": 1902,
      "completion_tokens": 65,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 82.79491704888642,
+     "queue_ms": 211.6024997085333,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 1553.3203750383109,
+     "latency_ms": 899.2873337119818,
      "prompt_tokens": 1879,
-     "completion_tokens": 197,
+     "completion_tokens": 28,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 184.66758402064443,
+     "queue_ms": 165.64412508159876,
      "key_id": "anthropic#0"
     },
     {
      "role": "nlu",
      "provider": "anthropic",
      "model": "claude-haiku-5-5",
-     "latency_ms": 983.6241248995066,
+     "latency_ms": 988.7329582124949,
      "prompt_tokens": 1883,
      "completion_tokens": 41,
      "cache_hit": false,
      "failover_from": null,
      "error": null,
-     "queue_ms": 0.006749993190169334,
+     "queue_ms": 296.1521251127124,
      "key_id": "anthropic#0"
     }
    ]

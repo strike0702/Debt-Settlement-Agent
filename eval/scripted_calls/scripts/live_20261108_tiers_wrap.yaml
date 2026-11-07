@@ -1,0 +1,57 @@
+# Live call on the AWS demo, 2026-11-08 (Claude Haiku, voice); Phase 71c.
+# VERBATIM rep lines: "eight", "It starts from one ...", "I mean, one eighty dollars.",
+# "Let's say it.", "No.", "No. That's it." The other lines are reconstructed (the
+# phase prompt carried only an excerpt; "tiers 1-3 then read back fine"): the
+# tier 2 / 3 lines, the read-back yes and the price part (the live call agreed
+# at 75%; here the rep takes our counter, which is what reaches WRAP on this
+# scenario). Pins: the tier clarify answer corrects tier 1 and asks the next
+# tier (live: restarted tier 1); "No." to "anything else?" closes (live: ASK
+# first_payment_date, back to DISCOVERY).
+name: live_20261108_tiers_wrap
+scenario: tier_definer
+turns:
+  - rep: "eight"
+    oracle: {acts: [{type: "answer", field: "max_payments", value: 8, quote: "eight"}]}
+    expect: {intent: ASK, reason: min_payment_cents}
+  - rep: "One eighty dollars."
+    oracle: {acts: [{type: "answer", field: "min_payment_cents", value: 18000, quote: "One eighty dollars"}]}
+    expect: {intent: ASK, reason: payment_structure}
+  - rep: "Flexible. I want to define the tiers."
+    oracle: {acts: [{type: "answer", field: "payment_structure", value: "flexible", quote: "Flexible"}, {type: "announce_rules", field: "min_payment_tiers", quote: "I want to define the tiers"}]}
+    expect: {intent: ASK, reason: min_payment_tiers}
+  - rep: "Three tiers."
+    oracle: {acts: [{type: "announce_rules", field: "min_payment_tiers", count: 3, quote: "Three tiers"}]}
+    expect: {intent: ASK, reason: min_payment_tiers, facts: {tier_count: 3, tier_position: 1}}
+  - rep: "It starts from one goes on till the second payment, and the minimum is one hundred dollars."
+    oracle: {acts: [{type: "rule_item", from_payment: 1, to_payment: 2, min_cents: 10000, quote: "It starts from one goes on till the second payment, and the minimum is one hundred dollars"}]}
+    expect: {intent: CLARIFY, reason: tiers_inconsistent, facts: {clarify_old: 18000, clarify_new: 10000}}
+  - rep: "I mean, one eighty dollars."
+    oracle: {acts: [{type: "state_rule", field: "min_payment_cents", value: 18000, quote: "one eighty dollars"}]}
+    # The next tier, not "Starting with tier 1" again.
+    expect: {intent: ASK, reason: min_payment_tiers, facts: {tier_position: null}}
+  - rep: "From the third payment till the fifth, the minimum is two hundred fifty dollars."
+    oracle: {acts: [{type: "rule_item", from_payment: 3, to_payment: 5, min_cents: 25000, quote: "From the third payment till the fifth, the minimum is two hundred fifty dollars"}]}
+    expect: {intent: ASK, reason: min_payment_tiers}
+  - rep: "From the sixth payment on, three hundred dollars."
+    oracle: {acts: [{type: "rule_item", from_payment: 6, min_cents: 30000, quote: "From the sixth payment on, three hundred dollars"}]}
+    expect: {intent: READ_BACK, reason: min_payment_tiers, facts: {readback_value_tier_a_min: 18000, readback_value_tier_a_to: 2}}
+  - rep: "Yes."
+    oracle: {acts: [{type: "readback_reply", response: "confirm", quote: "Yes."}]}
+    expect: {intent: ASK_SETTLEMENT}
+  - rep: "Let's say it."
+    expect: {intent: ASK_SETTLEMENT}
+  - rep: "Seventy five percent."
+    oracle: {acts: [{type: "price_ask", pct: 75, quote: "Seventy five percent", firmness: "counter"}]}
+    expect: {intent: COUNTER}
+  - rep: "Okay, that works."
+    oracle: {acts: [{type: "respond_to_offer", response: "accept", quote: "Okay, that works."}]}
+    expect: {intent: CONFIRM_SCHEDULE}
+  - rep: "Yes, that schedule works."
+    oracle: {acts: [{type: "respond_to_offer", response: "accept", quote: "Yes, that schedule works."}]}
+    expect: {intent: PROPOSE_WRAP, reason: confirmed}
+  # "Do you need anything else before we end the call?"
+  - rep: "No."
+    oracle: {acts: [{type: "respond_to_offer", response: "reject", quote: "No."}]}
+    expect: {intent: CLOSE, reason: post_wrap}
+  - rep: "No. That's it."
+    expect: {intent: CLOSE, reason: already_ended}

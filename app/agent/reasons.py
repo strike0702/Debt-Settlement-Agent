@@ -183,9 +183,9 @@ REASON_TEXT: dict[str, str] = {
         "The rep asked to hear the payment schedule after the proposal was sent, so we "
         "read it out."
     ),
-    "wrap_renegotiate": (
-        "The rep changed the terms after we sent the proposal, "
-        "so we reopen the deal."
+    "changed_after_proposal": (
+        "The rep changed the terms after we sent the proposal to the client, so a "
+        "specialist reviews it instead of reopening the deal on this call."
     ),
     "rep_ended": (
         "The rep ended the conversation without a deal, so we say a specialist will "
@@ -310,7 +310,7 @@ REASON_SHORT: dict[str, str] = {
     "already_ended": "The call has already ended.",
     "schedule_detail": "The rep asked for the details.",
     "schedule_detail_post_wrap": "The rep asked to hear the schedule.",
-    "wrap_renegotiate": "The rep changed the terms after the proposal.",
+    "changed_after_proposal": "Terms changed after the proposal; a specialist reviews.",
     "rep_ended": "The rep ended the call; a specialist follows up.",
     "rep_ended_after_wrap": "The rep ended the call after the proposal.",
     "private_info": "They asked about the client's private finances.",

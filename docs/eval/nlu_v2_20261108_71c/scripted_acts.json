@@ -1,0 +1,5957 @@
+{
+ "summary": {
+  "scripts_passed": 20,
+  "scripts_run": 20,
+  "skipped": {},
+  "turns_ok": 107,
+  "turns": 107,
+  "failed": [],
+  "nlu_ms_p50": 1064.403375145048,
+  "calls": 105,
+  "prompt_tokens": 194060,
+  "completion_tokens": 8069
+ },
+ "scripts": [
+  {
+   "name": "happy_balloon_structure",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "We allow up to six payments, at least $20 each, with a balloon payment at the end.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "Understood, up to 6 payments, at least $20 each, with a balloon schedule. What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1192.3876660875976,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "We'd settle for forty percent of the balance.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=2800",
+      "facts": {
+       "counter_pct": 2800,
+       "offer_total": 19600
+      }
+     },
+     "said": "We can propose 28% of the balance, which is $196. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 2800
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 6,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 2000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "balloon",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1070.260750129819,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "We could come down to thirty five percent.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=3000",
+      "facts": {
+       "counter_pct": 3000,
+       "offer_total": 21000
+      }
+     },
+     "said": "We can propose 30% of the balance, which is $210. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 3000
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 6,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 2000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "balloon",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1250.8186250925064,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 3,
+     "rep": "Okay, that works for us.",
+     "move": {
+      "intent": "CONFIRM_SCHEDULE",
+      "reason": "bp=3000",
+      "facts": {
+       "settlement_pct": 3000,
+       "offer_total": 21000,
+       "first_payment_date": "2026-11-30",
+       "num_payments": 4,
+       "last_payment": 8501,
+       "payment_level_0": 2000,
+       "payment_level_1": 8499,
+       "payment_level_2": 8501
+      }
+     },
+     "said": "30% works for us. We can do 4 payments totaling $210, starting November 30. Would that work?",
+     "expect": {
+      "intent": "CONFIRM_SCHEDULE",
+      "facts": {
+       "settlement_pct": 3000
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 6,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 2000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "balloon",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1023.3209999278188,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 4,
+     "rep": "Yes, that schedule works.",
+     "move": {
+      "intent": "PROPOSE_WRAP",
+      "reason": "confirmed",
+      "facts": {
+       "offer_total": 21000,
+       "first_payment_date": "2026-11-30",
+       "num_payments": 4,
+       "last_payment": 8501,
+       "payment_level_0": 2000,
+       "payment_level_1": 8499,
+       "payment_level_2": 8501,
+       "settlement_pct": 3000
+      }
+     },
+     "said": "I have sent this proposal to the client for approval. Do you need anything else before we end the call?",
+     "expect": {
+      "intent": "PROPOSE_WRAP",
+      "reason": "confirmed",
+      "facts": {
+       "settlement_pct": 3000
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 6,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 2000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "balloon",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1209.3845000490546,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer",
+      "question"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1190.8520830329508,
+     "prompt_tokens": 1779,
+     "completion_tokens": 128,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.0022079329937696457,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1068.5241660103202,
+     "prompt_tokens": 1842,
+     "completion_tokens": 54,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.0038330908864736557,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1249.1306660231203,
+     "prompt_tokens": 1857,
+     "completion_tokens": 51,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.004458008334040642,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1022.3446248564869,
+     "prompt_tokens": 1854,
+     "completion_tokens": 39,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006375135853886604,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1208.175583044067,
+     "prompt_tokens": 1853,
+     "completion_tokens": 44,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005542067810893059,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "happy_counter_ladder",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "We allow up to eight payments, at least $100 each, with even payments.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "Understood, up to 8 payments, at least $100 each, with even payments. What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1170.857375022024,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "We'd settle for ninety five percent of the balance.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=5200",
+      "facts": {
+       "counter_pct": 5200,
+       "offer_total": 65000
+      }
+     },
+     "said": "We can propose 52% of the balance, which is $650. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 5200
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 988.9341660309583,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "We could come down to forty percent.",
+     "move": {
+      "intent": "CONFIRM_SCHEDULE",
+      "reason": "ask_within_offer",
+      "facts": {
+       "settlement_pct": 4000,
+       "offer_total": 50000,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 2,
+       "last_payment": 25000,
+       "payment_level_0": 25000
+      }
+     },
+     "said": "40% works for us. We can do 2 payments totaling $500, starting October 31. Would that work?",
+     "expect": {
+      "intent": "CONFIRM_SCHEDULE",
+      "reason": "ask_within_offer",
+      "facts": {
+       "settlement_pct": 4000
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1032.8615419566631,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 3,
+     "rep": "Okay, that works for us.",
+     "move": {
+      "intent": "PROPOSE_WRAP",
+      "reason": "confirmed",
+      "facts": {
+       "offer_total": 50000,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 2,
+       "last_payment": 25000,
+       "payment_level_0": 25000,
+       "settlement_pct": 4000
+      }
+     },
+     "said": "I have sent this proposal to the client for approval. Do you need anything else before we end the call?",
+     "expect": {
+      "intent": "PROPOSE_WRAP",
+      "reason": "confirmed",
+      "facts": {
+       "settlement_pct": 4000
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 974.6944999787956,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 4,
+     "rep": "Yes, that schedule works.",
+     "move": {
+      "intent": "CLOSE",
+      "reason": "post_wrap",
+      "facts": {}
+     },
+     "said": "Thank you. We will present this to the client and follow up after their review. Have a good day.",
+     "expect": {
+      "intent": "CLOSE",
+      "reason": "post_wrap"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1035.1484171114862,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer",
+      "question"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1168.4224589262158,
+     "prompt_tokens": 1774,
+     "completion_tokens": 121,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.004541128873825073,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 987.2969998978078,
+     "prompt_tokens": 1842,
+     "completion_tokens": 56,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.0036670826375484467,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1031.405874993652,
+     "prompt_tokens": 1853,
+     "completion_tokens": 49,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005749985575675964,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 973.8505410496145,
+     "prompt_tokens": 1850,
+     "completion_tokens": 39,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006084097549319267,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1034.550374839455,
+     "prompt_tokens": 1855,
+     "completion_tokens": 44,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006207963451743126,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "happy_easy_deal",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "We allow up to eight payments, at least $100 each, with even payments.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "Understood, up to 8 payments, at least $100 each, with even payments. What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1037.446750095114,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "We'd settle for forty five percent of the balance.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=3100",
+      "facts": {
+       "counter_pct": 3100,
+       "offer_total": 38750
+      }
+     },
+     "said": "We can propose 31% of the balance, which is $387.50. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 3100
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1031.2542920000851,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "We could come down to forty percent.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=3300",
+      "facts": {
+       "counter_pct": 3300,
+       "offer_total": 41250
+      }
+     },
+     "said": "We can propose 33% of the balance, which is $412.50. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 3300
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 936.3222501706332,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 3,
+     "rep": "Okay, that works for us.",
+     "move": {
+      "intent": "CONFIRM_SCHEDULE",
+      "reason": "bp=3300",
+      "facts": {
+       "settlement_pct": 3300,
+       "offer_total": 41250,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 2,
+       "last_payment": 20625,
+       "payment_level_0": 20625
+      }
+     },
+     "said": "33% works for us. We can do 2 payments totaling $412.50, starting October 31. Would that work?",
+     "expect": {
+      "intent": "CONFIRM_SCHEDULE",
+      "facts": {
+       "settlement_pct": 3300
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 927.4972081184387,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 4,
+     "rep": "Yes, that schedule works.",
+     "move": {
+      "intent": "PROPOSE_WRAP",
+      "reason": "confirmed",
+      "facts": {
+       "offer_total": 41250,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 2,
+       "last_payment": 20625,
+       "payment_level_0": 20625,
+       "settlement_pct": 3300
+      }
+     },
+     "said": "I have sent this proposal to the client for approval. Do you need anything else before we end the call?",
+     "expect": {
+      "intent": "PROPOSE_WRAP",
+      "reason": "confirmed",
+      "facts": {
+       "settlement_pct": 3300
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1678.7467079702765,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer",
+      "question"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1036.3318750169128,
+     "prompt_tokens": 1774,
+     "completion_tokens": 121,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.002749962732195854,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1030.5520831607282,
+     "prompt_tokens": 1841,
+     "completion_tokens": 55,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.00237487256526947,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 935.8331251423806,
+     "prompt_tokens": 1853,
+     "completion_tokens": 49,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.0023329630494117737,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 926.6468330752105,
+     "prompt_tokens": 1852,
+     "completion_tokens": 39,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.0029159709811210632,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1677.7195839677006,
+     "prompt_tokens": 1851,
+     "completion_tokens": 207,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005375128239393234,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "happy_haggling_rep",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "We allow up to eight payments, at least $100 each, with even payments.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "Understood, up to 8 payments, at least $100 each, with even payments. What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1672.4118329584599,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "We'd settle for seventy percent of the balance.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=4900",
+      "facts": {
+       "counter_pct": 4900,
+       "offer_total": 98000
+      }
+     },
+     "said": "We can propose 49% of the balance, which is $980. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 4900
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 993.7620421405882,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "We could come down to sixty five percent.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=5100",
+      "facts": {
+       "counter_pct": 5100,
+       "offer_total": 102000
+      }
+     },
+     "said": "We can propose 51% of the balance, which is $1,020. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 5100
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1003.2146249432117,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 3,
+     "rep": "Okay, that works for us.",
+     "move": {
+      "intent": "CONFIRM_SCHEDULE",
+      "reason": "bp=5100",
+      "facts": {
+       "settlement_pct": 5100,
+       "offer_total": 102000,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 5,
+       "last_payment": 20400,
+       "payment_level_0": 20400
+      }
+     },
+     "said": "51% works for us. We can do 5 payments totaling $1,020, starting October 31. Would that work?",
+     "expect": {
+      "intent": "CONFIRM_SCHEDULE",
+      "facts": {
+       "settlement_pct": 5100
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 928.9746668655425,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 4,
+     "rep": "Yes, that schedule works.",
+     "move": {
+      "intent": "PROPOSE_WRAP",
+      "reason": "confirmed",
+      "facts": {
+       "offer_total": 102000,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 5,
+       "last_payment": 20400,
+       "payment_level_0": 20400,
+       "settlement_pct": 5100
+      }
+     },
+     "said": "I have sent this proposal to the client for approval. Do you need anything else before we end the call?",
+     "expect": {
+      "intent": "PROPOSE_WRAP",
+      "reason": "confirmed",
+      "facts": {
+       "settlement_pct": 5100
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 911.4906250033528,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer",
+      "question"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1670.3800419345498,
+     "prompt_tokens": 1774,
+     "completion_tokens": 121,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.004707835614681244,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 992.1487919054925,
+     "prompt_tokens": 1841,
+     "completion_tokens": 55,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.009750016033649445,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1001.5779579989612,
+     "prompt_tokens": 1855,
+     "completion_tokens": 51,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.00558304600417614,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 928.136375034228,
+     "prompt_tokens": 1852,
+     "completion_tokens": 39,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005875015631318092,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 910.5607089586556,
+     "prompt_tokens": 1851,
+     "completion_tokens": 44,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.00437488779425621,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "happy_late_start_date",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "We allow up to eight payments, at least $100 each, with even payments.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "Understood, up to 8 payments, at least $100 each, with even payments. What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1158.0256670713425,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "We'd settle for forty five percent of the balance.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=3100",
+      "facts": {
+       "counter_pct": 3100,
+       "offer_total": 38750
+      }
+     },
+     "said": "We can propose 31% of the balance, which is $387.50. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 3100
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1100.884084124118,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "We could come down to forty percent.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=3300",
+      "facts": {
+       "counter_pct": 3300,
+       "offer_total": 41250
+      }
+     },
+     "said": "We can propose 33% of the balance, which is $412.50. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 3300
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 925.7474581245333,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 3,
+     "rep": "Okay, that works for us.",
+     "move": {
+      "intent": "CONFIRM_SCHEDULE",
+      "reason": "bp=3300",
+      "facts": {
+       "settlement_pct": 3300,
+       "offer_total": 41250,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 2,
+       "last_payment": 20625,
+       "payment_level_0": 20625
+      }
+     },
+     "said": "33% works for us. We can do 2 payments totaling $412.50, starting October 31. Would that work?",
+     "expect": {
+      "intent": "CONFIRM_SCHEDULE",
+      "facts": {
+       "settlement_pct": 3300
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1023.4839578624815,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 4,
+     "rep": "Yes, that schedule works.",
+     "move": {
+      "intent": "PROPOSE_WRAP",
+      "reason": "confirmed",
+      "facts": {
+       "offer_total": 41250,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 2,
+       "last_payment": 20625,
+       "payment_level_0": 20625,
+       "settlement_pct": 3300
+      }
+     },
+     "said": "I have sent this proposal to the client for approval. Do you need anything else before we end the call?",
+     "expect": {
+      "intent": "PROPOSE_WRAP",
+      "reason": "confirmed",
+      "facts": {
+       "settlement_pct": 3300
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 873.9253329113126,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer",
+      "question"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1155.747750075534,
+     "prompt_tokens": 1774,
+     "completion_tokens": 121,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005708076059818268,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1100.196500075981,
+     "prompt_tokens": 1841,
+     "completion_tokens": 55,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.004417030140757561,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 925.2624590881169,
+     "prompt_tokens": 1853,
+     "completion_tokens": 49,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.0027918722480535507,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1022.7316250093281,
+     "prompt_tokens": 1852,
+     "completion_tokens": 39,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.0025408808141946793,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 873.4370411839336,
+     "prompt_tokens": 1851,
+     "completion_tokens": 44,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005792127922177315,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "happy_no_space",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "We allow up to four payments, at least $350 each, with a flexible schedule.",
+     "move": {
+      "intent": "ASK",
+      "reason": "optional_sweep",
+      "facts": {}
+     },
+     "said": "Understood, up to 4 payments, at least $350 each, with a flexible schedule. Any tiered minimums, or a limit on payment levels?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "optional_sweep"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1111.3796669524163,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule",
+      "question"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "No, nothing like that.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 4,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 35000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1165.8012920524925,
+     "acts": [
+      "unclear"
+     ],
+     "turn_acts": [],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "We'd settle for forty percent of the balance.",
+     "move": {
+      "intent": "COUNTER_TERMS",
+      "reason": "alt_first_payment_date",
+      "facts": {
+       "alt_first_payment_date": "2027-03-31"
+      }
+     },
+     "said": "Could payment start on March 31, 2027?",
+     "expect": {
+      "intent": "COUNTER_TERMS",
+      "reason": "alt_first_payment_date"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 4,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 35000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1152.099708095193,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 3,
+     "rep": "Okay, that works for us.",
+     "move": {
+      "intent": "ESCALATE",
+      "reason": "no_legal_counter",
+      "facts": {}
+     },
+     "said": "I need to involve someone from our side. We cannot propose a settlement below your number under these terms, so a specialist will review it.",
+     "expect": {
+      "intent": "ESCALATE",
+      "reason": "no_legal_counter"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 4,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 35000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1796.2444999720901,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 4,
+     "rep": "Yes, that schedule works.",
+     "move": {
+      "intent": "ESCALATE",
+      "reason": "already_escalated",
+      "facts": {}
+     },
+     "said": "I need to involve someone from our side. A specialist still needs to join this call.",
+     "expect": {
+      "intent": "ESCALATE",
+      "reason": "already_escalated"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 4,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 35000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      },
+      "first_payment_date": {
+       "value": "2027-03-31",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1064.403375145048,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer",
+      "question"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1108.4313329774886,
+     "prompt_tokens": 1777,
+     "completion_tokens": 126,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.002959044650197029,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1164.6832078695297,
+     "prompt_tokens": 1850,
+     "completion_tokens": 46,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006207963451743126,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1150.849999859929,
+     "prompt_tokens": 1842,
+     "completion_tokens": 54,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.00595790334045887,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1795.412875013426,
+     "prompt_tokens": 1846,
+     "completion_tokens": 157,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005749985575675964,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1063.5145001579076,
+     "prompt_tokens": 1885,
+     "completion_tokens": 44,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005334150046110153,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "happy_rescue_escalate",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "We allow up to four payments, at least $110 each, with a flexible schedule.",
+     "move": {
+      "intent": "ASK",
+      "reason": "optional_sweep",
+      "facts": {}
+     },
+     "said": "Understood, up to 4 payments, at least $110 each, with a flexible schedule. Any tiered minimums, or a limit on payment levels?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "optional_sweep"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1213.2255409378558,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule",
+      "question"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "No, nothing like that.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 4,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 11000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 980.1147500984371,
+     "acts": [
+      "unclear"
+     ],
+     "turn_acts": [],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "We'd settle for forty five percent of the balance.",
+     "move": {
+      "intent": "COUNTER_TERMS",
+      "reason": "alt_first_payment_date",
+      "facts": {
+       "alt_first_payment_date": "2026-12-31"
+      }
+     },
+     "said": "Could payment start on December 31?",
+     "expect": {
+      "intent": "COUNTER_TERMS",
+      "reason": "alt_first_payment_date"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 4,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 11000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1078.653333010152,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 3,
+     "rep": "Okay, that works for us.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=1300",
+      "facts": {
+       "counter_pct": 1300,
+       "offer_total": 11700
+      }
+     },
+     "said": "We can propose 13% of the balance, which is $117. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 1300
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 4,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 11000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 960.0874581374228,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 4,
+     "rep": "Yes, that schedule works.",
+     "move": {
+      "intent": "CONFIRM_SCHEDULE",
+      "reason": "bp=1300",
+      "facts": {
+       "settlement_pct": 1300,
+       "offer_total": 11700,
+       "first_payment_date": "2026-12-31",
+       "num_payments": 1,
+       "last_payment": 11700,
+       "payment_level_0": 11700
+      }
+     },
+     "said": "13% works for us. We can do 1 payment of $117, starting December 31. Would that work?",
+     "expect": {
+      "intent": "CONFIRM_SCHEDULE",
+      "facts": {
+       "settlement_pct": 1300
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 4,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 11000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      },
+      "first_payment_date": {
+       "value": "2026-12-31",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 935.0055840332061,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer",
+      "question"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1210.9640408307314,
+     "prompt_tokens": 1777,
+     "completion_tokens": 126,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005667097866535187,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 979.1813329793513,
+     "prompt_tokens": 1850,
+     "completion_tokens": 46,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.004458939656615257,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1077.6037080213428,
+     "prompt_tokens": 1843,
+     "completion_tokens": 55,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005583977326750755,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 959.2667920514941,
+     "prompt_tokens": 1842,
+     "completion_tokens": 39,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005499925464391708,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 934.5258329994977,
+     "prompt_tokens": 1882,
+     "completion_tokens": 44,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.0030838418751955032,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "happy_tier_definer",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "We allow up to eight payments, at least $190 each, with a flexible schedule.",
+     "move": {
+      "intent": "ASK",
+      "reason": "optional_sweep",
+      "facts": {}
+     },
+     "said": "Understood, up to 8 payments, at least $190 each, with a flexible schedule. Any tiered minimums, or a limit on payment levels?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "optional_sweep"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1117.3467501066625,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule",
+      "question"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "Payments one to two at least $190, three to five at least $250, and from the sixth payment on at least $300.",
+     "move": {
+      "intent": "READ_BACK",
+      "reason": "min_payment_tiers",
+      "facts": {
+       "readback_value_tier_a_from": 1,
+       "readback_value_tier_a_min": 19000,
+       "readback_value_tier_b_from": 3,
+       "readback_value_tier_b_min": 25000,
+       "readback_value_tier_c_from": 6,
+       "readback_value_tier_c_min": 30000
+      }
+     },
+     "said": "So I have a minimum of $190 from the 1st payment on and a minimum of $250 from the 3rd payment on and a minimum of $300 from the 6th payment on. Is that right?",
+     "expect": {
+      "intent": "READ_BACK",
+      "reason": "min_payment_tiers"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 2385.585832875222,
+     "acts": [
+      "rule_item",
+      "rule_item",
+      "rule_item"
+     ],
+     "turn_acts": [
+      "rule_item",
+      "rule_item",
+      "rule_item"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "Yes, that's right.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      },
+      "min_payment_tiers": {
+       "value": [
+        [
+         1,
+         19000
+        ],
+        [
+         3,
+         25000
+        ],
+        [
+         6,
+         30000
+        ]
+       ],
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1027.9953328426927,
+     "acts": [
+      "readback_reply"
+     ],
+     "turn_acts": [
+      "readback_reply",
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 3,
+     "rep": "We'd settle for sixty percent of the balance.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=4200",
+      "facts": {
+       "counter_pct": 4200,
+       "offer_total": 168000
+      }
+     },
+     "said": "We can propose 42% of the balance, which is $1,680. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 4200
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      },
+      "min_payment_tiers": {
+       "value": [
+        [
+         1,
+         19000
+        ],
+        [
+         3,
+         25000
+        ],
+        [
+         6,
+         30000
+        ]
+       ],
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1021.2181250099093,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 4,
+     "rep": "We could come down to fifty five percent.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=4400",
+      "facts": {
+       "counter_pct": 4400,
+       "offer_total": 176000
+      }
+     },
+     "said": "We can propose 44% of the balance, which is $1,760. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 4400
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      },
+      "min_payment_tiers": {
+       "value": [
+        [
+         1,
+         19000
+        ],
+        [
+         3,
+         25000
+        ],
+        [
+         6,
+         30000
+        ]
+       ],
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 871.1514170281589,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 5,
+     "rep": "Okay, that works for us.",
+     "move": {
+      "intent": "CONFIRM_SCHEDULE",
+      "reason": "bp=4400",
+      "facts": {
+       "settlement_pct": 4400,
+       "offer_total": 176000,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 3,
+       "last_payment": 138000,
+       "payment_level_0": 19000,
+       "payment_level_1": 138000
+      }
+     },
+     "said": "44% works for us. We can do 3 payments totaling $1,760, starting October 31. Would that work?",
+     "expect": {
+      "intent": "CONFIRM_SCHEDULE",
+      "facts": {
+       "settlement_pct": 4400
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      },
+      "min_payment_tiers": {
+       "value": [
+        [
+         1,
+         19000
+        ],
+        [
+         3,
+         25000
+        ],
+        [
+         6,
+         30000
+        ]
+       ],
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1010.8627921435982,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 6,
+     "rep": "Yes, that schedule works.",
+     "move": {
+      "intent": "PROPOSE_WRAP",
+      "reason": "confirmed",
+      "facts": {
+       "offer_total": 176000,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 3,
+       "last_payment": 138000,
+       "payment_level_0": 19000,
+       "payment_level_1": 138000,
+       "settlement_pct": 4400
+      }
+     },
+     "said": "I have sent this proposal to the client for approval. Do you need anything else before we end the call?",
+     "expect": {
+      "intent": "PROPOSE_WRAP",
+      "reason": "confirmed",
+      "facts": {
+       "settlement_pct": 4400
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      },
+      "min_payment_tiers": {
+       "value": [
+        [
+         1,
+         19000
+        ],
+        [
+         3,
+         25000
+        ],
+        [
+         6,
+         30000
+        ]
+       ],
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1430.1857079844922,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer",
+      "question"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1114.8330830037594,
+     "prompt_tokens": 1778,
+     "completion_tokens": 127,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.0025420449674129486,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 2382.1228749584407,
+     "prompt_tokens": 1875,
+     "completion_tokens": 414,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005292007699608803,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1026.8829169217497,
+     "prompt_tokens": 1880,
+     "completion_tokens": 41,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.00400003045797348,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1019.679166842252,
+     "prompt_tokens": 1884,
+     "completion_tokens": 55,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006667105481028557,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 869.543458102271,
+     "prompt_tokens": 1898,
+     "completion_tokens": 51,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006499933078885078,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1009.9933329038322,
+     "prompt_tokens": 1895,
+     "completion_tokens": 39,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006458023563027382,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1429.3184999842197,
+     "prompt_tokens": 1894,
+     "completion_tokens": 173,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005667097866535187,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "live_20261108_tiers_wrap",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "eight",
+     "move": {
+      "intent": "ASK",
+      "reason": "min_payment_cents",
+      "facts": {}
+     },
+     "said": "Understood, a maximum of 8 payments. What's the minimum payment amount?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "min_payment_cents"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1124.6068750042468,
+     "acts": [
+      "answer"
+     ],
+     "turn_acts": [
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "One eighty dollars.",
+     "move": {
+      "intent": "ASK",
+      "reason": "payment_structure",
+      "facts": {}
+     },
+     "said": "Okay, a $180 minimum payment. Do you need even payments, or can you allow a balloon or a flexible schedule?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "payment_structure"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 0.1018329057842493,
+     "acts": [],
+     "turn_acts": [
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "Flexible. I want to define the tiers.",
+     "move": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {}
+     },
+     "said": "Got it, a flexible schedule it is. Go ahead. For each tier, from which payment does it start, and what is its minimum?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 18000,
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1048.163834027946,
+     "acts": [
+      "answer",
+      "announce_rules"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "announce_rules"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 3,
+     "rep": "Three tiers.",
+     "move": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {
+       "tier_count": 3,
+       "tier_position": 1
+      }
+     },
+     "said": "Got it, 3 tiers. Starting with tier 1: from which payment does it start, and what is its minimum?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {
+       "tier_count": 3,
+       "tier_position": 1
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 18000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 992.6286248955876,
+     "acts": [
+      "announce_rules"
+     ],
+     "turn_acts": [
+      "announce_rules"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 4,
+     "rep": "It starts from one goes on till the second payment, and the minimum is one hundred dollars.",
+     "move": {
+      "intent": "CLARIFY",
+      "reason": "tiers_inconsistent",
+      "facts": {
+       "clarify_old": 18000,
+       "clarify_new": 10000
+      }
+     },
+     "said": "Just to check: you said the minimum payment is $180, but that tier's minimum is $100. Which minimum applies to those payments?",
+     "expect": {
+      "intent": "CLARIFY",
+      "reason": "tiers_inconsistent",
+      "facts": {
+       "clarify_old": 18000,
+       "clarify_new": 10000
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 18000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 925.6752079818398,
+     "acts": [
+      "rule_item"
+     ],
+     "turn_acts": [
+      "rule_item"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 5,
+     "rep": "I mean, one eighty dollars.",
+     "move": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {}
+     },
+     "said": "Got it. And the next tier: from which payment does it start, and what is its minimum?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {
+       "tier_position": null
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 18000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 2873.0205418542027,
+     "acts": [
+      "answer"
+     ],
+     "turn_acts": [
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 6,
+     "rep": "From the third payment till the fifth, the minimum is two hundred fifty dollars.",
+     "move": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {}
+     },
+     "said": "Got it. And the next tier: from which payment does it start, and what is its minimum?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 18000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 968.4233330190182,
+     "acts": [
+      "rule_item"
+     ],
+     "turn_acts": [
+      "rule_item"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 7,
+     "rep": "From the sixth payment on, three hundred dollars.",
+     "move": {
+      "intent": "READ_BACK",
+      "reason": "min_payment_tiers",
+      "facts": {
+       "readback_value_tier_a_from": 1,
+       "readback_value_tier_a_min": 18000,
+       "readback_value_tier_a_to": 2,
+       "readback_value_tier_b_from": 3,
+       "readback_value_tier_b_min": 25000,
+       "readback_value_tier_b_to": 5,
+       "readback_value_tier_c_from": 6,
+       "readback_value_tier_c_min": 30000,
+       "readback_value_tier_c_to": 8
+      }
+     },
+     "said": "So payments 1 to 2 at least $180, 3 to 5 at least $250, 6 to 8 at least $300. Is that right?",
+     "expect": {
+      "intent": "READ_BACK",
+      "reason": "min_payment_tiers",
+      "facts": {
+       "readback_value_tier_a_min": 18000,
+       "readback_value_tier_a_to": 2
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 18000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1356.7870000842959,
+     "acts": [
+      "rule_item"
+     ],
+     "turn_acts": [
+      "rule_item"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 8,
+     "rep": "Yes.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 18000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 0.04683295264840126,
+     "acts": [],
+     "turn_acts": [
+      "readback_reply"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 9,
+     "rep": "Let's say it.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "Sure, go ahead. When you are ready, what percentage of the balance would you settle for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 18000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      },
+      "min_payment_tiers": {
+       "value": [
+        [
+         1,
+         18000
+        ],
+        [
+         3,
+         25000
+        ],
+        [
+         6,
+         30000
+        ]
+       ],
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 950.9000419639051,
+     "acts": [
+      "backchannel"
+     ],
+     "turn_acts": [
+      "backchannel"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 10,
+     "rep": "Seventy five percent.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=5200",
+      "facts": {
+       "counter_pct": 5200,
+       "offer_total": 208000
+      }
+     },
+     "said": "We can propose 52% of the balance, which is $2,080. Would that work?",
+     "expect": {
+      "intent": "COUNTER"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 18000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      },
+      "min_payment_tiers": {
+       "value": [
+        [
+         1,
+         18000
+        ],
+        [
+         3,
+         25000
+        ],
+        [
+         6,
+         30000
+        ]
+       ],
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1297.5803329609334,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 11,
+     "rep": "Okay, that works.",
+     "move": {
+      "intent": "CONFIRM_SCHEDULE",
+      "reason": "bp=5200",
+      "facts": {
+       "settlement_pct": 5200,
+       "offer_total": 208000,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 3,
+       "last_payment": 172000,
+       "payment_level_0": 18000,
+       "payment_level_1": 172000
+      }
+     },
+     "said": "52% works for us. We can do 3 payments totaling $2,080, starting October 31. Would that work?",
+     "expect": {
+      "intent": "CONFIRM_SCHEDULE"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 18000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      },
+      "min_payment_tiers": {
+       "value": [
+        [
+         1,
+         18000
+        ],
+        [
+         3,
+         25000
+        ],
+        [
+         6,
+         30000
+        ]
+       ],
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1041.854500072077,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 12,
+     "rep": "Yes, that schedule works.",
+     "move": {
+      "intent": "PROPOSE_WRAP",
+      "reason": "confirmed",
+      "facts": {
+       "offer_total": 208000,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 3,
+       "last_payment": 172000,
+       "payment_level_0": 18000,
+       "payment_level_1": 172000,
+       "settlement_pct": 5200
+      }
+     },
+     "said": "I have sent this proposal to the client for approval. Do you need anything else before we end the call?",
+     "expect": {
+      "intent": "PROPOSE_WRAP",
+      "reason": "confirmed"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 18000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      },
+      "min_payment_tiers": {
+       "value": [
+        [
+         1,
+         18000
+        ],
+        [
+         3,
+         25000
+        ],
+        [
+         6,
+         30000
+        ]
+       ],
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1612.8180418163538,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer",
+      "question"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 13,
+     "rep": "No.",
+     "move": {
+      "intent": "CLOSE",
+      "reason": "post_wrap",
+      "facts": {}
+     },
+     "said": "Thank you. We will present this to the client and follow up after their review. Have a good day.",
+     "expect": {
+      "intent": "CLOSE",
+      "reason": "post_wrap"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 18000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      },
+      "min_payment_tiers": {
+       "value": [
+        [
+         1,
+         18000
+        ],
+        [
+         3,
+         25000
+        ],
+        [
+         6,
+         30000
+        ]
+       ],
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1009.7117079421878,
+     "acts": [],
+     "turn_acts": [
+      "list_done"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 14,
+     "rep": "No. That's it.",
+     "move": {
+      "intent": "CLOSE",
+      "reason": "already_ended",
+      "facts": {}
+     },
+     "said": "Thank you. We will present this to the client and follow up after their review. Have a good day.",
+     "expect": {
+      "intent": "CLOSE",
+      "reason": "already_ended"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 18000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      },
+      "min_payment_tiers": {
+       "value": [
+        [
+         1,
+         18000
+        ],
+        [
+         3,
+         25000
+        ],
+        [
+         6,
+         30000
+        ]
+       ],
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 914.0442090574652,
+     "acts": [
+      "end_call"
+     ],
+     "turn_acts": [
+      "list_done",
+      "end_call"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1123.782374896109,
+     "prompt_tokens": 1754,
+     "completion_tokens": 39,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006417045369744301,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1046.798458090052,
+     "prompt_tokens": 1839,
+     "completion_tokens": 81,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005834037438035011,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 991.5343341417611,
+     "prompt_tokens": 1874,
+     "completion_tokens": 49,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.004165805876255035,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 923.2089999131858,
+     "prompt_tokens": 1906,
+     "completion_tokens": 78,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006832880899310112,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 2871.529791969806,
+     "prompt_tokens": 1877,
+     "completion_tokens": 524,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005499925464391708,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 966.0633751191199,
+     "prompt_tokens": 1908,
+     "completion_tokens": 77,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005916925147175789,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1355.7346248999238,
+     "prompt_tokens": 1904,
+     "completion_tokens": 67,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006875023245811462,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 949.9238331336528,
+     "prompt_tokens": 1874,
+     "completion_tokens": 31,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.003333901986479759,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1296.4516249485314,
+     "prompt_tokens": 1879,
+     "completion_tokens": 47,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005458947271108627,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1040.8865839708596,
+     "prompt_tokens": 1893,
+     "completion_tokens": 37,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005166046321392059,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1611.9164580013603,
+     "prompt_tokens": 1894,
+     "completion_tokens": 208,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005666166543960571,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1008.9942079503089,
+     "prompt_tokens": 1890,
+     "completion_tokens": 10,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.007084105163812637,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 912.878958042711,
+     "prompt_tokens": 1884,
+     "completion_tokens": 38,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006749993190169334,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "neg_floor_above_limit",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "Up to eight payments, at least $100 each, even payments.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "Understood, up to 8 payments, at least $100 each, with even payments. What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1051.4711251016706,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "We need ninety percent.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=5200",
+      "facts": {
+       "counter_pct": 5200,
+       "offer_total": 65000
+      }
+     },
+     "said": "We can propose 52% of the balance, which is $650. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 5200
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1036.1608329694718,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "Eighty five percent, and that's final. My manager won't approve anything less.",
+     "move": {
+      "intent": "ESCALATE",
+      "reason": "above_accept_line",
+      "facts": {}
+     },
+     "said": "I need to involve someone from our side. Your number is above what I can accept on this call, so a specialist will review it.",
+     "expect": {
+      "intent": "ESCALATE",
+      "reason": "above_accept_line"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 966.9025831390172,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 3,
+     "rep": "No. Eighty five is as low as it goes.",
+     "move": {
+      "intent": "ESCALATE",
+      "reason": "already_escalated",
+      "facts": {}
+     },
+     "said": "I need to involve someone from our side. A specialist still needs to join this call.",
+     "expect": {
+      "intent": "ESCALATE"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 931.882084114477,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1049.2422909010202,
+     "prompt_tokens": 1771,
+     "completion_tokens": 118,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.004125060513615608,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1034.8800830543041,
+     "prompt_tokens": 1833,
+     "completion_tokens": 47,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005791895091533661,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 965.1333331130445,
+     "prompt_tokens": 1867,
+     "completion_tokens": 51,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006416812539100647,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 930.3489159792662,
+     "prompt_tokens": 1872,
+     "completion_tokens": 51,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006749993190169334,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "neg_floor_below_limit",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "Up to eight payments, at least $100 each, even payments.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "Understood, up to 8 payments, at least $100 each, with even payments. What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1282.0671659428626,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "We're asking sixty percent.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=4200",
+      "facts": {
+       "counter_pct": 4200,
+       "offer_total": 52500
+      }
+     },
+     "said": "We can propose 42% of the balance, which is $525. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 4200
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1002.5398337747902,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "Look, forty percent is the floor. I can't go under that.",
+     "move": {
+      "intent": "CONFIRM_SCHEDULE",
+      "reason": "ask_within_offer",
+      "facts": {
+       "settlement_pct": 4000,
+       "offer_total": 50000,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 2,
+       "last_payment": 25000,
+       "payment_level_0": 25000
+      }
+     },
+     "said": "40% works for us. We can do 2 payments totaling $500, starting October 31. Would that work?",
+     "expect": {
+      "intent": "CONFIRM_SCHEDULE",
+      "facts": {
+       "settlement_pct": 4000
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1292.1292081009597,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1280.051875161007,
+     "prompt_tokens": 1771,
+     "completion_tokens": 118,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005707843229174614,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1001.3489578850567,
+     "prompt_tokens": 1835,
+     "completion_tokens": 49,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006332993507385254,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1290.6128328759223,
+     "prompt_tokens": 1862,
+     "completion_tokens": 54,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005709007382392883,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "neg_haggle_steps",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "Sure. We allow up to eight payments, at least a hundred dollars each, and they need to be even payments.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "Understood, up to 8 payments, at least $100 each, with even payments. What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1125.9742078837007,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "Honestly we'd need seventy percent to close this out.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=4900",
+      "facts": {
+       "counter_pct": 4900,
+       "offer_total": 61250
+      }
+     },
+     "said": "We can propose 49% of the balance, which is $612.50. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 4900
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1020.8386657759547,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "That's way too low. I could maybe do sixty two.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=5300",
+      "facts": {
+       "counter_pct": 5300,
+       "offer_total": 66250
+      }
+     },
+     "said": "We can propose 53% of the balance, which is $662.50. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 5300
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1072.973207803443,
+     "acts": [
+      "respond_to_offer",
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask",
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 3,
+     "rep": "Okay, let me meet you partway. Fifty eight percent.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=5500",
+      "facts": {
+       "counter_pct": 5500,
+       "offer_total": 68750
+      }
+     },
+     "said": "We can propose 55% of the balance, which is $687.50. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 5500
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1048.453374998644,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 4,
+     "rep": "Yeah, okay, that works for us.",
+     "move": {
+      "intent": "CONFIRM_SCHEDULE",
+      "reason": "bp=5500",
+      "facts": {
+       "settlement_pct": 5500,
+       "offer_total": 68750,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 3,
+       "last_payment": 22917,
+       "payment_level_0": 22916,
+       "payment_level_1": 22917
+      }
+     },
+     "said": "55% works for us. We can do 3 payments totaling $687.50, starting October 31. Would that work?",
+     "expect": {
+      "intent": "CONFIRM_SCHEDULE",
+      "facts": {
+       "settlement_pct": 5500
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1074.644667096436,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 5,
+     "rep": "Yes, that schedule is fine.",
+     "move": {
+      "intent": "PROPOSE_WRAP",
+      "reason": "confirmed",
+      "facts": {
+       "offer_total": 68750,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 3,
+       "last_payment": 22917,
+       "payment_level_0": 22916,
+       "payment_level_1": 22917,
+       "settlement_pct": 5500
+      }
+     },
+     "said": "I have sent this proposal to the client for approval. Do you need anything else before we end the call?",
+     "expect": {
+      "intent": "PROPOSE_WRAP",
+      "reason": "confirmed"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1090.2748750522733,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer",
+      "question"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1122.783707920462,
+     "prompt_tokens": 1786,
+     "completion_tokens": 128,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005791895091533661,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1019.4042918737978,
+     "prompt_tokens": 1843,
+     "completion_tokens": 53,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005707843229174614,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1071.429583011195,
+     "prompt_tokens": 1860,
+     "completion_tokens": 80,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005416106432676315,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1047.086999984458,
+     "prompt_tokens": 1864,
+     "completion_tokens": 48,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006707850843667984,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1073.7164169549942,
+     "prompt_tokens": 1856,
+     "completion_tokens": 39,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005875015631318092,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1088.9881250914186,
+     "prompt_tokens": 1853,
+     "completion_tokens": 46,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006459187716245651,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "neg_rule_change",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "Up to eight payments, at least $100 each, even payments.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "Understood, up to 8 payments, at least $100 each, with even payments. What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1220.1257499400526,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "We'd take forty five percent.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=3100",
+      "facts": {
+       "counter_pct": 3100,
+       "offer_total": 38750
+      }
+     },
+     "said": "We can propose 31% of the balance, which is $387.50. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 3100
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 986.1052499618381,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "Actually, I just checked, on this account it's six payments max, not eight.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "hold",
+      "facts": {
+       "counter_pct": 3100,
+       "offer_total": 38750
+      }
+     },
+     "said": "Got it, a maximum of 6 payments. We are staying at 31% of the balance, which is $387.50. Can you come down from your number?",
+     "expect": {
+      "intent": "COUNTER",
+      "reason": "hold"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1060.331708053127,
+     "acts": [
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1218.159083975479,
+     "prompt_tokens": 1771,
+     "completion_tokens": 118,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005250098183751106,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 985.3767920285463,
+     "prompt_tokens": 1835,
+     "completion_tokens": 49,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.0052908435463905334,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1058.5631250869483,
+     "prompt_tokens": 1866,
+     "completion_tokens": 49,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.003125052899122238,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "neg_self_correction",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "Up to eight payments, at least $100 each, even payments.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "Understood, up to 8 payments, at least $100 each, with even payments. What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1061.8452501948923,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "We'd be looking at around thirty... no, sorry, seventy five percent.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=5200",
+      "facts": {
+       "counter_pct": 5200,
+       "offer_total": 104000
+      }
+     },
+     "said": "We can propose 52% of the balance, which is $1,040. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 5200
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 948.1305831577629,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": [
+      "thirty"
+     ]
+    },
+    {
+     "i": 2,
+     "rep": "Sixty eight. Sorry, I meant sixty five percent, final.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "final_counter",
+      "facts": {
+       "counter_pct": 5800,
+       "offer_total": 116000
+      }
+     },
+     "said": "We can meet you partway at 58% of the balance, which is $1,160. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "reason": "final_counter",
+      "facts": {
+       "counter_pct": 5800
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1034.115666989237,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 3,
+     "rep": "Okay. Fifty eight works.",
+     "move": {
+      "intent": "CONFIRM_SCHEDULE",
+      "reason": "bp=5800",
+      "facts": {
+       "settlement_pct": 5800,
+       "offer_total": 116000,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 6,
+       "last_payment": 19334,
+       "payment_level_0": 19333,
+       "payment_level_1": 19334
+      }
+     },
+     "said": "58% works for us. We can do 6 payments totaling $1,160, starting October 31. Would that work?",
+     "expect": {
+      "intent": "CONFIRM_SCHEDULE",
+      "facts": {
+       "settlement_pct": 5800
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 987.8529158886522,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer"
+     ],
+     "unaccounted": [
+      "Fifty eight"
+     ]
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1059.8899167962372,
+     "prompt_tokens": 1771,
+     "completion_tokens": 118,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.004500150680541992,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 946.6351671144366,
+     "prompt_tokens": 1850,
+     "completion_tokens": 46,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005499925464391708,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1032.4287919793278,
+     "prompt_tokens": 1867,
+     "completion_tokens": 62,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005832873284816742,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 986.601292155683,
+     "prompt_tokens": 1871,
+     "completion_tokens": 42,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006292015314102173,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "neg_total_dollars",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "Up to eight payments, at least $100 each, even payments.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "Understood, up to 8 payments, at least $100 each, with even payments. What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1198.9196669310331,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "We could settle the account for nine hundred dollars total.",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=5000",
+      "facts": {
+       "counter_pct": 5000,
+       "offer_total": 62500
+      }
+     },
+     "said": "Okay, $900 in total. We can propose 50% of the balance, which is $625. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 5000
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1010.7015001121908,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "I can come down to $500 total, that's the best I can do.",
+     "move": {
+      "intent": "CONFIRM_SCHEDULE",
+      "reason": "ask_within_offer",
+      "facts": {
+       "settlement_pct": 4000,
+       "offer_total": 50000,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 2,
+       "last_payment": 25000,
+       "payment_level_0": 25000
+      }
+     },
+     "said": "Got it, $500 for the whole settlement. 40% works for us. We can do 2 payments totaling $500, starting October 31. Would that work?",
+     "expect": {
+      "intent": "CONFIRM_SCHEDULE",
+      "facts": {
+       "settlement_pct": 4000,
+       "offer_total": 50000
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1204.475583974272,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1196.9295828603208,
+     "prompt_tokens": 1771,
+     "completion_tokens": 118,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006332993507385254,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1008.6807499174029,
+     "prompt_tokens": 1842,
+     "completion_tokens": 57,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006708083674311638,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1021.1533750407398,
+     "prompt_tokens": 1861,
+     "completion_tokens": 59,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 181.29149987362325,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "neg_voice_fillers",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "um yeah so uh it's up to eight payments and uh at least a hundred dollars each even payments",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "Understood, up to 8 payments, at least $100 each, with even payments. What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1397.6833750493824,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "okay so uh we we'd be looking at like seventy percent you know",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=4900",
+      "facts": {
+       "counter_pct": 4900,
+       "offer_total": 98000
+      }
+     },
+     "said": "We can propose 49% of the balance, which is $980. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "facts": {
+       "counter_pct": 4900
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1047.3786247894168,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "hmm I mean I could do sixty five that's uh that's really the lowest I can go",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "final_counter",
+      "facts": {
+       "counter_pct": 5700,
+       "offer_total": 114000
+      }
+     },
+     "said": "We can meet you partway at 57% of the balance, which is $1,140. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "reason": "final_counter",
+      "facts": {
+       "counter_pct": 5700
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1223.1822500471026,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 3,
+     "rep": "yeah okay yeah that works",
+     "move": {
+      "intent": "CONFIRM_SCHEDULE",
+      "reason": "bp=5700",
+      "facts": {
+       "settlement_pct": 5700,
+       "offer_total": 114000,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 6,
+       "last_payment": 19000,
+       "payment_level_0": 19000
+      }
+     },
+     "said": "57% works for us. We can do 6 payments totaling $1,140, starting October 31. Would that work?",
+     "expect": {
+      "intent": "CONFIRM_SCHEDULE",
+      "facts": {
+       "settlement_pct": 5700
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1073.8925840705633,
+     "acts": [
+      "respond_to_offer"
+     ],
+     "turn_acts": [
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1226.601165952161,
+     "prompt_tokens": 1783,
+     "completion_tokens": 123,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 168.33429178223014,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1045.5814581364393,
+     "prompt_tokens": 1846,
+     "completion_tokens": 46,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006332993507385254,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1106.100165983662,
+     "prompt_tokens": 1870,
+     "completion_tokens": 57,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 115.4259170871228,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 982.2731660678983,
+     "prompt_tokens": 1869,
+     "completion_tokens": 45,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 90.57979192584753,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "operator_rule_correction",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "No, it's six payments now. The minimum is $100 each.",
+     "move": {
+      "intent": "ASK",
+      "reason": "payment_structure",
+      "facts": {}
+     },
+     "said": "Understood, up to 6 payments, at least $100 each. Do you need even payments, or can you allow a balloon or a flexible schedule?",
+     "expect": {
+      "intent": [
+       "ASK",
+       "ASK_SETTLEMENT"
+      ],
+      "known_rules": {
+       "max_payments": "operator",
+       "min_payment_cents": "operator"
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "operator"
+      },
+      "min_payment_cents": {
+       "value": 15000,
+       "source": "operator"
+      }
+     },
+     "nlu_ms": 1242.8124998696148,
+     "acts": [
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "Yes, that's right, even payments.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "Okay, even payments. What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": [
+       "ASK",
+       "ASK_SETTLEMENT"
+      ],
+      "known_rules": {
+       "max_payments": "rep",
+       "min_payment_cents": "rep"
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 6,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1254.8896251246333,
+     "acts": [
+      "answer"
+     ],
+     "turn_acts": [
+      "state_rule"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1030.1010829862207,
+     "prompt_tokens": 1819,
+     "completion_tokens": 89,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 210.43724985793233,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1088.3349580690265,
+     "prompt_tokens": 1837,
+     "completion_tokens": 41,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 165.8278750255704,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "price_73_vs_75",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "Up to eight payments, at least $100 each, even payments.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "Understood, up to 8 payments, at least $100 each, with even payments. What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1212.1349580120295,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "seventy five percent",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "bp=5200",
+      "facts": {
+       "counter_pct": 5200,
+       "offer_total": 104000
+      }
+     },
+     "said": "We can propose 52% of the balance, which is $1,040. Would that work?",
+     "expect": {
+      "intent": "COUNTER"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1074.093250092119,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "I can't go lower than seventy five",
+     "move": {
+      "intent": "COUNTER",
+      "reason": "final_counter",
+      "facts": {
+       "counter_pct": 6300,
+       "offer_total": 126000
+      }
+     },
+     "said": "We can meet you partway at 63% of the balance, which is $1,260. Would that work?",
+     "expect": {
+      "intent": "COUNTER",
+      "reason": "final_counter"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1228.4911670722067,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask",
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 3,
+     "rep": "I think seventy three is the lowest I can go",
+     "move": {
+      "intent": "CONFIRM_SCHEDULE",
+      "reason": "rep_firm",
+      "facts": {
+       "settlement_pct": 7300,
+       "offer_total": 146000,
+       "first_payment_date": "2026-10-31",
+       "num_payments": 7,
+       "last_payment": 20858,
+       "payment_level_0": 20857,
+       "payment_level_1": 20858
+      }
+     },
+     "said": "73% works for us. We can do 7 payments totaling $1,460, starting October 31. Would that work?",
+     "expect": {
+      "intent": "CONFIRM_SCHEDULE",
+      "facts": {
+       "settlement_pct": 7300
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 10000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "even",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1381.0885830316693,
+     "acts": [
+      "price_ask"
+     ],
+     "turn_acts": [
+      "price_ask"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1104.1020420379937,
+     "prompt_tokens": 1771,
+     "completion_tokens": 118,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 106.33729188703,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 981.4295419491827,
+     "prompt_tokens": 1831,
+     "completion_tokens": 46,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 91.83879080228508,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1012.8830841276795,
+     "prompt_tokens": 1854,
+     "completion_tokens": 50,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 214.95412499643862,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1194.669291144237,
+     "prompt_tokens": 1873,
+     "completion_tokens": 51,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 185.04420877434313,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "tiers_suggested_lines",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "Up to eight payments, at least $190 each, and the schedule is flexible.",
+     "move": {
+      "intent": "ASK",
+      "reason": "optional_sweep",
+      "facts": {}
+     },
+     "said": "Understood, up to 8 payments, at least $190 each, with a flexible schedule. Any tiered minimums, or a limit on payment levels?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "optional_sweep"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1026.6851671040058,
+     "acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule",
+      "state_rule",
+      "question"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "There are three payment tiers.",
+     "move": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {
+       "tier_count": 3,
+       "tier_position": 1
+      }
+     },
+     "said": "Got it, 3 tiers. Starting with tier 1: from which payment does it start, and what is its minimum?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {
+       "tier_count": 3
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1052.9994170647115,
+     "acts": [
+      "announce_rules"
+     ],
+     "turn_acts": [
+      "announce_rules"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "The first two payments must be at least one hundred ninety dollars.",
+     "move": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {}
+     },
+     "said": "Got it. And the next tier: from which payment does it start, and what is its minimum?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1216.6831251233816,
+     "acts": [
+      "rule_item"
+     ],
+     "turn_acts": [
+      "rule_item"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 3,
+     "rep": "Payments three to five must be at least two hundred fifty dollars.",
+     "move": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {}
+     },
+     "said": "Got it. And the next tier: from which payment does it start, and what is its minimum?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1312.7563330344856,
+     "acts": [
+      "rule_item"
+     ],
+     "turn_acts": [
+      "rule_item"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 4,
+     "rep": "Payments six to eight must be at least three hundred dollars.",
+     "move": {
+      "intent": "READ_BACK",
+      "reason": "min_payment_tiers",
+      "facts": {
+       "readback_value_tier_a_from": 1,
+       "readback_value_tier_a_min": 19000,
+       "readback_value_tier_a_to": 2,
+       "readback_value_tier_b_from": 3,
+       "readback_value_tier_b_min": 25000,
+       "readback_value_tier_b_to": 5,
+       "readback_value_tier_c_from": 6,
+       "readback_value_tier_c_min": 30000,
+       "readback_value_tier_c_to": 8
+      }
+     },
+     "said": "So payments 1 to 2 at least $190, 3 to 5 at least $250, 6 to 8 at least $300. Is that right?",
+     "expect": {
+      "intent": "READ_BACK",
+      "reason": "min_payment_tiers"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1394.3166250828654,
+     "acts": [
+      "rule_item"
+     ],
+     "turn_acts": [
+      "rule_item"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 5,
+     "rep": "That's all the tiers.",
+     "move": {
+      "intent": "READ_BACK",
+      "reason": "min_payment_tiers",
+      "facts": {
+       "readback_value_tier_a_from": 1,
+       "readback_value_tier_a_min": 19000,
+       "readback_value_tier_a_to": 2,
+       "readback_value_tier_b_from": 3,
+       "readback_value_tier_b_min": 25000,
+       "readback_value_tier_b_to": 5,
+       "readback_value_tier_c_from": 6,
+       "readback_value_tier_c_min": 30000,
+       "readback_value_tier_c_to": 8
+      }
+     },
+     "said": "So payments 1 to 2 at least $190, 3 to 5 at least $250, 6 to 8 at least $300. Is that right?",
+     "expect": {
+      "intent": [
+       "READ_BACK",
+       "ASK_SETTLEMENT"
+      ]
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1171.625540824607,
+     "acts": [
+      "list_done"
+     ],
+     "turn_acts": [
+      "list_done"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 6,
+     "rep": "Yes, that's right.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "What settlement percentage of the balance are you looking for?",
+     "expect": null,
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 985.8691249974072,
+     "acts": [
+      "readback_reply"
+     ],
+     "turn_acts": [
+      "readback_reply",
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 7,
+     "rep": "At most three payment levels.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "What settlement percentage of the balance are you looking for?",
+     "expect": null,
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      },
+      "min_payment_tiers": {
+       "value": [
+        [
+         1,
+         19000
+        ],
+        [
+         3,
+         25000
+        ],
+        [
+         6,
+         30000
+        ]
+       ],
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1107.2772908955812,
+     "acts": [
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1024.3348330259323,
+     "prompt_tokens": 1777,
+     "completion_tokens": 125,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.004250090569257736,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 884.669333929196,
+     "prompt_tokens": 1851,
+     "completion_tokens": 47,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 167.38583287224174,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 902.2697079926729,
+     "prompt_tokens": 1898,
+     "completion_tokens": 70,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 312.507624970749,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1019.4003751967102,
+     "prompt_tokens": 1902,
+     "completion_tokens": 71,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 291.4782501757145,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1216.4539170917124,
+     "prompt_tokens": 1906,
+     "completion_tokens": 69,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 175.92991702258587,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1170.4514590092003,
+     "prompt_tokens": 1883,
+     "completion_tokens": 32,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.009791925549507141,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 981.5169170033187,
+     "prompt_tokens": 1883,
+     "completion_tokens": 41,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 3.4167920239269733,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 888.9437080360949,
+     "prompt_tokens": 1876,
+     "completion_tokens": 46,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 216.96250000968575,
+     "key_id": "anthropic#0"
+    }
+   ]
+  },
+  {
+   "name": "tiers_user_call",
+   "skipped": null,
+   "turns": [
+    {
+     "i": 0,
+     "rep": "Up to eight payments, at least $190 each.",
+     "move": {
+      "intent": "ASK",
+      "reason": "payment_structure",
+      "facts": {}
+     },
+     "said": "Understood, up to 8 payments, at least $190 each. Do you need even payments, or can you allow a balloon or a flexible schedule?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "payment_structure"
+     },
+     "ok": true,
+     "known_rules": {},
+     "nlu_ms": 1895.5878331325948,
+     "acts": [
+      "answer",
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "state_rule"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 1,
+     "rep": "I need a flexible schedule. I will define the payment structure.",
+     "move": {
+      "intent": "ASK",
+      "reason": "optional_sweep",
+      "facts": {}
+     },
+     "said": "Okay, a flexible schedule. Any tiered minimums, or a limit on payment levels?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "optional_sweep"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1147.5208329502493,
+     "acts": [
+      "state_rule"
+     ],
+     "turn_acts": [
+      "state_rule",
+      "question"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 2,
+     "rep": "Uh, before that, I need to define the payment tiers.",
+     "move": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {}
+     },
+     "said": "Go ahead. For each tier, from which payment does it start, and what is its minimum?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 978.5126249771565,
+     "acts": [
+      "announce_rules"
+     ],
+     "turn_acts": [
+      "announce_rules"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 3,
+     "rep": "So we will have three payment tiers.",
+     "move": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {
+       "tier_count": 3,
+       "tier_position": 1
+      }
+     },
+     "said": "Got it, 3 tiers. Starting with tier 1: from which payment does it start, and what is its minimum?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {
+       "tier_count": 3
+      }
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1114.6989171393216,
+     "acts": [
+      "announce_rules"
+     ],
+     "turn_acts": [
+      "announce_rules"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 4,
+     "rep": "Payments 1 to 2, at least $190.",
+     "move": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {}
+     },
+     "said": "Got it. And the next tier: from which payment does it start, and what is its minimum?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1125.2740419004112,
+     "acts": [
+      "rule_item"
+     ],
+     "turn_acts": [
+      "rule_item"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 5,
+     "rep": "Then from the 3rd payment on, at least $250.",
+     "move": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers",
+      "facts": {}
+     },
+     "said": "Got it. And the next tier: from which payment does it start, and what is its minimum?",
+     "expect": {
+      "intent": "ASK",
+      "reason": "min_payment_tiers"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1141.8754160404205,
+     "acts": [
+      "rule_item"
+     ],
+     "turn_acts": [
+      "rule_item"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 6,
+     "rep": "And from the 6th payment on, at least $300.",
+     "move": {
+      "intent": "READ_BACK",
+      "reason": "min_payment_tiers",
+      "facts": {
+       "readback_value_tier_a_from": 1,
+       "readback_value_tier_a_min": 19000,
+       "readback_value_tier_a_to": 2,
+       "readback_value_tier_b_from": 3,
+       "readback_value_tier_b_min": 25000,
+       "readback_value_tier_b_to": 5,
+       "readback_value_tier_c_from": 6,
+       "readback_value_tier_c_min": 30000,
+       "readback_value_tier_c_to": 8
+      }
+     },
+     "said": "So payments 1 to 2 at least $190, 3 to 5 at least $250, 6 to 8 at least $300. Is that right?",
+     "expect": {
+      "intent": "READ_BACK",
+      "reason": "min_payment_tiers"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1095.6969589460641,
+     "acts": [
+      "rule_item"
+     ],
+     "turn_acts": [
+      "rule_item"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 7,
+     "rep": "That's all.",
+     "move": {
+      "intent": "READ_BACK",
+      "reason": "min_payment_tiers",
+      "facts": {
+       "readback_value_tier_a_from": 1,
+       "readback_value_tier_a_min": 19000,
+       "readback_value_tier_a_to": 2,
+       "readback_value_tier_b_from": 3,
+       "readback_value_tier_b_min": 25000,
+       "readback_value_tier_b_to": 5,
+       "readback_value_tier_c_from": 6,
+       "readback_value_tier_c_min": 30000,
+       "readback_value_tier_c_to": 8
+      }
+     },
+     "said": "So payments 1 to 2 at least $190, 3 to 5 at least $250, 6 to 8 at least $300. Is that right?",
+     "expect": {
+      "intent": [
+       "READ_BACK",
+       "ASK_SETTLEMENT"
+      ]
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 1739.0101249329746,
+     "acts": [
+      "list_done"
+     ],
+     "turn_acts": [
+      "list_done"
+     ],
+     "unaccounted": []
+    },
+    {
+     "i": 8,
+     "rep": "Yes, that's right.",
+     "move": {
+      "intent": "ASK_SETTLEMENT",
+      "reason": null,
+      "facts": {}
+     },
+     "said": "What settlement percentage of the balance are you looking for?",
+     "expect": {
+      "intent": "ASK_SETTLEMENT"
+     },
+     "ok": true,
+     "known_rules": {
+      "max_payments": {
+       "value": 8,
+       "source": "rep"
+      },
+      "min_payment_cents": {
+       "value": 19000,
+       "source": "rep"
+      },
+      "payment_structure": {
+       "value": "flexible",
+       "source": "rep"
+      }
+     },
+     "nlu_ms": 984.5990419853479,
+     "acts": [
+      "readback_reply"
+     ],
+     "turn_acts": [
+      "readback_reply",
+      "respond_to_offer"
+     ],
+     "unaccounted": []
+    }
+   ],
+   "calls": [
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1594.8140830732882,
+     "prompt_tokens": 1767,
+     "completion_tokens": 83,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 299.12895895540714,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1146.0079168900847,
+     "prompt_tokens": 1844,
+     "completion_tokens": 51,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.0062498729676008224,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 977.0353329367936,
+     "prompt_tokens": 1860,
+     "completion_tokens": 49,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.0063749030232429504,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1113.3522090967745,
+     "prompt_tokens": 1879,
+     "completion_tokens": 49,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005250098183751106,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1123.6990001052618,
+     "prompt_tokens": 1893,
+     "completion_tokens": 65,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.005541834980249405,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1113.608584040776,
+     "prompt_tokens": 1898,
+     "completion_tokens": 65,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 26.656625093892217,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1011.3676250912249,
+     "prompt_tokens": 1902,
+     "completion_tokens": 65,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 82.79491704888642,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 1553.3203750383109,
+     "prompt_tokens": 1879,
+     "completion_tokens": 197,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 184.66758402064443,
+     "key_id": "anthropic#0"
+    },
+    {
+     "role": "nlu",
+     "provider": "anthropic",
+     "model": "claude-haiku-5-5",
+     "latency_ms": 983.6241248995066,
+     "prompt_tokens": 1883,
+     "completion_tokens": 41,
+     "cache_hit": false,
+     "failover_from": null,
+     "error": null,
+     "queue_ms": 0.006749993190169334,
+     "key_id": "anthropic#0"
+    }
+   ]
+  }
+ ]
+}

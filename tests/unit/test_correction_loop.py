@@ -61,7 +61,7 @@ def _nlu(*terms: tuple[str, Any, str], stance: str = "info") -> str:
 
 
 def _orch(tmp_path: Path, *, llm: Any = None, auto_ack: bool = True) -> Orchestrator:
-    kw: dict[str, Any] = {"nlu_mode": "llm"} if llm is not None else {}
+    kw: dict[str, Any] = {"nlu_mode": "llm", "nlu_schema": "flat"} if llm is not None else {}
     return Orchestrator(
         CallSession(scenario=load_scenario("fixtures/scenarios/easy_deal")),
         llm=llm,
@@ -252,7 +252,7 @@ def test_disputed_date_reply(reply: str, want: date | None) -> None:
 
 @pytest.mark.asyncio
 async def test_bare_no_clarifies_then_bare_value_settles_it(tmp_path: Path) -> None:
-    """"No, it's $250" → CLARIFY → "$250" → KNOWN $250, no LLM call, no amount question."""
+    """ "No, it's $250" → CLARIFY → "$250" → KNOWN $250, no LLM call, no amount question."""
     orch, llm = await _min_180_acked(tmp_path)
     llm.enqueue("nlu", _nlu(("min_payment_cents", 25000, "$250")))
     u = await orch.on_creditor_text("No, it's $250.")
@@ -302,8 +302,10 @@ async def test_pick_overrides_an_empty_or_ambiguous_reading(tmp_path: Path) -> N
         )
     assert orch.session.belief.get("min_payment_cents").status == TermStatus.CONTRADICTED
     u = await orch.on_creditor_text(
-        "$250", oracle=TurnAnalysis(stance="info", amount_ambiguous_cents=25000,
-                                   amount_ambiguous_quote="$250")
+        "$250",
+        oracle=TurnAnalysis(
+            stance="info", amount_ambiguous_cents=25000, amount_ambiguous_quote="$250"
+        ),
     )
     term = orch.session.belief.get("min_payment_cents")
     assert (term.status, term.value) == (TermStatus.KNOWN, 25000)
@@ -404,12 +406,15 @@ async def test_live_nlu_prompt_has_no_turn_context(tmp_path: Path) -> None:
     assert "Earlier turns" not in user and "$180" not in user
     assert "earlier turns" not in system.lower()
     assert user.startswith("Today's date: ") and "Agent last said: " in user
-    assert user == nlu_messages(
-        "Sorry, can you change it to $250?",
-        FIELDS_BY_NAME["payment_structure"].ask_text,
-        None,
-        ref=orch._ref,
-    )[1]["content"]
+    assert (
+        user
+        == nlu_messages(
+            "Sorry, can you change it to $250?",
+            FIELDS_BY_NAME["payment_structure"].ask_text,
+            None,
+            ref=orch._ref,
+        )[1]["content"]
+    )
 
 
 @pytest.mark.asyncio

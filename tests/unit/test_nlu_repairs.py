@@ -155,7 +155,7 @@ async def test_analyze_passes_ref_to_prompt(monkeypatch: pytest.MonkeyPatch) -> 
         "",
         None,
         llm=llm,
-        settings=Settings(nlu_mode="llm", llm_profile="offline"),
+        settings=Settings(nlu_mode="llm", nlu_schema="flat", llm_profile="offline"),
         ref=_REF,
     )
     assert seen.get("ref") == _REF
@@ -172,12 +172,11 @@ async def test_oracle_overlay_uses_flag_or_regex() -> None:
         "",
         None,
         llm=llm,
-        settings=Settings(nlu_mode="llm", llm_profile="offline"),
+        settings=Settings(nlu_mode="llm", nlu_schema="flat", llm_profile="offline"),
         oracle=TurnAnalysis(stance="question"),
         ref=_REF,
     )
     assert out.asks_client_private_info is True
-
 
 
 # --- Filler false-accept veto ----------------------------------------------
@@ -195,9 +194,7 @@ _CONFIRM_LINE = (
 )
 _QUESTION_LINE = "What settlement terms can you accept on this account?"
 _EIGHT = '[{"field": "max_payments", "value": 8, "quote": "eight payments"}]'
-_VETO_XFAIL = pytest.mark.xfail(
-    strict=True, reason="filler veto reverted after the corpus gate"
-)
+_VETO_XFAIL = pytest.mark.xfail(strict=True, reason="filler veto reverted after the corpus gate")
 
 
 async def _llm_stance(utterance: str, agent_line: str, reply: str) -> str:
@@ -210,7 +207,7 @@ async def _llm_stance(utterance: str, agent_line: str, reply: str) -> str:
         agent_line,
         None,
         llm=llm,
-        settings=Settings(nlu_mode="llm", llm_profile="offline"),
+        settings=Settings(nlu_mode="llm", nlu_schema="flat", llm_profile="offline"),
         ref=_REF,
     )
     return out.stance

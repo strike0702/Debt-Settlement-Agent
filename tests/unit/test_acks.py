@@ -64,6 +64,7 @@ def _orch(
 ) -> Orchestrator:
     if llm is not None:
         kw.setdefault("nlu_mode", "llm")
+        kw.setdefault("nlu_schema", "flat")  # fakes reply in the flat schema
     session = CallSession(scenario=load_scenario(fixture))
     return Orchestrator(
         session,
@@ -363,9 +364,7 @@ async def test_correction_without_an_ack_uses_the_clarify_path(tmp_path: Path) -
 @pytest.mark.asyncio
 async def test_thats_not_what_i_said_reads_the_acked_term_back(tmp_path: Path) -> None:
     orch = await _acked_five(tmp_path)
-    u = await orch.on_creditor_text(
-        "That's not what I said.", oracle=TurnAnalysis(stance="other")
-    )
+    u = await orch.on_creditor_text("That's not what I said.", oracle=TurnAnalysis(stance="other"))
     assert u.action.intent == Intent.READ_BACK and u.action.reason == "max_payments"
     assert u.action.ack == {}
     assert orch.session.belief.get("max_payments").status == TermStatus.TENTATIVE
@@ -382,9 +381,10 @@ async def test_thats_not_what_i_said_reads_the_acked_term_back(tmp_path: Path) -
 @pytest.mark.asyncio
 async def test_live_nlu_correction_end_to_end(tmp_path: Path) -> None:
     llm = FakeLLM()
-    reply = {"stance": "info", "terms": [
-        {"field": "max_payments", "value": 5, "quote": "five", "hedged": False}
-    ]}
+    reply = {
+        "stance": "info",
+        "terms": [{"field": "max_payments", "value": 5, "quote": "five", "hedged": False}],
+    }
     llm.enqueue("nlu", json.dumps(reply))
     orch = _orch(tmp_path, llm=llm)
     await orch.start()
@@ -417,9 +417,7 @@ def test_correction_cues() -> None:
 # ----- pending questions answered with new terms -----
 
 
-_AMB_600 = TurnAnalysis(
-    stance="offer", amount_ambiguous_cents=60000, amount_ambiguous_quote="$600"
-)
+_AMB_600 = TurnAnalysis(stance="offer", amount_ambiguous_cents=60000, amount_ambiguous_quote="$600")
 
 
 async def _pending_amount(tmp_path: Path) -> Orchestrator:
@@ -616,10 +614,18 @@ async def test_groq_style_total_reading_of_am09_asks_end_to_end(tmp_path: Path) 
                 "settlement_ask_total_cents": 42000,
                 "ask_total_quote": "$420",
                 "terms": [
-                    {"field": "max_payments", "value": 3, "quote": "3 even payments",
-                     "hedged": False},
-                    {"field": "payment_structure", "value": "even", "quote": "even",
-                     "hedged": False},
+                    {
+                        "field": "max_payments",
+                        "value": 3,
+                        "quote": "3 even payments",
+                        "hedged": False,
+                    },
+                    {
+                        "field": "payment_structure",
+                        "value": "even",
+                        "quote": "even",
+                        "hedged": False,
+                    },
                 ],
             }
         ),

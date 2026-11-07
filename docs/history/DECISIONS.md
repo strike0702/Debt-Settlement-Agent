@@ -366,6 +366,21 @@ answer instead of an explicit refusal.
 ([`docs/NLU_PLAN.md`](../NLU_PLAN.md)) adds a fresh held-out negotiation set frozen before tuning,
 because 71a tuned its prompt on the main corpus.
 
+## D22. Adopt NLU v2 (acts) although its rule failed narrowly (2026-11-07)
+
+**Question.** The 71a-2 rule required every scripted turn to pass. Acts held 91 of 92 (flat 77 of
+92); the one miss, a rule revision after a proposal ("six payments max, not eight"), fails on flat
+too and comes from a code cue both schemas share. On amounts, acts dropped a "$900 total" restating
+"Fifty percent" in the counted run; the agent would still have negotiated on 50%, and the converter
+fix passed on a re-run made after the result. Keep flat, or adopt?
+
+**Chosen (user).** Adopt acts as the default now; fix the shared revision cue in 71b.
+
+**Why.** The user's priority is smooth ordinary negotiation, and on the evidence written to test
+exactly that (scripted calls and the frozen held-out negotiation set) acts is better or equal
+everywhere. Recorded as a second amendment made after seeing a result, like D21: the rule was not
+met as written.
+
 ## Process choices
 
 - Each phase runs in its own git worktree with a paste-ready prompt; phases that touch the

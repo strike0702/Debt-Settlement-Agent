@@ -20,6 +20,7 @@ _REF = date(2026, 3, 15)
 def _settings(**kwargs: object) -> Settings:
     base: dict[str, object] = {
         "nlu_mode": "llm",
+        "nlu_schema": "flat",  # fakes reply in the flat schema
         "nlg_mode": "llm",
         "llm_profile": "offline",
         "llm_cache": False,
@@ -262,9 +263,7 @@ def test_post_verify_private_regex_without_llm_flag() -> None:
 
 def test_post_verify_keeps_private_flag_with_cues() -> None:
     analysis = TurnAnalysis(stance="other", asks_client_private_info=True)
-    out = post_verify(
-        analysis, "What is the client's bank balance?", ref=_REF
-    )
+    out = post_verify(analysis, "What is the client's bank balance?", ref=_REF)
     assert out.asks_client_private_info is True
 
 
@@ -276,9 +275,7 @@ def test_post_verify_keeps_llm_commitment_flag_without_regex_cue() -> None:
 
 def test_post_verify_keeps_commitment_flag_with_cues() -> None:
     analysis = TurnAnalysis(stance="other", demands_commitment=True)
-    out = post_verify(
-        analysis, "I need a firm commitment that this deal is locked in.", ref=_REF
-    )
+    out = post_verify(analysis, "I need a firm commitment that this deal is locked in.", ref=_REF)
     assert out.demands_commitment is True
 
 
@@ -290,34 +287,26 @@ def test_post_verify_repairs_asks_for_schedule() -> None:
 
 def test_post_verify_revises_terms_instead() -> None:
     analysis = TurnAnalysis(stance="offer")
-    out = post_verify(
-        analysis, "can we do it in 3 payments instead", ref=_REF
-    )
+    out = post_verify(analysis, "can we do it in 3 payments instead", ref=_REF)
     assert out.revises_terms is True
 
 
 def test_post_verify_firm_floor() -> None:
     analysis = TurnAnalysis(stance="info")
-    out = post_verify(
-        analysis, "65 is our floor, we cannot go lower", ref=_REF
-    )
+    out = post_verify(analysis, "65 is our floor, we cannot go lower", ref=_REF)
     assert out.firm is True
     assert out.stance == "reject"
 
 
 def test_post_verify_not_firm_could_come_down() -> None:
     analysis = TurnAnalysis(stance="reject", firm=False)
-    out = post_verify(
-        analysis, "We could come down to 65", ref=_REF
-    )
+    out = post_verify(analysis, "We could come down to 65", ref=_REF)
     assert out.firm is False
 
 
 def test_post_verify_actually_not_revises_terms() -> None:
     analysis = TurnAnalysis(stance="info")
-    out = post_verify(
-        analysis, "Actually, make that a maximum of ten payments", ref=_REF
-    )
+    out = post_verify(analysis, "Actually, make that a maximum of ten payments", ref=_REF)
     assert out.revises_terms is False
 
 
@@ -530,9 +519,7 @@ def test_ask_mismatched_value_cleared() -> None:
         ask_quote="ninety-five percent",
         stance="info",
     )
-    out = post_verify(
-        analysis, "we need ninety-five percent settlement", ref=_REF
-    )
+    out = post_verify(analysis, "we need ninety-five percent settlement", ref=_REF)
     assert out.settlement_ask_pct is None
     assert out.ask_verified is False
 
@@ -571,9 +558,7 @@ def test_ask_verified_when_quote_matches() -> None:
         ask_quote="forty five percent",
         stance="counter",
     )
-    out = post_verify(
-        analysis, "We are looking for a forty five percent settlement.", ref=_REF
-    )
+    out = post_verify(analysis, "We are looking for a forty five percent settlement.", ref=_REF)
     assert out.settlement_ask_pct == 45.0
     assert out.ask_verified is True
 
@@ -745,7 +730,9 @@ async def test_fast_readback_skips_llm() -> None:
 
     llm = FakeLLM()
     # If LLM were called, chat_text would raise (empty queue).
-    settings = Settings(nlu_mode="llm", llm_profile="offline", nlg_mode="template")
+    settings = Settings(
+        nlu_mode="llm", nlu_schema="flat", llm_profile="offline", nlg_mode="template"
+    )
     out = await analyze(
         "yes",
         "So I have October 31 for the initial payment date. Is that right?",

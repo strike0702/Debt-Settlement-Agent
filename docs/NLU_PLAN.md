@@ -109,3 +109,15 @@ The rule failed on criterion 1: scripted calls acts 91/92, flat 77/92. Both fail
 read as a contradiction, not a revision. Amounts terms failed on the run made under the rule (am14); the
 re-run after a fix passed but was not held out. Criteria 2, 4 and 5 pass. `NLU_SCHEMA`
 stays `flat` ([report](eval/nlu_v2_20261107_r2/summary.md)).
+
+## Result of 71a-2 and adoption (2026-11-07)
+
+The 71a-2 rule failed as written ([report](eval/nlu_v2_20261107_r2/summary.md)): on scripted calls
+acts held 91/92 turns (18/19 scripts) against flat's 77/92 (14/19); its one miss (a rule revision
+after a proposal, held-out `neg_rule_change` #2) fails on flat too and comes from a shared code cue.
+On amounts, acts dropped the "$900 total" next to "Fifty percent" (am14) in the counted run; the
+converter fix came after the result. Every other criterion passed, with acts ≥ flat on the frozen
+held-out negotiation set.
+
+**Adopted (user decision D22, second amendment made after a result, recorded as such):**
+`NLU_SCHEMA=acts` is the default. The shared revision cue is fixed in 71b.

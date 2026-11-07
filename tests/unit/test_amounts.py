@@ -264,9 +264,7 @@ def test_per_payment_cue_wins_over_total_cue() -> None:
 
 def test_min_check_skipped_after_per_payment_answer() -> None:
     v = VerifiedAnalysis(stance="info", terms=[_min_term(200000, "$2,000")])
-    _, pending = resolve_amounts(
-        v, "per payment", balance_cents=_BALANCE, check_min_payment=False
-    )
+    _, pending = resolve_amounts(v, "per payment", balance_cents=_BALANCE, check_min_payment=False)
     assert pending is None
 
 
@@ -372,7 +370,7 @@ def _settings(**kw: object) -> Settings:
 
 async def _orch(tmp_path: Path, *, llm: FakeLLM | None = None) -> tuple[Orchestrator, CallSession]:
     session = CallSession(scenario=load_scenario("fixtures/demo"))
-    settings = _settings(nlu_mode="llm") if llm is not None else _settings()
+    settings = _settings(nlu_mode="llm", nlu_schema="flat") if llm is not None else _settings()
     orch = Orchestrator(
         session,
         llm=llm,

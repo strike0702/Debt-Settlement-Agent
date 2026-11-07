@@ -200,6 +200,12 @@ class NumberToken:
         return (self.kind, self.value)
 
 
+# "hold on one second", "give me a sec": durations of a pause, never figures.
+_TIME_PHRASE_RE = re.compile(
+    r"\b(?:one|a|just a|half a)\s+(?:second|sec|moment|minute|min)\b", re.IGNORECASE
+)
+
+
 def words_to_number(text: str) -> int | None:
     """Convert common English number phrases to an int.
 
@@ -244,6 +250,11 @@ def words_to_number(text: str) -> int | None:
             current += _TENS[part]
             saw_numeric = True
         elif part in _ORDINALS:
+            # An ordinal only ends a compound after a tens / scale word ("twenty
+            # first"); "first two" and "one second" are not one number.
+            k = parts.index(part)
+            if k != len(parts) - 1 or not (parts[k - 1] in _TENS or parts[k - 1] in _SCALES):
+                return None
             current += _ORDINALS[part]
             saw_numeric = True
         elif part == "hundred":
@@ -410,6 +421,9 @@ def extract_tokens(text: str, *, ref: date | None = None) -> list[NumberToken]:
         add(kind, value, m.group(0), m.start(), m.end())
 
     # 6. Number words (greedy multi-word phrases)
+    # "one second" / "a moment" are time phrases, not figures: masked first.
+    for m in _TIME_PHRASE_RE.finditer(text):
+        _mask_span(masked, m.start(), m.end())
     # Scan word tokens; try longest phrase of NUMBER_WORDS.
     word_matches = list(_WORD_TOKEN_RE.finditer(text))
     i = 0
@@ -445,6 +459,8 @@ def extract_tokens(text: str, *, ref: date | None = None) -> list[NumberToken]:
                 pass  # "a hundred and twenty": "and" inside the number
             elif not nxt_pieces or any(p not in NUMBER_WORDS for p in nxt_pieces):
                 break
+            elif not _ordinal_glue_ok(words, nxt_pieces):
+                break  # "first two" is ordinal + count: two tokens
             words.extend(nxt_pieces)
             end = nxt.end()
             j += 1
@@ -474,6 +490,15 @@ def extract_tokens(text: str, *, ref: date | None = None) -> list[NumberToken]:
 
     tokens.sort(key=lambda t: t.start)
     return tokens
+
+
+def _ordinal_glue_ok(words: list[str], nxt: list[str]) -> bool:
+    """An ordinal only ends a number, after a tens or scale word ("twenty first")."""
+    if words[-1] in _ORDINALS:
+        return False
+    if nxt[0] in _ORDINALS:
+        return words[-1] in _TENS or words[-1] in _SCALES
+    return True
 
 
 def _next_word(

@@ -214,7 +214,8 @@ each with only its own keys and "quote": the shortest verbatim span that holds i
 A statement with no rule, price or request (the balance, small talk, "take it to the
 client", "no rush") is {"acts":[]}. Only rules the rep states: never infer a rule
 from other words. Hedged, unsure or disfluent lines still map ("I think the minimum is
-about $200" -> state_rule, hedged). Use "unclear" (alone) only for unintelligible speech.
+about $200" -> state_rule, hedged). Use "unclear" (alone) only for unintelligible speech;
+a long, pushy or mixed line still lists its acts. At most 6 acts, each said once.
 Context (JSON) says what the agent is waiting for ("awaiting"), the offers on the table
 and any list being collected. Read short or bare replies against it. In known_rules,
 source "operator" means the agent stated that rule from its records: a rep value that
@@ -239,8 +240,10 @@ rule_item: one tier: payments it covers and its minimum.
 list_done: the list is finished.
  {"type":"list_done","quote":"that's all the tiers"}
 price_ask: settlement price as pct of the balance or total_cents; firmness opening|counter|final
-(final = their floor, lowest, cannot go lower).
+(final = their floor, lowest, cannot go lower). When the rep corrects themselves ("thirty...
+no, sorry, seventy five percent") only the corrected number is the ask.
  {"type":"price_ask","pct":73,"firmness":"final","quote":"seventy three is the lowest I can go"}
+ {"type":"price_ask","total_cents":42000,"firmness":"counter","quote":"pay $420 by March 31"}
 respond_to_offer: accept or reject what the agent offered ("not sure" is a stall).
  {"type":"respond_to_offer","response":"accept","quote":"that works"}
 readback_reply: yes/no to the agent's read-back; correction = the right value if given.
@@ -250,7 +253,8 @@ why_not_higher|next_steps|who_approves|timeline|other.
  {"type":"question","topic":"next_steps","quote":"what happens next?"}
 ask_private_info: asks, directly or not, about the client's own money: income, take-home
 pay, savings, bank or program balance, assets, budget, what the client can afford, or how
-much the client pays, deposits or has drafted each month. Not the debt itself.
+much the client pays, deposits or has drafted each month, what they have left after rent or
+bills, disposable or spare money. Not the debt itself.
  {"type":"ask_private_info","quote":"how much does the client make?"}
 demand_commitment: demands the agent commit or guarantee now.
  {"type":"demand_commitment","quote":"I need your commitment today"}

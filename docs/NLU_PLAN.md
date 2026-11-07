@@ -74,3 +74,30 @@ a silent drop; a grid test enumerates them (about 8 × 17).
 4. Offline oracle eval thresholds PASS, and the oracle path unchanged.
 
 If any fails, the flag stays off and the result is recorded as it is.
+
+## Result of 71a and amended rule (2026-11-07, written after the 71a run)
+
+71a failed the rule above on criterion 2c (private-info recall 39/40: hs27 "what does the client
+have left after rent each month" read as a plain question) and regressed on the 14-line amounts
+file; it passed the scripted calls 63/63 (flat 49/63) and was faster (p50 1008 vs 1262 ms).
+`NLU_SCHEMA` stayed `flat` ([report](eval/nlu_v2_20261107/summary.md)).
+
+**Amendment (user decision D21, made after seeing the result, recorded as such).** For this demo
+the priority is that ordinary negotiation turns go smoothly. Private-info recall stops being a
+blocker: a missed private-info question cannot leak a private figure, because the reply prompt
+never receives PRIVATE facts and `rendered_guard` blocks any private value in a spoken sentence;
+the cost of a miss is a generic answer instead of an explicit refusal. It is still reported.
+
+**Rule for 71a-2 (written before its runs).** `NLU_SCHEMA=acts` becomes the default if, on Claude
+Haiku 5.5 with the demo settings:
+
+1. Scripted calls: every expected move holds on all scripts, including the new negotiation
+   scripts written for 71a-2 before any tuning.
+2. Fresh held-out negotiation set (written and frozen before any tuning in 71a-2): stance and
+   term exact-match ≥ flat − 0.02 each.
+3. Amounts file: term exact-match ≥ flat − 0.02 (after the offer/counter labelling is settled
+   and applied to both schemas alike).
+4. Main corpus and held-out stance: stance and terms ≥ flat − 0.02; filler false accepts 0.
+5. NLU latency p50 ≤ flat; offline oracle eval PASS.
+
+Private-info recall is reported for both schemas but does not block.

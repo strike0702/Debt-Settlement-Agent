@@ -351,6 +351,21 @@ server's own ICE is STUN only (`VOICE_SERVER_TURN=false`): it has a public IP, a
 TURN channel bind against Cloudflare failed with 401. Render stays as a text-only mirror.
 Details: [`docs/DEPLOY_AWS.md`](../DEPLOY_AWS.md).
 
+## D21. Private-info recall no longer blocks NLU v2 adoption (2026-11-07)
+
+**Question.** NLU v2 (acts) failed its pre-registered rule on one line: "what does the client have
+left after rent each month" read as a plain question (private-info recall 39/40). It passed the
+scripted negotiation calls 63/63 against 49/63 for the flat schema. Keep the criterion?
+
+**Chosen (user).** Drop it as a blocker, keep reporting it. For this demo what matters is that
+ordinary negotiation turns go smoothly. A miss cannot leak a private figure: the reply prompt never
+sees PRIVATE facts and `rendered_guard` blocks private values in speech, so the cost is a generic
+answer instead of an explicit refusal.
+
+**Recorded as an amendment made after the result**, not a quiet rule change. The 71a-2 rule
+([`docs/NLU_PLAN.md`](../NLU_PLAN.md)) adds a fresh held-out negotiation set frozen before tuning,
+because 71a tuned its prompt on the main corpus.
+
 ## Process choices
 
 - Each phase runs in its own git worktree with a paste-ready prompt; phases that touch the

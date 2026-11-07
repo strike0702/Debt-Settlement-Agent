@@ -103,7 +103,7 @@
    "I am authorized to discuss settlement options for this account.",
    "What payment terms can you work with for a settlement?",
    "Understood, up to 10 payments of at least $135, starting March 31, with a flexible schedule.",
-   "What settlement percentage of the balance are you looking for?",
+   "Any tiered minimums, or a limit on payment levels?",
    "I cannot share the client's private financial information.",
    "I need to involve someone from our side.",
    "I need to hand this off after a sensitive request."
@@ -123,7 +123,7 @@
   "identical_consecutive_agent_moves": 0,
   "intents": [
    "OPENING",
-   "ASK_SETTLEMENT",
+   "ASK",
    "REFUSE_PRIVATE",
    "ESCALATE"
   ],

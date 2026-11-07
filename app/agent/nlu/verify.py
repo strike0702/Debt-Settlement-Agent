@@ -6,7 +6,8 @@ must match the value for the field's kind, and the value must sit in the
 field's prior range; bare digits for a money field, a bare year as a date,
 tiers phrased as "the first N payments" and a payment-structure word that is
 not about the payments are rejected or flagged. Dropped terms are audited and
-kept on ``VerifiedAnalysis.dropped``. Then it applies the ``cues`` repairs.
+kept on ``VerifiedAnalysis.dropped``. Then it applies the ``cues`` repairs
+(stance, flags, and the rule-announcement side channel ``defines_field``).
 The shared quote helpers here are also used by ``fast_paths`` and ``amounts``.
 Dollar totals are only quote-checked here; ``amounts`` converts them.
 """
@@ -17,7 +18,13 @@ import re
 from datetime import date
 from typing import Any
 
-from app.agent.nlu.cues import _repair_dispositions, repair_question, repair_revises_terms
+from app.agent.nlu.cues import (
+    _repair_dispositions,
+    repair_defines_field,
+    repair_list_done,
+    repair_question,
+    repair_revises_terms,
+)
 from app.agent.nlu.fast_paths import _field_for_ask_line
 from app.agent.nlu.models import DroppedTerm, VerifiedAnalysis, VerifiedTerm
 from app.agent.nlu.parse import coerce_tiers
@@ -578,6 +585,12 @@ def post_verify(
         utterance,
         asks_private=dispositions["asks_client_private_info"],
     )
+    defines_field, expected_count = repair_defines_field(
+        analysis.defines_field,
+        analysis.expected_count,
+        utterance,
+        given_fields={t.field for t in verified_terms},
+    )
     if analysis.readback_response and dispositions["readback_response"] is None:
         _log(
             "nlu_rejected_readback",
@@ -601,4 +614,7 @@ def post_verify(
         tiers_ambiguous=tiers_ambiguous,
         asks_question=asks_question,
         question_topic=question_topic,
+        defines_field=defines_field,
+        expected_count=expected_count,
+        list_done=repair_list_done(utterance),
     )

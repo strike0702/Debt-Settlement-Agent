@@ -26,7 +26,7 @@ def test_corpus_schema() -> None:
     assert len(corpus) >= 140
     assert len({ln["id"] for ln in corpus}) == len(corpus)
     allowed = {"id", "tags", "text", "agent", "pending", "stance", "terms", "ask_pct",
-               "cents_ambiguity", *FLAGS}
+               "cents_ambiguity", "defines_field", "expected_count", *FLAGS}
     for ln in corpus:
         assert set(ln) <= allowed, ln["id"]
         assert ln["stance"] in _STANCES, ln["id"]

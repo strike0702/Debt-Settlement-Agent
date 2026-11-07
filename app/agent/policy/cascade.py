@@ -1,7 +1,8 @@
 """``decide``: the first-match cascade that picks one move per rep turn.
 
 The step order is load-bearing (see the package docstring): interruptions,
-clarify / read-back, confirm, discovery, negotiate. Each ``_decide_*`` returns
+clarify / read-back, rules the rep wants to define (yield, tiers one by one),
+confirm, discovery (with the optional sweep), negotiate. Each ``_decide_*`` returns
 an ``Action`` or ``None`` to fall through. After the cascade, ``loop_guard``
 hands off instead of asking the same question a third time, and
 ``rep_turn_progress`` tells the orchestrator whether a rep turn added anything
@@ -25,6 +26,14 @@ from app.agent.policy.moves import (
     _handoff,
     _spoken_value,
     follow_up_action,
+    rephrased_ask,
+    sweep_action,
+    tier_ask_action,
+    tier_conflict,
+    tier_conflict_clarify_action,
+    tier_draft_effect,
+    tier_readback_action,
+    yield_ask_action,
 )
 from app.agent.policy.state import (
     NegotiationState,
@@ -51,13 +60,22 @@ def question_key(action: Action) -> str | None:
     """``INTENT:reason`` for a question move (same intent + field / template), else None."""
     if action.intent not in _QUESTION_INTENTS:
         return None
-    return f"{action.intent.value}:{action.reason or ''}"
+    key = f"{action.intent.value}:{action.reason or ''}"
+    # Tier asks differ by how far the list got ("next tier" after the 1st and
+    # after the 2nd are different questions): key on draft size / expected count.
+    draft = next((e for e in action.effects if e.kind == "set_tier_draft"), None)
+    if action.intent == Intent.ASK and draft is not None:
+        key += f":{len(draft.data.get('tiers') or [])}/{draft.data.get('expected')}"
+    return key
 
 
 def loop_guard(action: Action, neg: NegotiationState, cfg: Settings) -> Action:
     """Hand off instead of asking the same question a third time; else count this ask.
 
     The count is an ``note_question`` effect, applied when the move is spoken.
+    An ASK / ASK_SETTLEMENT that repeats the question we asked last, after a
+    rep turn that added nothing (``neg.no_progress_turns``), is reworded
+    (``rephrased_ask``) so the same line is never spoken twice in a row.
     """
     key = question_key(action)
     # ``_decide_wrap`` re-enters ``decide``; count each spoken question once.
@@ -68,6 +86,14 @@ def loop_guard(action: Action, neg: NegotiationState, cfg: Settings) -> Action:
     if neg.question_counts.get(key, 0) >= cfg.max_same_question:
         kept = [e for e in action.effects if e.kind in ("record_ask", "clear_pending_terms_alt")]
         return _handoff(kept, "repeated_question")
+    # The rep just answered something else: same question, other words (still counted).
+    if (
+        key == neg.last_question_key
+        and neg.no_progress_turns > 0
+        and action.intent in (Intent.ASK, Intent.ASK_SETTLEMENT)
+        and action.template_override is None
+    ):
+        action = rephrased_ask(action)
     return action.model_copy(
         update={"effects": [*action.effects, Effect(kind="note_question", data={"key": key})]}
     )
@@ -83,7 +109,8 @@ def rep_turn_progress(
     """True when this rep turn added verified information or moved the call.
 
     Progress: a belief value or status changed, a new ask, an accept or reject,
-    a read-back answer, a firm stance, or a yes to a non-price alternative.
+    a read-back answer, a firm stance, a yes to a non-price alternative, or a
+    rule announcement / tier for the tier draft.
     A restated ask, a repeated term, a question or small talk is not progress.
     """
     if any(
@@ -100,6 +127,10 @@ def rep_turn_progress(
         or analysis.readback_response in ("confirm", "deny")
         or analysis.firm
         or accepted_term_alt
+        # Rule announcements and tiers held in the draft (not belief yet).
+        or analysis.defines_field is not None
+        or analysis.list_done
+        or any(t.field == _TIERS for t in analysis.terms)
     )
 
 
@@ -160,6 +191,8 @@ def decide(
         effects.append(Effect(kind="clear_pending_terms_alt", data={}))
         neg = replace(neg, pending_terms_alt=None)
 
+    analysis = _read_rule_replies(analysis, neg)
+
     t = _Turn(
         belief=belief,
         neg=neg,
@@ -174,8 +207,15 @@ def decide(
         term_alt=term_alt,
         accepted_term_alt=accepted_term_alt,
     )
+    t = _with_tier_draft(t)
     action: Action | None = None
-    for step in (_decide_interruptions, _decide_clarify, _decide_confirm, _decide_discovery):
+    for step in (
+        _decide_interruptions,
+        _decide_clarify,
+        _decide_rep_rules,
+        _decide_confirm,
+        _decide_discovery,
+    ):
         action = step(t)
         if action is not None:
             break
@@ -383,6 +423,142 @@ def _decide_clarify(t: _Turn) -> Action | None:
     return None
 
 
+_TIERS = "min_payment_tiers"
+_SWEEP_KEY = "ASK:optional_sweep"
+
+
+def _read_rule_replies(a: TurnAnalysis, neg: NegotiationState) -> TurnAnalysis:
+    """Read short replies in the light of our last rule question.
+
+    After the sweep ("Any tiered minimums, or a limit on payment levels?") a
+    bare yes means "there are tiers" (start collecting them) and a bare no is
+    information, not a rejection of a price. While tiers are being listed,
+    "that's all" ends the list, not the call.
+    """
+    bare = not a.terms and a.settlement_ask_pct is None and a.defines_field is None
+    if neg.last_question_key == _SWEEP_KEY and bare:
+        if a.stance == "accept":
+            return a.model_copy(update={"stance": "info", "defines_field": _TIERS})
+        if a.stance == "reject" or a.list_done:
+            return a.model_copy(update={"stance": "info", "list_done": False})
+    if neg.tier_draft is not None and a.list_done and a.wants_to_end:
+        return a.model_copy(update={"wants_to_end": False})
+    return a
+
+
+def _tier_values(a: TurnAnalysis) -> list[tuple[int, int]]:
+    """Tiers stated this turn (``[(from_payment, min_cents)]``)."""
+    out: list[tuple[int, int]] = []
+    for term in a.terms:
+        if term.field == _TIERS and isinstance(term.value, list):
+            out.extend((int(x[0]), int(x[1])) for x in term.value)
+    return out
+
+
+def _with_tier_draft(t: _Turn) -> _Turn:
+    """Merge this turn's tiers into the draft the rep is giving one by one.
+
+    Collecting starts when the rep announces tiers (``defines_field``) and ends
+    when the expected count is reached, the rep says that's all (or no), or
+    the rep moves on (a price or another rule): then the set is read back
+    once. ``set_tier_draft`` on every move of the turn records the merge.
+    """
+    a, neg = t.analysis, t.neg
+    starting = neg.tier_draft is None and a.defines_field == _TIERS
+    if neg.tier_draft is None and not starting:
+        return t
+    new = _tier_values(a)
+    merged = dict(neg.tier_draft or [])
+    merged.update(new)  # a tier restated from the same payment replaces the old one
+    draft = sorted(merged.items())
+    expected = (
+        a.expected_count
+        if a.defines_field == _TIERS and a.expected_count is not None
+        else neg.tier_expected
+    )
+    moved_on = (
+        not new
+        and not starting
+        and a.defines_field != _TIERS
+        and (a.settlement_ask_pct is not None or any(x.field != _TIERS for x in a.terms))
+    )
+    # A no to the read-back (the orchestrator cleared the draft) is not "no more tiers".
+    said_no_more = a.readback_response != "deny" and (
+        a.list_done or (bool(draft) and not new and a.stance == "reject")
+    )
+    done = said_no_more or moved_on
+    readback = bool(draft) and (done or (expected is not None and len(draft) >= expected))
+    tiers: list[tuple[int, int]] | None = None if done and not draft else draft
+    effect = tier_draft_effect(tiers, expected, readback=readback)
+    return replace(
+        t,
+        neg=replace(neg, tier_draft=tiers, tier_expected=expected, tier_readback=readback),
+        effects=[*t.effects, effect],
+    )
+
+
+def _rule_value(belief: BeliefState, field: str) -> int | None:
+    value = belief.get(field).value
+    return value if isinstance(value, int) else None
+
+
+def _decide_rep_rules(t: _Turn) -> Action | None:
+    """Yield to a rep who wants to define a rule: ask for it before the price.
+
+    Tiers: ask for the first / next tier, clarify one that contradicts the
+    max payments or the minimum payment (escalate after two), and read the
+    whole set back once it is complete. Another field: ask its question.
+    """
+    a, neg = t.analysis, t.neg
+    if neg.tier_draft is not None:
+        draft = neg.tier_draft
+        max_p = _rule_value(t.belief, "max_payments")
+        min_c = _rule_value(t.belief, "min_payment_cents")
+        conflict = tier_conflict(draft, max_payments=max_p, min_payment_cents=min_c)
+        if conflict is not None:
+            if neg.clarify_counts.get(_TIERS, 0) >= 2:
+                return _escalate(
+                    t.effects,
+                    reason="tiers_unresolved",
+                    spoken_reason="I need a specialist to confirm the payment tiers.",
+                )
+            kind, tier = conflict
+            rest = [x for x in draft if x != tier]
+            effects = [e for e in t.effects if e.kind != "set_tier_draft"]
+            effects.append(tier_draft_effect(rest, neg.tier_expected))
+            rule = max_p if kind == "past_max" else min_c
+            assert rule is not None
+            return tier_conflict_clarify_action(kind, tier, rule_value=rule, effects=effects)
+        if neg.tier_readback:
+            return tier_readback_action(tiers=draft, max_payments=max_p, effects=t.effects)
+        again = not draft and a.readback_response == "deny"
+        return tier_ask_action(
+            draft=draft, expected=neg.tier_expected, effects=t.effects, again=again
+        )
+    field = a.defines_field
+    if field is not None and field != _TIERS and all(x.field != field for x in a.terms):
+        return yield_ask_action(field, t.effects)
+    return None
+
+
+def _sweep_due(t: _Turn) -> bool:
+    """Ask once about tiers / payment levels before the price, flexible schedules only.
+
+    Skipped when the rep already gave either rule, and once a price is on the
+    table (a counter or a confirm), so it never interrupts the bargaining.
+    """
+    b, neg = t.belief, t.neg
+    return (
+        not neg.optional_sweep_done
+        and b.get("payment_structure").value == "flexible"
+        and b.usable_for_engine("payment_structure")
+        and b.get(_TIERS).status == TermStatus.ASSUMED
+        and b.get("max_segments").status == TermStatus.ASSUMED
+        and not neg.counters_offered
+        and neg.confirmed_bp is None
+    )
+
+
 def _propose_wrap(t: _Turn) -> Action:
     """Send the confirmed schedule for client approval."""
     return Action(
@@ -442,10 +618,12 @@ def _decide_confirm(t: _Turn) -> Action | None:
 
 
 def _decide_discovery(t: _Turn) -> Action | None:
-    """ASK the next missing required field, then the settlement ask."""
+    """ASK the next missing required field, the optional sweep, then the settlement ask."""
     missing = t.belief.missing_required()
     if missing:
         return _ask_field(missing[0], t.effects)
+    if _sweep_due(t):
+        return sweep_action(t.effects)
     # afford is None only when rules are not buildable (missing fields caught above).
     if t.ask_bp is None or t.afford is None:
         return Action(

@@ -68,6 +68,14 @@ REASON_TEXT: dict[str, str] = {
         "We ask the rep to restate their minimum payments, because their wording does not "
         "say which payment each minimum starts from."
     ),
+    "tiers_inconsistent": (
+        "One of the payment tiers the rep gave does not fit the maximum payments or the "
+        "minimum payment they gave earlier, so we ask which is right."
+    ),
+    "optional_sweep": (
+        "The schedule is flexible, so before talking price we ask once whether there are "
+        "tiered minimums or a limit on payment levels."
+    ),
     "cents_ambiguity": (
         "The rep said a bare number, so we ask whether it means dollars or cents before "
         "using it."
@@ -257,6 +265,8 @@ REASON_SHORT: dict[str, str] = {
     "read_back": "Making sure we heard an unclear term right.",
     "clarify_field": "The rep gave two different values.",
     "tiers_ambiguous": "Their minimum payment rules were unclear.",
+    "tiers_inconsistent": "A tier does not fit their other rules.",
+    "optional_sweep": "Flexible schedule, so we ask about tiers and level limits.",
     "cents_ambiguity": "Dollars or cents? We ask before using it.",
     "amount_meaning": "Total or per payment? We ask before using it.",
     "counter": "A step toward their ask, within our limit.",

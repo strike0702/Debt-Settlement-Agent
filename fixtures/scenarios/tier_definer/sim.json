@@ -1,0 +1,16 @@
+{
+  "_comment": "Hidden creditor truth for autoplay (app/autoplay.py). Mirrors rep_card.md; never sent to the agent. defines_tiers: the rep announces its tiers, says how many, then gives one per ask before any price.",
+  "persona": "flexible",
+  "opening_ask_bp": 6000,
+  "floor_bp": 5500,
+  "defines_tiers": true,
+  "rules": {
+    "max_payments": 8,
+    "min_payment_cents": 19000,
+    "payment_structure": "flexible",
+    "first_payment_date": "default",
+    "max_segments": 3,
+    "max_token_pays": 8,
+    "min_payment_tiers": [[1, 19000], [3, 25000], [6, 30000]]
+  }
+}

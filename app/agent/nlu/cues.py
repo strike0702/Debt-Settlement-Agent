@@ -6,6 +6,9 @@ dominant short ack sets the stance (never accept on a prompt injection); a
 phrase inside a question, after a conditional or after a negator never forces
 a label. Flags (wants to end, firm, private-info ask, commitment demand,
 question topic, revision) are the model's flag OR an un-negated regex cue.
+``repair_defines_field`` keeps a rule announcement ("before that I need to
+define the tiers", "there are three tiers") only with that field's word in
+the line; ``repair_list_done`` reads "that's all" at the end of a list.
 ``hostility_floor_hit`` lifts clear insults / threats to ``HOSTILITY_FLOOR``.
 ``_repair_dispositions`` applies them all in a fixed order; called from
 ``verify.post_verify`` and the oracle path of ``llm_call.analyze``. Regex
@@ -549,6 +552,121 @@ def repair_asks_client_private_info(claimed: bool, utterance: str) -> bool:
 def repair_demands_commitment(claimed: bool, utterance: str) -> bool:
     """LLM flag OR un-negated regex cue: the rep demands a lock-in / commitment."""
     return _flag_or_unnegated_cue(claimed, _DEMANDS_COMMITMENT_RE, utterance)
+
+
+# Rule announcements: the rep says they will give a rule before giving it.
+# The field word decides the field (tiers first: "tiered minimums" is tiers,
+# not the minimum payment); an announcement needs a cue verb or "there are /
+# we will have" in the same clause, or a count right before a tier / level word.
+_DEFINES_FIELD_WORDS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("min_payment_tiers", re.compile(r"\btier(?:s|ed)?\b", re.IGNORECASE)),
+    ("max_token_pays", re.compile(r"\btoken(?:\s+payments?)?\b", re.IGNORECASE)),
+    ("max_segments", re.compile(r"\b(?:payment\s+)?(?:levels?|segments?)\b", re.IGNORECASE)),
+    (
+        "first_payment_date",
+        re.compile(r"\b(?:start(?:ing)? date|first payment date|due date)\b", re.IGNORECASE),
+    ),
+    (
+        "max_payments",
+        re.compile(
+            r"\b(?:number of payments|payment count|how many payments"
+            r"|max(?:imum)? (?:number of )?payments)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    ("min_payment_cents", re.compile(r"\bminimum(?:\s+(?:payment|amount))?\b", re.IGNORECASE)),
+    ("payment_structure", re.compile(r"\b(?:payment\s+)?structure\b", re.IGNORECASE)),
+)
+_ANNOUNCE_RE = re.compile(
+    r"\b(?:define|set out|set up|lay out|tell you|give you|explain|go over|go through"
+    r"|walk you through|outline|describe|specify|list|break down|spell out"
+    r"|there (?:are|will be|is)|there'?s|we (?:have|will have|'ll have)|we'll have"
+    r"|it has|has)\b",
+    re.IGNORECASE,
+)
+_COUNT_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+}  # fmt: skip
+_EXPECTED_COUNT_RE = re.compile(
+    r"\b(\d{1,2}|" + "|".join(_COUNT_WORDS) + r")\s+"
+    r"(?:(?:different|distinct|separate|payment|minimum)\s+)*(?:tiers?|levels?|segments?)\b",
+    re.IGNORECASE,
+)
+# "no tiers", "there aren't any tiers": a statement that the rule is empty.
+_DEFINES_NEGATED_RE = re.compile(
+    r"\b(?:no|not|n't|without|zero|none|never)\b", re.IGNORECASE
+)
+
+
+def _clause_before(utterance: str, end: int) -> str:
+    """Text of the clause that ends at ``end`` (after the last . , ; ? ! or "but")."""
+    return _CLAUSE_BREAK_RE.split(utterance[:end])[-1]
+
+
+def _expected_count(utterance: str) -> int | None:
+    m = _EXPECTED_COUNT_RE.search(utterance)
+    if m is None:
+        return None
+    raw = m.group(1).lower()
+    n = _COUNT_WORDS.get(raw) or int(raw)
+    return n if 1 <= n <= 10 else None
+
+
+def repair_defines_field(
+    claimed: str | None,
+    claimed_count: int | None,
+    utterance: str,
+    *,
+    given_fields: set[str],
+) -> tuple[str | None, int | None]:
+    """``(defines_field, expected_count)`` after the code-side checks.
+
+    A field word must be in the line, un-negated in its clause ("there are no
+    tiers" states an empty rule). The model's claim stands with its word; with
+    no claim, a cue verb / "there are" or a count before "tiers" in the same
+    clause sets it. A scalar rule given in this same line (``given_fields``)
+    is not pending, so it clears; tiers stay pending (they may come one by
+    one). The count is read from the line ("three tiers"); the model's count
+    stands only if that number is in the line.
+    """
+    found: str | None = None
+    for fname, pattern in _DEFINES_FIELD_WORDS:
+        if claimed is not None and fname != claimed:
+            continue
+        for m in pattern.finditer(utterance):
+            clause = _clause_before(utterance, m.start())
+            if _DEFINES_NEGATED_RE.search(clause):
+                continue
+            counted = fname in ("min_payment_tiers", "max_segments") and _EXPECTED_COUNT_RE.search(
+                utterance[max(0, m.start() - 30) : m.end()]
+            )
+            if claimed is not None or _ANNOUNCE_RE.search(clause) or counted:
+                found = fname
+                break
+        if found is not None:
+            break
+    if found is None or (found != "min_payment_tiers" and found in given_fields):
+        return None, None
+    count = _expected_count(utterance) if found in ("min_payment_tiers", "max_segments") else None
+    if count is None and claimed_count is not None and 1 <= claimed_count <= 10:
+        said = {t.value for t in extract_tokens(utterance) if t.kind == "count"}
+        count = claimed_count if claimed_count in said else None
+    return found, count
+
+
+_LIST_DONE_RE = re.compile(
+    r"\b(?:that'?s (?:all|it|everything|the last(?: one)?)|that is (?:all|it|everything)"
+    r"|those are (?:all|the only ones?)|no (?:more|other|further)(?: tiers?)?"
+    r"|nothing (?:else|more)|that was the last(?: one)?|(?:the )?last one)\b"
+    r"|^\s*(?:no|nope)[.!]?\s*$",
+    re.IGNORECASE,
+)
+
+
+def repair_list_done(utterance: str) -> bool:
+    """True when the rep says a list is finished ("that's all", "no more tiers", "no")."""
+    return _LIST_DONE_RE.search(utterance) is not None
 
 
 def _repair_dispositions(

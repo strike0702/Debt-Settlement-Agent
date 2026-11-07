@@ -22,16 +22,19 @@ QUESTION_TOPICS: tuple[str, ...] = (
 )
 
 
+RuleField = Literal[
+    "max_payments",
+    "min_payment_cents",
+    "payment_structure",
+    "first_payment_date",
+    "max_segments",
+    "max_token_pays",
+    "min_payment_tiers",
+]
+
+
 class ExtractedTerm(BaseModel):
-    field: Literal[
-        "max_payments",
-        "min_payment_cents",
-        "payment_structure",
-        "first_payment_date",
-        "max_segments",
-        "max_token_pays",
-        "min_payment_tiers",
-    ]
+    field: RuleField
     value: int | str | date | dict | list
     quote: str  # verbatim span from the utterance
     hedged: bool = False
@@ -66,3 +69,10 @@ class TurnAnalysis(BaseModel):
     # NLU-sourced only; ``decide()`` ignores it, ``app.agent.acts`` answers it.
     asks_question: bool = False
     question_topic: QuestionTopic | None = None
+    # The rep announced a rule without giving it yet ("before that I need to
+    # define the payment tiers", "there are three tiers"): the field, and how
+    # many tiers / levels they said there will be. Code-checked in the NLU.
+    defines_field: RuleField | None = None
+    expected_count: int | None = None
+    # "That's all" / "no more": the rep finished a list (tiers given one by one).
+    list_done: bool = False

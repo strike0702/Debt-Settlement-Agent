@@ -10,13 +10,18 @@ is first-match and its order is load-bearing:
    schedule request, end.
 2. ``_decide_clarify``: "first N payments" tiers / CONTRADICTED → CLARIFY (escalate
    after two); TENTATIVE → READ_BACK.
-3. ``_decide_confirm``: accept of the unchanged CONFIRM on the table → PROPOSE_WRAP.
-4. ``_decide_discovery``: ASK a missing required field, then ASK_SETTLEMENT.
-5. ``_decide_negotiate``: empty curve (term alt / rescue / handoff), term alt over
+3. ``_decide_rep_rules``: the rep announced a rule (``defines_field``) → ask
+   it ("Go ahead. ..."); tiers given one by one → ask the next, clarify one
+   that contradicts max payments / minimum, read the whole set back once.
+4. ``_decide_confirm``: accept of the unchanged CONFIRM on the table → PROPOSE_WRAP.
+5. ``_decide_discovery``: ASK a missing required field, the optional sweep
+   (flexible schedules only), then ASK_SETTLEMENT.
+6. ``_decide_negotiate``: empty curve (term alt / rescue / handoff), term alt over
    an unreachable ask, accepted counter, the price ladder (``_negotiate``).
 
 After the cascade, ``loop_guard`` turns a question asked twice already into a
-handoff (``repeated_question``).
+handoff (``repeated_question``) and rewords a question the rep just did not
+answer, so no line is spoken twice in a row.
 
 Call endings: a call ends only as a confirmed deal (PROPOSE_WRAP /
 ``thanks_accept``) or a handoff (ESCALATE, with a reason code for the person

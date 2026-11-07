@@ -13,6 +13,8 @@ from ``fixtures/scenarios/<id>/sim.json`` (mirrors that scenario's rep card).
 ``sim.json`` may also name how the rep haggles (``"haggle"``: a
 ``sim.haggle.Haggle`` style and its knobs); without it the rep is the plain
 easy rep, so fixtures without the key play exactly as recorded.
+``"defines_tiers": true`` makes the rep define its tiers one by one before
+any price (``tier_definer``).
 The policy is unchanged; ``sim/`` still never imports ``app.agent``.
 """
 
@@ -136,7 +138,11 @@ def load_autoplay_scenario(scenario_id: str, call: CallScenario) -> Scenario:
         persona=persona,
     )
     haggle = parse_haggle(raw.get("haggle"), where=str(path))
-    return scenario if haggle == EASY else replace(scenario, haggle=haggle)
+    if haggle != EASY:
+        scenario = replace(scenario, haggle=haggle)
+    if raw.get("defines_tiers", False) is True:
+        scenario = replace(scenario, defines_tiers=True)
+    return scenario
 
 
 def new_autoplay_call(

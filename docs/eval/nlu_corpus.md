@@ -2888,6 +2888,39 @@ Misses (line ids):
 - filler false accept: -
 - act-type set: p10, p14, n02, n08, n15, c02, c07, i01, i02, i03, i07, i09, h04, f07, f10, f14, f17, f19, f20, f25, d01, d02, d03, d08, d11, a10, a13, a16, x02, x03, x07, x08, e01, e05, e09, e10, k02, k04, k05, rd06
 
+## p73_repeat
+
+- git: `4556b81`  profile=`claude_haiku_nlu`  ref=2026-04-01  providers=`docs/eval/nlu_haiku_20261008/providers_haiku.yaml`
+- stance: repaired (repair_stance on, as shipped)
+- lines: 12  skipped (LLM unavailable): 0
+- model share: anthropic/claude-haiku-5-5=12
+
+| label | pos | TP | FP | FN | precision | recall |
+|---|---|---|---|---|---|---|
+| asks_client_private_info | 0 | 0 | 0 | 0 | n/a | n/a |
+| demands_commitment | 0 | 0 | 0 | 0 | n/a | n/a |
+| firm | 0 | 0 | 0 | 0 | n/a | n/a |
+| wants_to_end | 0 | 0 | 0 | 0 | n/a | n/a |
+| hostility | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=accept | 0 | 0 | 0 | 0 | n/a | n/a |
+| stance=reject | 0 | 0 | 0 | 0 | n/a | n/a |
+
+| metric | value |
+|---|---|
+| stance accuracy (all 8 labels) | 0.917 |
+| term exact-match (all lines) | 1.000 |
+| term exact-match (lines with terms, n=0) | n/a |
+| filler false accepts (n=0) | 0 |
+| act-type set exact (n=12) | 0.917 |
+| NLU latency p50 / p95 ms (live n=12) | 986 / 1442 |
+| tokens in / out (mean out per line) | 22135 / 420 (35) |
+
+Misses (line ids):
+
+- terms: -
+- filler false accept: -
+- act-type set: r09
+
 ## Notes
 
 - Both runs used the same model and prompt (Groq `gpt-oss-120b`, temperature 0).

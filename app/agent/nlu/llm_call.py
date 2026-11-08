@@ -192,4 +192,6 @@ _DISPOSITIONS = frozenset(
     {"respond_to_offer", "readback_reply", "ask_private_info", "demand_commitment",
      "hostility", "end_call"}
 )  # fmt: skip
-_MODEL_KEEPS = frozenset({"announce_rules", "list_done", "question", "stall", "backchannel"})
+_MODEL_KEEPS = frozenset(
+    {"announce_rules", "list_done", "question", "stall", "backchannel", "repeat_request"}
+)

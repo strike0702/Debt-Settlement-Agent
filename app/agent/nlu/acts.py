@@ -469,7 +469,11 @@ def verify_acts(
     )
     if "price" in kinds and not asked:
         label = _stance(kinds - {"price"}, opening=opening, no_acts=False, utterance=utterance)
-    update["stance"] = repair_stance(label, utterance, has_terms=has_terms, opening=opening)
+    update["stance"] = (
+        "question"
+        if any(a.type == "repeat_request" for a in repaired)
+        else repair_stance(label, utterance, has_terms=has_terms, opening=opening)
+    )
     verified = verified.model_copy(update=update)
     update = {}
 
@@ -504,6 +508,8 @@ def verify_acts(
             _log("nlu_tiers_noncontiguous", {"items": ranges})
 
     final = verified.model_copy(update=update)
+    if not oracle and ctx.tier_clarify:
+        final = _tier_clarify_minimum(final, utterance, ref=ref_d)
     unaccounted: list[str] = []
     if not oracle:
         claimed += _claimed_quotes(kept, final, repaired)
@@ -518,7 +524,7 @@ def verify_acts(
     # sweep, list done) handle it, so it is not sent back as "say it again".
     if _YES_NO_RE.match(utterance):
         nothing = False
-    if unclear and nothing:
+    if unclear and nothing and not any(a.type == "repeat_request" for a in repaired):
         repaired = [*repaired, UnclearAct(type="unclear", quote=utterance.strip()[:300])]
     return final.model_copy(
         update={
@@ -527,6 +533,31 @@ def verify_acts(
             "model_acts": [a.type for a in kept] + (["unclear"] if unclear else []),
         }
     )
+
+
+def _tier_clarify_minimum(
+    verified: VerifiedAnalysis, utterance: str, *, ref: date
+) -> VerifiedAnalysis:
+    """Our last line asked which minimum a tier has: one dollar amount is that minimum.
+
+    Haiku often reads "I mean, one eighty dollars." here as a malformed tier list,
+    which restarts the list. Code reads the amount unless the line gave a tier
+    range, another rule or a price of its own; the policy keeps the tier's range
+    (``_pending_tier_answer``).
+    """
+    if (
+        any(t.field != _TIERS for t in verified.terms)
+        or verified.tier_items
+        or parse_tier_item(utterance, ref=ref) is not None
+        or verified.settlement_ask_pct is not None
+        or verified.settlement_ask_total_cents is not None
+    ):
+        return verified
+    tokens = extract_tokens(utterance, ref=ref)
+    if len(tokens) != 1 or tokens[0].kind != "money":
+        return verified
+    term = VerifiedTerm(field=_MIN, value=tokens[0].value, quote=tokens[0].raw, verified=True)
+    return verified.model_copy(update={"terms": [term]})
 
 
 def _empty_sweep_tiers(act: Any, last_agent_line: str) -> bool:

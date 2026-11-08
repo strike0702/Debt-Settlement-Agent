@@ -191,3 +191,15 @@
 {"id": "rd08", "tags": ["defines_neg"], "text": "We allow up to three payment levels.", "stance": "info", "terms": {"max_segments": 3}, "acts": ["state_rule"]}
 {"id": "rd09", "tags": ["defines_neg"], "text": "No tiers, the minimum is the same throughout.", "stance": "info", "terms": {"min_payment_tiers": []}, "acts": ["state_rule"]}
 {"id": "rd10", "tags": ["defines_neg"], "text": "I need a flexible schedule. I will define the payment structure.", "stance": "info", "terms": {"payment_structure": "flexible"}, "acts": ["state_rule"]}
+{"id": "r01", "tags": ["repeat"], "agent": "counter", "text": "Sorry. Can you come again?", "stance": "question", "acts": ["repeat_request"]}
+{"id": "r02", "tags": ["repeat"], "agent": "counter", "text": "Pardon?", "stance": "question", "acts": ["repeat_request"]}
+{"id": "r03", "tags": ["repeat"], "agent": "counter", "text": "Sorry?", "stance": "question", "acts": ["repeat_request"]}
+{"id": "r04", "tags": ["repeat"], "agent": "counter", "text": "Could you say that again?", "stance": "question", "acts": ["repeat_request"]}
+{"id": "r05", "tags": ["repeat"], "agent": "counter", "text": "What was that?", "stance": "question", "acts": ["repeat_request"]}
+{"id": "r06", "tags": ["repeat"], "agent": "counter", "text": "What did you propose last", "stance": "question", "acts": ["repeat_request"]}
+{"id": "r07", "tags": ["repeat"], "agent": "counter", "text": "What did you offer?", "stance": "question", "acts": ["repeat_request"]}
+{"id": "r08", "tags": ["repeat"], "agent": "counter", "text": "Can you repeat the number?", "stance": "question", "acts": ["repeat_request"]}
+{"id": "r09", "tags": ["repeat_near"], "agent": "counter", "text": "yeah so the the um with the uh", "stance": "other", "acts": ["unclear"]}
+{"id": "r10", "tags": ["repeat_near"], "agent": "counter", "text": "What happens after the client approves?", "stance": "question", "acts": ["question"]}
+{"id": "r11", "tags": ["repeat_near"], "agent": "counter", "text": "Why can't you go any higher?", "stance": "question", "acts": ["question"]}
+{"id": "r12", "tags": ["repeat_near"], "agent": "counter", "text": "Who decides on your side?", "stance": "question", "acts": ["question"]}

@@ -1,0 +1,20 @@
+# Phase 73: a repeat during a read-back says the read-back again, and it stays pending: the
+# rep's "Correct." then confirms the tiers. A tier read-back, since a hedge is the model's call.
+name: repeat_read_back
+scenario: easy_deal
+turns:
+  - rep: "I need to define two payment tiers."
+    oracle: {acts: [{type: "announce_rules", field: "min_payment_tiers", count: 2, quote: "I need to define two payment tiers"}]}
+    expect: {intent: ASK, reason: min_payment_tiers}
+  - rep: "Payments one to two must be at least one hundred dollars."
+    oracle: {acts: [{type: "rule_item", from_payment: 1, to_payment: 2, min_cents: 10000, quote: "Payments one to two must be at least one hundred dollars"}]}
+    expect: {intent: ASK, reason: min_payment_tiers}
+  - rep: "Payments three to six must be at least two hundred dollars."
+    oracle: {acts: [{type: "rule_item", from_payment: 3, to_payment: 6, min_cents: 20000, quote: "Payments three to six must be at least two hundred dollars"}]}
+    expect: {intent: READ_BACK, reason: min_payment_tiers}
+  - rep: "Pardon?"
+    oracle: {acts: [{type: "repeat_request", quote: "Pardon?"}]}
+    expect: {intent: READ_BACK, reason: repeat_request}
+  - rep: "Correct."
+    oracle: {acts: [{type: "readback_reply", response: "confirm", quote: "Correct."}]}
+    expect: {intent: ASK, reason: max_payments}

@@ -13,7 +13,9 @@ than a flag priority:
    terminal reply; in WRAP an unreadable line is asked again, a real change
    of price or terms hands off, anything else closes — WRAP never goes back
    to discovery or the ladder); a run
-   of turns that added nothing hands off.
+   of turns that added nothing hands off. ``repeat_request`` comes between
+   the two: said again in WRAP or earlier, from the last move's own facts, with
+   no state change, and it never counts as a turn that added nothing (D24).
 4. Acts that answer themselves: ``question`` (topic ``schedule`` after a
    proposal → read the schedule; other topics are answered by the act layer,
    ``app.agent.acts``, and the line goes on), ``end_call`` (an explicit
@@ -44,7 +46,8 @@ list in one move). Conflicts, written once:
 - an accept that restates a different number is that number, not a yes
   (CONFIRM wraps only on an accept with no new price);
 - two prices in one line: the later one (a self-correction);
-- ``unclear`` with any other surviving act is dropped by the NLU.
+- ``unclear`` with any other surviving act is dropped by the NLU;
+- a repeat request beside a content or safety act is ignored: that act decides.
 
 After the move, ``loop_guard`` hands off instead of asking the same question
 a third time and rewords a question the rep just did not answer;
@@ -71,6 +74,7 @@ from app.agent.policy.moves import (
     _handoff,
     _spoken_value,
     follow_up_action,
+    repeat_action,
     rephrased_ask,
     sweep_action,
     tier_ask_action,
@@ -81,6 +85,7 @@ from app.agent.policy.moves import (
     yield_ask_action,
 )
 from app.agent.policy.state import (
+    REPEAT_REASONS,
     NegotiationState,
     _Turn,
     ask_pct_to_bp,
@@ -131,6 +136,8 @@ def loop_guard(action: Action, neg: NegotiationState, cfg: Settings) -> Action:
     rep turn that added nothing (``neg.no_progress_turns``), is reworded
     (``rephrased_ask``) so the same line is never spoken twice in a row.
     """
+    if action.reason in REPEAT_REASONS:
+        return action  # the same question said again is not asked again
     key = question_key(action)
     # ``_decide_wrap`` re-enters ``decide``; count each spoken question once.
     if key is None or any(e.kind == "note_question" for e in action.effects):
@@ -328,6 +335,19 @@ def _post_proposal(t: _Turn) -> Action | None:
     return None
 
 
+def _on_repeat_request(t: _Turn) -> Action | None:
+    """The rep asks us to say it again: the last move's own facts, no state change.
+
+    ``t.effects`` stay out on purpose: a tier draft or a pending read-back is
+    left exactly as it was.
+    """
+    if not t.turn.repeat_only:
+        return None
+    return repeat_action(
+        t.neg.last_move, t.neg.repeat_streak, next_phase=_stay(t.neg), settings=t.cfg
+    )
+
+
 def _no_progress(t: _Turn) -> Action | None:
     if t.neg.no_progress_turns >= t.cfg.max_no_progress_turns:
         return _handoff(t.effects, "no_progress")
@@ -414,6 +434,7 @@ DISPATCH_ORDER: tuple[tuple[str, _Handler | None], ...] = (
     ("ask_private_info", _on_private_info),
     ("demand_commitment", _on_commitment),
     ("post_proposal", _post_proposal),
+    ("repeat_request", _on_repeat_request),
     ("no_progress", _no_progress),
     ("question", _on_question),
     ("end_call", _on_end_call),
@@ -492,9 +513,10 @@ def _changes_terms(t: _Turn) -> bool:
 def _decide_wrap(t: _Turn) -> Action:
     """Post-proposal phases: never reopen discovery or the ladder (71c).
 
-    WRAP allows only: read the schedule (a question), ask again on an
-    unreadable line, hand off on a real change request (the proposal no longer
-    matches the rep's terms), else CLOSE ("No", empty, a reject, a goodbye).
+    WRAP allows only: say the last line again (a repeat request), read the
+    schedule (a question), ask again on an unreadable line, hand off on a real
+    change request (the proposal no longer matches the rep's terms), else CLOSE
+    ("No", empty, a reject, a goodbye).
     The safety refusals run before this step.
     """
     tu, neg = t.turn, t.neg
@@ -508,6 +530,10 @@ def _decide_wrap(t: _Turn) -> Action:
         )
     if neg.phase == Phase.END:
         return _close_after_wrap(t.effects, reason="already_ended")
+    if neg.last_move is not None:
+        repeated = _on_repeat_request(t)
+        if repeated is not None:
+            return repeated
     if tu.asks("schedule") and not tu.accepts:
         return Action(
             intent=Intent.SPEAK_SCHEDULE,
@@ -515,7 +541,7 @@ def _decide_wrap(t: _Turn) -> Action:
             next_phase=Phase.WRAP,
             reason="schedule_detail_post_wrap",
         )
-    if tu.unclear:
+    if tu.unclear or tu.repeat_only:
         # Proposal sent and the reply could not be read: ask, never close on it.
         return Action(
             intent=Intent.CLARIFY,

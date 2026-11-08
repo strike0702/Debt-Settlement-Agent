@@ -710,6 +710,76 @@ def repair_list_done(utterance: str) -> bool:
     return _LIST_DONE_RE.search(utterance) is not None
 
 
+# The whole line asks us to say it again; a line with anything more ("what did you
+# say about the fees?", "say that again and I hang up") is not a repeat request.
+_REPEAT_LINE_RE = re.compile(
+    r"^\W*(?:(?:oh|uh|um|hm+|mm+|ah|er|wait|hang on|okay|ok|yeah|sorry|i'?m sorry|excuse me"
+    r"|pardon(?: me)?|please)\W+)*"
+    r"(?:(?:can|could|would|will) you(?: please)?(?: just)?\s+)?"
+    r"(?:come again"
+    r"|say (?:(?:that|it|this)\s+)?(?:again|one more time)"
+    r"|repeat(?: that| it| yourself| the (?:number|offer|figure|amount|question|last part)"
+    r"| what you (?:just )?said)?(?: again| one more time)?"
+    r"|what (?:was|were) that"
+    r"|what did you (?:just )?(?:say|propose|offer|ask)(?: last| again| just now| before)?"
+    r"|what(?: was|'?s| is) (?:your|the|that)(?: last)?"
+    r" (?:offer|number|proposal|figure|amount|question) again"
+    r"|what was (?:your|the|that)(?: last)? (?:offer|number|proposal|figure|amount|question)"
+    r"|i (?:didn'?t|did not) (?:catch|hear|get) (?:that|you|what you said)"
+    r"|i missed that"
+    r"|you (?:cut|broke) (?:out|up)"
+    r")(?:\W+please)?\W*$",
+    re.IGNORECASE,
+)
+# Alone, these only ask for a repeat with a question mark ("Sorry." is an apology).
+_REPEAT_BARE_RE = re.compile(
+    r"^\W*(?:sorry|i'?m sorry|pardon(?: me)?|excuse me|what|huh)\W*\?\W*$", re.IGNORECASE
+)
+# Model acts that give a line content of its own: a repeat beside one is ignored.
+_REPEAT_CONTENT_ACTS = frozenset(
+    {"respond_to_offer", "readback_reply", "question", "list_done", "announce_rules",
+     "price_ask", "end_call", "ask_private_info", "demand_commitment"}
+)  # fmt: skip
+# Filler the repeat cue replaces (cue rules read "what did you say?" as a question).
+_REPEAT_REPLACES = _REPEAT_CONTENT_ACTS - {"end_call", "ask_private_info", "demand_commitment"}
+
+
+def repeat_cue(utterance: str) -> bool:
+    """True when the whole line asks the agent to say again or recall what it said."""
+    return bool(_REPEAT_LINE_RE.match(utterance) or _REPEAT_BARE_RE.match(utterance))
+
+
+def _repair_repeat(
+    out: list[Any], acts: list[Any], utterance: str, *, has_terms: bool, quote: str
+) -> list[Any]:
+    """Keep or add ``repeat_request`` only on a line with no content of its own.
+
+    A verified rule or price always wins. The cue outranks what the question and
+    ack cues made of the same words. The model's act stands unless the line
+    holds a number no act claimed (then it is ``unclear``: ask, never re-say over
+    a new number) or a content act the model itself gave or a phrase cue found.
+    """
+    from app.domain.nlu_types import RepeatRequestAct, UnclearAct
+
+    asked = next((a for a in acts if a.type == "repeat_request"), None)
+    rest = [a for a in out if a.type != "repeat_request"]
+    if has_terms:
+        return rest
+    act_quote = asked.quote if asked is not None else quote
+    repeat = RepeatRequestAct(type="repeat_request", quote=act_quote)
+    if repeat_cue(utterance):
+        return [*(a for a in rest if a.type not in _REPEAT_REPLACES), repeat]
+    if asked is None:
+        return rest
+    if not any(a.type == "question" for a in acts):
+        rest = [a for a in rest if a.type != "question"]
+    if any(a.type in _REPEAT_CONTENT_ACTS for a in rest):
+        return rest
+    if extract_tokens(utterance):
+        return [*rest, UnclearAct(type="unclear", quote=quote)]
+    return [*rest, repeat]
+
+
 def _cue_quote(utterance: str) -> str:
     """Quote for an act code adds from a cue: the line itself (acts need a quote)."""
     return (utterance.strip() or "-")[:300]
@@ -743,6 +813,7 @@ def repair_acts(
        price act when the line has none).
     8. off-script questions (``repair_question``), rule announcements
        (``repair_defines_field``) and "that's all" (``list_done``).
+    9. repeat request: only on a line with no content of its own (``_repair_repeat``).
 
     Returns ``(acts, levels)``: ``levels`` is a count of payment levels said as
     the level limit itself ("at most two payment levels"), which the caller
@@ -878,4 +949,6 @@ def repair_acts(
                 quote=asked[0].quote if asked else q,
             )
         )
-    return out, levels
+
+    # 9. repeat request
+    return _repair_repeat(out, acts, utterance, has_terms=has_terms, quote=q), levels

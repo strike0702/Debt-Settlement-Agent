@@ -146,6 +146,9 @@ client", "no rush" (no act).
  {"type":"stall","quote":"let me check"}
 backchannel: filler with no content.
  {"type":"backchannel","quote":"mm-hmm"}
+repeat_request: asks the agent to say again or recall what it said (not garbled speech, not
+new information).
+ {"type":"repeat_request","quote":"can you come again?"}
 unclear:
  {"type":"unclear","quote":""}
 """

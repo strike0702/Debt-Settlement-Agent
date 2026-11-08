@@ -73,6 +73,14 @@ REASON_TEXT: dict[str, str] = {
         "instead of reusing their earlier ask."
     ),
     "unclear": "We could not tell what the rep meant, so we ask them to say it another way.",
+    "repeat_request": (
+        "The rep asked us to say that again, so we repeat our last line. Nothing in the "
+        "negotiation changes."
+    ),
+    "repeat_request_short": (
+        "The rep asked again, so we give only the key point of our last line. Nothing in "
+        "the negotiation changes."
+    ),
     "act_unusable": (
         "The rep's reply did not fit what we had asked (for example \"that's all\" with no "
         "list open), so we ask what they meant instead of ignoring it."
@@ -281,6 +289,8 @@ REASON_SHORT: dict[str, str] = {
     "tiers_inconsistent": "A tier does not fit their other rules.",
     "unaccounted_number": "Their new number was unclear, so we ask for it.",
     "unclear": "We did not understand, so we ask again.",
+    "repeat_request": "They asked us to repeat our last line.",
+    "repeat_request_short": "They asked again, so we say the key point.",
     "act_unusable": "Their reply did not fit our question, so we ask.",
     "tiers_gap": "A new tier does not join up with the earlier ones.",
     "optional_sweep": "Flexible schedule, so we ask about tiers and level limits.",

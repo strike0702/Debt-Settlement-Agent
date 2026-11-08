@@ -5,7 +5,8 @@ ever come from these facts) and the state ``effects`` for one kind of move:
 asking a field, reading back or clarifying a value (incl. "dollars or
 cents?" and "total or per payment?"), confirming a schedule, proposing a
 non-price alternative, the rep-defined tier asks / whole-set read-back /
-tier conflict clarify, the optional-rules sweep, the opening, and handoffs
+tier conflict clarify, the optional-rules sweep, the opening, the re-say of a
+repeat request, the natural schedule read-out, and handoffs
 (``HANDOFF_SPOKEN`` is the spoken line per handoff code; the code itself stays
 operator-only). Builders do not decide which move to make: that is
 ``cascade`` and ``ladder``.
@@ -17,7 +18,7 @@ from datetime import date
 from string import ascii_lowercase
 from typing import Any
 
-from app.agent.policy.state import terms_counter_key
+from app.agent.policy.state import REPEAT_REASON, REPEAT_SHORT_REASON, terms_counter_key
 from app.config import Settings, get_settings
 from app.domain.actions import Action, Effect, Intent, Phase
 from app.domain.belief import BeliefState, TermStatus
@@ -356,6 +357,123 @@ def _confirm_action(
     )
 
 
+# Longest schedule read date by date, and the most dates spoken aloud in any form.
+_LIST_MAX_PAYMENTS = 4
+_MAX_SPOKEN_DATES = 4
+# Most amount runs the "monthly from A to B: k of $X, then ..." form still lists.
+_MAX_SPOKEN_RUNS = 4
+
+
+def _join_list(parts: list[str]) -> str:
+    """``a``, ``a and b``, ``a, b and c``."""
+    if len(parts) < 2:
+        return "".join(parts)
+    return f"{', '.join(parts[:-1])} and {parts[-1]}"
+
+
+def _monthly(dates: list[date]) -> bool:
+    """Each date falls in the calendar month after the one before it."""
+    months = [d.year * 12 + d.month for d in dates]
+    return all(b - a == 1 for a, b in zip(months, months[1:], strict=False))
+
+
+class _ScheduleSentence:
+    """Builds one read-out template; each figure becomes a letter-id PUBLIC fact."""
+
+    def __init__(self) -> None:
+        self.facts: dict[str, Fact] = {}
+
+    def _add(self, prefix: str, kind: Any, value: int | date) -> str:
+        n = len(self.facts)
+        # Letter ids only: ``template_guard`` rejects a digit in the template.
+        letters = ascii_lowercase[n % 26] * (n // 26 + 1)
+        fid = f"{prefix}_{letters}"
+        self.facts[fid] = Fact(
+            id=fid, kind=kind, value=value, visibility="PUBLIC", source="engine"
+        )
+        return f"{{{fid}}}"
+
+    def count(self, n: int) -> str:
+        return self._add("pay_count", "count", n)
+
+    def money(self, cents: int) -> str:
+        return self._add("pay_amt", "money", cents)
+
+    def day(self, d: date) -> str:
+        return self._add("pay_date", "date", d)
+
+    def days(self, dates: list[date]) -> str:
+        return _join_list([self.day(d) for d in dates])
+
+    def span(self, dates: list[date]) -> str:
+        """``monthly from A to B`` (or ``from A to B`` on an uneven calendar)."""
+        lead = "monthly from" if _monthly(dates) else "from"
+        return f"{lead} {self.day(dates[0])} to {self.day(dates[-1])}"
+
+
+def _schedule_runs(pays: list[ScheduleRow]) -> list[tuple[int, list[date]]]:
+    """Consecutive payments of one amount: ``[(cents, dates)]`` in schedule order."""
+    runs: list[tuple[int, list[date]]] = []
+    for row in pays:
+        if runs and runs[-1][0] == row.creditor_payment_cents:
+            runs[-1][1].append(row.date)
+        else:
+            runs.append((row.creditor_payment_cents, [row.date]))
+    return runs
+
+
+def _schedule_run_dates(runs: list[tuple[int, list[date]]]) -> int:
+    """Dates the run-by-run form speaks: a long run says only its first and last."""
+    return sum(min(len(dates), 2) for _, dates in runs)
+
+
+def _long_run(s: _ScheduleSentence, cents: int, dates: list[date]) -> str:
+    """One run of a long schedule; a run of one or two names its dates."""
+    if len(dates) <= 2:
+        return f"{s.money(cents)} on {s.days(dates)}"
+    return f"{s.count(len(dates))} of {s.money(cents)} each, {s.span(dates)}"
+
+
+def _schedule_template(pays: list[ScheduleRow]) -> tuple[str, dict[str, Fact]]:
+    """One spoken sentence for the schedule, in the first form that fits.
+
+    Short schedules name every date. A longer one reads each run of equal
+    amounts, or (too many dates) the runs under one overall date range, or (too
+    many runs) the overall range, the smallest and largest payment and the
+    total. Every form states the payment count, so nothing is cut silently.
+    """
+    s = _ScheduleSentence()
+    dates = [r.date for r in pays]
+    runs = _schedule_runs(pays)
+    if len(pays) == 1:
+        return f"That's a single payment of {s.money(runs[0][0])} on {s.day(dates[0])}.", s.facts
+    head = f"That's {s.count(len(pays))} payments"
+    if len(runs) == 1:
+        amount = s.money(runs[0][0])
+        when = f"on {s.days(dates)}" if len(pays) <= _LIST_MAX_PAYMENTS else s.span(dates)
+        return f"{head} of {amount} each, {when}.", s.facts
+    if len(pays) <= _LIST_MAX_PAYMENTS:
+        parts = [f"{s.money(cents)} on {s.days(ds)}" for cents, ds in runs]
+        return f"{head}: {', then '.join(parts)}.", s.facts
+    if _schedule_run_dates(runs) <= _MAX_SPOKEN_DATES:
+        parts = [_long_run(s, cents, ds) for cents, ds in runs]
+        return f"{head}: {', then '.join(parts)}.", s.facts
+    if len(runs) <= _MAX_SPOKEN_RUNS:
+        span = s.span(dates)
+        parts = [
+            s.money(cents) if len(ds) == 1 else f"{s.count(len(ds))} of {s.money(cents)} each"
+            for cents, ds in runs
+        ]
+        return f"{head}, {span}: {', then '.join(parts)}.", s.facts
+    amounts = [cents for cents, _ in runs]
+    total = sum(r.creditor_payment_cents for r in pays)
+    return (
+        f"{head}, {s.span(dates)}, each between {s.money(min(amounts))} "
+        f"and {s.money(max(amounts))}, for {s.money(total)} in all.",
+        s.facts,
+    )
+
+
 def speak_schedule_action(
     rows: list[ScheduleRow],
     *,
@@ -363,40 +481,21 @@ def speak_schedule_action(
     next_phase: Phase = Phase.CONFIRM,
     reason: str | None = "schedule_detail",
 ) -> Action:
-    """Build a SPEAK_SCHEDULE action with one date/amount fact pair per payment.
+    """Build a SPEAK_SCHEDULE action that reads the plan as one natural sentence.
 
-    Placeholder ids use letter suffixes (``pay_date_a``) so ``template_guard``
-    does not see digits in the template string.
+    Every figure is a PUBLIC fact with a letter id (``pay_date_a``), so
+    ``template_guard`` sees no digit in the template. ``_schedule_template``
+    picks the form by the schedule's shape.
     """
-    pays = [r for r in rows if r.creditor_payment_cents > 0][:8]
-    letters = "abcdefgh"
-    facts: dict[str, Fact] = {}
-    parts: list[str] = []
-    for letter, row in zip(letters, pays, strict=False):
-        d_id = f"pay_date_{letter}"
-        a_id = f"pay_amt_{letter}"
-        facts[d_id] = Fact(
-            id=d_id,
-            kind="date",
-            value=row.date,
-            visibility="PUBLIC",
-            source="engine",
-        )
-        facts[a_id] = Fact(
-            id=a_id,
-            kind="money",
-            value=row.creditor_payment_cents,
-            visibility="PUBLIC",
-            source="engine",
-        )
-        parts.append(f"On {{{d_id}}} the creditor payment is {{{a_id}}}.")
-    if not parts:
+    pays = [r for r in rows if r.creditor_payment_cents > 0]
+    if not pays:
         return Action(
             intent=Intent.SPEAK_SCHEDULE,
             effects=list(effects or []),
             next_phase=next_phase,
             reason=reason,
         )
+    template, facts = _schedule_template(pays)
     return Action(
         intent=Intent.SPEAK_SCHEDULE,
         facts=facts,
@@ -404,8 +503,45 @@ def speak_schedule_action(
         effects=list(effects or []),
         next_phase=next_phase,
         reason=reason,
-        template_override=" ".join(parts),
+        template_override=template,
     )
+
+
+def _short_repeat(last: Action) -> Action:
+    """A second repeat in a row: the key fact only, or the open question."""
+    bare = last.model_copy(update={"answer": None, "records": {}, "reason": REPEAT_SHORT_REASON})
+    if last.intent == Intent.OPENING:
+        return bare.model_copy(
+            update={"template_override": "What payment terms can you work with for a settlement?"}
+        )
+    pct = next((p for p in ("counter_pct", "settlement_pct") if p in last.facts), None)
+    if pct is None or last.intent not in (
+        Intent.COUNTER, Intent.CONFIRM_SCHEDULE, Intent.PROPOSE_WRAP
+    ):  # fmt: skip
+        return bare
+    ids = {pct} | ({"offer_total"} if "offer_total" in last.facts else set())
+    total = ", which is {offer_total}" if "offer_total" in ids else ""
+    return bare.model_copy(
+        update={
+            "facts": {k: last.facts[k] for k in ids},
+            "required": ids,
+            "template_override": f"Our offer is {{{pct}}} of the balance{total}.",
+        }
+    )
+
+
+def repeat_action(
+    last: Action | None, streak: int, *, next_phase: Phase, settings: Settings | None = None
+) -> Action:
+    """Say the last move again: same intent and facts, no effects (D24).
+
+    ``last`` is ``NegotiationState.last_move``; with none yet, the opening. The
+    orchestrator adds the fixed lead and renders it from templates, never the
+    LLM. ``streak`` > 0 (a repeat just before this one) takes the short form.
+    """
+    move = last if last is not None else opening_action(settings=settings)
+    said = _short_repeat(move) if streak > 0 else move.model_copy(update={"reason": REPEAT_REASON})
+    return said.model_copy(update={"next_phase": next_phase, "effects": []})
 
 
 def _ask_field(fname: str, effects: list[Effect]) -> Action:

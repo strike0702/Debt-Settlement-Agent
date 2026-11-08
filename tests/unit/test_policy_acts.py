@@ -36,6 +36,7 @@ from app.domain.nlu_types import (
     PriceAskAct,
     QuestionAct,
     ReadbackReplyAct,
+    RepeatRequestAct,
     RepTurn,
     RespondToOfferAct,
     RuleItemAct,
@@ -76,6 +77,7 @@ _SAMPLES: dict[str, Any] = {
     "end_call": EndCallAct(type="end_call", kind="goodbye", quote=_Q),
     "stall": StallAct(type="stall", quote=_Q),
     "backchannel": BackchannelAct(type="backchannel", quote=_Q),
+    "repeat_request": RepeatRequestAct(type="repeat_request", quote=_Q),
     "unclear": UnclearAct(type="unclear", quote=_Q),
 }
 

@@ -4,7 +4,8 @@
 offered, ladder stage, loop-guard counts, pending clarifies); the policy only
 reads it and requests changes through ``Action.effects``, which the
 orchestrator applies on speech ack. ``_Turn`` bundles one ``decide`` call's
-inputs (the rep's verified acts as a ``RepTurn``). ``Agreement`` /
+inputs (the rep's verified acts as a ``RepTurn``). ``spoken_move`` keeps what a
+repeat request needs to say the last move again (PUBLIC only). ``Agreement`` /
 ``draft_agreement`` build the drafted deal from an engine schedule,
 ``ask_pct_to_bp`` is the one float → basis-point conversion, and the
 ``terms_*`` helpers key the non-price alternatives already offered. No decisions here.
@@ -21,12 +22,18 @@ from pydantic import BaseModel
 
 from app.adapter.engine_adapter import Affordability
 from app.config import Settings
-from app.domain.actions import Effect, Phase
+from app.domain.actions import Action, Effect, Phase
 from app.domain.belief import BeliefState
 from app.domain.facts import Fact
 from app.domain.nlu_types import RepTurn
 from app.store.audit import AuditLog
 from feasibility.engine import ScheduleRow
+
+# Reason codes of a move that says the last move again (D24): the full form and
+# the shorter form of a second repeat in a row. Such a move changes no state.
+REPEAT_REASON = "repeat_request"
+REPEAT_SHORT_REASON = "repeat_request_short"
+REPEAT_REASONS = frozenset({REPEAT_REASON, REPEAT_SHORT_REASON})
 
 
 @dataclass
@@ -100,6 +107,24 @@ class NegotiationState:
     # value the model read but the code could not confirm. Their read-back is
     # the fallback for an unclear number, not a repeated question.
     unconfirmed_fields: frozenset[str] = frozenset()
+    # The last move the rep heard (``spoken_move``: no effects, no ack, PUBLIC facts
+    # only) and how many repeats of it they have heard in a row. Set by the
+    # orchestrator when speech is heard, not through effects.
+    last_move: Action | None = None
+    repeat_streak: int = 0
+
+
+def spoken_move(action: Action) -> Action:
+    """What a repeat request needs from a heard move: intent, wording, PUBLIC facts.
+
+    Effects are gone (saying it again changes nothing) and so is the ack (it
+    answered the rep's earlier line). An answer and operator records stay: the
+    rep heard them as part of this move.
+    """
+    facts = {k: f for k, f in action.facts.items() if f.visibility == "PUBLIC"}
+    return action.model_copy(
+        update={"facts": facts, "required": action.required & set(facts), "effects": [], "ack": {}}
+    )
 
 
 def terms_counter_key(field: str, value: Any) -> str:

@@ -71,7 +71,13 @@ from app.agent.acts import (
 )
 from app.agent.effects import apply_effects
 from app.agent.guards import _cross_match
-from app.agent.nlg import SAFE_FALLBACK, render_action, render_acts, speak_action
+from app.agent.nlg import (
+    REPEAT_LEAD,
+    SAFE_FALLBACK,
+    render_action,
+    render_acts,
+    speak_action,
+)
 from app.agent.nlu import (
     VerifiedAnalysis,
     analyze,
@@ -104,6 +110,7 @@ from app.agent.policy import (
     rep_turn_progress,
     speak_schedule_action,
 )
+from app.agent.policy.state import REPEAT_REASON, REPEAT_REASONS, spoken_move
 from app.agent.reasons import reason_key, reason_text
 from app.agent.session import CallSession, PendingSpeech, Turn, TurnRollback
 
@@ -643,6 +650,13 @@ class Orchestrator:
                 },
             )
 
+            if clarify_pick is None and verified.to_rep_turn().repeat_only:
+                # D24: before every clarify, belief and no-progress step, so a held
+                # question, a pending read-back and the counts all stay as they were.
+                return await self._repeat_turn(
+                    verified, nlu_context, working, timings, t_server, acked
+                )
+
             # Resolve / emit dollars-vs-cents clarify for bare money replies.
             if session.neg.pending_cents_clarify is not None:
                 resolved = try_resolve_cents_clarify(
@@ -928,6 +942,31 @@ class Orchestrator:
 
             return utterance
 
+    async def _repeat_turn(
+        self,
+        verified: VerifiedAnalysis,
+        context: Any,
+        working: str,
+        timings: dict[str, float],
+        t_server: float,
+        acked: dict[str, Any],
+    ) -> Utterance:
+        """A repeat request: only ``decide`` runs (turn cap, post-proposal, the re-say)."""
+        session = self.session
+        self._last_ack = acked  # our next line still follows the same acknowledgement
+        self._turn_eval = None
+        self._turn_agreed_bp = None
+        session.last_belief_changes = []
+        action = decide(
+            session.belief,
+            session.neg,
+            verified.to_rep_turn(),
+            None,
+            context=context,
+            settings=self.settings,
+        )
+        return await self._emit_preempted(action, working, timings, t_server, [])
+
     async def _emit_preempted(
         self,
         action: Action,
@@ -955,19 +994,32 @@ class Orchestrator:
         )
         return await self._emit(action, sentences, timings, belief_changes)
 
+    def _note_heard(self, action: Action) -> None:
+        """Remember the move the rep heard; a re-say keeps the move and its question key."""
+        neg = self.session.neg
+        if action.reason in REPEAT_REASONS:
+            neg.repeat_streak += 1
+            return
+        neg.last_move = spoken_move(action)
+        neg.repeat_streak = 0
+
     def _commit_pending(self, pending: PendingSpeech) -> Agreement | None:
         """Apply effects + deferred eval; draft agreement or fail WRAP to a handoff."""
         apply_effects(self.session, pending.action.effects)
+        self._note_heard(pending.action)
         # What the rep just heard us ask (None: not a question), for the loop guard.
-        self.session.neg.last_question_key = question_key(pending.action)
+        if pending.action.reason not in REPEAT_REASONS:
+            self.session.neg.last_question_key = question_key(pending.action)
         if pending.pending_eval is not None:
             self.session.last_eval = pending.pending_eval
         if pending.pending_agreed_bp is not None:
             self.session.agreed_bp = pending.pending_agreed_bp
 
         agreement = self._maybe_draft_agreement(pending.action)
+        # A re-said proposal drafts nothing: the agreement from the first time stands.
         if (
             pending.action.intent == Intent.PROPOSE_WRAP
+            and pending.action.reason not in REPEAT_REASONS
             or (
                 pending.action.intent == Intent.CLOSE
                 and pending.action.reason == "thanks_accept"
@@ -1074,6 +1126,8 @@ class Orchestrator:
                     turn.spoken = turn.sentence_id in spoken
 
             heard = bool(spoken.intersection(pending.sentence_ids))
+            if heard:
+                self._note_heard(pending.action)
             unheard_ids = [sid for sid in pending.sentence_ids if sid not in spoken]
             self._dropped_ids.update(unheard_ids)
             kept: list[Effect] = []
@@ -1239,7 +1293,7 @@ class Orchestrator:
         if tier_draft:
             apply_effects(self.session, tier_draft)
         # Eager READ_BACK pending so barge-in doesn't lose the field before ack.
-        if action.intent == Intent.READ_BACK:
+        if action.intent == Intent.READ_BACK and action.reason not in REPEAT_REASONS:
             field = action.reason
             if field:
                 self.session.neg.pending_readback = field
@@ -1322,9 +1376,10 @@ class Orchestrator:
 
     async def _speak(self, action: Action, *, last_rep_line: str) -> list[str]:
         move = await self._speak_move(action, last_rep_line=last_rep_line)
+        lead = [REPEAT_LEAD] if action.reason == REPEAT_REASON else []
         if not (action.ack or action.answer or action.records):
-            return move
-        return self._speak_acts(action) + move
+            return lead + move
+        return lead + self._speak_acts(action) + move
 
     def _speak_acts(self, action: Action) -> list[str]:
         """H3 ack / answer sentences (no LLM call); blocks append to ``last_blocked``."""
@@ -1352,7 +1407,12 @@ class Orchestrator:
         try:
             # bank mode needs no LLM; llm mode without a client degrades to TEMPLATES.
             mode = self.settings.nlg_mode
-            if mode == "template" or (mode != "bank" and self.llm is None):
+            # A re-say comes from templates too: its numbers never pass through the LLM.
+            if (
+                action.reason in REPEAT_REASONS
+                or mode == "template"
+                or (mode != "bank" and self.llm is None)
+            ):
                 return render_action(
                     action,
                     self._ref,
@@ -1920,7 +1980,7 @@ class Orchestrator:
         drafts = action.intent == Intent.PROPOSE_WRAP or (
             action.intent == Intent.CLOSE and action.reason == "thanks_accept"
         )
-        if not drafts:
+        if not drafts or action.reason in REPEAT_REASONS:
             return None
         session = self.session
         if session.last_eval is None or session.agreed_bp is None:

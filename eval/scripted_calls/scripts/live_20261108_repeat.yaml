@@ -1,0 +1,30 @@
+# Live call on the AWS demo, 2026-11-08 (Claude Haiku, voice); Phase 73. The rep lines from
+# "I'm looking at eighty five percent." on are verbatim; the three lines before them only set
+# the rules the excerpt implies (the live agent's "Understood, even payments").
+# Live, "Sorry. Can you come again?" got "Sorry, I did not quite catch that. Could you say it
+# another way?". Now both repeat lines re-state the 52% / $650 offer and the ladder stays
+# where it was, so the rep's next line is read as if they had not interrupted.
+name: live_20261108_repeat
+scenario: easy_deal
+turns:
+  - rep: "Eight payments."
+    oracle: {acts: [{type: "answer", field: "max_payments", value: 8, quote: "Eight payments"}]}
+    expect: {intent: ASK, reason: min_payment_cents}
+  - rep: "One hundred dollars."
+    oracle: {acts: [{type: "answer", field: "min_payment_cents", value: 10000, quote: "One hundred dollars"}]}
+    expect: {intent: ASK, reason: payment_structure}
+  - rep: "Even payments."
+    oracle: {acts: [{type: "answer", field: "payment_structure", value: "even", quote: "Even payments"}]}
+    expect: {intent: ASK_SETTLEMENT}
+  - rep: "I'm looking at eighty five percent."
+    oracle: {acts: [{type: "price_ask", pct: 85, quote: "eighty five percent", firmness: "opening"}]}
+    expect: {intent: COUNTER, facts: {counter_pct: 5200, offer_total: 65000}}
+  - rep: "Sorry. Can you come again?"
+    oracle: {acts: [{type: "repeat_request", quote: "Can you come again?"}]}
+    expect: {intent: COUNTER, reason: repeat_request, facts: {counter_pct: 5200, offer_total: 65000}}
+  - rep: "What did you propose last"
+    oracle: {acts: [{type: "repeat_request", quote: "What did you propose last"}]}
+    expect: {intent: COUNTER, reason: repeat_request_short, facts: {counter_pct: 5200, offer_total: 65000}}
+  - rep: "Can we do it at seventy five percent?"
+    oracle: {acts: [{type: "price_ask", pct: 75, quote: "seventy five percent", firmness: "counter"}]}
+    expect: {intent: COUNTER}

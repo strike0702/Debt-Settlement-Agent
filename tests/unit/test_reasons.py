@@ -180,7 +180,7 @@ def test_rewrite_kept_every_key_and_placeholder() -> None:
         assert names == _PLACEHOLDERS_BEFORE.get(key, set()), key
     # Reason codes plus one display variant (alt_first_payment_date_assumed);
     # a new code must get a sentence here.
-    assert len(REASON_TEXT) == 59
+    assert len(REASON_TEXT) == 61
 
 
 _JARGON = ("ladder", "read back", "read-back", "wrap", "hedged", "engine", "policy", "feasible")

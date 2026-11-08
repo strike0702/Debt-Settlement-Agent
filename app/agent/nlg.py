@@ -40,6 +40,8 @@ from app.llm.prompts import nlg_messages
 from app.store.audit import AuditLog
 
 SAFE_FALLBACK = "Let me check that figure and come back to it."
+# Fixed, number-free lead of a move said again at the rep's request (D24).
+REPEAT_LEAD = "Sure."
 # gpt-oss reasoning tokens share the completion budget; at 400 the template was
 # often empty (carry-over 21.7). The nlg routes also send reasoning_effort: low.
 NLG_MAX_TOKENS = 800

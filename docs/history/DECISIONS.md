@@ -405,6 +405,27 @@ place in it rather than a new flag that can shadow an old one. Keeping the oracl
 identical shows the move to acts changed no negotiation rule; the grid test (every phase
 × act type, plus the empty line) shows no act falls through without a legal move.
 
+## D24. A repeat request re-says the last move (2026-11-08)
+
+**Question.** In a live call on Claude Haiku the rep said "Sorry. Can you come again?" after our
+offer, and the agent asked the rep to say it another way. The agent had a path for not
+understanding the rep, but none for the rep not hearing the agent.
+
+**Decision.** A new act, `repeat_request`. It says the last move again from the same facts, with
+a fixed "Sure." lead and no LLM wording. It changes no negotiation state: no ladder step, no phase
+change, no no-progress or repeated-question count, and a pending read-back or tier item stays
+pending. A second repeat in a row gives the key fact or the open question only. A line that also
+carries a rule or a price is handled by that content, and the repeat is ignored.
+
+**Evidence.** Scripted calls on Haiku 124/124, including the live transcript. All 8 repeat
+phrasings in the corpus read as `repeat_request`, none of the 4 near-misses did, and the oracle
+eval's decisions match main's
+([report](../eval/nlu_v2_20261108_73/summary.md)).
+
+**Why.** Saying the same facts again cannot move the bargain, so a rep who misheard loses nothing
+and the guards that count stalled turns are not spent on the agent's own audio. The turn cap
+still bounds a rep who keeps asking.
+
 ## Process choices
 
 - Each phase runs in its own git worktree with a paste-ready prompt; phases that touch the

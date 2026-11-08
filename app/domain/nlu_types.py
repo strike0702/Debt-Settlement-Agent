@@ -67,8 +67,12 @@ ACT_TYPES: tuple[str, ...] = (
     "end_call",
     "stall",
     "backchannel",
+    "repeat_request",
     "unclear",
 )
+
+# Acts that may share a line with a repeat request without giving it content.
+_REPEAT_COMPANIONS = frozenset({"repeat_request", "backchannel", "stall", "unclear"})
 
 
 class _ActBase(BaseModel):
@@ -207,6 +211,12 @@ class BackchannelAct(_ActBase):
     type: Literal["backchannel"]
 
 
+class RepeatRequestAct(_ActBase):
+    """The rep asks the agent to say again or recall what it said."""
+
+    type: Literal["repeat_request"]
+
+
 class UnclearAct(BaseModel):
     """The line maps to no act; the agent asks the rep to rephrase."""
 
@@ -231,6 +241,7 @@ Act = Annotated[
     | EndCallAct
     | StallAct
     | BackchannelAct
+    | RepeatRequestAct
     | UnclearAct,
     Field(discriminator="type"),
 ]
@@ -331,6 +342,14 @@ class RepTurn(BaseModel):
     @property
     def unclear(self) -> bool:
         return self.has("unclear")
+
+    @property
+    def repeat_only(self) -> bool:
+        """A repeat request with no content or safety act beside it (mild hostility allowed)."""
+        return self.has("repeat_request") and all(
+            a.type in _REPEAT_COMPANIONS or (a.type == "hostility" and a.level == "mild")
+            for a in self.acts
+        )
 
     def asks(self, topic: str) -> bool:
         """True when a ``question`` act of ``topic`` is present."""

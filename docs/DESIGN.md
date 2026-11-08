@@ -422,7 +422,7 @@ hosted demo, which needs a TURN server.
 
 ## ADR 10. NLU v2: acts and call context
 
-*Phases 71a, 71a-2 and 71b. Decisions D19, D21, D22, D23.*
+*Phases 71a, 71a-2, 71b and 73. Decisions D19, D21, D22, D23, D24.*
 
 **Context.** The flat NLU schema (about 20 flags filled every turn, conflicts settled
 by a priority order in the policy) failed two live Haiku calls: a firm "seventy three"
@@ -433,7 +433,7 @@ the call. The model also saw nothing of the call state.
 (`app.domain.nlu_types.Act`: `answer`, `state_rule`, `announce_rules`, `rule_item`,
 `list_done`, `price_ask`, `respond_to_offer`, `readback_reply`, `question`,
 `ask_private_info`, `demand_commitment`, `hostility`, `end_call`, `stall`,
-`backchannel`, `unclear`). Each act has only its own fields and a verbatim quote; a
+`backchannel`, `repeat_request`, `unclear`). Each act has only its own fields and a verbatim quote; a
 reply that fails validation keeps its valid acts, else is one `unclear`. The prompt
 gets a PUBLIC `CallContext` (phase, what we await, offers on the table, the list being
 collected, the rules stated and who stated them), never a client figure.
@@ -467,6 +467,9 @@ A rule change after a proposal that names the value it replaces ("six payments m
 not eight") revises the rule and re-plans instead of asking which value is right.
 Tier ranges keep their end across turns, so a later tier that leaves a gap or
 overlaps is asked again.
+
+A `repeat_request` says the last move again from the same PUBLIC facts and changes no
+negotiation state (D24); a second one in a row gives the key fact or the open question only.
 
 **Consequences.** One schema and one path: the flat schema, its prompt, the
 acts→flat converter and the flat flags are gone (frozen flat records stay in

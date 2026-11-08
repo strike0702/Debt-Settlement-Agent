@@ -1,0 +1,13 @@
+# Phase 73: a repeat during a field question re-asks the same field, and the next answer
+# is read as the answer to it (the fast path still sees the question as our last line).
+name: repeat_field_question
+scenario: easy_deal
+turns:
+  - rep: "Let's start."
+    expect: {intent: ASK, reason: max_payments}
+  - rep: "Sorry, what was that?"
+    oracle: {acts: [{type: "repeat_request", quote: "what was that?"}]}
+    expect: {intent: ASK, reason: repeat_request}
+  - rep: "Eight payments."
+    oracle: {acts: [{type: "answer", field: "max_payments", value: 8, quote: "Eight payments"}]}
+    expect: {intent: ASK, reason: min_payment_cents}

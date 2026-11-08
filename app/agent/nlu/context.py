@@ -51,6 +51,8 @@ class CallContext(BaseModel):
     # field → {"value", "source"}: ``rep`` (the rep said it) or ``operator``
     # (seeded from the firm's records and stated by the agent; Phase 69).
     known_rules: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    # Code only, never in the prompt: our last line asked which minimum a tier has.
+    tier_clarify: bool = Field(default=False, exclude=True)
 
     def prompt_json(self) -> str:
         """Compact JSON for the prompt: unset keys dropped, dates ISO."""
@@ -111,4 +113,5 @@ def build_call_context(belief: BeliefState, neg: NegotiationState) -> CallContex
         rep_final_ask_pct=_pct(neg.final_counter_ask),
         collecting=collecting,
         known_rules=rules,
+        tier_clarify=neg.tier_pending is not None,
     )

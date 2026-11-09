@@ -29,11 +29,17 @@
  * `PRECONNECT_IDLE_MS`, on a new call, or via `closeWarm` (tab hidden, call
  * over). The click → live time goes to the server timeline as `connect_ms`.
  *
+ * While voice is on, the agent's new lines are shown as they are spoken, not
+ * when they are decided (Phase 74): `reveal` holds each sentence from its
+ * `transcript` frame and follows the `agent_sentence_*` frames. Going off shows
+ * whatever was still held.
+ *
  * `useWebRtcVoice` wraps it for React; tests pass fake `RtcDeps`.
  * Failures go to `RtcIO.onError` as raw messages that `callErrorText` turns
  * into the visible error line; refusals the server already put on the call
  * socket (409, 429, 503) are not repeated.
  */
+import { SentenceReveal } from "@/lib/voice/reveal";
 import type { ServerEvent } from "@/types/protocol";
 
 /** What the call is doing, as the conversation panel shows it. */
@@ -147,6 +153,8 @@ export interface RtcDeps {
   log(msg: string, data?: unknown): void;
   /** Subscribe to mic plug / unplug (`devicechange`); returns the unsubscribe. */
   onDeviceChange?(fn: () => void): () => void;
+  /** The user asked for less motion: the agent's sentences appear whole. */
+  reducedMotion?(): boolean;
 }
 
 export interface RtcIO {
@@ -261,11 +269,19 @@ export class WebRtcVoice {
   private repSpoke = false;
   /** Autoplay: the server acks every line itself. */
   private passive = false;
+  /** What of the agent's sentences to show while voice is on. */
+  readonly reveal: SentenceReveal;
 
   constructor(
     private io: RtcIO,
     private deps: RtcDeps,
-  ) {}
+  ) {
+    this.reveal = new SentenceReveal({
+      now: () => deps.now(),
+      reducedMotion: () => deps.reducedMotion?.() ?? false,
+      onLag: (sid, lagMs) => deps.log("[voice] reveal", { sid, lag_ms: lagMs }),
+    });
+  }
 
   setIO(io: RtcIO): void {
     this.io = io;
@@ -648,6 +664,7 @@ export class WebRtcVoice {
     this.stream = null;
     this.track = null;
     this.set({ link: "off", flow: "listening", partial: "", talking: false });
+    this.reveal.release();
   }
 
   /**
@@ -666,6 +683,7 @@ export class WebRtcVoice {
   reset(autoplay = false): void {
     this.hangUp();
     this.closeWarm();
+    this.reveal.clear();
     this.passive = autoplay;
     this.unacked = [];
     this.repSpoke = false;
@@ -737,7 +755,24 @@ export class WebRtcVoice {
         this.onVoiceState(ev.state, ev.text ?? "");
         return;
       case "transcript":
-        if (ev.role === "creditor") this.set({ flow: "thinking", partial: "" });
+        if (ev.role === "creditor") {
+          this.set({ flow: "thinking", partial: "" });
+          this.reveal.release();
+        } else if (ev.sentence_id) {
+          this.reveal.hold(ev.sentence_id, ev.text);
+        }
+        return;
+      case "agent_sentence_start":
+        this.reveal.start(ev.sid, ev.text);
+        return;
+      case "agent_sentence_end":
+        this.reveal.end(ev.sid);
+        return;
+      case "agent_sentence_cut":
+        this.reveal.cut(ev.sid, ev.heard, ev.dropped, ev.heard_ms);
+        return;
+      case "speech_dropped":
+        this.reveal.drop(ev.ids);
         return;
       case "turn_done":
       case "error":

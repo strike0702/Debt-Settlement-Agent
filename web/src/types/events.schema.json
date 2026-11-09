@@ -47,6 +47,95 @@
       "title": "Affordability",
       "type": "object"
     },
+    "AgentSentenceCutEvent": {
+      "additionalProperties": false,
+      "description": "Pipecat voice path only: the agent was stopped; only part of its reply was spoken.\n\n``sid`` is the sentence that was cut (the first dropped one when none had\nstarted), ``heard_ms`` how much of its audio played, ``heard`` the sentences\nthat played whole and ``dropped`` those cut or never played.",
+      "properties": {
+        "dropped": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Dropped",
+          "type": "array"
+        },
+        "heard": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Heard",
+          "type": "array"
+        },
+        "heard_ms": {
+          "title": "Heard Ms",
+          "type": "integer"
+        },
+        "sid": {
+          "title": "Sid",
+          "type": "string"
+        },
+        "type": {
+          "const": "agent_sentence_cut",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "sid",
+        "heard",
+        "dropped",
+        "heard_ms"
+      ],
+      "title": "AgentSentenceCutEvent",
+      "type": "object"
+    },
+    "AgentSentenceEndEvent": {
+      "additionalProperties": false,
+      "description": "Pipecat voice path only: this sentence's last audio played (the \"heard\" point).",
+      "properties": {
+        "sid": {
+          "title": "Sid",
+          "type": "string"
+        },
+        "type": {
+          "const": "agent_sentence_end",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "sid"
+      ],
+      "title": "AgentSentenceEndEvent",
+      "type": "object"
+    },
+    "AgentSentenceStartEvent": {
+      "additionalProperties": false,
+      "description": "Pipecat voice path only: this sentence's first audio just played; start showing it.\n\nThe browser reveals the words at an estimated pace (Aura-2 gives no word\ntimestamps; DECISIONS D25). ``text`` is what the agent is saying aloud,\nalready PUBLIC. Acks and fillers are never announced.",
+      "properties": {
+        "sid": {
+          "title": "Sid",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "agent_sentence_start",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "sid",
+        "text"
+      ],
+      "title": "AgentSentenceStartEvent",
+      "type": "object"
+    },
     "AgreementEvent": {
       "additionalProperties": false,
       "properties": {
@@ -2303,6 +2392,9 @@
     "ServerEvent": {
       "discriminator": {
         "mapping": {
+          "agent_sentence_cut": "#/$defs/AgentSentenceCutEvent",
+          "agent_sentence_end": "#/$defs/AgentSentenceEndEvent",
+          "agent_sentence_start": "#/$defs/AgentSentenceStartEvent",
           "agreement": "#/$defs/AgreementEvent",
           "audit": "#/$defs/AuditEvent",
           "autoplay_done": "#/$defs/AutoplayDoneEvent",
@@ -2370,6 +2462,15 @@
         },
         {
           "$ref": "#/$defs/VoiceStateEvent"
+        },
+        {
+          "$ref": "#/$defs/AgentSentenceStartEvent"
+        },
+        {
+          "$ref": "#/$defs/AgentSentenceEndEvent"
+        },
+        {
+          "$ref": "#/$defs/AgentSentenceCutEvent"
         }
       ],
       "title": "Serverevent"

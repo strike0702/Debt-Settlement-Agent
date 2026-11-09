@@ -5,7 +5,9 @@
  * the scenario card, and a text box. `onSend` is wired by App to the call
  * socket; when absent (replay, no call) the controls are disabled.
  * `voiceStatus` (header) and `voiceBar` (above the replies) come from
- * `VoiceControls`; `interim` is Flux's live partial.
+ * `VoiceControls`; `interim` is Flux's live partial. `reveal` (voice on) says how
+ * much of each agent sentence has been spoken: a bubble grows with the voice, and
+ * one with nothing spoken yet is not drawn.
  * `ended` closes the transcript with a quiet line saying how the
  * call ended ("Call ended: handed off to a specialist").
  * `error` is the newest call error, shown as an alert above the text box
@@ -14,11 +16,12 @@
  * "try sending it again" is one click.
  */
 import { AlertTriangle, Send, X } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import type { ChatMessage } from "@/lib/callState";
 import { cn } from "@/lib/cn";
+import type { SentenceReveal } from "@/lib/voice/reveal";
 
 export interface ConversationProps {
   messages: ChatMessage[];
@@ -42,7 +45,12 @@ export interface ConversationProps {
   voiceStatus?: ReactNode;
   /** WebRTC voice controls (mute, push to talk), shown while voice is on. */
   voiceBar?: ReactNode;
+  /** Voice mode: how much of each agent sentence to show. Absent: all of it. */
+  reveal?: SentenceReveal;
 }
+
+const noSubscribe = () => () => {};
+const noVersion = () => 0;
 
 export function Conversation({
   messages,
@@ -57,6 +65,7 @@ export function Conversation({
   error,
   voiceStatus,
   voiceBar,
+  reveal,
 }: ConversationProps) {
   const [draft, setDraft] = useState("");
   const lastSent = useRef("");
@@ -66,11 +75,12 @@ export function Conversation({
     if (errorSeq != null && lastSent.current) setDraft((d) => d || lastSent.current);
   }, [errorSeq]);
   const log = useRef<HTMLDivElement>(null);
+  const revealed = useSyncExternalStore(reveal?.subscribe ?? noSubscribe, reveal?.getVersion ?? noVersion);
   // Scroll the transcript box only; scrollIntoView would also scroll the page.
   useEffect(() => {
     const el = log.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, interim, ended]);
+  }, [messages.length, interim, ended, revealed]);
 
   // Scripts repeat lines (a rep restates their number); the list shows each once, in first order.
   const unique = [...new Set(suggested)];
@@ -94,7 +104,7 @@ export function Conversation({
         {messages.length === 0 ? (
           <p className="m-auto max-w-xs text-center text-muted">{emptyHint}</p>
         ) : (
-          messages.map((m) => <Bubble key={m.key} msg={m} />)
+          messages.map((m) => <Bubble key={m.key} msg={m} reveal={reveal} />)
         )}
         {interim && (
           <p className="self-end text-sm italic text-muted" aria-live="polite" data-testid="interim">
@@ -182,10 +192,14 @@ export function Conversation({
   );
 }
 
-function Bubble({ msg }: { msg: ChatMessage }) {
+function Bubble({ msg, reveal }: { msg: ChatMessage; reveal?: SentenceReveal }) {
   const agent = msg.role === "agent";
+  const parts = msg.sentences.map((s) => (reveal ? reveal.visible(s.id, s.text) : s.text));
+  const text = parts.filter(Boolean).join(" ");
+  if (!text) return null;
+  const growing = reveal != null && msg.sentences.some((s) => reveal.revealing(s.id));
   return (
-    <div className={cn("flex flex-col gap-1", agent ? "items-start" : "items-end")}>
+    <div className={cn("flex flex-col gap-1", agent ? "items-start" : "items-end")} aria-busy={growing || undefined}>
       <span className="text-xs text-muted">{agent ? "Agent" : "Creditor rep"}</span>
       <div
         className={cn(
@@ -193,7 +207,7 @@ function Bubble({ msg }: { msg: ChatMessage }) {
           agent ? "rounded-tl-sm bg-surface-2" : "rounded-tr-sm bg-accent text-accent-fg",
         )}
       >
-        {msg.sentences.map((s) => s.text).join(" ")}
+        {text}
       </div>
     </div>
   );

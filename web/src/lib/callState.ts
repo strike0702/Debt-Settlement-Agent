@@ -159,6 +159,9 @@ export function reduceCall(state: CallState, ev: CallEvent): CallState {
       // Voice-only: the engine stops those sentences; the transcript keeps the lines.
       return state;
     case "voice_state":
+    case "agent_sentence_start":
+    case "agent_sentence_end":
+    case "agent_sentence_cut":
       // Pipecat voice only: the WebRTC client shows it; the transcript is unchanged.
       return state;
     case "voice_live":

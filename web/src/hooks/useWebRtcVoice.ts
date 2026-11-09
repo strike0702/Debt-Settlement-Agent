@@ -43,6 +43,7 @@ export function browserRtcDeps(): RtcDeps {
     },
     now: () => performance.now(),
     log: (msg, data) => console.info(msg, data),
+    reducedMotion: () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
     onDeviceChange: (fn) => {
       navigator.mediaDevices.addEventListener("devicechange", fn);
       return () => navigator.mediaDevices.removeEventListener("devicechange", fn);

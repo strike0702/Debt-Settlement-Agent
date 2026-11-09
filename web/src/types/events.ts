@@ -25,7 +25,10 @@ export type ServerEvent =
   | TurnTraceEvent
   | AutoplayDoneEvent
   | SpeechDroppedEvent
-  | VoiceStateEvent;
+  | VoiceStateEvent
+  | AgentSentenceStartEvent
+  | AgentSentenceEndEvent
+  | AgentSentenceCutEvent;
 export type Intent =
   | "OPENING"
   | "ASK"
@@ -369,6 +372,39 @@ export interface VoiceStateEvent {
   state: "listening" | "rep_speaking" | "thinking" | "agent_speaking" | "ended";
   text?: string;
   type: "voice_state";
+}
+/**
+ * Pipecat voice path only: this sentence's first audio just played; start showing it.
+ *
+ * The browser reveals the words at an estimated pace (Aura-2 gives no word
+ * timestamps; DECISIONS D25). ``text`` is what the agent is saying aloud,
+ * already PUBLIC. Acks and fillers are never announced.
+ */
+export interface AgentSentenceStartEvent {
+  sid: string;
+  text: string;
+  type: "agent_sentence_start";
+}
+/**
+ * Pipecat voice path only: this sentence's last audio played (the "heard" point).
+ */
+export interface AgentSentenceEndEvent {
+  sid: string;
+  type: "agent_sentence_end";
+}
+/**
+ * Pipecat voice path only: the agent was stopped; only part of its reply was spoken.
+ *
+ * ``sid`` is the sentence that was cut (the first dropped one when none had
+ * started), ``heard_ms`` how much of its audio played, ``heard`` the sentences
+ * that played whole and ``dropped`` those cut or never played.
+ */
+export interface AgentSentenceCutEvent {
+  dropped: string[];
+  heard: string[];
+  heard_ms: number;
+  sid: string;
+  type: "agent_sentence_cut";
 }
 /**
  * Start a call. ``autoplay`` lets the sim creditor drive it (curated ids only).

@@ -5,7 +5,7 @@ Server events (every ``type`` this module sends):
 ``transcript``, ``say``, ``belief``, ``eval``, ``blocked``, ``escalate``,
 ``latency``, ``audit``, ``phase``, ``agreement``, ``error``,
 ``turn_done``, ``speech_dropped`` (unheard sentences a barge dropped),
-``voice_state``, ``turn_trace`` (one per agent turn, operator only; it gains
+``voice_state``, ``agent_sentence_*``, ``turn_trace`` (one per agent turn, operator only; it gains
 ``needs_info`` when the engine did not run, ``decide.reason_short``, and on
 rep turns ``reader`` (which model, code path or script read the line) and
 ``notes`` (acks, corrections, held-back amounts, dropped questions), both
@@ -1033,6 +1033,10 @@ class _CallConnection:
     async def voice_state(self, state: str, text: str) -> None:
         """VoiceCall hook: the WebRTC client's call state (live partial, thinking, agent audio)."""
         await self._send_one({"type": "voice_state", "state": state, "text": text})
+
+    async def voice_event(self, payload: dict[str, Any]) -> None:
+        """VoiceCall hook: what the agent is saying aloud right now (``agent_sentence_*``)."""
+        await self._send_one(payload)
 
     async def voice_error(self, message: str) -> None:
         """A voice session was refused or failed: tell the UI."""

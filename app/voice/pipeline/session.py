@@ -27,7 +27,7 @@ voice turns on, so Deepgram and the caps see only voice-on time.
 
 ``events`` is a short timeline (epoch ms) for the voice harness
 (``GET /voice/events``): Flux turn events, finals, replies, first TTS byte,
-bot start/stop, barges, heard sentences, and ``connect`` (the browser's click
+bot start/stop, barges, sentence starts, heard sentences, and ``connect`` (the browser's click
 → live ``connect_ms`` and which path it took). Agent and rep words only; no
 private facts.
 """
@@ -192,7 +192,13 @@ class VoiceSession:
             api_key=key,
             settings=CachedDeepgramTTS.Settings(voice=s.voice_tts_voice),
         )
-        out_tap = Tap("out", log=self.log, on_played=self.proc.played)
+        out_tap = Tap(
+            "out",
+            log=self.log,
+            on_played=self.proc.played,
+            on_started=self.proc.sentence_started,
+            on_audio=self.proc.sentence_audio,
+        )
         gate = OutputGate(log=self.log)
         hear: list[Any] = []
         self.proc.filler_after_s = (

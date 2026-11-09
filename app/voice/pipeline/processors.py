@@ -14,8 +14,8 @@ gap longer than ``GAP_S``.
 
 ``OrchestratorProcessor`` takes Flux's final transcripts to ``VoiceTurns``,
 decides barge-ins itself (Flux runs with ``should_interrupt=False``; see
-``rules``), and speaks each reply sentence as one ``TTSSpeakFrame`` followed by
-a ``SentenceEndFrame``. It also tells the browser what the call is doing
+``rules``), and speaks each reply sentence as one ``TTSSpeakFrame`` between a
+``SentenceStartFrame`` and a ``SentenceEndFrame``. It also tells the browser what the call is doing
 (``VoiceCall.voice_state``: live partials, thinking, agent audio on / off) so
 the WebRTC client can show it; that is display only, never a turn.
 
@@ -41,6 +41,13 @@ The TTS service keeps data frames in order behind the audio before them, and
 the output transport pushes a data frame on only after the audio before it was
 written, so ``Tap("out")`` sees ``SentenceEndFrame``
 when that sentence finished playing: that is "heard" (``HeardTracker``).
+
+Words on screen (Phase 74, DECISIONS D25). The start marker travels the same
+way, so it reaches ``Tap("out")`` once the sentences before it have played; the
+next audio frame after it is that sentence's first. At that moment the browser
+gets ``agent_sentence_start``, at the end marker ``agent_sentence_end``, and a
+barge sends ``agent_sentence_cut``. Acks and fillers carry no markers and send
+nothing. Display only: the stored transcript and the heard split do not change.
 """
 
 from __future__ import annotations
@@ -109,6 +116,14 @@ Log = Callable[..., None]
 
 def _no_log(kind: str, **data: Any) -> None:
     return None
+
+
+@dataclass
+class SentenceStartFrame(DataFrame):
+    """Marks the start of one agent sentence's audio in the frame stream."""
+
+    sid: str
+    text: str
 
 
 @dataclass
@@ -515,6 +530,20 @@ class OrchestratorProcessor(FrameProcessor):
     async def interrupt(self, *, reason: str, text: str = "", barge: bool = True) -> None:
         """Stop the agent's audio; with ``barge`` tell the orchestrator what was heard."""
         split = self.tracker.interrupt()
+        if split.dropped:
+            # Spawned before the rep's line can be shown: the browser's fallback
+            # shows everything still hidden when that line arrives.
+            self._spawn(
+                self.turns.call.voice_event(
+                    {
+                        "type": "agent_sentence_cut",
+                        "sid": split.cut or split.dropped[0],
+                        "heard": split.heard,
+                        "dropped": split.dropped,
+                        "heard_ms": split.cut_ms,
+                    }
+                )
+            )
         self._barged = True
         self._pending_sids.clear()
         self._resume("barge")  # the interruption below drops what the gate held
@@ -532,7 +561,7 @@ class OrchestratorProcessor(FrameProcessor):
             self._spawn(self.turns.on_barge(split.heard))
 
     async def speak(self, sentences: list[tuple[str, str]]) -> None:
-        """Queue reply sentences for TTS, each followed by its end marker."""
+        """Queue reply sentences for TTS, each between its start and end markers."""
         self._cancel_filler()
         self._cancel_ack()
         self._barged = False
@@ -553,13 +582,26 @@ class OrchestratorProcessor(FrameProcessor):
         for sid, text in sentences:
             self.tracker.queued(sid)
             self._pending_sids.setdefault(text.strip(), deque()).append(sid)
+            await self.push_frame(SentenceStartFrame(sid, text))
             await self.push_frame(TTSSpeakFrame(text))
             await self.push_frame(SentenceEndFrame(sid))
+
+    def sentence_started(self, sid: str, text: str) -> None:
+        """``Tap("out")`` saw this sentence's first audio: the browser starts showing it."""
+        if self.tracker.started(sid):
+            self.log("sentence_start", sid=sid, text=text)
+            event = {"type": "agent_sentence_start", "sid": sid, "text": text}
+            self._spawn(self.turns.call.voice_event(event))
+
+    def sentence_audio(self, seconds: float) -> None:
+        """``Tap("out")``: this much agent audio was just written to the output."""
+        self.tracker.audio(seconds)
 
     def played(self, sid: str) -> None:
         """``Tap("out")`` saw this sentence's end marker: it was heard; ack it."""
         if self.tracker.played(sid):
             self.log("heard", sid=sid)
+            self._spawn(self.turns.call.voice_event({"type": "agent_sentence_end", "sid": sid}))
             self._spawn(self.turns.on_played(sid))
 
     async def drop(self, ids: list[str]) -> None:
@@ -587,16 +629,38 @@ class Tap(FrameProcessor):
         *,
         log: Log = _no_log,
         on_played: Callable[[str], None] | None = None,
+        on_started: Callable[[str, str], None] | None = None,
+        on_audio: Callable[[float], None] | None = None,
     ) -> None:
         super().__init__()
         self.where = where
         self.log = log
         self.on_played = on_played
+        self.on_started = on_started
+        self.on_audio = on_audio
         self._first_byte = False
         self._reply_audio = False
+        self._starting: SentenceStartFrame | None = None
+
+    def _sentence_began(self) -> None:
+        """A start marker is waiting and its sentence's audio (or its end) just came."""
+        start, self._starting = self._starting, None
+        if start is not None and self.on_started is not None:
+            self.on_started(start.sid, start.text)
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
+        if isinstance(frame, SentenceStartFrame):
+            self._starting = frame
+        elif isinstance(frame, InterruptionFrame):
+            self._starting = None  # its audio was dropped
+        elif isinstance(frame, SentenceEndFrame):
+            self._sentence_began()  # a sentence with no audio still ends in order
+        elif isinstance(frame, OutputAudioRawFrame) and self.where == "out":
+            self._sentence_began()
+            if self.on_audio is not None:
+                n = len(frame.audio) / (2 * frame.num_channels)
+                self.on_audio(n / frame.sample_rate)
         if isinstance(frame, TTSStartedFrame):
             self._first_byte = True
         elif isinstance(frame, TTSAudioRawFrame) and self._first_byte and self.where == "tts":

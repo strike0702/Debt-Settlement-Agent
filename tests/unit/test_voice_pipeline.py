@@ -31,15 +31,23 @@ from app.agent.orchestrator import Orchestrator, Utterance
 from app.config import Settings
 from app.llm.client import FakeLLM
 from app.main import create_app
+from app.schemas.events import SERVER_EVENT_ADAPTER
 from app.store.audit import AuditLog
 from app.voice import ws as call_ws
 from app.voice.pipeline import processors
 from app.voice.pipeline.budget import VoiceBudget
 from app.voice.pipeline.heard import HeardTracker
-from app.voice.pipeline.processors import OrchestratorProcessor, SilenceFill
+from app.voice.pipeline.processors import (
+    OrchestratorProcessor,
+    SentenceEndFrame,
+    SentenceStartFrame,
+    SilenceFill,
+    Tap,
+)
 from app.voice.pipeline.rules import is_backchannel, is_barge
 from app.voice.pipeline.session import VoiceSession
 from app.voice.pipeline.turns import VoiceTurns
+from app.voice.views import redact_for_view
 from tests.unit.test_unheard_barge import _ASK, _ladder, _orch, _to_first_counter
 
 
@@ -52,6 +60,7 @@ class FakeCall:
         self.emitted: list[Utterance] = []
         self.rows: list[tuple[str, dict[str, Any]]] = []
         self.states: list[tuple[str, str]] = []
+        self.spoken_events: list[dict[str, Any]] = []
 
     async def show_creditor(self, text: str) -> None:
         self.shown.append(text)
@@ -73,6 +82,9 @@ class FakeCall:
 
     async def voice_state(self, state: str, text: str) -> None:
         self.states.append((state, text))
+
+    async def voice_event(self, payload: dict[str, Any]) -> None:
+        self.spoken_events.append(payload)
 
 
 async def _speak_and_interrupt(orch: Orchestrator, utt: Utterance, played: int) -> None:
@@ -252,6 +264,121 @@ async def test_silence_fill_sends_zeros_through_input_gaps(monkeypatch: Any) -> 
         await asyncio.wait_for(fill._fill(), timeout=0.1)
     assert sent and all(f.audio == b"\x00\x00" * 320 for f in sent)
     assert processors.GAP_S < 0.1
+
+
+# ---------------------------------------------------------------- words on screen (Phase 74)
+
+
+def _tts_audio(ms: int = 100) -> TTSAudioRawFrame:
+    return TTSAudioRawFrame(b"\x00\x00" * (16 * ms), 16000, 1, context_id="c")
+
+
+async def _spoken(sentences: list[tuple[str, str]]) -> tuple[OrchestratorProcessor, FakeTurns, Tap]:
+    """A processor with a reply queued, and the output tap wired as the session does."""
+    turns, tracker = FakeTurns(), HeardTracker()
+    proc = OrchestratorProcessor(turns, tracker)  # type: ignore[arg-type]
+    sent: list[Any] = []
+
+    async def capture(frame: Any, direction: Any = FrameDirection.DOWNSTREAM) -> None:
+        sent.append(frame)
+
+    proc.push_frame = capture  # type: ignore[method-assign]
+    await proc.speak(sentences)
+    kinds = [type(f) for f in sent if not isinstance(f, processors.ReplyStartFrame)]
+    assert kinds == [SentenceStartFrame, TTSSpeakFrame, SentenceEndFrame] * len(sentences)
+    tap = Tap(
+        "out",
+        on_played=proc.played,
+        on_started=proc.sentence_started,
+        on_audio=proc.sentence_audio,
+    )
+    return proc, turns, tap
+
+
+async def test_browser_hears_of_each_sentence_when_its_audio_plays_not_when_queued() -> None:
+    proc, turns, tap = await _spoken([("s1", "One."), ("s2", "Two.")])
+    await run_test(
+        tap,
+        frames_to_send=[
+            _tts_audio(),  # an ack's audio, before any marker: no event
+            SentenceStartFrame("s1", "One."),
+            _tts_audio(),
+            _tts_audio(),
+            SentenceEndFrame("s1"),
+            SentenceStartFrame("s2", "Two."),
+            _tts_audio(),
+            SentenceEndFrame("s2"),
+        ],
+    )
+    await asyncio.sleep(0.01)
+    assert turns.call.spoken_events == [
+        {"type": "agent_sentence_start", "sid": "s1", "text": "One."},
+        {"type": "agent_sentence_end", "sid": "s1"},
+        {"type": "agent_sentence_start", "sid": "s2", "text": "Two."},
+        {"type": "agent_sentence_end", "sid": "s2"},
+    ]
+    await proc.aclose()
+
+
+async def test_marker_alone_starts_nothing() -> None:
+    proc, turns, tap = await _spoken([("s1", "One.")])
+    await run_test(tap, frames_to_send=[SentenceStartFrame("s1", "One.")])
+    await asyncio.sleep(0.01)
+    assert turns.call.spoken_events == []
+    await proc.aclose()
+
+
+async def test_barge_sends_the_cut_with_the_heard_split_before_the_rep_line() -> None:
+    proc, turns, tap = await _spoken([("s1", "One."), ("s2", "Two."), ("s3", "Three.")])
+    await run_test(
+        tap,
+        frames_to_send=[
+            SentenceStartFrame("s1", "One."),
+            _tts_audio(),
+            SentenceEndFrame("s1"),
+            SentenceStartFrame("s2", "Two."),
+            _tts_audio(200),
+            _tts_audio(300),
+        ],
+    )
+    await proc.interrupt(reason="final", text="No, wait.")
+    await asyncio.sleep(0.01)
+    cut = turns.call.spoken_events[-1]
+    assert cut == {
+        "type": "agent_sentence_cut",
+        "sid": "s2",
+        "heard": ["s1"],
+        "dropped": ["s2", "s3"],
+        "heard_ms": 500,
+    }
+    assert turns.barges == [["s1"]]
+    # A frame still in flight from the dropped audio tells the browser nothing new.
+    before = list(turns.call.spoken_events)
+    proc.played("s2")
+    proc.sentence_started("s3", "Three.")
+    await asyncio.sleep(0.01)
+    assert turns.call.spoken_events == before
+    await proc.aclose()
+
+
+async def test_barge_before_any_audio_cuts_with_nothing_heard() -> None:
+    proc, turns, _ = await _spoken([("s1", "One.")])
+    await proc.interrupt(reason="final", text="No, wait.")
+    await asyncio.sleep(0.01)
+    assert turns.call.spoken_events == [
+        {"type": "agent_sentence_cut", "sid": "s1", "heard": [], "dropped": ["s1"], "heard_ms": 0}
+    ]
+    await proc.aclose()
+
+
+def test_spoken_sentence_frames_reach_the_rep_stream_unchanged() -> None:
+    for frame in (
+        {"type": "agent_sentence_start", "sid": "s1", "text": "One."},
+        {"type": "agent_sentence_end", "sid": "s1"},
+        {"type": "agent_sentence_cut", "sid": "s1", "heard": [], "dropped": ["s1"], "heard_ms": 0},
+    ):
+        assert redact_for_view(frame, "rep") == frame
+        SERVER_EVENT_ADAPTER.validate_python(frame)
 
 
 # ---------------------------------------------------------------- budget

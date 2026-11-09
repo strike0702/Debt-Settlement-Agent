@@ -426,6 +426,26 @@ eval's decisions match main's
 and the guards that count stalled turns are not spent on the agent's own audio. The turn cap
 still bounds a rep who keeps asking.
 
+## D25. Voice text is revealed at an estimated pace; Aura-2 gives no word timestamps (2026-11-09)
+
+**Question.** In voice mode the agent's reply appeared whole as soon as the turn was decided, so the
+rep read ahead of the voice, and after a barge the bubble still showed words never spoken. How
+should the words follow the audio?
+
+**Decision.** Estimate. The server marks when each sentence's audio really starts, ends or is cut;
+between those the browser reveals words from a small table of milliseconds per letter, with extra
+for dollar amounts, percentages and other numbers. The end event catches up. A cut keeps the words
+that fit in the audio that played, and drops the rest with a cut-off mark. The stored transcript,
+the operator trace and the heard split do not change.
+
+**Evidence.** The table was fitted on 30 demo sentences (median error 357 ms on a held-out sentence).
+On one call, the last word came a median of 128 ms before the end event, and at most 529 ms from it
+([report](../eval/voice_reveal_20261109/summary.md)).
+
+**Why.** Word timestamps would need another TTS provider, for a display detail. The error stays
+inside one sentence, since a sentence never shows before its audio starts, and the rep cannot read
+ahead by more than that.
+
 ## Process choices
 
 - Each phase runs in its own git worktree with a paste-ready prompt; phases that touch the

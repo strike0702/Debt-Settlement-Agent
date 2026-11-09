@@ -125,3 +125,33 @@
 {"ts": "2026-10-29T15:06:06", "kind": "aura2_tts", "chars": 672, "seconds": 0.0, "usd": "0.020160", "note": "p64 pipecat-ui speakers harness run"}
 {"ts": "2026-10-30T15:50:32", "kind": "flux", "chars": 0, "seconds": 111.2, "usd": "0.014300", "note": "phase 66 relay-forced pipecat-ui numbers_easy (estimate: call span)"}
 {"ts": "2026-10-30T15:50:32", "kind": "aura2", "chars": 900, "seconds": 0.0, "usd": "0.027000", "note": "phase 66 relay-forced call (estimate: 717 reply chars + opening)"}
+{"ts": "2026-11-09T20:42:10", "kind": "aura2_tts", "chars": 111, "seconds": 0.0, "usd": "0.003330", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:12", "kind": "aura2_tts", "chars": 82, "seconds": 0.0, "usd": "0.002460", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:13", "kind": "aura2_tts", "chars": 54, "seconds": 0.0, "usd": "0.001620", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:15", "kind": "aura2_tts", "chars": 62, "seconds": 0.0, "usd": "0.001860", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:17", "kind": "aura2_tts", "chars": 77, "seconds": 0.0, "usd": "0.002310", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:19", "kind": "aura2_tts", "chars": 68, "seconds": 0.0, "usd": "0.002040", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:20", "kind": "aura2_tts", "chars": 40, "seconds": 0.0, "usd": "0.001200", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:21", "kind": "aura2_tts", "chars": 28, "seconds": 0.0, "usd": "0.000840", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:22", "kind": "aura2_tts", "chars": 10, "seconds": 0.0, "usd": "0.000300", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:23", "kind": "aura2_tts", "chars": 16, "seconds": 0.0, "usd": "0.000480", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:25", "kind": "aura2_tts", "chars": 20, "seconds": 0.0, "usd": "0.000600", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:27", "kind": "aura2_tts", "chars": 60, "seconds": 0.0, "usd": "0.001800", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:29", "kind": "aura2_tts", "chars": 65, "seconds": 0.0, "usd": "0.001950", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:30", "kind": "aura2_tts", "chars": 17, "seconds": 0.0, "usd": "0.000510", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:32", "kind": "aura2_tts", "chars": 52, "seconds": 0.0, "usd": "0.001560", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:35", "kind": "aura2_tts", "chars": 55, "seconds": 0.0, "usd": "0.001650", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:37", "kind": "aura2_tts", "chars": 63, "seconds": 0.0, "usd": "0.001890", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:41", "kind": "aura2_tts", "chars": 64, "seconds": 0.0, "usd": "0.001920", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:43", "kind": "aura2_tts", "chars": 47, "seconds": 0.0, "usd": "0.001410", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:47", "kind": "aura2_tts", "chars": 46, "seconds": 0.0, "usd": "0.001380", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:51", "kind": "aura2_tts", "chars": 52, "seconds": 0.0, "usd": "0.001560", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:55", "kind": "aura2_tts", "chars": 50, "seconds": 0.0, "usd": "0.001500", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:42:58", "kind": "aura2_tts", "chars": 49, "seconds": 0.0, "usd": "0.001470", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:43:08", "kind": "aura2_tts", "chars": 58, "seconds": 0.0, "usd": "0.001740", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:43:12", "kind": "aura2_tts", "chars": 54, "seconds": 0.0, "usd": "0.001620", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:43:14", "kind": "aura2_tts", "chars": 30, "seconds": 0.0, "usd": "0.000900", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:43:16", "kind": "aura2_tts", "chars": 28, "seconds": 0.0, "usd": "0.000840", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:43:18", "kind": "aura2_tts", "chars": 24, "seconds": 0.0, "usd": "0.000720", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:43:20", "kind": "aura2_tts", "chars": 32, "seconds": 0.0, "usd": "0.000960", "note": "phase 74 reveal pace"}
+{"ts": "2026-11-09T20:43:21", "kind": "aura2_tts", "chars": 33, "seconds": 0.0, "usd": "0.000990", "note": "phase 74 reveal pace"}

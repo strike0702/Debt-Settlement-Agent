@@ -457,3 +457,44 @@ describe("pre-connect (Phase 72)", () => {
     expect(urls()).toEqual(["POST /voice/offer"]);
   });
 });
+
+describe("agent words in voice mode", () => {
+  const says = (id: string, text: string): ServerEvent => ({
+    type: "transcript",
+    role: "agent",
+    text,
+    spoken: false,
+    sentence_id: id,
+    blocked: false,
+  });
+  const rep: ServerEvent = { type: "transcript", role: "creditor", text: "Hm.", spoken: true, sentence_id: null, blocked: false };
+
+  it("holds lines only while voice is on", async () => {
+    ev(says("a1", "Hello there."));
+    expect(voice.reveal.visible("a1", "Hello there.")).toBe("Hello there.");
+    await live();
+    ev(says("a2", "Next line."));
+    expect(voice.reveal.visible("a2", "Next line.")).toBe("");
+    ev({ type: "agent_sentence_start", sid: "a2", text: "Next line." });
+    ev({ type: "agent_sentence_end", sid: "a2" });
+    expect(voice.reveal.visible("a2", "Next line.")).toBe("Next line.");
+  });
+
+  it("shows held lines when the rep's next line arrives or voice goes off", async () => {
+    await live();
+    ev(says("a1", "One."));
+    ev(rep);
+    expect(voice.reveal.visible("a1", "One.")).toBe("One.");
+    ev(says("a2", "Two."));
+    voice.hangUp();
+    expect(voice.reveal.visible("a2", "Two.")).toBe("Two.");
+  });
+
+  it("a barge's cut arrives before the rep's line and survives it", async () => {
+    await live();
+    ev(says("a1", "One two three."));
+    ev({ type: "agent_sentence_cut", sid: "a1", heard: [], dropped: ["a1"], heard_ms: 0 });
+    ev(rep);
+    expect(voice.reveal.visible("a1", "One two three.")).toBe("");
+  });
+});

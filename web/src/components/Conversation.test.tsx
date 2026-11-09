@@ -3,9 +3,11 @@
  * own way makes a "next" highlight wrong, so no suggestion is singled out; every
  * one stays clickable while the call is live. A line the script repeats is listed once.
  */
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { Conversation } from "@/components/Conversation";
+import type { ChatMessage } from "@/lib/callState";
+import { SentenceReveal, wordTimes } from "@/lib/voice/reveal";
 
 const UNIQUE = ["We're looking for seventy percent.", "Still seventy percent.", "Correct."];
 const LINES = ["We're looking for seventy percent.", "Still seventy percent.", "Still seventy percent.", "Correct."];
@@ -42,5 +44,28 @@ describe("suggested rep replies", () => {
     fireEvent.click(buttons[2]!);
     expect(onSend.mock.calls.map((c) => c[0])).toEqual(["Still seventy percent.", "Correct."]);
     for (const b of buttons) expect(b).toBeEnabled();
+  });
+});
+
+describe("agent words in voice mode", () => {
+  const agent = (id: string, text: string): ChatMessage => ({
+    key: id,
+    role: "agent",
+    sentences: [{ id, text }],
+    blocked: false,
+  });
+
+  it("draws no bubble until a word is spoken, then grows it", () => {
+    vi.useFakeTimers();
+    const reveal = new SentenceReveal({ now: () => Date.now(), reducedMotion: () => false });
+    reveal.hold("a1", "Thank you.");
+    render(<Conversation messages={[agent("a1", "Thank you.")]} suggested={[]} emptyHint="" reveal={reveal} />);
+    expect(screen.queryByText("Agent")).toBeNull();
+    act(() => reveal.start("a1", "Thank you."));
+    act(() => void vi.advanceTimersByTime(wordTimes("Thank you.")[0]!));
+    expect(screen.getByText("Thank")).toBeTruthy();
+    act(() => reveal.end("a1"));
+    expect(screen.getByText("Thank you.")).toBeTruthy();
+    vi.useRealTimers();
   });
 });

@@ -1,0 +1,182 @@
+[
+ {
+  "text": "Hello, this is an automated agent calling on behalf of Synthetic Debt Relief about a client's account with you.",
+  "ms": 6320,
+  "lead_ms": 150,
+  "trail_ms": 10
+ },
+ {
+  "text": "You are speaking with an automated agent authorized to discuss settlement options.",
+  "ms": 4720,
+  "lead_ms": 20,
+  "trail_ms": 0
+ },
+ {
+  "text": "What payment terms can you work with for a settlement?",
+  "ms": 2640,
+  "lead_ms": 10,
+  "trail_ms": 0
+ },
+ {
+  "text": "What settlement percentage of the balance are you looking for?",
+  "ms": 2920,
+  "lead_ms": 380,
+  "trail_ms": 90
+ },
+ {
+  "text": "Do you need even payments, or can you allow a balloon or a flexible schedule?",
+  "ms": 4320,
+  "lead_ms": 0,
+  "trail_ms": 10
+ },
+ {
+  "text": "We will present this to the client and follow up after their review.",
+  "ms": 3240,
+  "lead_ms": 0,
+  "trail_ms": 0
+ },
+ {
+  "text": "I need to involve someone from our side.",
+  "ms": 2120,
+  "lead_ms": 40,
+  "trail_ms": 0
+ },
+ {
+  "text": "Does that fit your schedule?",
+  "ms": 1640,
+  "lead_ms": 0,
+  "trail_ms": 10
+ },
+ {
+  "text": "Thank you.",
+  "ms": 600,
+  "lead_ms": 0,
+  "trail_ms": 0
+ },
+ {
+  "text": "Have a good day.",
+  "ms": 1080,
+  "lead_ms": 130,
+  "trail_ms": 0
+ },
+ {
+  "text": "Okay, even payments.",
+  "ms": 1880,
+  "lead_ms": 0,
+  "trail_ms": 0
+ },
+ {
+  "text": "Could you consider 31% of the balance, amounting to $387.50?",
+  "ms": 6080,
+  "lead_ms": 0,
+  "trail_ms": 40
+ },
+ {
+  "text": "Just to confirm, that's November 15 for the initial payment date?",
+  "ms": 3800,
+  "lead_ms": 80,
+  "trail_ms": 100
+ },
+ {
+  "text": "Great, 29% works.",
+  "ms": 2280,
+  "lead_ms": 0,
+  "trail_ms": 10
+ },
+ {
+  "text": "How about 1 payment of $362.50 starting November 15?",
+  "ms": 5080,
+  "lead_ms": 40,
+  "trail_ms": 80
+ },
+ {
+  "text": "We can propose 49% of the balance, which comes to $980.",
+  "ms": 5120,
+  "lead_ms": 70,
+  "trail_ms": 80
+ },
+ {
+  "text": "We can meet you partway at 59% of the balance, which is $1,180.",
+  "ms": 6400,
+  "lead_ms": 90,
+  "trail_ms": 70
+ },
+ {
+  "text": "Let's outline 6 payments totalling $1,300 beginning November 30.",
+  "ms": 5400,
+  "lead_ms": 70,
+  "trail_ms": 10
+ },
+ {
+  "text": "I have December 1 for the initial payment date.",
+  "ms": 2400,
+  "lead_ms": 0,
+  "trail_ms": 0
+ },
+ {
+  "text": "On October 31 the creditor payment is $216.66.",
+  "ms": 5880,
+  "lead_ms": 0,
+  "trail_ms": 10
+ },
+ {
+  "text": "On January 31, 2027 the creditor payment is $216.67.",
+  "ms": 7080,
+  "lead_ms": 320,
+  "trail_ms": 50
+ },
+ {
+  "text": "On March 31, 2027 the creditor payment is $216.67.",
+  "ms": 7000,
+  "lead_ms": 0,
+  "trail_ms": 50
+ },
+ {
+  "text": "Understood, up to 8 payments, at least $120 each.",
+  "ms": 4560,
+  "lead_ms": 0,
+  "trail_ms": 0
+ },
+ {
+  "text": "I suggest 4 payments totaling $1,140 beginning December 1.",
+  "ms": 5840,
+  "lead_ms": 50,
+  "trail_ms": 20
+ },
+ {
+  "text": "We can offer 29% of the balance, which totals $362.50.",
+  "ms": 5640,
+  "lead_ms": 30,
+  "trail_ms": 10
+ },
+ {
+  "text": "That is $1,005 in 12 payments.",
+  "ms": 3480,
+  "lead_ms": 0,
+  "trail_ms": 30
+ },
+ {
+  "text": "We could pay $99.99 a month.",
+  "ms": 3560,
+  "lead_ms": 0,
+  "trail_ms": 0
+ },
+ {
+  "text": "That is 45.5% of $2,000.",
+  "ms": 3280,
+  "lead_ms": 420,
+  "trail_ms": 30
+ },
+ {
+  "text": "The balance is $12,345.67 today.",
+  "ms": 5040,
+  "lead_ms": 30,
+  "trail_ms": 60
+ },
+ {
+  "text": "Then $75 from the 4th payment on.",
+  "ms": 3000,
+  "lead_ms": 0,
+  "trail_ms": 20
+ }
+]

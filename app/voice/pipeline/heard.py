@@ -9,6 +9,11 @@ mid-way is not heard. The caller acks played sentences with
 ``Orchestrator.on_sentence_done`` and passes ``interrupt().heard`` to
 ``on_barge_in``, so the Phase 56 rollback (nothing heard) and fragment merge
 apply unchanged. No browser acks on this path.
+
+It also follows the sentence playing now (``started``, ``audio``), so a split
+can say how much of the cut sentence came out (``BargeSplit.cut_ms``). That
+number only trims the words shown in the browser (Phase 74); the cut sentence
+still counts as not heard.
 """
 
 from __future__ import annotations
@@ -22,6 +27,9 @@ class BargeSplit:
 
     heard: list[str]
     dropped: list[str]
+    # The sentence playing when the split was asked for, and how much of it played.
+    cut: str | None = None
+    cut_ms: int = 0
 
 
 class HeardTracker:
@@ -30,6 +38,8 @@ class HeardTracker:
     def __init__(self) -> None:
         self._queued: list[str] = []
         self._played: list[str] = []
+        self._current: str | None = None
+        self._current_s = 0.0
 
     @property
     def speaking(self) -> bool:
@@ -47,15 +57,35 @@ class HeardTracker:
             self._queued, self._played = [], []
         self._queued.append(sid)
 
+    def started(self, sid: str) -> bool:
+        """Its first audio reached the output; False for an id not waiting to play."""
+        if sid not in self.outstanding() or sid == self._current:
+            return False
+        self._current, self._current_s = sid, 0.0
+        return True
+
+    def audio(self, seconds: float) -> None:
+        """This much more of the current sentence's audio reached the output."""
+        if self._current is not None:
+            self._current_s += seconds
+
     def played(self, sid: str) -> bool:
         """Its audio finished on the output; False for an id this tracker does not hold."""
         if sid not in self._queued or sid in self._played:
             return False
         self._played.append(sid)
+        if sid == self._current:
+            self._current = None
         return True
 
     def interrupt(self) -> BargeSplit:
         """Split the current utterance and forget it (its unplayed audio is flushed)."""
-        split = BargeSplit(heard=list(self._played), dropped=self.outstanding())
+        split = BargeSplit(
+            heard=list(self._played),
+            dropped=self.outstanding(),
+            cut=self._current,
+            cut_ms=round(self._current_s * 1000) if self._current is not None else 0,
+        )
         self._queued, self._played = [], []
+        self._current = None
         return split

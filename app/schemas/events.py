@@ -3,7 +3,7 @@
 Server events are what ``app.voice.ws`` sends (``transcript``, ``say``,
 ``belief``, ``eval``, ``blocked``, ``escalate``, ``latency``, ``audit``,
 ``phase``, ``agreement``, ``error``, ``turn_done``, ``turn_trace``,
-``autoplay_done``, ``speech_dropped``, ``voice_state``); client events are
+``autoplay_done``, ``speech_dropped``, ``voice_state``, ``agent_sentence_*``); client events are
 what it accepts. The web UI's TypeScript types are generated from the
 exported schema, so this file is the protocol's single source of truth.
 ``TurnTrace`` is also the type of ``Orchestrator``'s ``Utterance.trace``.
@@ -408,6 +408,41 @@ class VoiceStateEvent(_Model):
     text: str = ""
 
 
+class AgentSentenceStartEvent(_Model):
+    """Pipecat voice path only: this sentence's first audio just played; start showing it.
+
+    The browser reveals the words at an estimated pace (Aura-2 gives no word
+    timestamps; DECISIONS D25). ``text`` is what the agent is saying aloud,
+    already PUBLIC. Acks and fillers are never announced.
+    """
+
+    type: Literal["agent_sentence_start"]
+    sid: str
+    text: str
+
+
+class AgentSentenceEndEvent(_Model):
+    """Pipecat voice path only: this sentence's last audio played (the "heard" point)."""
+
+    type: Literal["agent_sentence_end"]
+    sid: str
+
+
+class AgentSentenceCutEvent(_Model):
+    """Pipecat voice path only: the agent was stopped; only part of its reply was spoken.
+
+    ``sid`` is the sentence that was cut (the first dropped one when none had
+    started), ``heard_ms`` how much of its audio played, ``heard`` the sentences
+    that played whole and ``dropped`` those cut or never played.
+    """
+
+    type: Literal["agent_sentence_cut"]
+    sid: str
+    heard: list[str]
+    dropped: list[str]
+    heard_ms: int
+
+
 class TurnTraceEvent(TurnTrace):
     type: Literal["turn_trace"]
 
@@ -439,7 +474,10 @@ ServerEvent = Annotated[
     | TurnTraceEvent
     | AutoplayDoneEvent
     | SpeechDroppedEvent
-    | VoiceStateEvent,
+    | VoiceStateEvent
+    | AgentSentenceStartEvent
+    | AgentSentenceEndEvent
+    | AgentSentenceCutEvent,
     Field(discriminator="type"),
 ]
 SERVER_EVENT_ADAPTER: TypeAdapter[Any] = TypeAdapter(ServerEvent)
@@ -460,6 +498,9 @@ SERVER_EVENT_TYPES: tuple[str, ...] = (
     "autoplay_done",
     "speech_dropped",
     "voice_state",
+    "agent_sentence_start",
+    "agent_sentence_end",
+    "agent_sentence_cut",
 )
 
 

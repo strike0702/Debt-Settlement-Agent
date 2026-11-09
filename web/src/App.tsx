@@ -19,7 +19,8 @@
  * view the call was started in.
  *
  * Voice: `useWebRtcVoice` (Pipecat over WebRTC). The server hears and speaks,
- * `say` lines are never spoken here, and voice failures (mic, connection,
+ * `say` lines are never spoken here, the agent's words appear as they are spoken
+ * (`engine.reveal`, read by `Conversation`), and voice failures (mic, connection,
  * budget) land on the same visible error line. With voice off the client acks
  * the lines the rep has read (`WebRtcVoice.beforeRepText`). While a call is
  * live with voice off, an idle link is pre-connected (no mic, no Deepgram) so
@@ -569,6 +570,7 @@ function LiveApp() {
             )
           }
           interim={rtc.snapshot.partial}
+          reveal={rtcEngine.reveal}
           notice={rtc.snapshot.echoHint ? ECHO_HINT : ""}
           onDismissNotice={() => rtcEngine.dismissEcho()}
           error={
